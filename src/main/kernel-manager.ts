@@ -98,7 +98,9 @@ export class KernelManager {
     private readonly settings: SettingsStore,
     private readonly onProgress: (progress: KernelInstallProgress) => void,
     private readonly logger?: Logger,
-    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => []
+    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => [],
+    /** Electron passes net.fetch so downloads follow the system proxy. */
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init)
   ) {}
 
   async installed(): Promise<KernelRelease[]> {
@@ -131,7 +133,7 @@ export class KernelManager {
     const installed = await this.installedManifests()
     let releases: GithubRelease[]
     try {
-      const response = await fetch(RELEASES_URL, {
+      const response = await this.fetchImpl(RELEASES_URL, {
         headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
         signal: AbortSignal.timeout(15_000)
       })
@@ -473,7 +475,7 @@ export class KernelManager {
       'user-agent': 'Fingerprint-Browser/0.1'
     }
     if (existingBytes > 0 && existingBytes < release.size) headers.range = `bytes=${existingBytes}-`
-    const response = await fetch(release.downloadUrl, {
+    const response = await this.fetchImpl(release.downloadUrl, {
       headers,
       redirect: 'follow',
       signal: AbortSignal.any([AbortSignal.timeout(15 * 60_000), this.installAbort?.signal ?? new AbortController().signal])

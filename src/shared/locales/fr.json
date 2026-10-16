@@ -1710,5 +1710,17 @@
   "打开日志目录": "Ouvrir le dossier des journaux",
   "导入一次，按需分配给窗口；每个窗口的扩展数据彼此独立": "Importez une fois, attribuez aux fenêtres au besoin ; chaque fenêtre garde ses propres données d'extension",
   "扩展不存在或已被移除": "L'extension n'existe pas ou a été retirée",
-  "目录参数无效": "Dossier invalide"
+  "目录参数无效": "Dossier invalide",
+  "最新": "Dernière",
+  "发布时间": "Publication",
+  "大小": "Taille",
+  "下载并启用": "Télécharger et utiliser",
+  "在线下载内核": "Télécharger le kernel",
+  "取消下载": "Annuler le téléchargement",
+  "来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。": "Versions officielles de fingerprint-chromium. Les fichiers sont vérifiés avant l’installation, puis le kernel devient celui par défaut.",
+  "没有适用于当前系统的内核版本": "Aucun kernel pour ce système",
+  "内核 {0} 已安装并设为默认": "Kernel {0} installé et défini par défaut",
+  "内核安装完成": "Kernel installé",
+  "下载已取消，可稍后从断点继续": "Téléchargement annulé ; il pourra reprendre plus tard",
+  "获取内核版本失败（GitHub HTTP {0}）": "Impossible de charger les versions du kernel (GitHub HTTP {0})"
 }

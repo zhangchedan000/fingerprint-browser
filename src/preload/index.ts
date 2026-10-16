@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BrowserApi, BrowserProfileView, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import type { BrowserApi, BrowserProfileView, KernelInstallProgress, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
@@ -73,7 +73,15 @@ const api: BrowserApi = {
     rollbackAvailable: () => ipcRenderer.invoke('engine:rollback-available'),
     rollback: () => ipcRenderer.invoke('engine:rollback'),
     remove: (version: string) => ipcRenderer.invoke('engine:remove', version),
-    verify: (version: string) => ipcRenderer.invoke('engine:verify', version)
+    verify: (version: string) => ipcRenderer.invoke('engine:verify', version),
+    releases: () => ipcRenderer.invoke('engine:releases'),
+    install: (version: string) => ipcRenderer.invoke('engine:install', version),
+    cancelInstall: (version: string) => ipcRenderer.invoke('engine:cancel-install', version),
+    onProgress: (listener: (progress: KernelInstallProgress) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: KernelInstallProgress): void => listener(progress)
+      ipcRenderer.on('engine:progress', handler)
+      return () => ipcRenderer.removeListener('engine:progress', handler)
+    }
   },
   proxy: {
     test: (config, profileId, proxyId) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId),

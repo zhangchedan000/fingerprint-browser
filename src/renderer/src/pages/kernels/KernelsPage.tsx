@@ -1,4 +1,4 @@
-import { DeploymentUnitOutlined, DownOutlined, FolderOpenOutlined, ReloadOutlined, RollbackOutlined } from '@ant-design/icons'
+import { CloudDownloadOutlined, DeploymentUnitOutlined, DownOutlined, FolderOpenOutlined, ReloadOutlined, RollbackOutlined } from '@ant-design/icons'
 import { Alert, Button, Dropdown, Modal, Select, Space, Table, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
@@ -9,6 +9,7 @@ import { kernelUsers } from '../../data/kernels'
 import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
+import { DownloadKernelModal } from './DownloadKernelModal'
 
 const FOLLOW_DEFAULT = ''
 
@@ -36,6 +37,7 @@ export function KernelsPage({ navigate }: PageProps) {
   const [scope, setScope] = useState<string>('__all__')
   const [target, setTarget] = useState<string>(FOLLOW_DEFAULT)
   const [busy, setBusy] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     void window.browserApi.engine.rollbackAvailable().then(setRollbackAvailable).catch(() => setRollbackAvailable(false))
@@ -174,6 +176,7 @@ export function KernelsPage({ navigate }: PageProps) {
           showIcon
           title={engine.executable ? t("当前运行在兼容模式") : t("尚未配置浏览器内核")}
           description={engine.executable ? t("当前内核不支持指纹配置，请在使用前切换到指纹内核。") : t("请先选择或导入浏览器内核。")}
+          action={<Button type="primary" icon={<CloudDownloadOutlined />} onClick={() => setDownloading(true)}>{t("在线下载内核")}</Button>}
         />
       )}
       <section className="fb-card fb-kernel-current">
@@ -195,7 +198,8 @@ export function KernelsPage({ navigate }: PageProps) {
           {engine?.executable && <span className="fb-mono fb-muted fb-ellipsis" title={engine.executable}>{engine.executable}</span>}
         </div>
         <Space wrap className="fb-kernel-actions">
-          <Button type="primary" icon={<FolderOpenOutlined />} onClick={() => void changeEngine(() => window.browserApi.engine.importLocal(), (version) => t("本地构建 {0} 已导入并启用", version ?? ''))}>{t("导入本地内核")}</Button>
+          <Button type="primary" icon={<CloudDownloadOutlined />} onClick={() => setDownloading(true)}>{t("在线下载内核")}</Button>
+          <Button icon={<FolderOpenOutlined />} onClick={() => void changeEngine(() => window.browserApi.engine.importLocal(), (version) => t("本地构建 {0} 已导入并启用", version ?? ''))}>{t("导入本地内核")}</Button>
           <Button icon={<ReloadOutlined />} disabled={!defaultVersion} loading={checking === defaultVersion} onClick={() => defaultVersion && void verify(defaultVersion)}>{t("重新校验")}</Button>
           {rollbackAvailable && (
             <Button
@@ -295,6 +299,15 @@ export function KernelsPage({ navigate }: PageProps) {
         busy={busy}
         onSubmit={(ids) => { if (assignTo) return pin(ids, assignTo) }}
         onClose={() => setAssignTo(null)}
+      />
+      <DownloadKernelModal
+        open={downloading}
+        onClose={() => setDownloading(false)}
+        onInstalled={(status) => {
+          ws.setEngine(status)
+          void ws.reloadKernels()
+          notify.success(t("内核 {0} 已安装并设为默认", status.version ?? ''))
+        }}
       />
     </div>
   )

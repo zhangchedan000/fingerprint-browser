@@ -1,5 +1,5 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, net, screen, shell } from 'electron'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -107,7 +107,14 @@ app.whenReady().then(async () => {
     return { width, height }
   })
   await launcher.initialize()
-  const kernels = new KernelManager(vaultPath, settings, () => undefined, logger, (version) => profiles.kernelUsers(version))
+  const kernels = new KernelManager(
+    vaultPath,
+    settings,
+    (progress) => mainWindow?.webContents.send('engine:progress', progress),
+    logger,
+    (version) => profiles.kernelUsers(version),
+    (input, init) => net.fetch(input as string, init)
+  )
   const cookies = new CookieManager(profiles, settings, logger)
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)

@@ -408,6 +408,12 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       bundled.executable
     )
   })
+  ipcMain.handle('engine:releases', () => kernels.releases())
+  ipcMain.handle('engine:install', (_event, version: string) => {
+    if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再导入并切换内核')
+    return kernels.install(version)
+  })
+  ipcMain.handle('engine:cancel-install', (_event, version: string) => kernels.cancel(version))
   ipcMain.handle('engine:rollback-available', () => kernels.rollbackAvailable())
   ipcMain.handle('engine:rollback', () => {
     if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再回滚内核')

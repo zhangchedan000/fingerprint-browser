@@ -1710,5 +1710,17 @@
   "打开日志目录": "Mở thư mục nhật ký",
   "导入一次，按需分配给窗口；每个窗口的扩展数据彼此独立": "Nhập một lần, gán cho cửa sổ khi cần; dữ liệu tiện ích của mỗi cửa sổ riêng biệt",
   "扩展不存在或已被移除": "Tiện ích không tồn tại hoặc đã bị gỡ",
-  "目录参数无效": "Thư mục không hợp lệ"
+  "目录参数无效": "Thư mục không hợp lệ",
+  "最新": "Mới nhất",
+  "发布时间": "Ngày phát hành",
+  "大小": "Kích thước",
+  "下载并启用": "Tải và dùng",
+  "在线下载内核": "Tải kernel trực tuyến",
+  "取消下载": "Hủy tải xuống",
+  "来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。": "Bản phát hành chính thức của fingerprint-chromium. Tệp được kiểm tra trước khi cài, sau đó đặt làm kernel mặc định.",
+  "没有适用于当前系统的内核版本": "Không có kernel cho hệ thống này",
+  "内核 {0} 已安装并设为默认": "Đã cài kernel {0} và đặt làm mặc định",
+  "内核安装完成": "Đã cài kernel",
+  "下载已取消，可稍后从断点继续": "Đã hủy tải; có thể tiếp tục sau",
+  "获取内核版本失败（GitHub HTTP {0}）": "Không tải được danh sách kernel (GitHub HTTP {0})"
 }

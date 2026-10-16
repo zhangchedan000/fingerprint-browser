@@ -337,3 +337,5 @@ button, input, textarea { font: inherit; }
 .fb-settings-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 18px 16px; font-size: 14px; }
 .fb-settings-label { color: var(--fb-text-secondary); }
 .fb-settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+
+.fb-block-gap { display: block; margin-bottom: 12px; }

@@ -1710,5 +1710,17 @@
   "打开日志目录": "Open logs folder",
   "导入一次，按需分配给窗口；每个窗口的扩展数据彼此独立": "Import once, assign to windows as needed; each window keeps its own extension data",
   "扩展不存在或已被移除": "The extension does not exist or was removed",
-  "目录参数无效": "Invalid folder"
+  "目录参数无效": "Invalid folder",
+  "最新": "Latest",
+  "发布时间": "Released",
+  "大小": "Size",
+  "下载并启用": "Download and use",
+  "在线下载内核": "Download kernel",
+  "取消下载": "Cancel download",
+  "来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。": "Official fingerprint-chromium releases. Files are checked before installing, then set as the default kernel.",
+  "没有适用于当前系统的内核版本": "No kernel available for this system",
+  "内核 {0} 已安装并设为默认": "Kernel {0} installed and set as default",
+  "内核安装完成": "Kernel installed",
+  "下载已取消，可稍后从断点继续": "Download cancelled; it can resume later",
+  "获取内核版本失败（GitHub HTTP {0}）": "Could not load kernel versions (GitHub HTTP {0})"
 }

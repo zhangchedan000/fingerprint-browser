@@ -504,6 +504,12 @@ export interface BrowserApi {
     rollback: () => Promise<EngineStatus>
     remove: (version: string) => Promise<void>
     verify: (version: string) => Promise<KernelHealth>
+    /** Kernels published by fingerprint-chromium for this system (plus installed ones). */
+    releases: () => Promise<KernelRelease[]>
+    /** Downloads, checks and installs a published kernel, then makes it the default. */
+    install: (version: string) => Promise<EngineStatus>
+    cancelInstall: (version: string) => Promise<void>
+    onProgress: (listener: (progress: KernelInstallProgress) => void) => () => void
   }
   /** The proxy library. Windows refer to these proxies by id. */
   proxy: {

@@ -1710,5 +1710,17 @@
   "打开日志目录": "Günlük klasörünü aç",
   "导入一次，按需分配给窗口；每个窗口的扩展数据彼此独立": "Bir kez içe aktarın, gerektiğinde pencerelere atayın; her pencerenin eklenti verisi ayrıdır",
   "扩展不存在或已被移除": "Eklenti yok veya kaldırıldı",
-  "目录参数无效": "Geçersiz klasör"
+  "目录参数无效": "Geçersiz klasör",
+  "最新": "En yeni",
+  "发布时间": "Yayın tarihi",
+  "大小": "Boyut",
+  "下载并启用": "İndir ve kullan",
+  "在线下载内核": "Kernel indir",
+  "取消下载": "İndirmeyi iptal et",
+  "来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。": "Resmi fingerprint-chromium sürümleri. Dosyalar kurulumdan önce doğrulanır, ardından varsayılan kernel yapılır.",
+  "没有适用于当前系统的内核版本": "Bu sistem için kernel yok",
+  "内核 {0} 已安装并设为默认": "Kernel {0} kuruldu ve varsayılan yapıldı",
+  "内核安装完成": "Kernel kuruldu",
+  "下载已取消，可稍后从断点继续": "İndirme iptal edildi; daha sonra devam edebilir",
+  "获取内核版本失败（GitHub HTTP {0}）": "Kernel sürümleri alınamadı (GitHub HTTP {0})"
 }
