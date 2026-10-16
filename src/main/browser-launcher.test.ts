@@ -14,7 +14,7 @@ import { SettingsStore } from './settings-store'
 const temporaryPaths: string[] = []
 
 afterEach(async () => {
-  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })))
 })
 
 class FakeProcessInspector implements ProcessInspector {
