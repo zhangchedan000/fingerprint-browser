@@ -4,7 +4,7 @@ import { profileTableSorters } from './profile-table-sort'
 
 function profile(serialNumber: number, overrides: Partial<BrowserProfileView> = {}): BrowserProfileView {
   const base: BrowserProfileView = {
-    id: `profile-${serialNumber}`, serialNumber, name: `环境 ${serialNumber}`, note: '', group: '', tags: [],
+    id: `profile-${serialNumber}`, serialNumber, name: `环境 ${serialNumber}`, note: '', group: '', groupId: '', proxyId: '', tags: [],
     extensionIds: [], color: '#5566dd', startUrls: [], window: { mode: 'auto', x: 0, y: 0, width: 1280, height: 800 },
     favorite: false, status: 'closed', proxy: { protocol: 'direct', host: '', username: '', password: '', passwordStored: false },
     account: { platform: '', username: '', password: '', passwordStored: false },

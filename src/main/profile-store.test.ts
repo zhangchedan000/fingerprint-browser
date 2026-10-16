@@ -20,6 +20,11 @@ async function store(): Promise<ProfileStore> {
   return result
 }
 
+/** What the window editor sends: the proxy typed in the form, without a library pick. */
+function typedDraft<T extends { proxyId?: string }>(view: T): T {
+  return { ...view, proxyId: undefined }
+}
+
 describe('ProfileStore', () => {
   it('persists profiles and creates an independent data directory', async () => {
     const repository = await store()
@@ -138,15 +143,15 @@ describe('ProfileStore', () => {
     draft.proxy = { protocol: 'http', host: 'proxy.example.com', port: 8080, username: 'user', password: 'secret' }
     const created = await repository.create(draft)
 
-    const unchanged = publicProfile(created)
+    const unchanged = typedDraft(publicProfile(created))
     await repository.update(created.id, unchanged)
     expect(repository.get(created.id).proxy.password).toBe('secret')
 
-    const replaced = publicProfile(repository.get(created.id))
+    const replaced = typedDraft(publicProfile(repository.get(created.id)))
     await repository.update(created.id, { ...replaced, proxy: { ...replaced.proxy, password: 'new-secret' } })
     expect(repository.get(created.id).proxy.password).toBe('new-secret')
 
-    const cleared = publicProfile(repository.get(created.id))
+    const cleared = typedDraft(publicProfile(repository.get(created.id)))
     cleared.proxy.passwordStored = false
     await repository.update(created.id, cleared)
     expect(repository.get(created.id).proxy.password).toBe('')
@@ -158,7 +163,7 @@ describe('ProfileStore', () => {
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: 'one.example.com', port: 8080, username: 'user', password: 'secret' }
     const created = await repository.create(draft)
-    const changed = publicProfile(created)
+    const changed = typedDraft(publicProfile(created))
     changed.proxy.host = 'two.example.com'
 
     await repository.update(created.id, changed)
@@ -258,7 +263,7 @@ describe('ProfileStore', () => {
       profileId: 'legacy-profile'
     })
     const migrated = JSON.parse(await readFile(repository.profilesPath, 'utf8'))
-    expect(migrated.schemaVersion).toBe(11)
+    expect(migrated.schemaVersion).toBe(12)
     expect(migrated.nextSerialNumber).toBe(2)
   })
 
@@ -315,7 +320,7 @@ describe('ProfileStore', () => {
     await recovered.initialize()
 
     expect(recovered.storageHealth().recoveryMessage).toContain('上一份备份')
-    expect(JSON.parse(await readFile(recovered.previousBackupPath, 'utf8')).schemaVersion).toBe(11)
+    expect(JSON.parse(await readFile(recovered.previousBackupPath, 'utf8')).schemaVersion).toBe(12)
   })
 
   it('refuses to replace data when the primary and both backups are invalid', async () => {
@@ -347,7 +352,7 @@ describe('ProfileStore', () => {
     await reopened.initialize()
     expect(reopened.get(profile.id).proxyCheck?.ip).toBe('203.0.113.8')
 
-    const changed = publicProfile(reopened.get(profile.id))
+    const changed = typedDraft(publicProfile(reopened.get(profile.id)))
     await reopened.update(profile.id, { ...changed, proxy: { ...changed.proxy, password: 'replacement' } })
     expect(reopened.get(profile.id).proxyCheck).toBeUndefined()
   })

@@ -10,6 +10,8 @@ function profile(): BrowserProfile {
     proxy: { protocol: 'socks5', host: '203.0.113.9', port: 1080, username: 'proxy-user', password: 'proxy-secret' },
     account: { platform: 'TikTok Shop', username: 'shop@example.com', password: 'account-secret' },
     id: 'profile-1',
+    groupId: '',
+    proxyId: '',
     serialNumber: 1,
     createdAt: '2026-10-16T00:00:00.000Z',
     updatedAt: '2026-10-16T00:00:00.000Z',

@@ -7,6 +7,7 @@ import type { BrowserProfile, ProfileBackupResult, ProfileDraft } from '../share
 import { validateProfileDraft } from '../shared/validation'
 import type { Logger } from './app-logger'
 import type { ProfileStore } from './profile-store'
+import { portableDraft } from './profile-portable'
 
 interface ProfileBackupManifest {
   schemaVersion: 1
@@ -64,23 +65,6 @@ async function copySafeTree(source: string, target: string, stats: CopyStats, re
   for await (const chunk of createReadStream(target)) stats.hash.update(chunk as Buffer)
 }
 
-function portableDraft(profile: BrowserProfile): ProfileDraft {
-  return {
-    name: profile.name,
-    note: profile.note,
-    group: profile.group,
-    tags: [...profile.tags],
-    extensionIds: [],
-    color: profile.color,
-    startUrls: [...profile.startUrls],
-    kernelVersion: profile.kernelVersion,
-    window: { ...profile.window },
-    proxy: { ...profile.proxy, password: '', passwordStored: false },
-    account: { platform: profile.account.platform, username: profile.account.username, password: '' },
-    fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
-  }
-}
-
 export class ProfileBackupManager {
   constructor(
     private readonly profiles: ProfileStore,
@@ -116,7 +100,7 @@ export class ProfileBackupManager {
         totalBytes: stats.bytes,
         fileCount: stats.files,
         contentSha256,
-        profile: portableDraft(profile)
+        profile: portableDraft(profile, { passwords: 'strip', extensions: false })
       }
       await writeFile(join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2), { encoding: 'utf8', mode: 0o600 })
       await rename(staging, target)

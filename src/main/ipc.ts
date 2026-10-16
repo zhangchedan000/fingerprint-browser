@@ -19,7 +19,7 @@ import type { CookieManager } from './cookie-manager'
 import { parseCookieFile, serializeCookieFile } from './cookie-file'
 import { randomUUID } from 'node:crypto'
 import { analyzeBatchTable, batchTemplateRows, errorRows, importFormat, readImportTable, serializeCsv, serializeXlsx, type AnalyzedTable, type ImportFileFormat } from './profile-batch-import'
-import { proxyForTest, publicProfile, sameProxyIdentity } from './profile-secrets'
+import { proxyForTest, publicGroupRecord, publicProfile, publicProxyRecord, sameProxyIdentity } from './profile-secrets'
 import type { ProfileBackupManager } from './profile-backup'
 import type { AppSessionTracker } from './app-session'
 import type { WorkspaceMigrationManager } from './workspace-migration'
@@ -320,6 +320,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
   })
+  ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: { proxyId?: string; groupId?: string }) => {
+    return (await profiles.assignMany(ids, patch)).map(publicProfile)
+  })
   ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {
     const version = typeof kernelVersion === 'string' ? kernelVersion.trim() : kernelVersion
     if (version) {
@@ -407,11 +410,40 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     return kernels.verify(version)
   })
-  ipcMain.handle('proxy:test', (_event, config, profileId?: string) => {
+  ipcMain.handle('proxy:test', (_event, config, profileId?: string, proxyId?: string) => {
     const validated = validateProxyConfig(config)
-    const profile = profileId ? profiles.get(profileId) : undefined
-    return testProxy(proxyForTest(validated, profile))
+    const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
+    return testProxy(proxyForTest(validated, saved))
   })
+  // Proxy and group libraries: windows refer to these records by id.
+  const proxyView = (id: string) => publicProxyRecord(profiles.getProxy(id), profiles.list())
+  ipcMain.handle('proxy:list', () => {
+    const windows = profiles.list()
+    return profiles.listProxies().map((proxy) => publicProxyRecord(proxy, windows))
+  })
+  ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(draft)).id))
+  ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, draft)).id))
+  ipcMain.handle('proxy:remove', (_event, id: string, replaceWith?: unknown) => {
+    if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
+    return profiles.removeProxy(id, replaceWith)
+  })
+  ipcMain.handle('proxy:check', async (_event, id: string) => {
+    const tested = profiles.getProxy(id)
+    const result = await testProxy(tested)
+    const current = profiles.getProxy(id)
+    if (!sameProxyIdentity(tested, current) || tested.password !== current.password) {
+      throw new Error('检测期间代理配置已变更，本次结果未保存')
+    }
+    await profiles.setLibraryProxyCheck(id, { ...result, checkedAt: new Date().toISOString() })
+    return proxyView(id)
+  })
+  ipcMain.handle('groups:list', () => {
+    const windows = profiles.list()
+    return profiles.listGroups().map((group) => publicGroupRecord(group, windows))
+  })
+  ipcMain.handle('groups:create', async (_event, name: string) => publicGroupRecord(await profiles.createGroup(name), profiles.list()))
+  ipcMain.handle('groups:rename', async (_event, id: string, name: string) => publicGroupRecord(await profiles.renameGroup(id, name), profiles.list()))
+  ipcMain.handle('groups:remove', (_event, id: string) => profiles.removeGroup(id))
   ipcMain.handle('diagnostics:session-health', () => appSession.recoveryStatus())
   if (process.env.PRISM_E2E === '1') {
     ipcMain.handle('diagnostics:e2e-quit', () => app.quit())

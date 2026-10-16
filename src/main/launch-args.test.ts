@@ -8,7 +8,7 @@ function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): Brow
   return {
     ...draft,
     fingerprint: { ...draft.fingerprint, screenWidth: 1920, screenHeight: 1080, ...fingerprint },
-    id: 'p1', serialNumber: 7, createdAt: '', updatedAt: '', favorite: false, status: 'closed'
+    id: 'p1', groupId: '', proxyId: '', serialNumber: 7, createdAt: '', updatedAt: '', favorite: false, status: 'closed'
   }
 }
 

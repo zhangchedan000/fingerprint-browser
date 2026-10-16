@@ -167,6 +167,8 @@ export class BrowserLauncher {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
     let profile = this.profiles.get(id)
+    // Never fall back to the real network when the chosen proxy is gone.
+    if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
     await this.guardProfileAvailable(id)
     const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
     if (!engine.executable) {

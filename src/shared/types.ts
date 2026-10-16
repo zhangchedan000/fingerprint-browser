@@ -83,12 +83,61 @@ export interface FingerprintConfig {
 
 export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'
 
+/**
+ * A proxy in the proxy library. It is stored once; windows refer to it by id,
+ * so editing it here changes every window that uses it.
+ */
+export interface ProxyRecord {
+  id: string
+  protocol: Exclude<ProxyProtocol, 'direct'>
+  host: string
+  port: number
+  username: string
+  /** Encrypted at rest and never sent to the UI. */
+  password: string
+  note: string
+  createdAt: string
+  updatedAt: string
+  /** Latest check of this proxy, shared by every window that uses it. */
+  check?: ProxyCheckSummary
+}
+
+export type ProxyRecordView = Omit<ProxyRecord, 'password'> & {
+  password: ''
+  passwordStored: boolean
+  /** Windows that use this proxy, derived from the windows' proxyId. */
+  profileIds: string[]
+}
+
+export interface ProxyDraft {
+  protocol: Exclude<ProxyProtocol, 'direct'>
+  host: string
+  port?: number
+  username: string
+  password: string
+  /** Keep the saved password when password is empty. */
+  passwordStored?: boolean
+  note?: string
+}
+
+/** A window group. Windows refer to it by id, so renaming it renames it everywhere. */
+export interface GroupRecord {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export type GroupRecordView = GroupRecord & { profileCount: number }
+
 export interface BrowserProfile {
   id: string
   /** Permanent, user-facing environment number. Never reused after deletion. */
   serialNumber: number
   name: string
   note: string
+  /** Reference into the group library; '' means ungrouped. */
+  groupId: string
+  /** Name of the referenced group, filled in when the window is read; never stored on the window. */
   group: string
   tags: string[]
   extensionIds: string[]
@@ -98,12 +147,18 @@ export interface BrowserProfile {
   kernelVersion: string
   window: ProfileWindowConfig
   favorite: boolean
+  /** Reference into the proxy library; '' means direct connection. */
+  proxyId: string
+  /** The referenced proxy, filled in when the window is read; never stored on the window. */
   proxy: ProxyConfig
+  /** True when proxyId points at a proxy that no longer exists. Such a window must not launch. */
+  proxyMissing?: boolean
   account: PlatformAccount
   fingerprint: FingerprintConfig
   createdAt: string
   updatedAt: string
   lastOpenedAt?: string
+  /** Latest check of the window's network: the library proxy's check, or the direct connection's own. */
   proxyCheck?: ProxyCheckSummary
   status: ProfileStatus
   lastError?: string
@@ -121,12 +176,19 @@ export interface PublicPlatformAccount extends Omit<PlatformAccount, 'password' 
 
 export type BrowserProfileView = Omit<BrowserProfile, 'proxy' | 'account'> & { proxy: PublicProxyConfig; account: PublicPlatformAccount }
 
+/**
+ * What a window is created or edited from.
+ * group: a group name; it is looked up in (or added to) the group library.
+ * proxyId: pick a proxy from the library. Without it, proxy is looked up in (or added to)
+ * the library, so a proxy is never stored on the window itself.
+ */
 export type ProfileDraft = Pick<
   BrowserProfile,
   'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
 > & {
   /** Optional on input for older callers and files; validation fills an empty account. */
   account?: PlatformAccount
+  proxyId?: string
 }
 
 export interface ProfileBatchClassification {
@@ -388,6 +450,8 @@ export interface BrowserApi {
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
+    /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */
+    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string }) => Promise<BrowserProfileView[]>
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
     /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
@@ -409,8 +473,25 @@ export interface BrowserApi {
     remove: (version: string) => Promise<void>
     verify: (version: string) => Promise<KernelHealth>
   }
+  /** The proxy library. Windows refer to these proxies by id. */
   proxy: {
-    test: (config: ProxyConfig, profileId?: string) => Promise<ProxyTestResult>
+    /** Tests typed-in settings; an empty password with passwordStored uses the saved one of the window or library proxy. */
+    test: (config: ProxyConfig, profileId?: string, proxyId?: string) => Promise<ProxyTestResult>
+    list: () => Promise<ProxyRecordView[]>
+    create: (draft: ProxyDraft) => Promise<ProxyRecordView>
+    update: (id: string, draft: ProxyDraft) => Promise<ProxyRecordView>
+    /** replaceWith: what the windows using it switch to (another proxy id, or '' for direct). */
+    remove: (id: string, replaceWith?: string) => Promise<void>
+    /** Tests a library proxy and saves the result on it. */
+    check: (id: string) => Promise<ProxyRecordView>
+  }
+  /** The group library. Windows refer to these groups by id. */
+  groups: {
+    list: () => Promise<GroupRecordView[]>
+    create: (name: string) => Promise<GroupRecordView>
+    rename: (id: string, name: string) => Promise<GroupRecordView>
+    /** Its windows become ungrouped. */
+    remove: (id: string) => Promise<void>
   }
   diagnostics: {
     sessionHealth: () => Promise<AppRecoveryStatus>

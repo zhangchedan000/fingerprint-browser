@@ -1,5 +1,5 @@
 import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
-import type { HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig } from './types'
+import type { HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -244,4 +244,30 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   }
   if (proxy.username.length > 1024 || proxy.password.length > 2048) throw new Error('代理凭据长度超出限制')
   return proxy
+}
+
+/** A proxy added to or edited in the proxy library. */
+export function validateProxyDraft(input: ProxyDraft): ProxyDraft & { port: number; note: string } {
+  if (!input || typeof input !== 'object') throw new Error('代理配置不完整')
+  if (input.protocol as string === 'direct') throw new Error('代理库只保存代理，直连不需要添加')
+  const proxy = validateProxyConfig({ ...input, password: typeof input.password === 'string' ? input.password : '' })
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length > 200) throw new Error('代理备注不能超过 200 个字符')
+  return {
+    protocol: proxy.protocol as ProxyDraft['protocol'],
+    host: proxy.host,
+    port: proxy.port!,
+    username: proxy.username,
+    password: proxy.password,
+    ...(proxy.passwordStored ? { passwordStored: true } : {}),
+    note
+  }
+}
+
+export function validateGroupName(input: unknown): string {
+  if (typeof input !== 'string') throw new Error('分组名称格式无效')
+  const name = input.trim()
+  if (!name) throw new Error('分组名称不能为空')
+  if (name.length > 40) throw new Error('环境分组不能超过 40 个字符')
+  return name
 }

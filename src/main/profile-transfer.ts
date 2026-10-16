@@ -1,5 +1,6 @@
 import type { BrowserProfile, ProfileDraft } from '../shared/types'
 import { validateProfileDraft } from '../shared/validation'
+import { portableDraft } from './profile-portable'
 
 const PROFILE_EXPORT_MARKER = 'prism-browser-profile'
 
@@ -21,20 +22,7 @@ export function serializeProfileConfig(profile: BrowserProfile): string {
     containsBrowserData: false,
     containsProxyPassword: false,
     containsExtensions: false,
-    profile: {
-      name: profile.name,
-      note: profile.note,
-      group: profile.group,
-      tags: [...profile.tags],
-      extensionIds: [],
-      color: profile.color,
-      startUrls: [...profile.startUrls],
-      kernelVersion: profile.kernelVersion,
-      window: { ...profile.window },
-      proxy: { ...profile.proxy, password: '' },
-      account: { platform: profile.account.platform, username: profile.account.username, password: '' },
-      fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
-    }
+    profile: portableDraft(profile, { passwords: 'strip', extensions: false })
   }
   return JSON.stringify(data, null, 2)
 }

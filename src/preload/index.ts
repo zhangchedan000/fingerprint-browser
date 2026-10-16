@@ -44,6 +44,7 @@ const api: BrowserApi = {
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),
     setFavorite: (id: string, favorite: boolean) => ipcRenderer.invoke('profiles:set-favorite', id, favorite),
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),
+    assignMany: (ids, patch) => ipcRenderer.invoke('profiles:assign-many', ids, patch),
     setKernelMany: (ids: string[], kernelVersion: string) => ipcRenderer.invoke('profiles:set-kernel-many', ids, kernelVersion),
     importCookiesText: (id: string, text: string) => ipcRenderer.invoke('profiles:import-cookies-text', id, text),
     removeMany: (ids: string[]) => ipcRenderer.invoke('profiles:remove-many', ids),
@@ -68,7 +69,18 @@ const api: BrowserApi = {
     verify: (version: string) => ipcRenderer.invoke('engine:verify', version)
   },
   proxy: {
-    test: (config, profileId) => ipcRenderer.invoke('proxy:test', config, profileId)
+    test: (config, profileId, proxyId) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId),
+    list: () => ipcRenderer.invoke('proxy:list'),
+    create: (draft) => ipcRenderer.invoke('proxy:create', draft),
+    update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
+    remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
+    check: (id) => ipcRenderer.invoke('proxy:check', id)
+  },
+  groups: {
+    list: () => ipcRenderer.invoke('groups:list'),
+    create: (name) => ipcRenderer.invoke('groups:create', name),
+    rename: (id, name) => ipcRenderer.invoke('groups:rename', id, name),
+    remove: (id) => ipcRenderer.invoke('groups:remove', id)
   },
   diagnostics: {
     sessionHealth: () => ipcRenderer.invoke('diagnostics:session-health'),

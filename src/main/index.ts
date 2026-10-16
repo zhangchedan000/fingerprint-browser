@@ -98,6 +98,10 @@ app.whenReady().then(async () => {
   launcher = new BrowserLauncher(profiles, settings, (profile) => {
     mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   }, extensions, logger)
+  // A proxy or group edited in its library changes how other windows look.
+  profiles.onProfilesChanged((changed) => {
+    for (const profile of changed) mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
+  })
   launcher.setHostScreenProvider(() => {
     const { width, height } = screen.getPrimaryDisplay().size
     return { width, height }

@@ -11,6 +11,7 @@ import { validateProfileDraft } from '../shared/validation'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
 import type { ProfileStore } from './profile-store'
+import { portableDraft } from './profile-portable'
 
 const MAGIC = Buffer.concat([Buffer.from('PRISM-MIGRATION'), Buffer.from([1])])
 const AUTH_TAG_BYTES = 16
@@ -81,12 +82,7 @@ function portableProfile(profile: BrowserProfile): MigrationProfile {
   return {
     sourceId: profile.id,
     favorite: profile.favorite,
-    profile: {
-      name: profile.name, note: profile.note, group: profile.group, tags: [...profile.tags],
-      extensionIds: [...profile.extensionIds], color: profile.color, startUrls: [...profile.startUrls],
-      kernelVersion: profile.kernelVersion, window: { ...profile.window }, proxy: { ...profile.proxy }, account: { ...profile.account },
-      fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
-    }
+    profile: portableDraft(profile, { passwords: 'keep', extensions: true })
   }
 }
 
