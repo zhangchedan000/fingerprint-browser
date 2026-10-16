@@ -374,6 +374,17 @@
         "chrome/browser/ui/views/frame/browser_window_property_manager_win.cc::SchedulePrismProfileOverlay",
         "chrome/browser/ui/views/frame/browser_window_property_manager_win.cc::base::Milliseconds(1200)"
       ]
+    },
+    {
+      "id": "device-memory",
+      "seriesPath": "extra/fingerprint/045-device-memory.patch",
+      "insertAfterSeriesPath": "extra/fingerprint/044-windows-taskbar-badge-readiness.patch",
+      "file": "045-device-memory.patch",
+      "sha256": "c731c6c05282b2559a4e0faa3510793de0c7713bdac6753876c8cf15c593f1ee",
+      "appliedMarkers": [
+        "third_party/blink/common/device_memory/approximated_device_memory.cc::fingerprint-device-memory",
+        "components/ungoogled/ungoogled_switches.cc::kFingerprintDeviceMemory"
+      ]
     }
   ],
   "acceptance": {

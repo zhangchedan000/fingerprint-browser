@@ -13,6 +13,11 @@ function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): Brow
 }
 
 describe('launch arguments', () => {
+  it('passes device memory only when the window sets it', () => {
+    expect(buildLaunchArgs(profile(), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-device-memory'))).toBe(false)
+    expect(buildLaunchArgs(profile({ deviceMemory: 4 }), { userDataDir: '/data' })).toContain('--fingerprint-device-memory=4')
+  })
+
   it('uses the stored screen size by default', () => {
     const args = buildLaunchArgs(profile(), { userDataDir: '/data', hostScreen: { width: 2560, height: 1440 } })
     expect(args).toContain('--fingerprint-screen-width=1920')

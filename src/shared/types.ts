@@ -52,6 +52,8 @@ export interface FingerprintConfig {
   hardwareProfileId: HardwareProfileId
   /** Kernel GPU catalogue bucket pinned for profile-lifetime stability. */
   gpuBucket?: number
+  /** navigator.deviceMemory in GB (2, 4 or 8). Unset = 8. Needs a kernel with patch 045. */
+  deviceMemory?: 2 | 4 | 8
   /** Version of the render identity allocation contract. */
   renderIdentityVersion?: 1 | 2 | 3 | 4
   platform: BrowserPlatform

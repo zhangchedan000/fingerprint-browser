@@ -888,6 +888,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
         />
       </Row>
+      {selectedHardware?.renderIdentityMode === 'seeded-curated' && selectedHardware.gpuPool?.length && (
+        <Row label={t("显卡型号")} hint={t("只列出内核里有完整渲染数据的真实型号；每个窗口可以不同")}>
+          <Select
+            className="fb-wide-select"
+            showSearch={{ optionFilterProp: 'label' }}
+            aria-label={t("显卡型号")}
+            value={gpu?.bucket}
+            onChange={(bucket: number) => patchFingerprint({ gpuBucket: bucket, renderIdentityVersion: 4 })}
+            options={selectedHardware.gpuPool.map((identity) => ({
+              value: identity.bucket,
+              label: identity.deviceId ? `${identity.model} · ${identity.deviceId.replace(/^0x0*/, '')}` : identity.model
+            }))}
+          />
+        </Row>
+      )}
       <Row label="Canvas">{spoofControl('canvas')}</Row>
       <Row label={t("WebGL 图像")} hint={t("与 WebGL 元数据一起开关")}>
         <Unsupported value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
@@ -917,8 +932,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
         />
       </Row>
-      <Row label={t("设备内存")} hint={t("浏览器只报告最多 8 GB")}>
-        <Unsupported value="8 GB" reason={kernelUnsupported} />
+      <Row label={t("设备内存")} hint={t("浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效")}>
+        <Select
+          className="fb-fp-select"
+          value={fp.deviceMemory ?? 8}
+          onChange={(value: 2 | 4 | 8) => patchFingerprint({ deviceMemory: value })}
+          options={[2, 4, 8].map((value) => ({ value, label: `${value} GB` }))}
+        />
       </Row>
       <Row label={t("设备名称")}>
         <Unsupported value={t("随机")} reason={kernelUnsupported} />

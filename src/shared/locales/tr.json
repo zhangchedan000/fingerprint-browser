@@ -1728,5 +1728,9 @@
   "设备名称": "Aygıt adı",
   "MAC 地址": "MAC adresi",
   "其他": "Diğer",
-  "端口扫描保护": "Port tarama koruması"
+  "端口扫描保护": "Port tarama koruması",
+  "显卡型号": "GPU modeli",
+  "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Yalnızca kernel'de tam render verisi olan gerçek modeller; her pencere farklı olabilir",
+  "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Tarayıcı en fazla 8 GB bildirir; kendi derlenmiş kernel gerekir (yama 045)",
+  "设备内存只能是 2、4 或 8 GB": "Cihaz belleği 2, 4 veya 8 GB olmalı"
 }

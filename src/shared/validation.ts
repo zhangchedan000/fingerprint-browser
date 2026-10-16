@@ -95,6 +95,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     hardwareConcurrency: overrides.includes('cores') ? rawFp.hardwareConcurrency : templated.hardwareConcurrency,
     platformVersion: overrides.includes('platformVersion') ? rawFp.platformVersion : templated.platformVersion
   }
+  if (rawFp.deviceMemory !== undefined && ![2, 4, 8].includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4 或 8 GB')
   const screenSource = rawFp.screenSource ?? 'profile'
   if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
   const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
@@ -200,6 +201,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       disabledSpoofing: [...fp.disabledSpoofing],
       ...(overrides.length ? { overrides } : {}),
       ...(screenSource !== 'profile' ? { screenSource } : {}),
+      ...(rawFp.deviceMemory !== undefined && rawFp.deviceMemory !== 8 ? { deviceMemory: rawFp.deviceMemory } : {}),
       ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
       ...(doNotTrack !== 'default' ? { doNotTrack } : {})
     }

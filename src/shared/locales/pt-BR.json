@@ -1728,5 +1728,9 @@
   "设备名称": "Nome do dispositivo",
   "MAC 地址": "Endereço MAC",
   "其他": "Outros",
-  "端口扫描保护": "Proteção contra varredura de portas"
+  "端口扫描保护": "Proteção contra varredura de portas",
+  "显卡型号": "Modelo de GPU",
+  "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Só modelos reais com dados de renderização completos no kernel; cada janela pode ter um diferente",
+  "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "O navegador informa no máximo 8 GB; requer kernel compilado (patch 045)",
+  "设备内存只能是 2、4 或 8 GB": "A memória do dispositivo deve ser 2, 4 ou 8 GB"
 }

@@ -1728,5 +1728,9 @@
   "设备名称": "Nom de l’appareil",
   "MAC 地址": "Adresse MAC",
   "其他": "Autres",
-  "端口扫描保护": "Protection contre l’analyse de ports"
+  "端口扫描保护": "Protection contre l’analyse de ports",
+  "显卡型号": "Modèle de GPU",
+  "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Seuls les modèles réels dont le kernel a toutes les données de rendu ; chaque fenêtre peut être différente",
+  "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Le navigateur indique 8 GB au maximum ; nécessite un kernel compilé (patch 045)",
+  "设备内存只能是 2、4 或 8 GB": "La mémoire de l’appareil doit être de 2, 4 ou 8 GB"
 }

@@ -83,6 +83,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (networkIdentity.latitude !== undefined && networkIdentity.longitude !== undefined) {
     args.push(`--fingerprint-location=${networkIdentity.latitude},${networkIdentity.longitude},${networkIdentity.accuracyMeters ?? 25000}`)
   }
+  if (fp.deviceMemory) args.push(`--fingerprint-device-memory=${fp.deviceMemory}`)
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')

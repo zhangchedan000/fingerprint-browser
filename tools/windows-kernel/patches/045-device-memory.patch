@@ -1,0 +1,128 @@
+diff --git a/components/ungoogled/ungoogled_switches.cc b/components/ungoogled/ungoogled_switches.cc
+index df886e9..e450ba7 100644
+--- a/components/ungoogled/ungoogled_switches.cc
++++ b/components/ungoogled/ungoogled_switches.cc
+@@ -42,6 +42,9 @@ const char kFingerprintDeviceScaleFactor[] = "fingerprint-device-scale-factor";
+ // Specify the number of CPU cores
+ const char kFingerprintHardwareConcurrency[] = "fingerprint-hardware-concurrency";
+ 
++// Specify navigator.deviceMemory and the Device-Memory client hint (GB)
++const char kFingerprintDeviceMemory[] = "fingerprint-device-memory";
++
+ // Specify the operating system type
+ const char kFingerprintPlatform[] = "fingerprint-platform";
+ 
+diff --git a/components/ungoogled/ungoogled_switches.h b/components/ungoogled/ungoogled_switches.h
+index 25988f2..3822dfd 100644
+--- a/components/ungoogled/ungoogled_switches.h
++++ b/components/ungoogled/ungoogled_switches.h
+@@ -24,6 +24,7 @@ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintScreenWidth[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintScreenHeight[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintDeviceScaleFactor[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintHardwareConcurrency[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintDeviceMemory[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintPlatform[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintLanguage[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintPlatformVersion[];
+diff --git a/content/browser/renderer_host/render_process_host_impl.cc b/content/browser/renderer_host/render_process_host_impl.cc
+index e8e739f..a8765b4 100644
+--- a/content/browser/renderer_host/render_process_host_impl.cc
++++ b/content/browser/renderer_host/render_process_host_impl.cc
+@@ -3733,6 +3733,7 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
+       switches::kFingerprintScreenHeight,
+       switches::kFingerprintDeviceScaleFactor,
+       switches::kFingerprintHardwareConcurrency,
++      switches::kFingerprintDeviceMemory,
+       switches::kFingerprintPlatform,
+       switches::kFingerprintLanguage,
+       switches::kFingerprintPlatformVersion,
+diff --git a/third_party/blink/common/device_memory/approximated_device_memory.cc b/third_party/blink/common/device_memory/approximated_device_memory.cc
+index fee5a18..484e9a8 100644
+--- a/third_party/blink/common/device_memory/approximated_device_memory.cc
++++ b/third_party/blink/common/device_memory/approximated_device_memory.cc
+@@ -5,10 +5,41 @@
+ #include "third_party/blink/public/common/device_memory/approximated_device_memory.h"
+ 
+ #include "base/check_op.h"
++#include "base/command_line.h"
++#include "base/strings/string_number_conversions.h"
+ #include "base/system/sys_info.h"
+ 
+ namespace blink {
+ 
++namespace {
++
++// Same string as switches::kFingerprintDeviceMemory; spelled out so blink/common
++// does not need a dependency on components/ungoogled.
++constexpr char kFingerprintDeviceMemorySwitch[] = "fingerprint-device-memory";
++
++// Returns the configured value when it is one Chrome itself can report, else 0.
++float ConfiguredDeviceMemoryGb() {
++  const base::CommandLine* command_line =
++      base::CommandLine::InitializedForCurrentProcess()
++          ? base::CommandLine::ForCurrentProcess()
++          : nullptr;
++  if (!command_line || !command_line->HasSwitch(kFingerprintDeviceMemorySwitch))
++    return 0.0;
++  double value = 0.0;
++  if (!base::StringToDouble(
++          command_line->GetSwitchValueASCII(kFingerprintDeviceMemorySwitch),
++          &value)) {
++    return 0.0;
++  }
++  for (double allowed : {0.25, 0.5, 1.0, 2.0, 4.0, 8.0}) {
++    if (value == allowed)
++      return static_cast<float>(value);
++  }
++  return 0.0;
++}
++
++}  // namespace
++
+ // static
+ float ApproximatedDeviceMemory::approximated_device_memory_gb_ = 0.0;
+ int64_t ApproximatedDeviceMemory::physical_memory_mb_ = 0;
+@@ -57,6 +88,12 @@ void ApproximatedDeviceMemory::CalculateAndSetApproximatedDeviceMemory() {
+   // high-spec machines.
+   if (approximated_device_memory_gb_ > 8)
+     approximated_device_memory_gb_ = 8.0;
++
++  // A fingerprint profile's value wins, so navigator.deviceMemory and the
++  // Device-Memory client hint always agree.
++  const float configured = ConfiguredDeviceMemoryGb();
++  if (configured > 0.0)
++    approximated_device_memory_gb_ = configured;
+ }
+ 
+ // static
+diff --git a/third_party/blink/renderer/core/frame/navigator_device_memory.cc b/third_party/blink/renderer/core/frame/navigator_device_memory.cc
+index 792ee43..181382d 100644
+--- a/third_party/blink/renderer/core/frame/navigator_device_memory.cc
++++ b/third_party/blink/renderer/core/frame/navigator_device_memory.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "third_party/blink/renderer/core/frame/navigator_device_memory.h"
+ 
++#include "base/command_line.h"
++#include "components/ungoogled/ungoogled_switches.h"
+ #include "third_party/blink/public/common/device_memory/approximated_device_memory.h"
+ #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
+ #include "third_party/blink/renderer/core/dom/document.h"
+@@ -12,8 +14,16 @@
+ namespace blink {
+ 
+ float NavigatorDeviceMemory::deviceMemory() const {
++  // With --fingerprint-device-memory the approximated value already holds the
++  // profile's choice (shared with the Device-Memory client hint).
++  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
++          switches::kFingerprintDeviceMemory)) {
++    const float configured =
++        ApproximatedDeviceMemory::GetApproximatedDeviceMemory();
++    if (configured > 0)
++      return configured;
++  }
+   return 8;
+-  // return ApproximatedDeviceMemory::GetApproximatedDeviceMemory();
+ }
+ 
+ }  // namespace blink

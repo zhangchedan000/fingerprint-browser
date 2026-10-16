@@ -1728,5 +1728,9 @@
   "设备名称": "Tên thiết bị",
   "MAC 地址": "Địa chỉ MAC",
   "其他": "Khác",
-  "端口扫描保护": "Chống quét cổng"
+  "端口扫描保护": "Chống quét cổng",
+  "显卡型号": "Mẫu GPU",
+  "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Chỉ liệt kê mẫu thật có đủ dữ liệu kết xuất trong kernel; mỗi cửa sổ có thể khác nhau",
+  "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Trình duyệt báo tối đa 8 GB; cần kernel tự biên dịch (bản vá 045)",
+  "设备内存只能是 2、4 或 8 GB": "Bộ nhớ thiết bị chỉ được là 2, 4 hoặc 8 GB"
 }
