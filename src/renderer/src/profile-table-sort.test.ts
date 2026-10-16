@@ -7,6 +7,7 @@ function profile(serialNumber: number, overrides: Partial<BrowserProfileView> = 
     id: `profile-${serialNumber}`, serialNumber, name: `环境 ${serialNumber}`, note: '', group: '', tags: [],
     extensionIds: [], color: '#5566dd', startUrls: [], window: { mode: 'auto', x: 0, y: 0, width: 1280, height: 800 },
     favorite: false, status: 'closed', proxy: { protocol: 'direct', host: '', username: '', password: '', passwordStored: false },
+    account: { platform: '', username: '', password: '', passwordStored: false },
     fingerprint: {
       seed: serialNumber, hardwareProfileId: 'windows-host', platform: 'windows', platformVersion: '10.0.0',
       brand: 'Chrome', brandVersion: '144.0.7559.132', hardwareConcurrency: 8, language: 'zh-CN',

@@ -76,6 +76,7 @@ function portableDraft(profile: BrowserProfile): ProfileDraft {
     kernelVersion: profile.kernelVersion,
     window: { ...profile.window },
     proxy: { ...profile.proxy, password: '', passwordStored: false },
+    account: { platform: profile.account.platform, username: profile.account.username, password: '' },
     fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
   }
 }
@@ -154,7 +155,8 @@ export class ProfileBackupManager {
       kernelVersion: typeof manifest.profile.kernelVersion === 'string' ? manifest.profile.kernelVersion : '',
       name: suffixedProfileName('{0}（迁移）', manifest.profile.name),
       extensionIds: [],
-      proxy: { ...manifest.profile.proxy, password: '', passwordStored: false }
+      proxy: { ...manifest.profile.proxy, password: '', passwordStored: false },
+      account: manifest.profile.account ? { ...manifest.profile.account, password: '', passwordStored: false } : undefined
     })
     const stagingRoot = await mkdtemp(join(this.profiles.vaultPath, '.profile-backup-import-'))
     const staging = join(stagingRoot, 'user-data')

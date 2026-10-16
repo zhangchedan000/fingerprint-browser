@@ -84,7 +84,7 @@ function portableProfile(profile: BrowserProfile): MigrationProfile {
     profile: {
       name: profile.name, note: profile.note, group: profile.group, tags: [...profile.tags],
       extensionIds: [...profile.extensionIds], color: profile.color, startUrls: [...profile.startUrls],
-      kernelVersion: profile.kernelVersion, window: { ...profile.window }, proxy: { ...profile.proxy },
+      kernelVersion: profile.kernelVersion, window: { ...profile.window }, proxy: { ...profile.proxy }, account: { ...profile.account },
       fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
     }
   }

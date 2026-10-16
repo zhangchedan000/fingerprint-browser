@@ -1,5 +1,5 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, screen, shell } from 'electron'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -98,6 +98,10 @@ app.whenReady().then(async () => {
   launcher = new BrowserLauncher(profiles, settings, (profile) => {
     mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   }, extensions, logger)
+  launcher.setHostScreenProvider(() => {
+    const { width, height } = screen.getPrimaryDisplay().size
+    return { width, height }
+  })
   await launcher.initialize()
   const kernels = new KernelManager(vaultPath, settings, () => undefined, logger, (version) => profiles.kernelUsers(version))
   const cookies = new CookieManager(profiles, settings, logger)

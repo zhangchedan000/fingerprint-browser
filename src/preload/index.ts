@@ -42,6 +42,7 @@ const api: BrowserApi = {
     setFavorite: (id: string, favorite: boolean) => ipcRenderer.invoke('profiles:set-favorite', id, favorite),
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),
     setKernelMany: (ids: string[], kernelVersion: string) => ipcRenderer.invoke('profiles:set-kernel-many', ids, kernelVersion),
+    importCookiesText: (id: string, text: string) => ipcRenderer.invoke('profiles:import-cookies-text', id, text),
     removeMany: (ids: string[]) => ipcRenderer.invoke('profiles:remove-many', ids),
     onChanged: (listener: (profile: BrowserProfileView) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, profile: BrowserProfileView): void => listener(profile)

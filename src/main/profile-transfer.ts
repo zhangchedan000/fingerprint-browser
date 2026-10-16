@@ -32,6 +32,7 @@ export function serializeProfileConfig(profile: BrowserProfile): string {
       kernelVersion: profile.kernelVersion,
       window: { ...profile.window },
       proxy: { ...profile.proxy, password: '' },
+      account: { platform: profile.account.platform, username: profile.account.username, password: '' },
       fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
     }
   }
@@ -61,7 +62,8 @@ export function parseProfileConfig(raw: string): ProfileDraft {
   return {
     ...draft,
     name: `${draft.name}（导入）`,
-    proxy: { ...draft.proxy, password: '' }
+    proxy: { ...draft.proxy, password: '' },
+    account: { ...draft.account, password: '' }
   }
 }
 

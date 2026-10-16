@@ -47,4 +47,10 @@ describe('profile secret boundary', () => {
     const exposed = publicProfile(stored)
     expect(proxyForTest({ ...exposed.proxy, password: 'replacement' }, stored).password).toBe('replacement')
   })
+
+  it('never exposes the platform account password to the interface', () => {
+    const view = publicProfile({ ...profile(), account: { platform: 'TikTok Shop', username: 'shop@example.com', password: 'account-secret' } })
+    expect(view.account).toEqual({ platform: 'TikTok Shop', username: 'shop@example.com', password: '', passwordStored: true })
+    expect(JSON.stringify(view)).not.toContain('account-secret')
+  })
 })

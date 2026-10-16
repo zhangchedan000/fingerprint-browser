@@ -122,4 +122,31 @@ describe('profile validation', () => {
     expect(result.group).toBe('美国店铺')
     expect(result.tags).toEqual(['重点', '广告'])
   })
+
+  it('keeps the template values unless a value is marked as hand-set', () => {
+    const draft = defaultProfileDraft()
+    const templated = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 } })
+    expect(templated.fingerprint.screenWidth).toBe(draft.fingerprint.screenWidth)
+    expect(templated.fingerprint.hardwareConcurrency).toBe(draft.fingerprint.hardwareConcurrency)
+    expect(templated.fingerprint.overrides).toBeUndefined()
+
+    const custom = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12, platformVersion: '15.0.0', overrides: ['screen', 'cores', 'platformVersion', 'screen'] }
+    })
+    expect(custom.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12, platformVersion: '15.0.0', overrides: ['screen', 'cores', 'platformVersion'] })
+  })
+
+  it('validates the new site permission and screen options and omits defaults', () => {
+    const draft = defaultProfileDraft()
+    const chosen = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' } })
+    expect(chosen.fingerprint).toMatchObject({ geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' })
+    const defaults = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'ask', doNotTrack: 'default', screenSource: 'profile' } })
+    expect(defaults.fingerprint).not.toHaveProperty('geolocationPermission')
+    expect(defaults.fingerprint).not.toHaveProperty('doNotTrack')
+    expect(defaults.fingerprint).not.toHaveProperty('screenSource')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'maybe' as never } })).toThrow('地理位置')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, overrides: ['gpu' as never] } })).toThrow('自定义项')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 9000, overrides: ['screen'] } })).toThrow('7680')
+  })
 })

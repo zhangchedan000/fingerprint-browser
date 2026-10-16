@@ -15,6 +15,8 @@ export interface LaunchArgumentOptions {
   hostPlatformVersion?: string
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean
+  /** Real primary display size, used when the window follows the computer's screen. */
+  hostScreen?: { width: number; height: number }
 }
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
@@ -44,19 +46,23 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
     allowGeoConflict: options.allowGeoConflict
   })
+  const followHost = fp.screenSource === 'host' && options.hostScreen
+    && Number.isInteger(options.hostScreen.width) && Number.isInteger(options.hostScreen.height)
+  const screenWidth = followHost ? options.hostScreen!.width : fp.screenWidth
+  const screenHeight = followHost ? options.hostScreen!.height : fp.screenHeight
   const args = [
     `--user-data-dir=${options.userDataDir}`,
     `--fingerprint=${seed}`,
     `--fingerprint-platform=${fp.platform}`,
     `--fingerprint-brand=${fp.brand}`,
     `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
-    `--fingerprint-screen-width=${fp.screenWidth}`,
-    `--fingerprint-screen-height=${fp.screenHeight}`,
+    `--fingerprint-screen-width=${screenWidth}`,
+    `--fingerprint-screen-height=${screenHeight}`,
     `--fingerprint-language=${networkIdentity.language}`,
     `--lang=${networkIdentity.language}`,
     `--accept-lang=${networkIdentity.acceptLanguages}`,
     `--timezone=${networkIdentity.timezone}`,
-    `--window-size=${profile.window.mode === 'custom' ? profile.window.width : fp.screenWidth},${profile.window.mode === 'custom' ? profile.window.height : fp.screenHeight}`,
+    `--window-size=${profile.window.mode === 'custom' ? profile.window.width : screenWidth},${profile.window.mode === 'custom' ? profile.window.height : screenHeight}`,
     `--window-name=${profileWindowName(profile)}`,
     `--prism-profile-serial=${profile.serialNumber}`,
     `--prism-profile-id=${profile.id}`,

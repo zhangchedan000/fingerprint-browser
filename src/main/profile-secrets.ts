@@ -1,4 +1,4 @@
-import type { BrowserProfile, BrowserProfileView, ProxyConfig } from '../shared/types'
+import type { BrowserProfile, BrowserProfileView, PlatformAccount, ProxyConfig } from '../shared/types'
 import { redactSensitiveText } from './redaction'
 
 export function sameProxyIdentity(first: ProxyConfig, second: ProxyConfig): boolean {
@@ -13,6 +13,15 @@ export function privateProxyConfig(proxy: ProxyConfig): ProxyConfig {
   return privateConfig
 }
 
+export function sameAccountIdentity(first: PlatformAccount, second: PlatformAccount): boolean {
+  return first.platform === second.platform && first.username === second.username
+}
+
+export function privateAccount(account: PlatformAccount): PlatformAccount {
+  const { passwordStored: _passwordStored, ...privateConfig } = account
+  return privateConfig
+}
+
 export function publicProfile(profile: BrowserProfile): BrowserProfileView {
   return {
     ...profile,
@@ -24,6 +33,12 @@ export function publicProfile(profile: BrowserProfile): BrowserProfileView {
       ...profile.proxy,
       password: '',
       passwordStored: Boolean(profile.proxy.password)
+    },
+    account: {
+      platform: profile.account.platform,
+      username: profile.account.username,
+      password: '',
+      passwordStored: Boolean(profile.account.password)
     },
     fingerprint: {
       ...profile.fingerprint,

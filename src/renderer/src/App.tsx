@@ -44,7 +44,7 @@ import {
 } from 'antd'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AppRecoveryStatus, BrowserCrashRecord, BrowserExtension, BrowserProfileView, EngineStatus, KernelRelease, LaunchDiagnosticReport, ProfileDraft, ProfileStoreHealth, StorageOverview } from '../../shared/types'
-import { ProfileEditor } from './ProfileEditor'
+import { ProfileEditor, type ProfileEditorExtras } from './ProfileEditor'
 import { KernelManagerModal } from './KernelManagerModal'
 import { ProfileDataModal } from './ProfileDataModal'
 import { RecycleBinModal } from './RecycleBinModal'
@@ -343,7 +343,7 @@ export default function App() {
     }
   }
 
-  async function saveProfile(draft: ProfileDraft): Promise<void> {
+  async function saveProfile(draft: ProfileDraft, extras: ProfileEditorExtras): Promise<void> {
     setSaving(true)
     try {
       const saved = editing
@@ -353,6 +353,14 @@ export default function App() {
       setEditorOpen(false)
       setEditing(undefined)
       messageApi.success(editing ? t("环境已更新") : t("环境已创建"))
+      if (extras.cookieText.trim()) {
+        try {
+          const { count } = await window.browserApi.profiles.importCookiesText(saved.id, extras.cookieText)
+          messageApi.success(t("已导入 {0} 条 Cookie", count))
+        } catch (error) {
+          messageApi.warning(t("窗口已保存，但 Cookie 导入失败：{0}", humanError(error)))
+        }
+      }
     } catch (error) {
       messageApi.error(humanError(error))
     } finally {

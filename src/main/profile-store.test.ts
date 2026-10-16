@@ -396,4 +396,42 @@ describe('ProfileStore', () => {
     await expect(repository.setKernelMany([profile.id, 'missing'], '144.0.7559.132')).rejects.toThrow('不存在')
     expect(repository.get(profile.id).kernelVersion).toBe('')
   })
+
+  it('keeps the platform account password across edits, restarts and the recycle bin', async () => {
+    const repository = await store()
+    const draft = defaultProfileDraft()
+    const created = await repository.create({ ...draft, account: { platform: 'TikTok Shop', username: 'shop@example.com', password: 'p@ss' } })
+    expect(repository.get(created.id).account.password).toBe('p@ss')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'TikTok Shop', username: 'shop@example.com', password: '', passwordStored: true } })
+    expect(repository.get(created.id).account.password).toBe('p@ss')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'TikTok Shop', username: 'other@example.com', password: '', passwordStored: true } })
+    expect(repository.get(created.id).account.password).toBe('')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'Facebook', username: 'fb@example.com', password: 'new' } })
+    await repository.classifyMany([created.id], { group: 'Meta' })
+    await repository.setKernelMany([created.id], '144.0.7559.132')
+    expect(repository.get(created.id).account).toEqual({ platform: 'Facebook', username: 'fb@example.com', password: 'new' })
+
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(created.id).account.password).toBe('new')
+
+    await repository.remove(created.id)
+    const [trashed] = await repository.listTrash()
+    const restored = await repository.restore(trashed.trashId)
+    expect(restored.account).toEqual({ platform: 'Facebook', username: 'fb@example.com', password: 'new' })
+  })
+
+  it('loads older stores without an account as an empty account', async () => {
+    const repository = await store()
+    const profile = await repository.create(defaultProfileDraft())
+    const persisted = JSON.parse(await readFile(repository.profilesPath, 'utf8'))
+    delete persisted.profiles[0].account
+    await writeFile(repository.profilesPath, JSON.stringify(persisted))
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(profile.id).account).toEqual({ platform: '', username: '', password: '' })
+  })
 })

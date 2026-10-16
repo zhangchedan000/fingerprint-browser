@@ -208,6 +208,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await writeFile(result.filePath, serializeCookieFile(profile.name, exported), { encoding: 'utf8', mode: 0o600 })
     return { count: exported.length, filePath: result.filePath }
   })
+  ipcMain.handle('profiles:import-cookies-text', async (_event, id: string, text: string) => {
+    profiles.get(id)
+    if (typeof text !== 'string' || !text.trim()) throw new Error('请粘贴 Cookie 内容')
+    if (Buffer.byteLength(text, 'utf8') > 10 * 1024 * 1024) throw new Error('Cookie 文件不能超过 10 MB')
+    if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导入 Cookie')
+    const imported = parseCookieFile(text)
+    return { count: await cookies.importCookies(id, imported) }
+  })
   ipcMain.handle('profiles:import-cookies', async (_event, id: string) => {
     profiles.get(id)
     if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导入 Cookie')

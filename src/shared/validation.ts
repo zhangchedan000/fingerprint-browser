@@ -1,5 +1,5 @@
 import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
-import type { HardwareProfileId, ProfileDraft, ProxyConfig } from './types'
+import type { HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -13,7 +13,25 @@ export function normalizeUrl(value: string): string {
   return url.toString()
 }
 
-export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
+export const EMPTY_ACCOUNT: PlatformAccount = { platform: '', username: '', password: '' }
+
+export function validatePlatformAccount(input: PlatformAccount | undefined): PlatformAccount {
+  if (input === undefined || input === null) return { ...EMPTY_ACCOUNT }
+  if (typeof input !== 'object' || typeof input.platform !== 'string' || typeof input.username !== 'string'
+    || typeof input.password !== 'string') {
+    throw new Error('平台账号格式无效')
+  }
+  const platform = input.platform.trim()
+  const username = input.username.trim()
+  if (platform.length > 40) throw new Error('平台名称不能超过 40 个字符')
+  if (username.length > 200) throw new Error('平台账号不能超过 200 个字符')
+  if (input.password.length > 500) throw new Error('平台密码不能超过 500 个字符')
+  const account: PlatformAccount = { platform, username, password: input.password }
+  if (input.passwordStored === true) account.passwordStored = true
+  return account
+}
+
+export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { account: PlatformAccount } {
   if (!draft || !draft.fingerprint || !draft.proxy || !Array.isArray(draft.startUrls)) {
     throw new Error('浏览器环境配置不完整')
   }
@@ -47,6 +65,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   const urls = draft.startUrls.map(normalizeUrl).filter(Boolean)
   if (urls.length > 50) throw new Error('启动页不能超过 50 个')
   const proxy = validateProxyConfig(draft.proxy)
+  const account = validatePlatformAccount(draft.account)
   const rawWindow = draft.window ?? { mode: 'auto', x: 0, y: 0, width: 1200, height: 800 }
   if (rawWindow.mode !== 'auto' && rawWindow.mode !== 'custom') throw new Error('浏览器窗口模式无效')
   const windowValues = [rawWindow.x, rawWindow.y, rawWindow.width, rawWindow.height]
@@ -62,7 +81,26 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   const hardwareProfileId = (rawFp.hardwareProfileId ?? 'legacy-custom') as HardwareProfileId
   const allowedHardwareProfiles = new Set<HardwareProfileId>(['legacy-custom', ...HARDWARE_PROFILES.map((profile) => profile.id)])
   if (!allowedHardwareProfiles.has(hardwareProfileId)) throw new Error('硬件模板无效')
-  const fp = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
+  const allowedOverrides = new Set(['screen', 'cores', 'platformVersion'])
+  if (rawFp.overrides !== undefined && (!Array.isArray(rawFp.overrides) || !rawFp.overrides.every((item) => allowedOverrides.has(item)))) {
+    throw new Error('指纹自定义项无效')
+  }
+  const overrides = [...new Set(rawFp.overrides ?? [])]
+  const templated = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
+  // Hand-set values win over the template; everything else stays coherent with it.
+  const fp = {
+    ...templated,
+    screenWidth: overrides.includes('screen') ? rawFp.screenWidth : templated.screenWidth,
+    screenHeight: overrides.includes('screen') ? rawFp.screenHeight : templated.screenHeight,
+    hardwareConcurrency: overrides.includes('cores') ? rawFp.hardwareConcurrency : templated.hardwareConcurrency,
+    platformVersion: overrides.includes('platformVersion') ? rawFp.platformVersion : templated.platformVersion
+  }
+  const screenSource = rawFp.screenSource ?? 'profile'
+  if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
+  const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
+  if (!['ask', 'allow', 'block'].includes(geolocationPermission)) throw new Error('地理位置权限无效')
+  const doNotTrack = rawFp.doNotTrack ?? 'default'
+  if (!['default', 'on', 'off'].includes(doNotTrack)) throw new Error('Do Not Track 设置无效')
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -89,6 +127,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (!Number.isInteger(fp.screenWidth) || !Number.isInteger(fp.screenHeight) || fp.screenWidth < 800 || fp.screenHeight < 600) {
     throw new Error('屏幕分辨率不能小于 800×600')
   }
+  if (fp.screenWidth > 7680 || fp.screenHeight > 4320) throw new Error('屏幕分辨率不能超过 7680×4320')
   const textFields = [fp.language, fp.acceptLanguages, fp.timezone, fp.platformVersion, fp.brandVersion]
   if (!textFields.every((value) => typeof value === 'string')) throw new Error('指纹文本配置格式无效')
   if (!fp.language.trim() || !fp.acceptLanguages.trim() || !fp.timezone.trim()) {
@@ -139,6 +178,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       height: rawWindow.height
     },
     proxy,
+    account,
     fingerprint: {
       seed: fp.seed,
       hardwareProfileId: fp.hardwareProfileId,
@@ -157,7 +197,11 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       hardwareConcurrency: fp.hardwareConcurrency,
       screenWidth: fp.screenWidth,
       screenHeight: fp.screenHeight,
-      disabledSpoofing: [...fp.disabledSpoofing]
+      disabledSpoofing: [...fp.disabledSpoofing],
+      ...(overrides.length ? { overrides } : {}),
+      ...(screenSource !== 'profile' ? { screenSource } : {}),
+      ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
+      ...(doNotTrack !== 'default' ? { doNotTrack } : {})
     }
   }
 }

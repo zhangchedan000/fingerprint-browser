@@ -1,41 +1,65 @@
 import { t, translateMessage as mt } from '../../shared/i18n'
-import { ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
   AutoComplete,
   Button,
-  Checkbox,
-  Col,
+  Collapse,
   ColorPicker,
-  Divider,
+  Drawer,
   Form,
   Input,
   InputNumber,
-  Modal,
-  Row,
+  Radio,
   Select,
   Space,
-  Tag,
+  Switch,
   Tabs,
+  Tag,
+  Tooltip,
   Typography
 } from 'antd'
-import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../shared/defaults'
 import { fingerprintVersionWarning } from '../../shared/fingerprint-consistency'
 import {
   applyHardwareProfile,
+  defaultHardwareProfileId,
   effectiveGpuIdentity,
   HARDWARE_PROFILES,
   hardwareProfile,
-  hardwareProfileSummary,
   refreshSeededGpuIdentity
 } from '../../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../../shared/network-identity'
-import type { BrowserExtension, BrowserProfileView, EngineStatus, HardwareProfileId, KernelRelease, ProfileDraft, ProxyTestResult } from '../../shared/types'
+import { parsePastedProxy } from '../../shared/proxy-paste'
+import { parseCookieFile } from '../../main/cookie-file'
+import type {
+  FingerprintOverride,
+  BrowserExtension,
+  BrowserPlatform,
+  BrowserProfileView,
+  EngineStatus,
+  FingerprintConfig,
+  HardwareProfileId,
+  KernelRelease,
+  PlatformAccount,
+  ProfileDraft,
+  ProxyTestResult
+} from '../../shared/types'
 
-interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color'> {
+type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
+type EditorTab = 'basic' | 'proxy' | 'fingerprint'
+
+interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'account'> {
   startUrlsText: string
   color: string | { toHexString: () => string }
+  account: PlatformAccount
+  cookieText: string
+}
+
+export interface ProfileEditorExtras {
+  /** Cookie JSON pasted in the basic tab, imported after the window is saved. */
+  cookieText: string
 }
 
 interface ProfileEditorProps {
@@ -48,12 +72,38 @@ interface ProfileEditorProps {
   kernels: KernelRelease[]
   groups: string[]
   onCancel: () => void
-  onSave: (draft: ProfileDraft) => Promise<void>
+  onSave: (draft: ProfileDraft, extras: ProfileEditorExtras) => Promise<void>
 }
+
+/** Login pages offered for the most common platforms; any other name can be typed. */
+const PLATFORMS: Array<{ value: string; url: string }> = [
+  { value: 'TikTok Shop', url: 'https://seller-us.tiktok.com/' },
+  { value: 'TikTok', url: 'https://www.tiktok.com/login' },
+  { value: 'Facebook', url: 'https://www.facebook.com/' },
+  { value: 'Meta Business', url: 'https://business.facebook.com/' },
+  { value: 'Google Ads', url: 'https://ads.google.com/' },
+  { value: 'Shopify', url: 'https://accounts.shopify.com/' },
+  { value: 'Amazon Seller', url: 'https://sellercentral.amazon.com/' }
+]
+
+const WINDOWS_VERSIONS = [
+  { value: '10.0.0', label: 'Windows 10' },
+  { value: '15.0.0', label: 'Windows 11' }
+]
+const MACOS_VERSIONS = [
+  { value: '13.0.0', label: 'macOS 13' },
+  { value: '14.0.0', label: 'macOS 14' },
+  { value: '15.0.0', label: 'macOS 15' }
+]
+
+/** Common desktop sizes used when the user asks for a random resolution. */
+const COMMON_SCREENS: Array<[number, number]> = [
+  [1920, 1080], [1536, 864], [1366, 768], [1440, 900], [1600, 900], [2560, 1440], [1680, 1050], [1280, 800]
+]
+const CORE_OPTIONS = [2, 4, 6, 8, 10, 12, 16, 20, 24, 32]
 
 function editorValues(profile: BrowserProfileView | undefined, index: number): EditorValues {
   const draft = profile ?? defaultProfileDraft(index)
-  const fingerprint = { ...draft.fingerprint }
   return {
     name: draft.name,
     note: draft.note,
@@ -65,13 +115,66 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     kernelVersion: draft.kernelVersion,
     window: { ...draft.window },
     proxy: { ...draft.proxy },
-    fingerprint: {
-      ...fingerprint,
-      disabledSpoofing: [...draft.fingerprint.disabledSpoofing]
-    }
+    account: profile
+      ? { ...profile.account }
+      : { platform: '', username: '', password: '' },
+    cookieText: '',
+    fingerprint: { ...draft.fingerprint, disabledSpoofing: [...draft.fingerprint.disabledSpoofing] }
   }
 }
 
+/** The UA Chrome reports with the reduced user-agent policy for the chosen system and kernel. */
+function userAgentPreview(platform: BrowserPlatform, brand: string, version: string | undefined): string {
+  const major = version?.split('.')[0] || '144'
+  const system = platform === 'windows' ? 'Windows NT 10.0; Win64; x64' : 'Macintosh; Intel Mac OS X 10_15_7'
+  const edge = brand === 'Edge' ? ` Edg/${major}.0.0.0` : ''
+  return `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36${edge}`
+}
+
+function countPastedCookies(text: string): { count?: number; error?: string } {
+  if (!text.trim()) return {}
+  try {
+    return { count: parseCookieFile(text).length }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** One label + controls line, laid out like the design's two-column rows. */
+function Row({ label, children, hint, required }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean }) {
+  return (
+    <div className="fb-form-row">
+      <span className="fb-form-label">{required && <em>*</em>}{label}</span>
+      <div className="fb-form-control">
+        {children}
+        {hint && <span className="fb-form-hint">{hint}</span>}
+      </div>
+    </div>
+  )
+}
+
+/** Shows the first validation message of a field rendered with `noStyle`. */
+function FieldError({ name }: { name: Array<string | number> | string }) {
+  return (
+    <Form.Item noStyle shouldUpdate>
+      {(form) => {
+        const errors = form.getFieldError(name)
+        return errors.length ? <div className="fb-form-error">{errors[0]}</div> : null
+      }}
+    </Form.Item>
+  )
+}
+
+/** A choice the current kernel cannot apply yet: shown, never clickable. */
+function Unsupported({ options, value, reason }: { options: string[]; value: string; reason: string }) {
+  return (
+    <Tooltip title={reason}>
+      <span className="fb-unsupported">
+        <Radio.Group size="small" optionType="button" disabled value={value} options={options.map((label) => ({ value: label, label }))} />
+      </span>
+    </Tooltip>
+  )
+}
 
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, onCancel, onSave }: ProfileEditorProps) {
   const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
@@ -80,24 +183,37 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     proxy: t("代理网络"),
     hosting: t("机房网络")
   }
-
   const [form] = Form.useForm<EditorValues>()
-  const proxyProtocol = Form.useWatch(['proxy', 'protocol'], form)
-  const proxyPassword = Form.useWatch(['proxy', 'password'], form) ?? ''
-  const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], form) === true
-  const webrtcPolicy = Form.useWatch(['fingerprint', 'webrtcPolicy'], form) ?? 'proxy_only'
-  const fingerprintTimezone = Form.useWatch(['fingerprint', 'timezone'], form)
-  const fingerprintLanguage = Form.useWatch(['fingerprint', 'language'], form) ?? 'zh-CN'
-  const fingerprintAcceptLanguages = Form.useWatch(['fingerprint', 'acceptLanguages'], form) ?? 'zh-CN,zh,en-US,en'
-  const networkIdentityMode = Form.useWatch(['fingerprint', 'networkIdentityMode'], form) ?? 'manual'
-  const brandVersion = Form.useWatch(['fingerprint', 'brandVersion'], form) ?? ''
-  const hardwareProfileId = Form.useWatch(['fingerprint', 'hardwareProfileId'], form) ?? 'legacy-custom'
-  const fingerprintSeed = Form.useWatch(['fingerprint', 'seed'], form) ?? 0
-  const fingerprintGpuBucket = Form.useWatch(['fingerprint', 'gpuBucket'], form)
-  const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
-  const windowMode = Form.useWatch(['window', 'mode'], form) ?? 'auto'
+  const [tab, setTab] = useState<EditorTab>('basic')
   const [testingProxy, setTestingProxy] = useState(false)
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteError, setPasteError] = useState('')
+  const [screenCustom, setScreenCustom] = useState(false)
+
+  const proxyProtocol = Form.useWatch(['proxy', 'protocol'], form) ?? 'direct'
+  const proxyPassword = Form.useWatch(['proxy', 'password'], form) ?? ''
+  const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], form) === true
+  const accountPassword = Form.useWatch(['account', 'password'], form) ?? ''
+  const accountPasswordStored = Form.useWatch(['account', 'passwordStored'], form) === true
+  const cookieText = Form.useWatch('cookieText', form) ?? ''
+  const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
+  const windowMode = Form.useWatch(['window', 'mode'], form) ?? 'auto'
+  const fp = (Form.useWatch('fingerprint', form) ?? editorValues(profile, suggestedIndex).fingerprint) as FingerprintConfig
+
+  useEffect(() => {
+    if (!open) return
+    form.resetFields()
+    form.setFieldsValue(editorValues(profile, suggestedIndex))
+    setTab('basic')
+    setProxyResult(null)
+    setPasteText('')
+    setPasteError('')
+    const initial = editorValues(profile, suggestedIndex).fingerprint
+    setScreenCustom(Boolean(initial.overrides?.includes('screen')
+      && !COMMON_SCREENS.some(([width, height]) => width === initial.screenWidth && height === initial.screenHeight)))
+  }, [form, open, profile, suggestedIndex])
+
   const pinnedKernel = kernels.find((kernel) => kernel.version === kernelVersion)
   const selectedEngine: EngineStatus | null = kernelVersion
     ? {
@@ -108,29 +224,109 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         version: kernelVersion
       }
     : engine
-  const versionWarning = fingerprintVersionWarning(brandVersion, selectedEngine)
-  const selectedHardware = hardwareProfile(hardwareProfileId)
-  const selectedGpuIdentity = effectiveGpuIdentity({
-    hardwareProfileId,
-    seed: fingerprintSeed,
-    gpuBucket: fingerprintGpuBucket
-  })
+  const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
+  const selectedHardware = hardwareProfile(fp.hardwareProfileId)
+  const hostMatched = selectedHardware?.hostMatched === true
+  const gpu = effectiveGpuIdentity({ hardwareProfileId: fp.hardwareProfileId, seed: fp.seed, gpuBucket: fp.gpuBucket })
   const hostPlatform = defaultPlatform()
-  const timezoneMismatch = Boolean(proxyResult?.timezone && fingerprintTimezone && proxyResult.timezone !== fingerprintTimezone)
-  const networkIdentity = effectiveNetworkIdentity({
-    ...form.getFieldValue('fingerprint'),
-    language: fingerprintLanguage,
-    acceptLanguages: fingerprintAcceptLanguages,
-    timezone: fingerprintTimezone,
-    networkIdentityMode
-  }, proxyResult?.ok ? proxyResult : profile?.proxyCheck)
+  const followIp = fp.networkIdentityMode === 'proxy'
+  const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : profile?.proxyCheck)
+  const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
+  const running = Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
 
-  useEffect(() => {
-    if (open) {
-      form.setFieldsValue(editorValues(profile, suggestedIndex))
-      setProxyResult(null)
+  function patchFingerprint(patch: Partial<FingerprintConfig>): void {
+    form.setFieldValue('fingerprint', { ...form.getFieldValue('fingerprint'), ...patch })
+  }
+
+  function setSpoofing(surface: SpoofSurface, random: boolean): void {
+    const current = new Set<SpoofSurface>(form.getFieldValue(['fingerprint', 'disabledSpoofing']) ?? [])
+    if (random) current.delete(surface)
+    else current.add(surface)
+    patchFingerprint({ disabledSpoofing: [...current] })
+  }
+
+  function spoofControl(surface: SpoofSurface) {
+    const value = hostMatched || fp.disabledSpoofing.includes(surface) ? 'real' : 'random'
+    return (
+      <Radio.Group
+        size="small"
+        optionType="button"
+        disabled={hostMatched}
+        value={value}
+        onChange={(event) => setSpoofing(surface, event.target.value === 'random')}
+        options={[{ value: 'random', label: t("随机") }, { value: 'real', label: t("关闭") }]}
+      />
+    )
+  }
+
+  function chooseHardware(id: HardwareProfileId): void {
+    // A new hardware set brings its own coherent values, so hand-set overrides start over.
+    const next = applyHardwareProfile(form.getFieldValue('fingerprint'), id, { refreshSeededGpu: true })
+    form.setFieldValue('fingerprint', { ...next, overrides: [] })
+  }
+
+  function setOverride(override: FingerprintOverride, enabled: boolean, patch: Partial<FingerprintConfig> = {}): void {
+    const current = new Set<FingerprintOverride>(form.getFieldValue(['fingerprint', 'overrides']) ?? [])
+    if (enabled) current.add(override)
+    else current.delete(override)
+    patchFingerprint({ ...patch, overrides: [...current] })
+  }
+
+  function chooseScreen(mode: 'random' | 'host' | 'custom'): void {
+    if (mode === 'host') {
+      patchFingerprint({ screenSource: 'host' })
+      return
     }
-  }, [form, open, profile, suggestedIndex])
+    if (mode === 'random') {
+      const [width, height] = COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
+      setOverride('screen', true, { screenSource: 'profile', screenWidth: width, screenHeight: height })
+      setScreenCustom(false)
+      return
+    }
+    setOverride('screen', true, { screenSource: 'profile' })
+    setScreenCustom(true)
+  }
+
+  function chooseCores(value: number | 'template'): void {
+    if (value === 'template') {
+      const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
+      setOverride('cores', false, template ? { hardwareConcurrency: template.hardwareConcurrency } : {})
+    } else {
+      setOverride('cores', true, { hardwareConcurrency: value })
+    }
+  }
+
+  function choosePlatformVersion(value: string): void {
+    const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
+    setOverride('platformVersion', value !== template?.platformVersion, { platformVersion: value })
+  }
+
+  function choosePlatform(platform: BrowserPlatform): void {
+    if (platform === fp.platform) return
+    chooseHardware(defaultHardwareProfileId(platform))
+  }
+
+  function applyPastedProxy(text: string): void {
+    setPasteText(text)
+    if (!text.trim()) { setPasteError(''); return }
+    try {
+      const parsed = parsePastedProxy(text)
+      const current = form.getFieldValue('proxy')
+      form.setFieldValue('proxy', {
+        ...current,
+        protocol: parsed.protocol ?? (current.protocol === 'direct' ? 'socks5' : current.protocol),
+        host: parsed.host,
+        port: parsed.port,
+        username: parsed.username,
+        password: parsed.password,
+        passwordStored: false
+      })
+      setProxyResult(null)
+      setPasteError('')
+    } catch (error) {
+      setPasteError(mt(error instanceof Error ? error.message : String(error)))
+    }
+  }
 
   async function testCurrentProxy(): Promise<void> {
     try {
@@ -141,498 +337,520 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     } catch (error) {
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
         setProxyResult({ ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) })
+      } else {
+        setTab('proxy')
       }
     } finally {
       setTestingProxy(false)
     }
   }
 
+  function onPlatformChange(platform: string): void {
+    const known = PLATFORMS.find((item) => item.value === platform)
+    const urls = String(form.getFieldValue('startUrlsText') ?? '').trim()
+    if (known && (!urls || urls === 'https://browserleaks.com/')) form.setFieldValue('startUrlsText', known.url)
+  }
+
   async function submit(): Promise<void> {
-    await form.validateFields()
+    try {
+      await form.validateFields()
+    } catch (error) {
+      const fields = (error as { errorFields?: Array<{ name: Array<string | number> }> }).errorFields ?? []
+      const first = fields[0]?.name[0]
+      setTab(first === 'proxy' ? 'proxy' : first === 'fingerprint' ? 'fingerprint' : 'basic')
+      return
+    }
+    if (cookiePreview.error) {
+      setTab('basic')
+      return
+    }
     const values = form.getFieldsValue(true) as EditorValues
     const color = typeof values.color === 'string' ? values.color : values.color.toHexString()
     await onSave({
       name: values.name,
       note: values.note,
-      group: values.group,
+      group: values.group ?? '',
       tags: values.tags,
       color,
-      startUrls: values.startUrlsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+      startUrls: String(values.startUrlsText ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       kernelVersion: values.kernelVersion,
       window: values.window,
       proxy: values.proxy,
+      account: values.account,
       extensionIds: values.extensionIds,
       fingerprint: values.fingerprint
-    })
+    }, { cookieText: values.cookieText ?? '' })
   }
 
-  const general = (
-    <div className="editor-section">
-      <Form.Item name="name" label={t("环境名称")} rules={[{ required: true, message: t("请输入环境名称") }]}>
-        <Input placeholder={t("例如：美国店铺 01")} maxLength={60} />
-      </Form.Item>
-      <Form.Item name="color" label={t("标记颜色")}>
-        <ColorPicker showText />
-      </Form.Item>
-      <Form.Item
-        name="kernelVersion"
-        label={t("浏览器内核")}
-        extra={t("长期使用的账号建议固定版本；自动模式会跟随应用当前选择的内核。")}
+  const basic = (
+    <div className="fb-editor-section">
+      <Row label={t("窗口名称")} required>
+        <Form.Item name="name" noStyle rules={[{ required: true, message: t("请输入环境名称") }]}>
+          <Input placeholder={t("例如：TK-美区-01")} maxLength={60} />
+        </Form.Item>
+      </Row>
+      <FieldError name="name" />
+      <Row label={t("分组")}>
+        <Form.Item name="group" noStyle>
+          <AutoComplete
+            allowClear
+            options={groups.map((value) => ({ value }))}
+            placeholder={t("选择已有分组，或输入新分组名称")}
+            maxLength={40}
+            filterOption={(input, option) => String(option?.value ?? '').toLocaleLowerCase().includes(input.toLocaleLowerCase())}
+          />
+        </Form.Item>
+      </Row>
+      <Row
+        label={t("平台账号")}
+        hint={accountPasswordStored && !accountPassword ? t("密码已加密保存；平台和账号不变时留空即保持原密码。") : t("账号密码只加密保存在本机，导出配置时不会带出密码。")}
       >
-        <Select
-          options={[
-            { value: '', label: t("自动跟随当前内核{0}", engine?.version ? ` · ${engine.version}` : '') },
-            ...kernels.map((kernel) => ({
-              value: kernel.version,
-              label: `${kernel.version}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}`
-            })),
-            ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelVersion) }] : [])
-          ]}
-        />
-      </Form.Item>
-      {kernelVersion && !pinnedKernel && (
-        <Alert type="error" showIcon message={t("固定内核 {0} 当前不可用", kernelVersion)} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
-      )}
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item name="group" label={t("环境分组")}>
+        <div className="fb-account-grid">
+          <Form.Item name={['account', 'platform']} noStyle>
             <AutoComplete
               allowClear
-              options={groups.map((value) => ({ value }))}
-              placeholder={t("选择已有分组或输入新分组")}
+              options={PLATFORMS.map((item) => ({ value: item.value }))}
+              placeholder={t("平台")}
               maxLength={40}
-              filterOption={(input, option) => String(option?.value ?? '').toLocaleLowerCase().includes(input.toLocaleLowerCase())}
+              onChange={onPlatformChange}
             />
           </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name="tags" label={t("标签")}>
-            <Select mode="tags" maxCount={20} tokenSeparators={[',']} placeholder={t("输入后回车")} />
+          <Form.Item name={['account', 'username']} noStyle>
+            <Input placeholder={t("账号")} autoComplete="off" maxLength={200} />
           </Form.Item>
-        </Col>
+          <Form.Item name={['account', 'password']} noStyle>
+            <Input.Password placeholder={accountPasswordStored ? t("已保存，留空保持不变") : t("密码")} autoComplete="new-password" maxLength={500} />
+          </Form.Item>
+        </div>
       </Row>
-      <Form.Item name="startUrlsText" label={t("启动页面")} extra={t("每行一个网址；不填写协议时自动使用 HTTPS")}>
-        <Input.TextArea rows={4} placeholder={'https://example.com\nhttps://browserleaks.com/'} />
-      </Form.Item>
-      <Form.Item name="extensionIds" label={t("启动扩展")} extra={t("从扩展管理中导入后，可为每个环境选择不同的扩展组合")}>
-        <Select
-          mode="multiple"
-          allowClear
-          placeholder={extensions.length ? t("选择该环境启动时加载的扩展") : t("尚未导入扩展")}
-          options={extensions.map((extension) => ({
-            value: extension.id,
-            label: `${extension.name} · ${extension.version}`
-          }))}
-        />
-      </Form.Item>
-      <Divider />
-      <Form.Item name={['window', 'mode']} label={t("浏览器窗口")} extra={t("自动模式沿用指纹屏幕尺寸；自定义模式可固定窗口尺寸和桌面坐标。")}>
-        <Select options={[{ value: 'auto', label: t("自动尺寸与位置") }, { value: 'custom', label: t("固定尺寸与位置") }]} />
-      </Form.Item>
-      {windowMode === 'custom' && (
-        <>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item label={t("窗口尺寸")}>
-                <Space.Compact block>
-                  <Form.Item name={['window', 'width']} noStyle><InputNumber min={480} max={7680} precision={0} className="resolution-input" /></Form.Item>
-                  <Input className="resolution-times" value="×" disabled />
-                  <Form.Item name={['window', 'height']} noStyle><InputNumber min={360} max={4320} precision={0} className="resolution-input" /></Form.Item>
-                </Space.Compact>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label={t("桌面坐标")}>
-                <Space.Compact block>
-                  <Form.Item name={['window', 'x']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="X" className="resolution-input" /></Form.Item>
-                  <Input className="resolution-times" value="," disabled />
-                  <Form.Item name={['window', 'y']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="Y" className="resolution-input" /></Form.Item>
-                </Space.Compact>
-              </Form.Item>
-            </Col>
-          </Row>
-          <Alert type="info" showIcon message={t("多显示器允许负坐标；显示器布局变化后，过期坐标可能让窗口出现在屏幕之外。")} />
-        </>
-      )}
-      <Form.Item name="note" label={t("备注")}>
-        <Input.TextArea rows={3} maxLength={500} showCount placeholder={t("仅保存在本机")} />
-      </Form.Item>
+      <Row label={t("启动页面")} hint={t("每行一个网址；不填写协议时自动使用 HTTPS")}>
+        <Form.Item name="startUrlsText" noStyle>
+          <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
+        </Form.Item>
+      </Row>
+      <Row
+        label={t("Cookie")}
+        hint={running
+          ? t("窗口运行中，关闭后才能导入 Cookie")
+          : cookiePreview.error
+            ? <Typography.Text type="danger">{mt(cookiePreview.error)}</Typography.Text>
+            : cookiePreview.count !== undefined
+              ? t("识别到 {0} 条 Cookie，保存后导入此窗口", cookiePreview.count)
+              : t("粘贴 JSON 格式 Cookie（支持常见插件导出的格式），保存后导入")}
+      >
+        <Form.Item name="cookieText" noStyle>
+          <Input.TextArea disabled={running} autoSize={{ minRows: 3, maxRows: 8 }} placeholder={t("粘贴 JSON 格式 Cookie，或从文件导入")} />
+        </Form.Item>
+      </Row>
+      <Row label={t("备注")}>
+        <Form.Item name="note" noStyle>
+          <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} maxLength={500} placeholder={t("选填")} />
+        </Form.Item>
+      </Row>
+      <Collapse
+        ghost
+        className="fb-more"
+        items={[{
+          key: 'more',
+          label: t("更多设置：标签、颜色、扩展、窗口位置"),
+          forceRender: true,
+          children: (
+            <>
+              <Row label={t("标签")}>
+                <Form.Item name="tags" noStyle>
+                  <Select mode="tags" maxCount={20} tokenSeparators={[',']} placeholder={t("输入后回车")} />
+                </Form.Item>
+              </Row>
+              <Row label={t("标记颜色")}>
+                <Form.Item name="color" noStyle>
+                  <ColorPicker showText />
+                </Form.Item>
+              </Row>
+              <Row label={t("启动扩展")} hint={extensions.length ? undefined : t("尚未导入扩展")}>
+                <Form.Item name="extensionIds" noStyle>
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    placeholder={t("选择该环境启动时加载的扩展")}
+                    options={extensions.map((extension) => ({ value: extension.id, label: `${extension.name} · ${extension.version}` }))}
+                  />
+                </Form.Item>
+              </Row>
+              <Row label={t("浏览器窗口")}>
+                <Form.Item name={['window', 'mode']} noStyle>
+                  <Radio.Group size="small" optionType="button" options={[{ value: 'auto', label: t("自动尺寸与位置") }, { value: 'custom', label: t("固定尺寸与位置") }]} />
+                </Form.Item>
+              </Row>
+              {windowMode === 'custom' && (
+                <Row label={t("窗口尺寸")} hint={t("多显示器允许负坐标；显示器布局变化后，过期坐标可能让窗口出现在屏幕之外。")}>
+                  <Space wrap>
+                    <Form.Item name={['window', 'width']} noStyle><InputNumber min={480} max={7680} precision={0} prefix="W" /></Form.Item>
+                    <Form.Item name={['window', 'height']} noStyle><InputNumber min={360} max={4320} precision={0} prefix="H" /></Form.Item>
+                    <Form.Item name={['window', 'x']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="X" /></Form.Item>
+                    <Form.Item name={['window', 'y']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="Y" /></Form.Item>
+                  </Space>
+                </Row>
+              )}
+            </>
+          )
+        }]}
+      />
     </div>
   )
 
   const proxy = (
-    <div className="editor-section">
-      <Form.Item name={['proxy', 'protocol']} label={t("代理方式")}>
-        <Select
-          options={[
-            { value: 'direct', label: t("不使用代理（本地网络）") },
-            { value: 'http', label: 'HTTP' },
-            { value: 'https', label: 'HTTPS' },
-            { value: 'socks5', label: 'SOCKS5' }
-          ]}
-        />
-      </Form.Item>
+    <div className="fb-editor-section">
+      <Row label={t("代理方式")}>
+        <Space wrap size={8}>
+          <Form.Item name={['proxy', 'protocol']} noStyle>
+            <Radio.Group
+              optionType="button"
+              options={[
+                { value: 'direct', label: t("直连") },
+                { value: 'http', label: 'HTTP' },
+                { value: 'https', label: 'HTTPS' },
+                { value: 'socks5', label: 'SOCKS5' }
+              ]}
+            />
+          </Form.Item>
+          <Tooltip title={t("代理 IP 模块完成后开放")}>
+            <Button disabled>{t("从代理池选择")}</Button>
+          </Tooltip>
+        </Space>
+      </Row>
       {proxyProtocol !== 'direct' && (
         <>
-          <Row gutter={12}>
-            <Col span={16}>
-              <Form.Item name={['proxy', 'host']} label={t("主机")} rules={[{ required: true, message: t("请输入代理主机") }]}>
+          <Row label={t("代理地址")} required>
+            <div className="fb-host-grid">
+              <Form.Item name={['proxy', 'host']} noStyle rules={[{ required: true, message: t("请输入代理主机") }]}>
                 <Input placeholder="proxy.example.com" />
               </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name={['proxy', 'port']} label={t("端口")} rules={[{ required: true, message: t("请输入端口") }]}>
-                <InputNumber min={1} max={65535} className="full-width" placeholder="8080" />
+              <Form.Item name={['proxy', 'port']} noStyle rules={[{ required: true, message: t("请输入端口") }]}>
+                <InputNumber min={1} max={65535} precision={0} placeholder={t("端口")} className="full-width" />
               </Form.Item>
-            </Col>
+            </div>
           </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name={['proxy', 'username']} label={t("用户名")}>
-                <Input autoComplete="off" />
+          <FieldError name={['proxy', 'host']} />
+          <FieldError name={['proxy', 'port']} />
+          <Row
+            label={t("账号 / 密码")}
+            hint={proxyPasswordStored && !proxyPassword ? t("已保存；代理地址和用户名未修改时，留空可保持原密码。") : undefined}
+          >
+            <div className="fb-host-grid even">
+              <Form.Item name={['proxy', 'username']} noStyle>
+                <Input placeholder={t("用户名")} autoComplete="off" />
               </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label={t("密码")}
-                extra={proxyPasswordStored
-                  ? t("已保存；代理地址和用户名未修改时，留空可保持原密码。")
-                  : t("密码将安全保存在当前设备。")}
-              >
-                <Space.Compact block>
-                  <Form.Item name={['proxy', 'password']} noStyle>
-                    <Input.Password
-                      autoComplete="new-password"
-                      placeholder={proxyPasswordStored ? t("已保存，留空保持不变") : undefined}
-                    />
-                  </Form.Item>
-                  {proxyPasswordStored && !proxyPassword && (
-                    <Button onClick={() => form.setFieldValue(['proxy', 'passwordStored'], false)}>{t("清除已保存")}</Button>
-                  )}
-                </Space.Compact>
-              </Form.Item>
-            </Col>
+              <Space.Compact block>
+                <Form.Item name={['proxy', 'password']} noStyle>
+                  <Input.Password autoComplete="new-password" placeholder={proxyPasswordStored ? t("已保存，留空保持不变") : t("密码")} />
+                </Form.Item>
+                {proxyPasswordStored && !proxyPassword && (
+                  <Button onClick={() => form.setFieldValue(['proxy', 'passwordStored'], false)}>{t("清除已保存")}</Button>
+                )}
+              </Space.Compact>
+            </div>
           </Row>
         </>
       )}
-      <Space className="proxy-test-row">
-        <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测连接")}</Button>
-        {proxyResult && !proxyResult.ok && <Typography.Text type="danger">{t("连接失败：{0}", proxyResult.error)}</Typography.Text>}
-      </Space>
-      {proxyResult?.ok && (
-        <div className="proxy-test-result">
-          <div className="proxy-result-line">
-            <Typography.Text strong>{t("出口 IP：{0}", proxyResult.ip)}</Typography.Text>
-            <Typography.Text type="secondary">{proxyResult.latencyMs} ms</Typography.Text>
-            {proxyResult.networkRisk && <Tag color="warning">{riskLabels[proxyResult.networkRisk]}</Tag>}
-          </div>
-          {(proxyResult.country || proxyResult.city) && (
-            <Typography.Text type="secondary">
-              {[proxyResult.country, proxyResult.region, proxyResult.city].filter(Boolean).join(' · ')}
-            </Typography.Text>
-          )}
-          {(proxyResult.asn || proxyResult.organization || proxyResult.isp) && (
-            <Typography.Text type="secondary">
-              {[proxyResult.asn ? `AS${proxyResult.asn}` : '', proxyResult.organization, proxyResult.isp]
-                .filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ')}
-            </Typography.Text>
-          )}
-          {proxyResult.timezone && (
-            <div className="proxy-timezone-row">
-              <Typography.Text type={proxyResult.geoConfidence === 'conflict' || timezoneMismatch ? 'warning' : 'success'}>
-                {t("代理时区：{0}", proxyResult.timezone)} · {proxyResult.geoConfidence === 'conflict'
-                  ? t("GeoIP 数据源存在冲突")
-                  : timezoneMismatch ? t("与指纹时区 {0} 不一致", fingerprintTimezone) : t("与指纹时区一致")}
-              </Typography.Text>
-              {timezoneMismatch && proxyResult.geoConfidence !== 'conflict' && (
-                <Button size="small" onClick={() => form.setFieldValue(['fingerprint', 'timezone'], proxyResult.timezone)}>{t("应用代理时区")}</Button>
-              )}
-            </div>
-          )}
-          {proxyResult.latitude !== undefined && proxyResult.longitude !== undefined && (
-            <Typography.Text type="secondary">
-              {t("城市级坐标：{0}, {1}", proxyResult.latitude.toFixed(3), proxyResult.longitude.toFixed(3))} · {t("精度约 {0} km", Math.round((proxyResult.accuracyMeters ?? 25000) / 1000))}
-            </Typography.Text>
-          )}
-          {networkIdentityMode === 'proxy' && (
-            <Alert
-              type={proxyResult.geoConfidence === 'conflict' ? 'warning' : 'success'}
-              showIcon
-              message={proxyResult.geoConfidence === 'conflict' ? t("代理地理信息存在冲突") : t("代理网络身份已生成")}
-              description={proxyResult.geoConfidence === 'conflict'
-                ? t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))
-                : `${networkIdentity.language} · ${networkIdentity.acceptLanguages} · ${networkIdentity.timezone}`}
-            />
-          )}
-          {proxyResult.degraded && <Typography.Text type="warning">{mt(proxyResult.warning)}</Typography.Text>}
-        </div>
-      )}
-      <Divider />
-      <Form.Item
-        name={['fingerprint', 'webrtcPolicy']}
-        label={t("WebRTC IP 策略")}
-        extra={t("视频通话兼容性与网络隐私之间的取舍；普通多环境使用建议保持默认。")}
+      <Row
+        label={t("快速粘贴")}
+        hint={pasteError ? <Typography.Text type="danger">{pasteError}</Typography.Text> : t("支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入")}
       >
-        <Select
-          options={[
-            { value: 'proxy_only', label: t("防泄漏（推荐）— 禁止非代理 UDP") },
-            { value: 'public_only', label: t("仅公网接口 — 不暴露本地地址") },
-            { value: 'default', label: t("系统默认 — 使用所有网络接口") }
-          ]}
+        <Input
+          className="fb-paste"
+          value={pasteText}
+          placeholder="host:port:user:pass"
+          onChange={(event) => applyPastedProxy(event.target.value)}
         />
-      </Form.Item>
-      {webrtcPolicy === 'proxy_only' && (
-        <Alert
-          type="success"
-          showIcon
-          message={t("WebRTC 防泄漏已开启")}
-          description={proxyProtocol === 'direct'
-            ? t("不会枚举本地接口；未配置 UDP 代理时 WebRTC 将使用 TCP，部分实时音视频性能可能下降。")
-            : t("WebRTC 仅使用代理支持的 UDP 或 TCP，不允许通过本地网络绕过代理。")}
-        />
+      </Row>
+      <Row label="">
+        <div className="fb-proxy-test">
+          <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>
+          {proxyResult?.ok && (
+            <span className={`fb-proxy-result ${proxyResult.geoConfidence === 'conflict' ? 'warn' : 'ok'}`}>
+              {t("连接正常")} · {proxyResult.ip} · {[proxyResult.country, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
+              {proxyResult.networkRisk && <Tag color="warning" className="fb-inline-tag">{riskLabels[proxyResult.networkRisk]}</Tag>}
+            </span>
+          )}
+          {proxyResult && !proxyResult.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(proxyResult.error))}</span>}
+        </div>
+      </Row>
+      {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (
+        <Alert type="warning" showIcon className="fb-editor-alert" title={t("代理地理信息存在冲突")} description={t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))} />
       )}
-      {webrtcPolicy === 'public_only' && (
-        <Alert
-          type="warning"
-          showIcon
-          message={t("可能暴露真实公网 IP")}
-          description={t("该模式隐藏本地网卡地址，但 WebRTC 可以使用系统默认公网接口；使用代理环境时不建议选择。")}
+      {proxyResult?.degraded && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
+      <Row
+        label={t("按 IP 匹配")}
+        hint={followIp
+          ? proxyProtocol === 'direct'
+            ? t("直连环境继续使用指纹设置里的手动值；配置代理后自动联动。")
+            : t("启动时按出口 IP 设置：{0} · {1}", networkIdentity.language, networkIdentity.timezone)
+          : t("关闭后使用指纹设置里手动填写的时区和语言")}
+      >
+        <Switch
+          checked={followIp}
+          aria-label={t("按 IP 匹配")}
+          onChange={(checked) => patchFingerprint({ networkIdentityMode: checked ? 'proxy' : 'manual' })}
         />
-      )}
-      {webrtcPolicy === 'default' && (
-        <Alert
-          type="error"
-          showIcon
-          message={t("高风险：WebRTC 使用所有接口")}
-          description={t("网页可能获取本地网卡或绕过代理的公网地址，仅用于兼容性排障。")}
+        <span className="fb-switch-label">{t("根据出口 IP 自动设置时区、语言和地理位置")}</span>
+      </Row>
+      <Row label={t("出口变化时")} hint={t("代理出口 IP 与上次检测不同时的处理方式")}>
+        <Radio.Group
+          size="small"
+          optionType="button"
+          value={fp.proxyExitPolicy}
+          onChange={(event) => patchFingerprint({ proxyExitPolicy: event.target.value })}
+          options={[{ value: 'block', label: t("阻止启动并确认（推荐）") }, { value: 'warn', label: t("仅告警，继续启动") }]}
         />
-      )}
+      </Row>
     </div>
   )
 
+  const hardwareOptions = HARDWARE_PROFILES
+    .filter((item) => item.platform === fp.platform)
+    .map((item) => ({ value: item.id, label: mt(item.label), disabled: item.hostMatched && item.platform !== hostPlatform }))
+  const kernelUnsupported = t("当前内核暂不支持，编译新内核后开放")
+
   const fingerprint = (
-    <div className="editor-section">
-      <Form.Item
-        name={['fingerprint', 'hardwareProfileId']}
-        label={t("硬件模板")}
-        extra={t("请选择完整硬件组合，避免出现不合理的设备信息。")}
-      >
-        <Select
-          options={[
-            ...HARDWARE_PROFILES.map((item) => ({
-              value: item.id,
-              label: mt(item.label),
-              disabled: item.hostMatched && item.platform !== hostPlatform
-            })),
-            ...(hardwareProfileId === 'legacy-custom' ? [{ value: 'legacy-custom', label: t("旧版自定义配置（保持原指纹）") }] : [])
-          ]}
-          onChange={(id: HardwareProfileId) => {
-            const current = form.getFieldValue('fingerprint')
-            form.setFieldValue('fingerprint', applyHardwareProfile(current, id, { refreshSeededGpu: true }))
-          }}
-        />
-      </Form.Item>
-      {selectedHardware?.hostMatched && (
-        <Alert
-          type="success"
-          showIcon
-          message={t("使用当前设备的硬件信息")}
-          description={t("不同环境可能显示相同的硬件信息。")}
-        />
-      )}
-      {selectedHardware && !selectedHardware.hostMatched && (
-        <Alert
-          type="info"
-          showIcon
-          message={mt(hardwareProfileSummary(selectedHardware.id))}
-          description={t("同一环境的硬件信息保持稳定；重新生成后会获得新的身份。")}
-        />
-      )}
-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && !selectedGpuIdentity && (
-        <Alert
-          type="warning"
-          showIcon
-          message={t("旧环境保持原有硬件信息")}
-          description={t("如需更换，请点击下方“重新生成”。")}
-        />
-      )}
-      {hardwareProfileId === 'legacy-custom' && (
-        <Alert
-          type="warning"
-          showIcon
-          message={t("这是升级前创建的自定义硬件组合")}
-          description={t("为避免已使用环境的指纹突变，当前值不会自动修改。新账号建议新建环境并选择成套硬件模板。")}
-        />
-      )}
-      <Divider />
-      <Row gutter={12}>
-        <Col span={16}>
-          <Form.Item name={['fingerprint', 'seed']} label={t("指纹种子")} rules={[{ required: true }]}>
-            <InputNumber min={0} max={0xffffffff} precision={0} className="full-width" />
-          </Form.Item>
-        </Col>
-        <Col span={8} className="seed-action">
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              const current = form.getFieldValue('fingerprint')
-              form.setFieldValue('fingerprint', refreshSeededGpuIdentity({
-                ...current,
-                seed: randomSeed()
-              }))
-            }}
-          >{t("重新生成")}</Button>
-        </Col>
-      </Row>
-      <div className="form-hint prominent">
-        {selectedHardware?.hostMatched
-          ? t("不同环境可能共享当前设备的硬件信息。")
-          : t("指纹种子决定环境身份。使用中的环境请勿随意修改；复制或重新生成会获得新身份。")}
+    <div className="fb-editor-section">
+      <div className="fb-fp-intro">
+        <span>{t("每个窗口独立指纹，重启后保持不变。不确定的选项保持默认即可。")}</span>
+        <Button
+          onClick={() => form.setFieldValue('fingerprint', refreshSeededGpuIdentity({ ...form.getFieldValue('fingerprint'), seed: randomSeed() }))}
+        >{t("一键随机指纹")}</Button>
       </div>
-      <Divider />
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'platform']} label={t("模拟系统")}>
-            <Select disabled={hardwareProfileId !== 'legacy-custom'} options={[{ value: 'windows', label: 'Windows' }, { value: 'macos', label: 'macOS' }]} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'platformVersion']} label={t("系统版本")}>
-            <Input
-              disabled={hardwareProfileId !== 'legacy-custom'}
-              placeholder="10.0.0"
-              addonAfter={selectedHardware?.hostMatched ? t("启动时读取本机") : undefined}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item
-            name={['fingerprint', 'networkIdentityMode']}
-            label={t("网络身份")}
-            extra={t("自动模式会在启动前检测代理并匹配语言、时区和位置。")}
-          >
-            <Select options={[
-              { value: 'proxy', label: t("跟随代理出口（推荐）") },
-              { value: 'manual', label: t("手动固定") }
-            ]} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'proxyExitPolicy']} label={t("出口变化")}>
-            <Select options={[
-              { value: 'block', label: t("阻止启动并确认（推荐）") },
-              { value: 'warn', label: t("仅告警，继续启动") }
-            ]} />
-          </Form.Item>
-        </Col>
-      </Row>
-      {networkIdentityMode === 'proxy' && (
-        <Alert
-          type={proxyProtocol === 'direct' ? 'warning' : 'info'}
-          showIcon
-          message={proxyProtocol === 'direct' ? t("当前没有配置代理") : t("语言、时区和地理位置将在启动时跟随代理")}
-          description={proxyProtocol === 'direct'
-            ? t("直连环境继续使用下方手动值；配置代理后自动联动。")
-            : `${networkIdentity.language} · ${networkIdentity.acceptLanguages} · ${networkIdentity.timezone}`}
-        />
+      {hostMatched && (
+        <Alert type="info" showIcon className="fb-editor-alert" title={t("使用当前设备的硬件信息")} description={t("本机硬件模板会让 Canvas、WebGL、Audio、字体和 ClientRects 都使用真实值。")} />
       )}
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'brand']} label={t("浏览器品牌")}>
-            <Select options={[{ value: 'Chrome', label: 'Chrome' }, { value: 'Edge', label: 'Edge' }]} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item
-            name={['fingerprint', 'brandVersion']}
-            label={t("品牌版本")}
-            extra={selectedEngine?.version ? t("留空时自动匹配内核 {0}", selectedEngine.version) : t("留空时与内核版本一致")}
-            rules={[{ pattern: /^\d+(?:\.\d+){0,3}$/, message: t("请输入 1–4 段数字版本，或留空自动匹配"), validateTrigger: 'onBlur' }]}
-          >
-            <Input placeholder={t("自动")} />
-          </Form.Item>
-        </Col>
+
+      <h3 className="fb-fp-group">{t("基础信息")}</h3>
+      <Row label={t("浏览器内核")} hint={t("每个窗口可单独指定，在内核管理里导入更多版本")}>
+        <Form.Item name="kernelVersion" noStyle>
+          <Select
+            className="fb-wide-select"
+            options={[
+              { value: '', label: engine?.version ? t("跟随默认内核（Chromium {0}）", engine.version) : t("跟随默认内核") },
+              ...kernels.map((kernel) => ({ value: kernel.version, label: `Chromium ${kernel.version}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}` })),
+              ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelVersion) }] : [])
+            ]}
+          />
+        </Form.Item>
       </Row>
-      {versionWarning && <Alert type="warning" showIcon message={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'hardwareConcurrency']} label={t("CPU 核心数")}>
-            <Select disabled={hardwareProfileId !== 'legacy-custom'} options={[2, 4, 6, 8, 10, 12, 14, 16, 20, 24].map((value) => ({ value, label: t("{0} 核", value) }))} />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item label={t("屏幕分辨率")}>
-            <Space.Compact block>
-              <Form.Item name={['fingerprint', 'screenWidth']} noStyle>
-                <InputNumber disabled={hardwareProfileId !== 'legacy-custom'} min={800} max={7680} precision={0} className="resolution-input" />
+      {kernelVersion && !pinnedKernel && (
+        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用", kernelVersion)} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
+      )}
+      <Row label={t("浏览器品牌")}>
+        <Radio.Group
+          size="small"
+          optionType="button"
+          value={fp.brand}
+          onChange={(event) => patchFingerprint({ brand: event.target.value })}
+          options={[{ value: 'Chrome', label: 'Chrome' }, { value: 'Edge', label: 'Edge' }]}
+        />
+      </Row>
+      <Row label={t("操作系统")}>
+        <Space wrap size={8}>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            value={fp.platform}
+            onChange={(event) => choosePlatform(event.target.value)}
+            options={[{ value: 'windows', label: 'Windows' }, { value: 'macos', label: 'macOS' }]}
+          />
+          <Select
+            size="small"
+            disabled={hostMatched}
+            className="fb-small-select"
+            value={fp.platformVersion}
+            onChange={choosePlatformVersion}
+            options={(fp.platform === 'windows' ? WINDOWS_VERSIONS : MACOS_VERSIONS)}
+            aria-label={t("系统版本")}
+          />
+        </Space>
+      </Row>
+      <Row label="User-Agent" hint={t("与内核版本和系统自动匹配")}>
+        <div className="fb-ua">
+          <span title={userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}>{userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}</span>
+        </div>
+      </Row>
+      {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
+
+      <h3 className="fb-fp-group">{t("地区与网络")}</h3>
+      <Row label={t("时区")} hint={followIp ? networkIdentity.timezone : undefined}>
+        <Space wrap size={8}>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            value={followIp ? 'ip' : 'custom'}
+            onChange={(event) => patchFingerprint({ networkIdentityMode: event.target.value === 'ip' ? 'proxy' : 'manual' })}
+            options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
+          />
+          {!followIp && (
+            <Form.Item name={['fingerprint', 'timezone']} noStyle>
+              <Input size="small" className="fb-small-input" placeholder="Asia/Shanghai" />
+            </Form.Item>
+          )}
+        </Space>
+      </Row>
+      <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
+        <Radio.Group
+          size="small"
+          optionType="button"
+          value={fp.geolocationPermission ?? 'ask'}
+          onChange={(event) => patchFingerprint({ geolocationPermission: event.target.value })}
+          options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
+        />
+      </Row>
+      <Row label={t("语言")} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : t("时区和语言一起跟随 IP 或一起自定义")}>
+        <Space wrap size={8}>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            value={followIp ? 'ip' : 'custom'}
+            onChange={(event) => patchFingerprint({ networkIdentityMode: event.target.value === 'ip' ? 'proxy' : 'manual' })}
+            options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
+          />
+          {!followIp && (
+            <>
+              <Form.Item name={['fingerprint', 'language']} noStyle>
+                <Input size="small" className="fb-small-input" placeholder="en-US" />
               </Form.Item>
-              <Input className="resolution-times" value="×" disabled />
-              <Form.Item name={['fingerprint', 'screenHeight']} noStyle>
-                <InputNumber disabled={hardwareProfileId !== 'legacy-custom'} min={600} max={4320} precision={0} className="resolution-input" />
+              <Form.Item name={['fingerprint', 'acceptLanguages']} noStyle>
+                <Input size="small" className="fb-small-input" placeholder="en-US,en" />
               </Form.Item>
-            </Space.Compact>
-          </Form.Item>
-        </Col>
+            </>
+          )}
+        </Space>
       </Row>
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'language']} label={t("界面语言")}>
-            <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="zh-CN" />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item name={['fingerprint', 'timezone']} label={t("时区")}>
-            <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="Asia/Shanghai" />
-          </Form.Item>
-        </Col>
+      <Row label={t("界面语言")} hint={t("目前与语言保持一致")}>
+        <Unsupported options={[t("跟随语言")]} value={t("跟随语言")} reason={kernelUnsupported} />
       </Row>
-      <Form.Item name={['fingerprint', 'acceptLanguages']} label="Accept-Language">
-        <Input disabled={networkIdentityMode === 'proxy' && proxyProtocol !== 'direct'} placeholder="zh-CN,zh,en-US,en" />
-      </Form.Item>
-      <Form.Item name={['fingerprint', 'disabledSpoofing']} label={t("关闭部分伪装")} extra={t("仅用于排障，正常情况下保持全不选。")}>
-        <Checkbox.Group
+      <Row
+        label="WebRTC"
+        hint={fp.webrtcPolicy === 'proxy_only'
+          ? t("替换为代理 IP，防止泄露本机 IP")
+          : fp.webrtcPolicy === 'public_only'
+            ? t("可能暴露真实公网 IP")
+            : t("高风险：WebRTC 使用所有接口")}
+      >
+        <Radio.Group
+          size="small"
+          optionType="button"
+          value={fp.webrtcPolicy}
+          onChange={(event) => patchFingerprint({ webrtcPolicy: event.target.value })}
+          options={[{ value: 'proxy_only', label: t("替换") }, { value: 'public_only', label: t("仅公网") }, { value: 'default', label: t("真实") }]}
+        />
+      </Row>
+
+      <h3 className="fb-fp-group">{t("显示")}</h3>
+      <Row label={t("分辨率")} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : `${fp.screenWidth} × ${fp.screenHeight}`}>
+        <Space wrap size={8}>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            value={fp.screenSource === 'host' ? 'host' : screenCustom ? 'custom' : 'random'}
+            onChange={(event) => chooseScreen(event.target.value)}
+            options={[{ value: 'random', label: t("随机") }, { value: 'host', label: t("跟随电脑") }, { value: 'custom', label: t("自定义") }]}
+          />
+          {fp.screenSource !== 'host' && screenCustom && (
+            <>
+              <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber size="small" min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+              <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber size="small" min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+            </>
+          )}
+        </Space>
+      </Row>
+      <Row label={t("字体")}>{spoofControl('font')}</Row>
+
+      <h3 className="fb-fp-group">{t("硬件指纹")}</h3>
+      <Row label={t("硬件配置")} hint={selectedHardware ? `${t("{0} 核", selectedHardware.hardwareConcurrency)} · ${selectedHardware.physicalMemoryGb} GB · ${mt(gpu?.model ?? selectedHardware.gpuModel)}` : t("旧版自定义配置（保持原指纹）")}>
+        <Select
+          className="fb-wide-select"
+          value={fp.hardwareProfileId}
+          onChange={chooseHardware}
           options={[
-            { value: 'font', label: t("字体") },
-            { value: 'audio', label: 'Audio' },
-            { value: 'canvas', label: 'Canvas' },
-            { value: 'clientrects', label: 'ClientRects' },
-            { value: 'gpu', label: 'GPU' }
+            ...hardwareOptions,
+            ...(fp.hardwareProfileId === 'legacy-custom' ? [{ value: 'legacy-custom' as const, label: t("旧版自定义配置（保持原指纹）"), disabled: false }] : [])
           ]}
         />
-      </Form.Item>
+      </Row>
+      <Row label="Canvas">{spoofControl('canvas')}</Row>
+      <Row label={t("WebGL 图像")} hint={t("与 WebGL 元数据一起开关")}>
+        <Unsupported options={[t("随机"), t("关闭")]} value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
+      </Row>
+      <Row label={t("WebGL 元数据")} hint={mt(gpu?.model ?? selectedHardware?.gpuModel ?? '')}>{spoofControl('gpu')}</Row>
+      <Row label="AudioContext">{spoofControl('audio')}</Row>
+      <Row label="ClientRects">{spoofControl('clientrects')}</Row>
+      <Row label="SpeechVoices" hint={t("自动与系统和语言保持一致")}>
+        <Unsupported options={[t("随机"), t("关闭")]} value={t("随机")} reason={kernelUnsupported} />
+      </Row>
+      <Row label={t("硬件并发数")}>
+        <Select
+          size="small"
+          disabled={hostMatched}
+          className="fb-small-select"
+          value={fp.overrides?.includes('cores') ? fp.hardwareConcurrency : 'template'}
+          onChange={chooseCores}
+          aria-label={t("硬件并发数")}
+          options={[
+            { value: 'template', label: t("跟随硬件配置（{0} 核）", selectedHardware?.hardwareConcurrency ?? fp.hardwareConcurrency) },
+            ...CORE_OPTIONS.map((value) => ({ value, label: t("{0} 核", value) }))
+          ]}
+        />
+      </Row>
+      <Row label={t("设备内存")} hint={t("浏览器只报告最多 8 GB")}>
+        <Tooltip title={kernelUnsupported}>
+          <span><Select size="small" disabled className="fb-small-select" value={8} options={[{ value: 8, label: '8 GB' }]} /></span>
+        </Tooltip>
+      </Row>
+      <Row label="Do Not Track">
+        <Radio.Group
+          size="small"
+          optionType="button"
+          value={fp.doNotTrack ?? 'default'}
+          onChange={(event) => patchFingerprint({ doNotTrack: event.target.value })}
+          options={[{ value: 'default', label: t("默认") }, { value: 'on', label: t("开启") }, { value: 'off', label: t("关闭") }]}
+        />
+      </Row>
     </div>
   )
 
   return (
-    <Modal
+    <Drawer
       open={open}
-      title={profile ? t("编辑浏览器环境") : t("新建浏览器环境")}
       width={720}
+      placement="right"
       destroyOnHidden
-      confirmLoading={saving}
-      okText={profile ? t("保存修改") : t("创建环境")}
-      cancelText={t("取消")}
-      onCancel={onCancel}
-      onOk={() => void submit()}
+      className="fb-editor"
+      onClose={onCancel}
+      title={(
+        <span className="fb-editor-title">
+          {profile ? t("编辑窗口") : t("新建窗口")}
+          {profile && <Tag>{t("序号 #{0}", profile.serialNumber)}</Tag>}
+        </span>
+      )}
+      footer={(
+        <div className="fb-editor-footer">
+          <Button onClick={onCancel}>{t("取消")}</Button>
+          <Button type="primary" loading={saving} onClick={() => void submit()}>{profile ? t("保存修改") : t("确定创建")}</Button>
+        </div>
+      )}
     >
-      <Typography.Paragraph type="secondary" className="editor-intro">{t("每个环境的数据、指纹和网络设置彼此独立。")}</Typography.Paragraph>
       <Form
         form={form}
-        layout="vertical"
         requiredMark={false}
         onValuesChange={(changed) => { if ('proxy' in changed) setProxyResult(null) }}
       >
         <Tabs
-          defaultActiveKey="general"
+          activeKey={tab}
+          onChange={(key) => setTab(key as EditorTab)}
           items={[
-            { key: 'general', label: t("基础设置"), children: general, forceRender: true },
+            { key: 'basic', label: t("基础设置"), children: basic, forceRender: true },
             { key: 'proxy', label: t("代理设置"), children: proxy, forceRender: true },
             { key: 'fingerprint', label: t("指纹设置"), children: fingerprint, forceRender: true }
           ]}
         />
       </Form>
-    </Modal>
+    </Drawer>
   )
 }

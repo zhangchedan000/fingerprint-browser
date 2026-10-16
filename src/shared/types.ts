@@ -39,6 +39,14 @@ export interface ProxyConfig {
   passwordStored?: boolean
 }
 
+/** Login the window is used for. The password is encrypted at rest and never sent to the UI. */
+export interface PlatformAccount {
+  platform: string
+  username: string
+  password: string
+  passwordStored?: boolean
+}
+
 export interface FingerprintConfig {
   seed: number
   hardwareProfileId: HardwareProfileId
@@ -60,7 +68,20 @@ export interface FingerprintConfig {
   screenWidth: number
   screenHeight: number
   disabledSpoofing: Array<'font' | 'audio' | 'canvas' | 'clientrects' | 'gpu'>
+  /**
+   * Values the user set by hand that the hardware template must not overwrite.
+   * Missing on older profiles, which keep following their template exactly.
+   */
+  overrides?: FingerprintOverride[]
+  /** 'host' reports the real primary display size at launch. Default: the stored size. */
+  screenSource?: 'profile' | 'host'
+  /** Default geolocation permission for sites. Default: ask. */
+  geolocationPermission?: 'ask' | 'allow' | 'block'
+  /** Do Not Track request header. Default: leave Chromium's own setting. */
+  doNotTrack?: 'default' | 'on' | 'off'
 }
+
+export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'
 
 export interface BrowserProfile {
   id: string
@@ -78,6 +99,7 @@ export interface BrowserProfile {
   window: ProfileWindowConfig
   favorite: boolean
   proxy: ProxyConfig
+  account: PlatformAccount
   fingerprint: FingerprintConfig
   createdAt: string
   updatedAt: string
@@ -92,12 +114,20 @@ export interface PublicProxyConfig extends Omit<ProxyConfig, 'password' | 'passw
   passwordStored: boolean
 }
 
-export type BrowserProfileView = Omit<BrowserProfile, 'proxy'> & { proxy: PublicProxyConfig }
+export interface PublicPlatformAccount extends Omit<PlatformAccount, 'password' | 'passwordStored'> {
+  password: ''
+  passwordStored: boolean
+}
+
+export type BrowserProfileView = Omit<BrowserProfile, 'proxy' | 'account'> & { proxy: PublicProxyConfig; account: PublicPlatformAccount }
 
 export type ProfileDraft = Pick<
   BrowserProfile,
   'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
->
+> & {
+  /** Optional on input for older callers and files; validation fills an empty account. */
+  account?: PlatformAccount
+}
 
 export interface ProfileBatchClassification {
   group?: string
@@ -323,6 +353,8 @@ export interface BrowserApi {
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
+    /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
+    importCookiesText: (id: string, text: string) => Promise<{ count: number }>
     removeMany: (ids: string[]) => Promise<void>
     onChanged: (listener: (profile: BrowserProfileView) => void) => () => void
   }

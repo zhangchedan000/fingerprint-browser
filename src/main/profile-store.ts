@@ -5,9 +5,9 @@ import { dirname, join } from 'node:path'
 import type { BrowserProfile, DeletedProfileSummary, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth, ProxyCheckSummary, WebRtcPolicy } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
-import { validateProfileDraft } from '../shared/validation'
+import { EMPTY_ACCOUNT, validatePlatformAccount, validateProfileDraft } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
-import { privateProxyConfig, sameProxyIdentity } from './profile-secrets'
+import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
 
 interface StoreFile {
@@ -198,6 +198,9 @@ export class ProfileStore {
         kernelVersion: typeof stored.kernelVersion === 'string' ? stored.kernelVersion : '',
         window: stored.window ?? defaultProfileWindow(),
         proxy: { ...stored.proxy, password: this.secrets.decode(stored.proxy.password) },
+        account: stored.account && typeof stored.account === 'object'
+          ? { ...stored.account, password: this.secrets.decode(typeof stored.account.password === 'string' ? stored.account.password : '') }
+          : undefined,
         fingerprint: {
           ...stored.fingerprint,
           hardwareProfileId: stored.fingerprint.hardwareProfileId ?? 'legacy-custom',
@@ -212,6 +215,7 @@ export class ProfileStore {
         ...stored,
         ...draft,
         proxy: privateProxyConfig(draft.proxy),
+        account: privateAccount(draft.account),
         id: stored.id,
         serialNumber: validProfileSerial(stored.serialNumber) ? stored.serialNumber : 0,
         createdAt: stored.createdAt,
@@ -277,6 +281,7 @@ export class ProfileStore {
         id,
         serialNumber: firstSerialNumber + index,
         proxy: privateProxyConfig(draft.proxy),
+        account: privateAccount(draft.account),
         fingerprint: {
           ...draft.fingerprint,
           seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
@@ -310,9 +315,16 @@ export class ProfileStore {
       && !draft.proxy.password
       && draft.proxy.passwordStored
       && sameProxyIdentity(draft.proxy, current.proxy)
+    const keepAccountPassword = !draft.account.password
+      && draft.account.passwordStored === true
+      && sameAccountIdentity(draft.account, current.account)
     const profile: BrowserProfile = {
       ...current,
       ...draft,
+      account: privateAccount({
+        ...draft.account,
+        password: keepAccountPassword ? current.account.password : draft.account.password
+      }),
       proxy: privateProxyConfig({
         ...draft.proxy,
         password: draft.proxy.protocol === 'direct' ? '' : keepStoredPassword ? current.proxy.password : draft.proxy.password
@@ -344,6 +356,7 @@ export class ProfileStore {
       kernelVersion: source.kernelVersion,
       window: { ...source.window },
       proxy: { ...source.proxy },
+      account: { ...source.account },
       fingerprint: refreshSeededGpuIdentity({ ...source.fingerprint, seed })
     })
   }
@@ -372,9 +385,10 @@ export class ProfileStore {
         kernelVersion: current.kernelVersion,
         window: current.window,
         proxy: current.proxy,
+        account: current.account,
         fingerprint: current.fingerprint
       })
-      return { ...current, ...validated, proxy: current.proxy, updatedAt: now }
+      return { ...current, ...validated, proxy: current.proxy, account: current.account, updatedAt: now }
     })
     for (const profile of nextProfiles) this.profiles.set(profile.id, profile)
     await this.persist()
@@ -438,7 +452,8 @@ export class ProfileStore {
         ...profile,
         status: 'closed',
         lastError: undefined,
-        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) }
+        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) },
+        account: { ...profile.account, password: this.secrets.encode(profile.account.password) }
       }
     }
     const marker = join(source, 'deleted-profile.json')
@@ -577,6 +592,12 @@ export class ProfileStore {
       window: record.profile.window ?? defaultProfileWindow(),
       favorite: record.profile.favorite === true,
       proxy: privateProxyConfig({ ...record.profile.proxy, password: this.secrets.decode(record.profile.proxy.password) }),
+      account: record.profile.account && typeof record.profile.account === 'object'
+        ? privateAccount(validatePlatformAccount({
+            ...record.profile.account,
+            password: this.secrets.decode(typeof record.profile.account.password === 'string' ? record.profile.account.password : '')
+          }))
+        : { ...EMPTY_ACCOUNT },
       status: 'closed',
       lastError: undefined,
       updatedAt: new Date().toISOString()
@@ -710,7 +731,8 @@ export class ProfileStore {
       nextSerialNumber: this.nextSerialNumber,
       profiles: this.list().map((profile) => ({
         ...profile,
-        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) }
+        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) },
+        account: { ...profile.account, password: this.secrets.encode(profile.account.password) }
       }))
     }
     const operation = this.writeQueue.catch(() => undefined).then(async () => {

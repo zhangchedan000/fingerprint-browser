@@ -14,6 +14,7 @@ import { findManagedProcess, SystemProcessInspector, type ProcessInspector } fro
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
 import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-profiles'
+import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, testProxy } from './proxy-tester'
 import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
@@ -93,6 +94,13 @@ export class BrowserLauncher {
     if (!Number.isInteger(proxyMonitorIntervalMs) || proxyMonitorIntervalMs < 10) {
       throw new Error('代理出口复检间隔不能小于 10 毫秒')
     }
+  }
+
+  private hostScreen: () => { width: number; height: number } | undefined = () => undefined
+
+  /** Provides the primary display size for windows whose resolution follows the computer. */
+  setHostScreenProvider(provider: () => { width: number; height: number } | undefined): void {
+    this.hostScreen = provider
   }
 
   async initialize(): Promise<void> {
@@ -198,6 +206,14 @@ export class BrowserLauncher {
       })
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
+      try {
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint)
+      } catch (error) {
+        this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
       const args = buildLaunchArgs(profile, {
         userDataDir: this.profiles.profileDataPath(id),
         proxyUrl: localProxyUrl,
@@ -207,7 +223,8 @@ export class BrowserLauncher {
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostPlatformVersion: hostHardware.platformVersion,
         proxyIdentity: profile.proxyCheck,
-        allowGeoConflict: options.allowGeoConflict === true
+        allowGeoConflict: options.allowGeoConflict === true,
+        hostScreen: this.hostScreen()
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
