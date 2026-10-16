@@ -12,6 +12,7 @@ import { t } from '../../../shared/i18n'
 import type { Workspace } from '../data/workspace'
 import { ExtensionsDialog } from './extensions'
 import { KernelsDialog } from './kernels'
+import { ProxiesPage, proxiesSubtitle } from './proxies/ProxiesPage'
 import { RecycleDialog } from './recycle'
 import { windowsSubtitle, WindowsPage } from './windows/WindowsPage'
 
@@ -66,7 +67,15 @@ export const PAGES: PageDefinition[] = [
     page: ({ navigate }) => <WindowsPage openKernels={() => navigate('kernels')} />
   },
   { key: 'groups', section: 'workspace', icon: <FolderOutlined />, label: () => t("分组管理"), upcoming: true },
-  { key: 'proxies', section: 'workspace', icon: <ClusterOutlined />, label: () => t("代理 IP"), upcoming: true },
+  {
+    key: 'proxies',
+    section: 'workspace',
+    icon: <ClusterOutlined />,
+    label: () => t("代理 IP"),
+    count: (ws) => ws.proxies.length,
+    subtitle: () => proxiesSubtitle(),
+    page: ProxiesPage
+  },
   {
     key: 'extensions',
     section: 'tools',

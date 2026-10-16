@@ -451,7 +451,7 @@ export interface BrowserApi {
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
     /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */
-    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string }) => Promise<BrowserProfileView[]>
+    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean }) => Promise<BrowserProfileView[]>
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
     /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
@@ -479,6 +479,8 @@ export interface BrowserApi {
     test: (config: ProxyConfig, profileId?: string, proxyId?: string) => Promise<ProxyTestResult>
     list: () => Promise<ProxyRecordView[]>
     create: (draft: ProxyDraft) => Promise<ProxyRecordView>
+    /** Adds many at once; proxies already in the library are counted as duplicates. */
+    createMany: (drafts: ProxyDraft[]) => Promise<{ created: ProxyRecordView[]; duplicates: number; errors: Array<{ index: number; message: string }> }>
     update: (id: string, draft: ProxyDraft) => Promise<ProxyRecordView>
     /** replaceWith: what the windows using it switch to (another proxy id, or '' for direct). */
     remove: (id: string, replaceWith?: string) => Promise<void>

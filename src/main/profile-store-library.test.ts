@@ -182,3 +182,31 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(reopened.listProxies()).toHaveLength(1)
   })
 })
+
+describe('adding proxies in bulk and following the proxy IP', () => {
+  it('adds new proxies, counts ones already in the library and reports bad entries', async () => {
+    const store = await open()
+    await store.createProxy({ ...PROXY, note: '' })
+    const result = await store.createProxies([
+      { ...PROXY, note: '' },
+      { ...PROXY, host: '198.51.100.1', note: '批量' },
+      { ...PROXY, host: '', note: '' }
+    ])
+    expect(result.created.map((proxy) => proxy.host)).toEqual(['198.51.100.1'])
+    expect(result.duplicates).toBe(1)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].index).toBe(2)
+    expect(store.listProxies()).toHaveLength(2)
+  })
+
+  it('switches assigned windows to follow the proxy exit IP when asked', async () => {
+    const store = await open()
+    const base = defaultProfileDraft()
+    const a = await store.create(draft('A', { fingerprint: { ...base.fingerprint, networkIdentityMode: 'manual' } }))
+    const proxy = await store.createProxy({ ...PROXY, note: '' })
+    await store.assignMany([a.id], { proxyId: proxy.id })
+    expect(store.get(a.id).fingerprint.networkIdentityMode).toBe('manual')
+    await store.assignMany([a.id], { proxyId: proxy.id, followProxyIdentity: true })
+    expect(store.get(a.id).fingerprint.networkIdentityMode).toBe('proxy')
+  })
+})

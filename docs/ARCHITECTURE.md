@@ -48,10 +48,12 @@
 ```
 theme/        颜色：tokens.ts 定义全部颜色，index.tsx 提供 applyTheme()
 data/         workspace.tsx：所有页面共用的数据（窗口、代理库、分组库、内核、扩展）
-components/   共用组件：ListPage（列表模板）、AssignModal（分配弹窗）、ProxyCell、StatusDot、Sidebar、格式化函数
+components/   共用组件：ListPage（列表模板）、AssignModal（选一个库记录的分配弹窗）、WindowPicker（勾选窗口）、
+              StatCards（统计卡片）、ProxyCell、StatusDot、Sidebar、格式化函数
 pages/        每个侧边栏页面一个文件夹
   registry.tsx  页面登记表：侧边栏、顶栏、导航都从这里读取
   windows/      窗口管理（列表、编辑抽屉、批量导入等）
+  proxies/      代理 IP（代理库：添加、批量导入、检测、分配到窗口、删除时选替换）
   kernels/ extensions/ recycle/   目前还是弹窗，以后改成页面
 App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 ```
@@ -75,7 +77,9 @@ App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 **加一种可分配的东西（例如以后的“成员”）**
 1. `workspace-library.ts` 加成员库（照代理、分组的写法）。
 2. 窗口加引用字段（如 `memberIds`），并在 `assignMany` 里加上它的检查。
-3. 界面用 `AssignModal` 选择，不需要写新的分配逻辑。
+3. 界面用 `AssignModal`（选一个成员）或 `WindowPicker`（勾选窗口）选择，不需要写新的分配逻辑。
+
+代理页的“分配到窗口”就是这样做的：勾选窗口用 `WindowPicker`，提交走 `assignMany`；按顺序批量分配只是先把代理和窗口配好对（`pages/proxies/pairing.ts`），再按代理分组调用 `assignMany`。
 
 **改颜色 / 加主题 / 深色模式**
 - 只改 `theme/tokens.ts`：`LIGHT` 是浅色，`DARK` 是深色，`ACCENT_PRESETS` 是可选主题色。

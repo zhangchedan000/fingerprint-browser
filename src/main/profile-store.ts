@@ -8,7 +8,7 @@ import type {
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
-import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig } from '../shared/validation'
+import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
 import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
@@ -26,6 +26,14 @@ type StoredProfile = Omit<BrowserProfile, 'group' | 'proxy' | 'proxyCheck' | 'pr
 }
 
 const SCHEMA_VERSION = 12
+
+/** What assignMany can point windows at. '' = direct connection / ungrouped. */
+export interface AssignPatch {
+  proxyId?: string
+  groupId?: string
+  /** With a proxy: let time zone, language and location follow its exit IP. */
+  followProxyIdentity?: boolean
+}
 
 interface StoreFile {
   schemaVersion: number
@@ -519,10 +527,10 @@ export class ProfileStore {
    * The one way windows are assigned to a library record: point proxyId / groupId at it.
    * '' means direct connection / ungrouped. Proxies change only on closed windows.
    */
-  async assignMany(idsInput: string[], patch: { proxyId?: string; groupId?: string }): Promise<BrowserProfile[]> {
+  async assignMany(idsInput: string[], patch: AssignPatch): Promise<BrowserProfile[]> {
     if (!patch || typeof patch !== 'object') throw new Error('批量修改参数无效')
     const ids = this.selection(idsInput)
-    const { proxyId, groupId } = patch
+    const { proxyId, groupId, followProxyIdentity } = patch
     if (proxyId === undefined && groupId === undefined) throw new Error('请选择要分配的代理或分组')
     if (proxyId !== undefined) {
       if (typeof proxyId !== 'string' || (proxyId && !this.library.proxies.has(proxyId))) throw new Error('所选代理已不在代理库中，请重新选择')
@@ -541,6 +549,8 @@ export class ProfileStore {
         profile.proxyId = proxyId
         delete profile.directCheck
       }
+      // Time zone, language and location follow the new proxy's exit IP at launch.
+      if (proxyId && followProxyIdentity === true) profile.fingerprint = { ...profile.fingerprint, networkIdentityMode: 'proxy' }
       return profile
     })
     for (const profile of next) this.profiles.set(profile.id, profile)
@@ -589,6 +599,35 @@ export class ProfileStore {
   /** Windows that use a library proxy. Derived from the windows; never stored on the proxy. */
   proxyUsers(proxyId: string): BrowserProfile[] {
     return this.list().filter((profile) => profile.proxyId === proxyId)
+  }
+
+  /**
+   * Adds many proxies at once (pasted list or file). Proxies already in the library are
+   * counted, not added again; a bad entry is reported and the rest still go in.
+   */
+  async createProxies(inputs: ProxyDraft[]): Promise<{ created: ProxyRecord[]; duplicates: number; errors: Array<{ index: number; message: string }> }> {
+    if (!Array.isArray(inputs) || !inputs.length) throw new Error('没有可添加的代理')
+    if (inputs.length > 5000) throw new Error('单次最多添加 5000 个代理')
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const created: ProxyRecord[] = []
+      const errors: Array<{ index: number; message: string }> = []
+      let duplicates = 0
+      inputs.forEach((input, index) => {
+        try {
+          const draft = validateProxyDraft(input)
+          if (this.library.findProxy(draft)) {
+            duplicates += 1
+            return
+          }
+          created.push({ ...this.library.addProxy(draft, now) })
+        } catch (error) {
+          errors.push({ index, message: error instanceof Error ? error.message : String(error) })
+        }
+      })
+      if (created.length) await this.persist()
+      return { created, duplicates, errors }
+    })
   }
 
   async createProxy(input: ProxyDraft): Promise<ProxyRecord> {

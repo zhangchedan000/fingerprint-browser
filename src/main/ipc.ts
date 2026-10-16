@@ -7,7 +7,7 @@ import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
-import type { ProfileStore } from './profile-store'
+import type { AssignPatch, ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
 import { validateProxyConfig } from '../shared/validation'
@@ -320,7 +320,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
   })
-  ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: { proxyId?: string; groupId?: string }) => {
+  ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: AssignPatch) => {
     return (await profiles.assignMany(ids, patch)).map(publicProfile)
   })
   ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {
@@ -422,6 +422,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return profiles.listProxies().map((proxy) => publicProxyRecord(proxy, windows))
   })
   ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(draft)).id))
+  ipcMain.handle('proxy:create-many', async (_event, drafts) => {
+    const result = await profiles.createProxies(drafts)
+    const windows = profiles.list()
+    return { ...result, created: result.created.map((proxy) => publicProxyRecord(proxy, windows)) }
+  })
   ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, draft)).id))
   ipcMain.handle('proxy:remove', (_event, id: string, replaceWith?: unknown) => {
     if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
