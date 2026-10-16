@@ -9,8 +9,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -28,18 +28,21 @@ jobs:
               if (f.status === "failed" && !f.assertionResults.some((a) => a.status === "failed")) console.log(`::error file=${file}::${(f.message || "suite failed").split("\n").slice(0, 6).join(" | ")}`)
               for (const a of f.assertionResults) if (a.status === "failed") console.log(`::error file=${file}::${a.fullName} :: ${(a.failureMessages[0] || "").split("\n").slice(0, 4).join(" | ")}`)
             }'
-      - name: Build installer (unsigned)
+      - name: Build portable exe (unsigned)
         shell: bash
         run: |
           set -o pipefail
           npm run dist:win 2>&1 | tee build.log || { grep -v "duplicate dependency" build.log | tail -n 40 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v4
+      - name: Check there is exactly one exe
+        shell: bash
+        run: |
+          ls -la release/*.exe
+          [ "$(ls release/*.exe | wc -l)" -eq 1 ] || { echo "::error::expected exactly one exe in release/"; exit 1; }
+      - uses: actions/upload-artifact@v7
         with:
-          name: fingerprint-browser-windows
-          path: |
-            release/*.exe
-            release/*.zip
+          path: release/*.exe
+          archive: false
           if-no-files-found: error
           retention-days: 14
