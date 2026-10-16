@@ -1722,5 +1722,11 @@
   "内核 {0} 已安装并设为默认": "Kernel {0} installé et défini par défaut",
   "内核安装完成": "Kernel installé",
   "下载已取消，可稍后从断点继续": "Téléchargement annulé ; il pourra reprendre plus tard",
-  "获取内核版本失败（GitHub HTTP {0}）": "Impossible de charger les versions du kernel (GitHub HTTP {0})"
+  "获取内核版本失败（GitHub HTTP {0}）": "Impossible de charger les versions du kernel (GitHub HTTP {0})",
+  "跟随硬件配置（{0}）": "Selon le modèle matériel ({0})",
+  "媒体设备": "Périphériques multimédias",
+  "设备名称": "Nom de l’appareil",
+  "MAC 地址": "Adresse MAC",
+  "其他": "Autres",
+  "端口扫描保护": "Protection contre l’analyse de ports"
 }

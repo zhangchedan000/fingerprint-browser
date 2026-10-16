@@ -1722,5 +1722,11 @@
   "内核 {0} 已安装并设为默认": "Kernel {0} kuruldu ve varsayılan yapıldı",
   "内核安装完成": "Kernel kuruldu",
   "下载已取消，可稍后从断点继续": "İndirme iptal edildi; daha sonra devam edebilir",
-  "获取内核版本失败（GitHub HTTP {0}）": "Kernel sürümleri alınamadı (GitHub HTTP {0})"
+  "获取内核版本失败（GitHub HTTP {0}）": "Kernel sürümleri alınamadı (GitHub HTTP {0})",
+  "跟随硬件配置（{0}）": "Donanım şablonunu izle ({0})",
+  "媒体设备": "Medya aygıtları",
+  "设备名称": "Aygıt adı",
+  "MAC 地址": "MAC adresi",
+  "其他": "Diğer",
+  "端口扫描保护": "Port tarama koruması"
 }

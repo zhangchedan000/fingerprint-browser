@@ -203,6 +203,9 @@ button, input, textarea { font: inherit; }
 .fb-small-input { width: 160px; }
 .fb-ua span { display: block; padding: 6px 10px; overflow: hidden; border: 1px solid var(--fb-line); border-radius: 6px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .fb-unsupported { display: inline-block; cursor: not-allowed; }
+.fb-fp-select { width: 240px; max-width: 100%; }
+.fb-fp-select-half { width: 160px; max-width: 100%; }
+.fb-form-control > .ant-select.fb-fp-select, .fb-form-control > .fb-unsupported { align-self: flex-start; }
 .fb-editor .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) { background: var(--fb-accent-soft); }
 .fb-form-control > .ant-select.fb-small-select { align-self: flex-start; width: 240px; }
 

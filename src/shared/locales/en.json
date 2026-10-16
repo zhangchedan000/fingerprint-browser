@@ -1722,5 +1722,11 @@
   "内核 {0} 已安装并设为默认": "Kernel {0} installed and set as default",
   "内核安装完成": "Kernel installed",
   "下载已取消，可稍后从断点继续": "Download cancelled; it can resume later",
-  "获取内核版本失败（GitHub HTTP {0}）": "Could not load kernel versions (GitHub HTTP {0})"
+  "获取内核版本失败（GitHub HTTP {0}）": "Could not load kernel versions (GitHub HTTP {0})",
+  "跟随硬件配置（{0}）": "Match hardware template ({0})",
+  "媒体设备": "Media devices",
+  "设备名称": "Device name",
+  "MAC 地址": "MAC address",
+  "其他": "Other",
+  "端口扫描保护": "Port scan protection"
 }

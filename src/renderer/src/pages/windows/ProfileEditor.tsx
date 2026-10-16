@@ -166,14 +166,34 @@ function FieldError({ name }: { name: Array<string | number> | string }) {
 }
 
 /** A choice the current kernel cannot apply yet: shown, never clickable. */
-function Unsupported({ options, value, reason }: { options: string[]; value: string; reason: string }) {
+function Unsupported({ value, reason }: { value: string; reason: string }) {
   return (
     <Tooltip title={reason}>
       <span className="fb-unsupported">
-        <Radio.Group size="small" optionType="button" disabled value={value} options={options.map((label) => ({ value: label, label }))} />
+        <Select className="fb-fp-select" disabled value={value} options={[{ value, label: value }]} />
       </span>
     </Tooltip>
   )
+}
+
+/** Every IANA zone this Chromium knows, for the custom time zone dropdown. */
+const TIME_ZONES: string[] = (() => {
+  try { return Intl.supportedValuesOf('timeZone') } catch { return ['Asia/Shanghai', 'America/New_York', 'Europe/London'] }
+})()
+
+/** Languages offered when the language is set by hand; any other tag can still be typed. */
+const LANGUAGES: Array<[string, string]> = [
+  ['zh-CN', '中文（简体）'], ['zh-TW', '中文（繁體）'], ['zh-HK', '中文（香港）'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'],
+  ['ja-JP', '日本語'], ['ko-KR', '한국어'], ['de-DE', 'Deutsch'], ['fr-FR', 'Français'], ['es-ES', 'Español'], ['es-MX', 'Español (México)'],
+  ['pt-BR', 'Português (Brasil)'], ['pt-PT', 'Português'], ['it-IT', 'Italiano'], ['ru-RU', 'Русский'], ['uk-UA', 'Українська'],
+  ['tr-TR', 'Türkçe'], ['vi-VN', 'Tiếng Việt'], ['th-TH', 'ไทย'], ['id-ID', 'Bahasa Indonesia'], ['ms-MY', 'Bahasa Melayu'],
+  ['hi-IN', 'हिन्दी'], ['ar-SA', 'العربية'], ['nl-NL', 'Nederlands'], ['pl-PL', 'Polski'], ['sv-SE', 'Svenska']
+]
+
+/** Accept-Language a browser set to `language` sends: the tag, its base language, then English. */
+function acceptLanguagesFor(language: string): string {
+  const base = language.split('-')[0]
+  return [...new Set([language, base, 'en-US', 'en'])].join(',')
 }
 
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave }: ProfileEditorProps) {
@@ -263,12 +283,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function spoofControl(surface: SpoofSurface) {
     const value = hostMatched || fp.disabledSpoofing.includes(surface) ? 'real' : 'random'
     return (
-      <Radio.Group
-        size="small"
-        optionType="button"
+      <Select
+        className="fb-fp-select"
         disabled={hostMatched}
         value={value}
-        onChange={(event) => setSpoofing(surface, event.target.value === 'random')}
+        onChange={(next) => setSpoofing(surface, next === 'random')}
         options={[{ value: 'random', label: t("随机") }, { value: 'real', label: t("关闭") }]}
       />
     )
@@ -287,19 +306,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     patchFingerprint({ ...patch, overrides: [...current] })
   }
 
-  function chooseScreen(mode: 'random' | 'host' | 'custom'): void {
+  function chooseScreen(mode: string): void {
     if (mode === 'host') {
       patchFingerprint({ screenSource: 'host' })
       return
     }
-    if (mode === 'random') {
-      const [width, height] = COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
-      setOverride('screen', true, { screenSource: 'profile', screenWidth: width, screenHeight: height })
+    if (mode === 'template') {
+      const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
+      setOverride('screen', false, { screenSource: 'profile', ...(template ? { screenWidth: template.screenWidth, screenHeight: template.screenHeight } : {}) })
       setScreenCustom(false)
       return
     }
-    setOverride('screen', true, { screenSource: 'profile' })
-    setScreenCustom(true)
+    if (mode === 'custom') {
+      setOverride('screen', true, { screenSource: 'profile' })
+      setScreenCustom(true)
+      return
+    }
+    const [width, height] = mode === 'random'
+      ? COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
+      : mode.split('x').map(Number)
+    setOverride('screen', true, { screenSource: 'profile', screenWidth: width, screenHeight: height })
+    setScreenCustom(false)
   }
 
   function chooseCores(value: number | 'template'): void {
@@ -677,6 +704,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     .filter((item) => item.platform === fp.platform)
     .map((item) => ({ value: item.id, label: mt(item.label), disabled: item.hostMatched && item.platform !== hostPlatform }))
   const kernelUnsupported = t("当前内核暂不支持，编译新内核后开放")
+  const screenValue = fp.screenSource === 'host'
+    ? 'host'
+    : screenCustom
+      ? 'custom'
+      : fp.overrides?.includes('screen')
+        ? COMMON_SCREENS.some(([width, height]) => width === fp.screenWidth && height === fp.screenHeight) ? `${fp.screenWidth}x${fp.screenHeight}` : 'custom'
+        : 'template'
+  const languageOptions = [
+    ...LANGUAGES.map(([value, label]) => ({ value, label: `${label} · ${value}` })),
+    ...(fp.language && !LANGUAGES.some(([value]) => value === fp.language) ? [{ value: fp.language, label: fp.language }] : [])
+  ]
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -707,27 +745,25 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用", kernelVersion)} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
       )}
       <Row label={t("浏览器品牌")}>
-        <Radio.Group
-          size="small"
-          optionType="button"
+        <Select
+          className="fb-fp-select"
           value={fp.brand}
-          onChange={(event) => patchFingerprint({ brand: event.target.value })}
+          onChange={(brand) => patchFingerprint({ brand })}
           options={[{ value: 'Chrome', label: 'Chrome' }, { value: 'Edge', label: 'Edge' }]}
         />
       </Row>
       <Row label={t("操作系统")}>
         <Space wrap size={8}>
-          <Radio.Group
-            size="small"
-            optionType="button"
+          <Select
+            className="fb-fp-select-half"
             value={fp.platform}
-            onChange={(event) => choosePlatform(event.target.value)}
+            onChange={choosePlatform}
             options={[{ value: 'windows', label: 'Windows' }, { value: 'macos', label: 'macOS' }]}
+            aria-label={t("操作系统")}
           />
           <Select
-            size="small"
             disabled={hostMatched}
-            className="fb-small-select"
+            className="fb-fp-select-half"
             value={fp.platformVersion}
             onChange={choosePlatformVersion}
             options={(fp.platform === 'windows' ? WINDOWS_VERSIONS : MACOS_VERSIONS)}
@@ -743,54 +779,60 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
 
       <h3 className="fb-fp-group">{t("地区与网络")}</h3>
-      <Row label={t("时区")} hint={followIp ? networkIdentity.timezone : undefined}>
+      <Row label={t("时区")} hint={followIp ? networkIdentity.timezone : t("时区和语言一起跟随 IP 或一起自定义")}>
         <Space wrap size={8}>
-          <Radio.Group
-            size="small"
-            optionType="button"
+          <Select
+            className="fb-fp-select-half"
             value={followIp ? 'ip' : 'custom'}
-            onChange={(event) => patchFingerprint({ networkIdentityMode: event.target.value === 'ip' ? 'proxy' : 'manual' })}
+            onChange={(mode) => patchFingerprint({ networkIdentityMode: mode === 'ip' ? 'proxy' : 'manual' })}
             options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
+            aria-label={t("时区")}
           />
           {!followIp && (
             <Form.Item name={['fingerprint', 'timezone']} noStyle>
-              <Input size="small" className="fb-small-input" placeholder="Asia/Shanghai" />
+              <Select
+                showSearch
+                className="fb-fp-select"
+                placeholder="Asia/Shanghai"
+                options={TIME_ZONES.map((zone) => ({ value: zone, label: zone }))}
+                aria-label={t("时区")}
+              />
             </Form.Item>
           )}
         </Space>
       </Row>
-      <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
-        <Radio.Group
-          size="small"
-          optionType="button"
-          value={fp.geolocationPermission ?? 'ask'}
-          onChange={(event) => patchFingerprint({ geolocationPermission: event.target.value })}
-          options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
-        />
-      </Row>
-      <Row label={t("语言")} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : t("时区和语言一起跟随 IP 或一起自定义")}>
+      <Row label={t("语言")} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : fp.acceptLanguages}>
         <Space wrap size={8}>
-          <Radio.Group
-            size="small"
-            optionType="button"
+          <Select
+            className="fb-fp-select-half"
             value={followIp ? 'ip' : 'custom'}
-            onChange={(event) => patchFingerprint({ networkIdentityMode: event.target.value === 'ip' ? 'proxy' : 'manual' })}
+            onChange={(mode) => patchFingerprint({ networkIdentityMode: mode === 'ip' ? 'proxy' : 'manual' })}
             options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
+            aria-label={t("语言")}
           />
           {!followIp && (
-            <>
-              <Form.Item name={['fingerprint', 'language']} noStyle>
-                <Input size="small" className="fb-small-input" placeholder="en-US" />
-              </Form.Item>
-              <Form.Item name={['fingerprint', 'acceptLanguages']} noStyle>
-                <Input size="small" className="fb-small-input" placeholder="en-US,en" />
-              </Form.Item>
-            </>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              className="fb-fp-select"
+              value={fp.language}
+              onChange={(language) => patchFingerprint({ language, acceptLanguages: acceptLanguagesFor(language) })}
+              options={languageOptions}
+              aria-label={t("语言")}
+            />
           )}
         </Space>
       </Row>
       <Row label={t("界面语言")} hint={t("目前与语言保持一致")}>
-        <Unsupported options={[t("跟随语言")]} value={t("跟随语言")} reason={kernelUnsupported} />
+        <Unsupported value={t("跟随语言")} reason={kernelUnsupported} />
+      </Row>
+      <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
+        <Select
+          className="fb-fp-select"
+          value={fp.geolocationPermission ?? 'ask'}
+          onChange={(geolocationPermission) => patchFingerprint({ geolocationPermission })}
+          options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
+        />
       </Row>
       <Row
         label="WebRTC"
@@ -800,11 +842,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ? t("可能暴露真实公网 IP")
             : t("高风险：WebRTC 使用所有接口")}
       >
-        <Radio.Group
-          size="small"
-          optionType="button"
+        <Select
+          className="fb-fp-select"
           value={fp.webrtcPolicy}
-          onChange={(event) => patchFingerprint({ webrtcPolicy: event.target.value })}
+          onChange={(webrtcPolicy) => patchFingerprint({ webrtcPolicy })}
           options={[{ value: 'proxy_only', label: t("替换") }, { value: 'public_only', label: t("仅公网") }, { value: 'default', label: t("真实") }]}
         />
       </Row>
@@ -812,17 +853,23 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <h3 className="fb-fp-group">{t("显示")}</h3>
       <Row label={t("分辨率")} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : `${fp.screenWidth} × ${fp.screenHeight}`}>
         <Space wrap size={8}>
-          <Radio.Group
-            size="small"
-            optionType="button"
-            value={fp.screenSource === 'host' ? 'host' : screenCustom ? 'custom' : 'random'}
-            onChange={(event) => chooseScreen(event.target.value)}
-            options={[{ value: 'random', label: t("随机") }, { value: 'host', label: t("跟随电脑") }, { value: 'custom', label: t("自定义") }]}
+          <Select
+            className="fb-fp-select"
+            value={screenValue}
+            onChange={chooseScreen}
+            aria-label={t("分辨率")}
+            options={[
+              { value: 'template', label: t("跟随硬件配置（{0}）", selectedHardware ? `${selectedHardware.screenWidth} × ${selectedHardware.screenHeight}` : `${fp.screenWidth} × ${fp.screenHeight}`) },
+              { value: 'random', label: t("随机") },
+              { value: 'host', label: t("跟随电脑") },
+              ...COMMON_SCREENS.map(([width, height]) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
+              { value: 'custom', label: t("自定义") }
+            ]}
           />
-          {fp.screenSource !== 'host' && screenCustom && (
+          {screenValue === 'custom' && (
             <>
-              <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber size="small" min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
-              <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber size="small" min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+              <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+              <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
             </>
           )}
         </Space>
@@ -843,19 +890,24 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row label="Canvas">{spoofControl('canvas')}</Row>
       <Row label={t("WebGL 图像")} hint={t("与 WebGL 元数据一起开关")}>
-        <Unsupported options={[t("随机"), t("关闭")]} value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
+        <Unsupported value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
       </Row>
       <Row label={t("WebGL 元数据")} hint={mt(gpu?.model ?? selectedHardware?.gpuModel ?? '')}>{spoofControl('gpu')}</Row>
+      <Row label="WebGPU" hint={t("与 WebGL 元数据一起开关")}>
+        <Unsupported value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
+      </Row>
       <Row label="AudioContext">{spoofControl('audio')}</Row>
       <Row label="ClientRects">{spoofControl('clientrects')}</Row>
       <Row label="SpeechVoices" hint={t("自动与系统和语言保持一致")}>
-        <Unsupported options={[t("随机"), t("关闭")]} value={t("随机")} reason={kernelUnsupported} />
+        <Unsupported value={t("随机")} reason={kernelUnsupported} />
+      </Row>
+      <Row label={t("媒体设备")}>
+        <Unsupported value={t("随机")} reason={kernelUnsupported} />
       </Row>
       <Row label={t("硬件并发数")}>
         <Select
-          size="small"
           disabled={hostMatched}
-          className="fb-small-select"
+          className="fb-fp-select"
           value={fp.overrides?.includes('cores') ? fp.hardwareConcurrency : 'template'}
           onChange={chooseCores}
           aria-label={t("硬件并发数")}
@@ -866,18 +918,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       <Row label={t("设备内存")} hint={t("浏览器只报告最多 8 GB")}>
-        <Tooltip title={kernelUnsupported}>
-          <span><Select size="small" disabled className="fb-small-select" value={8} options={[{ value: 8, label: '8 GB' }]} /></span>
-        </Tooltip>
+        <Unsupported value="8 GB" reason={kernelUnsupported} />
       </Row>
+      <Row label={t("设备名称")}>
+        <Unsupported value={t("随机")} reason={kernelUnsupported} />
+      </Row>
+      <Row label={t("MAC 地址")}>
+        <Unsupported value={t("随机")} reason={kernelUnsupported} />
+      </Row>
+
+      <h3 className="fb-fp-group">{t("其他")}</h3>
       <Row label="Do Not Track">
-        <Radio.Group
-          size="small"
-          optionType="button"
+        <Select
+          className="fb-fp-select"
           value={fp.doNotTrack ?? 'default'}
-          onChange={(event) => patchFingerprint({ doNotTrack: event.target.value })}
+          onChange={(doNotTrack) => patchFingerprint({ doNotTrack })}
           options={[{ value: 'default', label: t("默认") }, { value: 'on', label: t("开启") }, { value: 'off', label: t("关闭") }]}
         />
+      </Row>
+      <Row label={t("端口扫描保护")}>
+        <Unsupported value={t("开启")} reason={kernelUnsupported} />
       </Row>
     </div>
   )
