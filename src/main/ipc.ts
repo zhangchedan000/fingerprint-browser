@@ -21,15 +21,7 @@ import { parseBatchProfileCsv, serializeBatchProfileTemplate } from './profile-b
 import { proxyForTest, publicProfile, sameProxyIdentity } from './profile-secrets'
 import type { ProfileBackupManager } from './profile-backup'
 import type { AppSessionTracker } from './app-session'
-import type { UpdateManager } from './update-manager'
-import type { LicenseManager } from './license-manager'
 import type { WorkspaceMigrationManager } from './workspace-migration'
-import type { ProAgentManager } from './pro-agent-manager'
-import type { SchedulerManager } from './scheduler-manager'
-import type { McpControlManager } from './mcp-control-manager'
-import type { AnnouncementManager } from './announcement-manager'
-
-export const PRO_PURCHASE_URL = 'https://pay.ldxp.cn/item/q23itv'
 
 interface IpcDependencies {
   profiles: ProfileStore
@@ -42,15 +34,9 @@ interface IpcDependencies {
   backups: ProfileBackupManager
   workspaceMigration: WorkspaceMigrationManager
   appSession: AppSessionTracker
-  updater: UpdateManager
-  licensing: LicenseManager
-  automation: ProAgentManager
-  scheduler: SchedulerManager
-  mcp: McpControlManager
-  announcements: AnnouncementManager
 }
 
-export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, updater, licensing, automation, scheduler, mcp, announcements }: IpcDependencies): void {
+export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => publicProfile(await profiles.create(draft)))
@@ -63,7 +49,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.SaveDialogOptions = {
       title: t('导出环境配置'),
       defaultPath: safeProfileFileName(profile.name),
-      filters: [{ name: 'Prism Browser 环境配置', extensions: ['json'] }]
+      filters: [{ name: '指纹浏览器环境配置', extensions: ['json'] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
@@ -76,7 +62,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入环境配置'),
       properties: ['openFile'],
-      filters: [{ name: 'Prism Browser 环境配置', extensions: ['json'] }]
+      filters: [{ name: '指纹浏览器环境配置', extensions: ['json'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
@@ -151,7 +137,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:import-backup', async () => {
     const owner = BrowserWindow.getFocusedWindow()
-    const options: Electron.OpenDialogOptions = { title: t('选择 Prism 环境数据备份目录'), properties: ['openDirectory'] }
+    const options: Electron.OpenDialogOptions = { title: t('选择指纹浏览器环境数据备份目录'), properties: ['openDirectory'] }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
     const imported = await backups.import(result.filePaths[0])
@@ -164,8 +150,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const stamp = new Date().toISOString().slice(0, 10)
     const options: Electron.SaveDialogOptions = {
       title: t('导出全部环境加密迁移包'),
-      defaultPath: `Prism 全部环境 ${stamp}.prism-migration`,
-      filters: [{ name: 'Prism 加密迁移包', extensions: ['prism-migration'] }]
+      defaultPath: `指纹浏览器全部环境 ${stamp}.prism-migration`,
+      filters: [{ name: '指纹浏览器加密迁移包', extensions: ['prism-migration'] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
@@ -178,7 +164,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入全部环境加密迁移包'),
       properties: ['openFile'],
-      filters: [{ name: 'Prism 加密迁移包', extensions: ['prism-migration'] }]
+      filters: [{ name: '指纹浏览器加密迁移包', extensions: ['prism-migration'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
@@ -242,9 +228,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:remove', async (_event, id: string) => {
     if (launcher.isRunning(id)) throw new Error('请先关闭运行中的环境')
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
-    if (scheduler.profileTasks(id).length) throw new Error('该环境仍被计划任务引用，请先删除对应计划任务')
     await profiles.remove(id)
-    await mcp.removeProfile(id)
   })
   ipcMain.handle('profiles:launch', (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
@@ -272,10 +256,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     for (const id of ids) {
       if (launcher.isRunning(id)) throw new Error(`环境“${profiles.get(id).name}”正在运行，不能删除`)
       if (cookies.isBusy(id)) throw new Error(`环境“${profiles.get(id).name}”正在执行 Cookie 操作`)
-      if (scheduler.profileTasks(id).length) throw new Error(`环境“${profiles.get(id).name}”仍被计划任务引用，请先删除对应计划任务`)
     }
     await profiles.removeMany(ids)
-    await Promise.all(ids.map((id) => mcp.removeProfile(id)))
   })
 
   ipcMain.handle('engine:status', () => locateBrowser(settings))
@@ -342,25 +324,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       return {
         version,
         status: 'healthy',
-        message: '随 Prism Browser 发布的内核完整性正常',
+        message: '随指纹浏览器发布的内核完整性正常',
         checkedAt: new Date().toISOString()
       }
     }
     return kernels.verify(version)
-  })
-  ipcMain.handle('updates:status', () => updater.status())
-  ipcMain.handle('updates:check', () => updater.check())
-  ipcMain.handle('updates:download', () => updater.download())
-  ipcMain.handle('updates:open-installer', async () => {
-    const error = await shell.openPath(await updater.downloadedPath())
-    if (error) throw new Error(`无法打开更新安装程序：${error}`)
-  })
-  ipcMain.handle('announcements:status', () => announcements.status())
-  ipcMain.handle('announcements:check', () => announcements.check())
-  ipcMain.handle('announcements:open-action', async () => {
-    const status = announcements.status()
-    if (status.state !== 'available' || !status.announcement?.action) throw new Error('当前公告没有可打开的链接')
-    await shell.openExternal(status.announcement.action.url)
   })
   ipcMain.handle('proxy:test', (_event, config, profileId?: string) => {
     const validated = validateProxyConfig(config)
@@ -371,37 +339,6 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   if (process.env.PRISM_E2E === '1') {
     ipcMain.handle('diagnostics:e2e-quit', () => app.quit())
   }
-  ipcMain.handle('licensing:status', () => licensing.status())
-  ipcMain.handle('licensing:sync', () => licensing.synchronize())
-  ipcMain.handle('licensing:activate', (_event, activationCode: string) => licensing.activate(activationCode))
-  ipcMain.handle('licensing:deactivate', () => licensing.deactivate())
-  ipcMain.handle('licensing:open-purchase', async () => {
-    await shell.openExternal(PRO_PURCHASE_URL)
-  })
-  ipcMain.handle('automation:status', () => automation.status())
-  ipcMain.handle('automation:start', () => automation.start())
-  ipcMain.handle('automation:stop', () => automation.stop(false))
-  ipcMain.handle('automation:emergency-stop', () => automation.stop(true))
-  ipcMain.handle('scheduler:list', () => scheduler.list())
-  ipcMain.handle('scheduler:create', (_event, draft) => scheduler.create(draft))
-  ipcMain.handle('scheduler:update', (_event, id: string, draft) => scheduler.update(id, draft))
-  ipcMain.handle('scheduler:remove', (_event, id: string) => scheduler.remove(id))
-  ipcMain.handle('scheduler:set-enabled', (_event, id: string, enabled: boolean) => scheduler.setEnabled(id, enabled))
-  ipcMain.handle('scheduler:run-now', (_event, id: string) => scheduler.runNow(id))
-  ipcMain.handle('mcp:status', () => mcp.status(automation.status().state === 'running'))
-  ipcMain.handle('mcp:permissions', () => mcp.permissionList())
-  ipcMain.handle('mcp:set-permission', (_event, profileId: string, enabled: boolean) => mcp.setPermission(profileId, enabled))
-  ipcMain.handle('mcp:start', () => automation.mcpConnection())
-  ipcMain.handle('mcp:stop', async () => {
-    await automation.stop(false)
-    mcp.resetSessions()
-    return mcp.status(false)
-  })
-  ipcMain.handle('mcp:emergency-stop', async () => {
-    await mcp.emergencyStop()
-    await automation.stop(false)
-    return mcp.status(false)
-  })
   ipcMain.handle('extensions:list', () => extensions.list())
   ipcMain.handle('extensions:import-directory', async () => {
     const owner = BrowserWindow.getFocusedWindow()

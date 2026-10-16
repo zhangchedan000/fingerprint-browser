@@ -20,7 +20,6 @@ import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaun
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
-import { kernelRequiresPro } from '../shared/kernel-policy'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -75,7 +74,6 @@ export class BrowserLauncher {
   private activeLaunches = 0
   private readonly launchWaiters: Array<() => void> = []
   private closeAllOperation?: Promise<void>
-  private canUseProKernel: () => boolean = () => true
 
   constructor(
     private readonly profiles: ProfileStore,
@@ -95,10 +93,6 @@ export class BrowserLauncher {
     if (!Number.isInteger(proxyMonitorIntervalMs) || proxyMonitorIntervalMs < 10) {
       throw new Error('代理出口复检间隔不能小于 10 毫秒')
     }
-  }
-
-  setProKernelAccessCheck(check: () => boolean): void {
-    this.canUseProKernel = check
   }
 
   async initialize(): Promise<void> {
@@ -171,9 +165,6 @@ export class BrowserLauncher {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先选择 Fingerprint Chromium 可执行文件')
-    }
-    if (kernelRequiresPro(engine.version) && !this.canUseProKernel()) {
-      throw new Error(`Chromium ${engine.version} 是 Prism Pro 内核，请先激活 Pro 或将环境切换回 144 稳定内核`)
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()

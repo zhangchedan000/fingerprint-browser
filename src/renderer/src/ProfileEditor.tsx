@@ -32,7 +32,6 @@ import {
 } from '../../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../../shared/network-identity'
 import type { BrowserExtension, BrowserProfileView, EngineStatus, HardwareProfileId, KernelRelease, ProfileDraft, ProxyTestResult } from '../../shared/types'
-import { kernelRequiresPro } from '../../shared/kernel-policy'
 
 interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color'> {
   startUrlsText: string
@@ -48,7 +47,6 @@ interface ProfileEditorProps {
   engine: EngineStatus | null
   kernels: KernelRelease[]
   groups: string[]
-  proEnabled: boolean
   onCancel: () => void
   onSave: (draft: ProfileDraft) => Promise<void>
 }
@@ -75,7 +73,7 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
 }
 
 
-export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proEnabled, onCancel, onSave }: ProfileEditorProps) {
+export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, onCancel, onSave }: ProfileEditorProps) {
   const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
     tor: t("Tor 出口"),
     vpn: t("VPN 网络"),
@@ -186,8 +184,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: '', label: t("自动跟随当前内核{0}", engine?.version ? ` · ${engine.version}` : '') },
             ...kernels.map((kernel) => ({
               value: kernel.version,
-              label: `${kernel.version}${kernelRequiresPro(kernel.version) ? ' · Pro' : ''}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}`,
-              disabled: kernelRequiresPro(kernel.version) && !proEnabled
+              label: `${kernel.version}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}`
             })),
             ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelVersion) }] : [])
           ]}
