@@ -16,7 +16,18 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Unit tests
-        run: npx vitest run --fileParallelism=false
+        run: npx vitest run --fileParallelism=false --reporter=default --reporter=json --outputFile=vitest.json
+      - name: Report test failures
+        if: failure()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            for (const f of r.testResults) {
+              const file = f.name.replace(process.cwd() + "\\", "").replace(/\\/g, "/")
+              if (f.status === "failed" && !f.assertionResults.some((a) => a.status === "failed")) console.log(`::error file=${file}::${(f.message || "suite failed").split("\n").slice(0, 6).join(" | ")}`)
+              for (const a of f.assertionResults) if (a.status === "failed") console.log(`::error file=${file}::${a.fullName} :: ${(a.failureMessages[0] || "").split("\n").slice(0, 4).join(" | ")}`)
+            }'
       - name: Build installer (unsigned)
         run: npm run dist:win
         env:
