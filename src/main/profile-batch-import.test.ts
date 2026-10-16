@@ -57,6 +57,10 @@ describe('batch import', () => {
     expect(row.errors).toEqual([])
     expect(row.draft).toMatchObject({ proxy: { protocol: 'socks5', host: 'proxy.example.com', port: 1080 }, window: { x: -20 } })
     expect(row.draft?.fingerprint.platform).toBe('macos')
+    // Whatever OS this test runs on, the row's OS wins.
+    const [win] = analyzeBatchTable([['name', 'platform'], ['W', 'windows']]).rows
+    expect(win.draft?.fingerprint.platform).toBe('windows')
+    expect(win.draft?.fingerprint.hardwareProfileId.startsWith('windows')).toBe(true)
     const [bad] = analyzeBatchTable([['name', 'proxy_port', 'proxy_host'], ['B', '80x', 'h.example.com']]).rows
     expect(bad.errors).toEqual(['proxy_port 必须是整数'])
     const [both] = analyzeBatchTable([['name', 'proxy', 'proxy_host'], ['C', 'h:1', 'h.example.com']]).rows

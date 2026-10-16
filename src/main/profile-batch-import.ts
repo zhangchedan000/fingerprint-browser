@@ -1,5 +1,5 @@
 import { defaultProfileDraft } from '../shared/defaults'
-import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
+import { defaultHardwareProfileId, refreshSeededGpuIdentity } from '../shared/hardware-profiles'
 import { getLocale, joinMessages, t, translateMessage } from '../shared/i18n'
 import { platformStartUrl } from '../shared/platforms'
 import { parsePastedProxy } from '../shared/proxy-paste'
@@ -278,10 +278,13 @@ function analyzeRow(values: Record<BatchImportColumn, string>, index: number): P
     const rawBrand = values.brand.trim()
     const startUrls = values.start_urls.trim() ? splitPipe(values.start_urls) : [platformStartUrl(platform)].filter((url): url is string => Boolean(url))
     const windowMode = values.window_mode.trim().toLowerCase()
+    const os = (values.platform.trim().toLowerCase() || base.fingerprint.platform) as BrowserPlatform
     const fingerprint = refreshSeededGpuIdentity({
       ...base.fingerprint,
+      // The hardware template decides the OS, so a row asking for another OS needs that OS's template.
+      hardwareProfileId: os === base.fingerprint.platform ? base.fingerprint.hardwareProfileId : defaultHardwareProfileId(os),
       seed: seed ?? base.fingerprint.seed,
-      platform: (values.platform.trim().toLowerCase() || base.fingerprint.platform) as BrowserPlatform,
+      platform: os,
       platformVersion: values.platform_version.trim() || base.fingerprint.platformVersion,
       brand: (rawBrand ? `${rawBrand[0].toUpperCase()}${rawBrand.slice(1).toLowerCase()}` : base.fingerprint.brand) as BrowserBrand,
       brandVersion: values.brand_version.trim(),
