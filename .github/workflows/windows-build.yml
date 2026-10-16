@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npm run dist:win 2>&1 | tee build.log || { tail -n 40 build.log | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
+          npm run dist:win 2>&1 | tee build.log || { grep -v "duplicate dependency" build.log | tail -n 40 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
