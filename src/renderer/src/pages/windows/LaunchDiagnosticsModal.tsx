@@ -1,7 +1,7 @@
-import { t, getLocale, translateMessage as mt } from '../../shared/i18n'
+import { t, getLocale, translateMessage as mt } from '../../../../shared/i18n'
 import { CheckCircleFilled, CloseCircleFilled, WarningFilled } from '@ant-design/icons'
 import { Alert, List, Modal, Space, Tag, Typography } from 'antd'
-import type { BrowserProfileView, LaunchDiagnosticReport } from '../../shared/types'
+import type { BrowserProfileView, LaunchDiagnosticReport } from '../../../../shared/types'
 
 interface LaunchDiagnosticsModalProps {
   profile?: BrowserProfileView

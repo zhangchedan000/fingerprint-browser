@@ -1,4 +1,4 @@
-import { t } from '../../shared/i18n'
+import { t } from '../../../../shared/i18n'
 import { LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { Alert, Input, Modal, Radio, Space, Typography } from 'antd'
 import { useEffect, useState } from 'react'

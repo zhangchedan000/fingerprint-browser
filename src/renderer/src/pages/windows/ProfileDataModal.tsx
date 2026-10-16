@@ -1,8 +1,8 @@
-import { t, translateMessage as mt } from '../../shared/i18n'
+import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { DeleteOutlined, DownloadOutlined, FolderOpenOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { Alert, Button, Descriptions, Modal, Popconfirm, Space, Spin, Typography, message } from 'antd'
 import { useEffect, useState } from 'react'
-import type { BrowserProfileView, ProfileStorageInfo } from '../../shared/types'
+import type { BrowserProfileView, ProfileStorageInfo } from '../../../../shared/types'
 
 interface ProfileDataModalProps {
   open: boolean

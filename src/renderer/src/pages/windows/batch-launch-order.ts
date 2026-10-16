@@ -1,4 +1,4 @@
-import type { BrowserProfileView } from '../../shared/types'
+import type { BrowserProfileView } from '../../../../shared/types'
 
 export const BATCH_LAUNCH_GAP_MS = 1_500
 

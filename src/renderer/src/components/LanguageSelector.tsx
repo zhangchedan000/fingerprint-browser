@@ -1,7 +1,7 @@
 import { GlobalOutlined } from '@ant-design/icons'
 import { Select, Tooltip, message } from 'antd'
 import { useState, useSyncExternalStore } from 'react'
-import { getLocale, languages, setLocale, subscribeLocale, t, type UiLocale } from '../../shared/i18n'
+import { getLocale, languages, setLocale, subscribeLocale, t, type UiLocale } from '../../../shared/i18n'
 
 export function LanguageSelector() {
   const locale = useSyncExternalStore(subscribeLocale, getLocale)

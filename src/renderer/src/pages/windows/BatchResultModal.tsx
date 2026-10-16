@@ -1,4 +1,4 @@
-import { t, translateMessage as mt } from '../../shared/i18n'
+import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { Alert, List, Modal, Typography } from 'antd'
 
 export interface BatchOperationResult {

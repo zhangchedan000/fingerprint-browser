@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserProfileView } from '../../shared/types'
+import type { BrowserProfileView } from '../../../../shared/types'
 import { profileTableSorters } from './profile-table-sort'
 
 function profile(serialNumber: number, overrides: Partial<BrowserProfileView> = {}): BrowserProfileView {

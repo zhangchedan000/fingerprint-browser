@@ -1,7 +1,7 @@
 import { Alert, Modal, Select, Typography } from 'antd'
 import { useEffect, useState } from 'react'
-import { t } from '../../shared/i18n'
-import type { EngineStatus, KernelRelease } from '../../shared/types'
+import { t } from '../../../../shared/i18n'
+import type { EngineStatus, KernelRelease } from '../../../../shared/types'
 
 /** '' means "follow the default kernel". */
 export const FOLLOW_DEFAULT_KERNEL = ''

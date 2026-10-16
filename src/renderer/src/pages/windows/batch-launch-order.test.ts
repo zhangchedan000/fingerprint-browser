@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserProfileView } from '../../shared/types'
+import type { BrowserProfileView } from '../../../../shared/types'
 import { orderBatchLaunchProfiles, waitForBatchLaunchGap } from './batch-launch-order'
 
 function profile(id: string, serialNumber: number): BrowserProfileView {

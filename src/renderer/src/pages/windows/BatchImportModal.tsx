@@ -2,8 +2,8 @@ import { CheckCircleOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { Button, Checkbox, Modal, Select, Spin, Steps, Table, Tag, Tooltip, Typography } from 'antd'
 import type { DragEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { formatList, joinMessages, t, translateMessage as mt } from '../../shared/i18n'
-import type { BatchImportPreview, BatchImportResult, BatchImportRowView, BrowserProfileView } from '../../shared/types'
+import { formatList, joinMessages, t, translateMessage as mt } from '../../../../shared/i18n'
+import type { BatchImportPreview, BatchImportResult, BatchImportRowView, BrowserProfileView } from '../../../../shared/types'
 
 interface BatchImportModalProps {
   open: boolean

@@ -1,5 +1,5 @@
-import { t, getLocale } from '../../shared/i18n'
-import type { BrowserProfileView, ProfileStatus } from '../../shared/types'
+import { t, getLocale } from '../../../../shared/i18n'
+import type { BrowserProfileView, ProfileStatus } from '../../../../shared/types'
 
 let collatorLocale = getLocale()
 let collator = new Intl.Collator(collatorLocale, { numeric: true, sensitivity: 'base' })

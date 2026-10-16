@@ -1,8 +1,8 @@
-import { t, getLocale, translateMessage as mt } from '../../shared/i18n'
+import { t, getLocale, translateMessage as mt } from '../../../../shared/i18n'
 import { DeleteOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { Button, Empty, List, Modal, Popconfirm, Select, Space, Spin, Typography, message } from 'antd'
 import { useEffect, useState } from 'react'
-import type { AppSettings, BrowserProfileView, DeletedProfileSummary } from '../../shared/types'
+import type { AppSettings, BrowserProfileView, DeletedProfileSummary } from '../../../../shared/types'
 
 interface RecycleBinModalProps {
   open: boolean

@@ -1,4 +1,4 @@
-import { t, translateMessage as mt } from '../../shared/i18n'
+import { t, translateMessage as mt } from '../../../../shared/i18n'
 import {
   Alert,
   AutoComplete,
@@ -20,8 +20,8 @@ import {
 } from 'antd'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../shared/defaults'
-import { fingerprintVersionWarning } from '../../shared/fingerprint-consistency'
+import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
+import { fingerprintVersionWarning } from '../../../../shared/fingerprint-consistency'
 import {
   applyHardwareProfile,
   defaultHardwareProfileId,
@@ -29,11 +29,11 @@ import {
   HARDWARE_PROFILES,
   hardwareProfile,
   refreshSeededGpuIdentity
-} from '../../shared/hardware-profiles'
-import { effectiveNetworkIdentity } from '../../shared/network-identity'
-import { parsePastedProxy } from '../../shared/proxy-paste'
-import { parseCookieFile } from '../../main/cookie-file'
-import { PLATFORMS } from '../../shared/platforms'
+} from '../../../../shared/hardware-profiles'
+import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
+import { parsePastedProxy } from '../../../../shared/proxy-paste'
+import { parseCookieFile } from '../../../../main/cookie-file'
+import { PLATFORMS } from '../../../../shared/platforms'
 import type {
   FingerprintOverride,
   BrowserExtension,
@@ -45,17 +45,22 @@ import type {
   KernelRelease,
   PlatformAccount,
   ProfileDraft,
+  ProxyRecordView,
   ProxyTestResult
-} from '../../shared/types'
+} from '../../../../shared/types'
+import { proxyLabel } from '../../components/proxy'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
 type EditorTab = 'basic' | 'proxy' | 'fingerprint'
+/** 'library' picks a proxy from the proxy library; the others type one in (it is saved into the library). */
+type ProxyMode = 'direct' | 'http' | 'https' | 'socks5' | 'library'
 
-interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'account'> {
+interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'account' | 'proxyId'> {
   startUrlsText: string
   color: string | { toHexString: () => string }
   account: PlatformAccount
   cookieText: string
+  proxyId: string
 }
 
 export interface ProfileEditorExtras {
@@ -71,7 +76,10 @@ interface ProfileEditorProps {
   extensions: BrowserExtension[]
   engine: EngineStatus | null
   kernels: KernelRelease[]
+  /** Group names from the group library. A new name typed here is added to the library on save. */
   groups: string[]
+  /** The proxy library. */
+  proxies: ProxyRecordView[]
   onCancel: () => void
   onSave: (draft: ProfileDraft, extras: ProfileEditorExtras) => Promise<void>
 }
@@ -106,6 +114,7 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     kernelVersion: draft.kernelVersion,
     window: { ...draft.window },
     proxy: { ...draft.proxy },
+    proxyId: profile && !profile.proxyMissing ? profile.proxyId : '',
     account: profile
       ? { ...profile.account }
       : { platform: '', username: '', password: '' },
@@ -167,7 +176,7 @@ function Unsupported({ options, value, reason }: { options: string[]; value: str
   )
 }
 
-export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, onCancel, onSave }: ProfileEditorProps) {
+export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave }: ProfileEditorProps) {
   const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
     tor: t("Tor 出口"),
     vpn: t("VPN 网络"),
@@ -181,8 +190,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
   const [screenCustom, setScreenCustom] = useState(false)
+  const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
 
-  const proxyProtocol = Form.useWatch(['proxy', 'protocol'], form) ?? 'direct'
+  const typedProtocol = Form.useWatch(['proxy', 'protocol'], form) ?? 'direct'
+  const proxyId = Form.useWatch('proxyId', form) ?? ''
+  const libraryProxy = proxyMode === 'library' ? proxies.find((item) => item.id === proxyId) : undefined
+  /** Protocol of the proxy the window will use, whether typed or picked. */
+  const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : typedProtocol
+  const sharedWith = libraryProxy ? libraryProxy.profileIds.filter((id) => id !== profile?.id).length : 0
   const proxyPassword = Form.useWatch(['proxy', 'password'], form) ?? ''
   const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], form) === true
   const accountPassword = Form.useWatch(['account', 'password'], form) ?? ''
@@ -200,6 +215,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyResult(null)
     setPasteText('')
     setPasteError('')
+    setProxyMode(profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
     const initial = editorValues(profile, suggestedIndex).fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !COMMON_SCREENS.some(([width, height]) => width === initial.screenWidth && height === initial.screenHeight)))
@@ -221,7 +237,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const gpu = effectiveGpuIdentity({ hardwareProfileId: fp.hardwareProfileId, seed: fp.seed, gpuBucket: fp.gpuBucket })
   const hostPlatform = defaultPlatform()
   const followIp = fp.networkIdentityMode === 'proxy'
-  const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : profile?.proxyCheck)
+  const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const running = Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
 
@@ -303,9 +319,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     try {
       const parsed = parsePastedProxy(text)
       const current = form.getFieldValue('proxy')
+      const protocol = parsed.protocol ?? (current.protocol === 'direct' ? 'socks5' : current.protocol)
+      setProxyMode(protocol)
       form.setFieldValue('proxy', {
         ...current,
-        protocol: parsed.protocol ?? (current.protocol === 'direct' ? 'socks5' : current.protocol),
+        protocol,
         host: parsed.host,
         port: parsed.port,
         username: parsed.username,
@@ -319,8 +337,22 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }
   }
 
+  function chooseProxyMode(mode: ProxyMode): void {
+    setProxyMode(mode)
+    setProxyResult(null)
+    if (mode !== 'library') form.setFieldValue(['proxy', 'protocol'], mode)
+  }
+
   async function testCurrentProxy(): Promise<void> {
     try {
+      if (proxyMode === 'library') {
+        await form.validateFields(['proxyId'])
+        setTestingProxy(true)
+        setProxyResult(null)
+        // Saved on the library proxy, so every window using it sees the result.
+        setProxyResult((await window.browserApi.proxy.check(form.getFieldValue('proxyId'))).check ?? null)
+        return
+      }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
       setProxyResult(null)
@@ -366,7 +398,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       startUrls: String(values.startUrlsText ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
       kernelVersion: values.kernelVersion,
       window: values.window,
-      proxy: values.proxy,
+      // A picked library proxy goes by id; a typed one is saved into the library by the store.
+      ...(proxyMode === 'library'
+        ? { proxyId: values.proxyId, proxy: { protocol: 'direct' as const, host: '', username: '', password: '' } }
+        : { proxy: values.proxy }),
       account: values.account,
       extensionIds: values.extensionIds,
       fingerprint: values.fingerprint
@@ -491,25 +526,58 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   const proxy = (
     <div className="fb-editor-section">
-      <Row label={t("代理方式")}>
-        <Space wrap size={8}>
-          <Form.Item name={['proxy', 'protocol']} noStyle>
-            <Radio.Group
-              optionType="button"
-              options={[
-                { value: 'direct', label: t("直连") },
-                { value: 'http', label: 'HTTP' },
-                { value: 'https', label: 'HTTPS' },
-                { value: 'socks5', label: 'SOCKS5' }
-              ]}
-            />
-          </Form.Item>
-          <Tooltip title={t("代理 IP 模块完成后开放")}>
-            <Button disabled>{t("从代理池选择")}</Button>
-          </Tooltip>
-        </Space>
+      <Row
+        label={t("代理方式")}
+        hint={proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
+      >
+        <Radio.Group
+          optionType="button"
+          value={proxyMode}
+          onChange={(event) => chooseProxyMode(event.target.value as ProxyMode)}
+          options={[
+            { value: 'direct', label: t("直连") },
+            { value: 'http', label: 'HTTP' },
+            { value: 'https', label: 'HTTPS' },
+            { value: 'socks5', label: 'SOCKS5' },
+            { value: 'library', label: t("从代理库选择") }
+          ]}
+        />
       </Row>
-      {proxyProtocol !== 'direct' && (
+      {proxyMode === 'library' && (
+        <>
+          <Row
+            label={t("选择代理")}
+            required
+            hint={proxies.length ? undefined : t("代理库还是空的，可以先用上面的 HTTP / SOCKS5 填写一个")}
+          >
+            <Form.Item name="proxyId" noStyle rules={[{ required: true, message: t("请选择一个代理") }]}>
+              <Select
+                showSearch
+                className="fb-wide-select"
+                placeholder={t("搜索地址或备注")}
+                optionFilterProp="search"
+                onChange={() => setProxyResult(null)}
+                options={proxies.map((item) => ({
+                  value: item.id,
+                  search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
+                  label: proxyLabel(item)
+                }))}
+              />
+            </Form.Item>
+          </Row>
+          <FieldError name="proxyId" />
+          {sharedWith > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              className="fb-editor-alert"
+              title={t("这个代理已被另外 {0} 个窗口使用", sharedWith)}
+              description={t("多个窗口共用同一个出口 IP，可能被平台判定为关联账号。")}
+            />
+          )}
+        </>
+      )}
+      {proxyMode !== 'library' && proxyProtocol !== 'direct' && (
         <>
           <Row label={t("代理地址")} required>
             <div className="fb-host-grid">

@@ -1,6 +1,6 @@
-import { t, getLocale, translateMessage as mt } from '../../shared/i18n'
+import { t, getLocale, translateMessage as mt } from '../../../../shared/i18n'
 import { Alert, Button, Empty, List, Modal, Space, Spin, Tag, Typography } from 'antd'
-import type { BrowserCrashRecord, BrowserProfileView } from '../../shared/types'
+import type { BrowserCrashRecord, BrowserProfileView } from '../../../../shared/types'
 
 interface CrashHistoryModalProps {
   open: boolean

@@ -1,8 +1,8 @@
-import { t, translateMessage as mt } from '../../shared/i18n'
+import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { CheckCircleFilled, CrownOutlined, DeleteOutlined, FolderOpenOutlined, ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { Alert, Button, List, Modal, Popconfirm, Space, Spin, Tag, Typography, message } from 'antd'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { EngineStatus, KernelHealth, KernelRelease } from '../../shared/types'
+import type { EngineStatus, KernelHealth, KernelRelease } from '../../../../shared/types'
 
 interface KernelManagerModalProps {
   open: boolean

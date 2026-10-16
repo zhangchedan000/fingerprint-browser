@@ -1,6 +1,5 @@
 import React, { useEffect, useSyncExternalStore } from 'react'
 import ReactDOM from 'react-dom/client'
-import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import zhTW from 'antd/locale/zh_TW'
 import en from 'antd/locale/en_US'
@@ -16,31 +15,18 @@ import ja from 'antd/locale/ja_JP'
 import hi from 'antd/locale/hi_IN'
 import { getLocale, resolveLocale, setLocale, subscribeLocale } from '../../shared/i18n'
 import App from './App'
+import { applyTheme, DEFAULT_THEME, ThemeProvider } from './theme'
 import './styles.css'
+
+const ANTD_LOCALES = { 'zh-CN': zhCN, 'zh-TW': zhTW, en, ru, vi, th, 'pt-BR': ptBR, fr, uk, es, tr, ja, hi }
 
 function PrismApplication() {
   const locale = useSyncExternalStore(subscribeLocale, getLocale)
   useEffect(() => { document.documentElement.lang = locale }, [locale])
   return (
-    <ConfigProvider
-      locale={{ 'zh-CN': zhCN, 'zh-TW': zhTW, en, ru, vi, th, 'pt-BR': ptBR, fr, uk, es, tr, ja, hi }[locale]}
-      theme={{
-        token: {
-          colorPrimary: '#5965e8',
-          colorText: '#1f2430',
-          borderRadius: 10,
-          fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        },
-        components: {
-          Button: { controlHeight: 38 },
-          Input: { controlHeight: 38 },
-          Select: { controlHeight: 38 },
-          Table: { headerBg: '#f8f9fc', headerColor: '#687083' }
-        }
-      }}
-    >
+    <ThemeProvider locale={ANTD_LOCALES[locale]}>
       <App />
-    </ConfigProvider>
+    </ThemeProvider>
   )
 }
 
@@ -48,6 +34,7 @@ async function mount(): Promise<void> {
   const selected = await window.browserApi.uiLanguage.get().catch(() => 'en')
   setLocale(resolveLocale(selected))
   document.documentElement.lang = getLocale()
+  applyTheme(DEFAULT_THEME)
   ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><PrismApplication /></React.StrictMode>)
 }
 void mount()

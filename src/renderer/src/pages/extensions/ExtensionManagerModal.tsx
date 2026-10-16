@@ -1,8 +1,8 @@
-import { t, translateMessage as mt } from '../../shared/i18n'
+import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { DeleteOutlined, EditOutlined, FolderAddOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, List, Modal, Popconfirm, Space, Spin, Switch, Tag, Typography, message } from 'antd'
 import { useEffect, useState } from 'react'
-import type { BrowserExtension } from '../../shared/types'
+import type { BrowserExtension } from '../../../../shared/types'
 
 interface ExtensionManagerModalProps {
   open: boolean
