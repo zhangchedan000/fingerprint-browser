@@ -22,7 +22,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const [paste, setPaste] = useState('')
   const [pasteError, setPasteError] = useState('')
   const [result, setResult] = useState<ProxyTestResult | null>(null)
-  const passwordStored = Form.useWatch('passwordStored', form) === true
+  const passwordStored = Form.useWatch('passwordStored', { form, preserve: true }) === true
   const password = Form.useWatch('password', form) ?? ''
 
   useEffect(() => {

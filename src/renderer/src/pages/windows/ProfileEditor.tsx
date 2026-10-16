@@ -192,20 +192,28 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [screenCustom, setScreenCustom] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
 
-  const typedProtocol = Form.useWatch(['proxy', 'protocol'], form) ?? 'direct'
-  const proxyId = Form.useWatch('proxyId', form) ?? ''
+  const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
+  const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
   const libraryProxy = proxyMode === 'library' ? proxies.find((item) => item.id === proxyId) : undefined
   /** Protocol of the proxy the window will use, whether typed or picked. */
   const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : typedProtocol
   const sharedWith = libraryProxy ? libraryProxy.profileIds.filter((id) => id !== profile?.id).length : 0
-  const proxyPassword = Form.useWatch(['proxy', 'password'], form) ?? ''
-  const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], form) === true
-  const accountPassword = Form.useWatch(['account', 'password'], form) ?? ''
-  const accountPasswordStored = Form.useWatch(['account', 'passwordStored'], form) === true
-  const cookieText = Form.useWatch('cookieText', form) ?? ''
-  const kernelVersion = Form.useWatch('kernelVersion', form) ?? ''
-  const windowMode = Form.useWatch(['window', 'mode'], form) ?? 'auto'
-  const fp = (Form.useWatch('fingerprint', form) ?? editorValues(profile, suggestedIndex).fingerprint) as FingerprintConfig
+  const proxyPassword = Form.useWatch(['proxy', 'password'], { form, preserve: true }) ?? ''
+  const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], { form, preserve: true }) === true
+  const accountPassword = Form.useWatch(['account', 'password'], { form, preserve: true }) ?? ''
+  const accountPasswordStored = Form.useWatch(['account', 'passwordStored'], { form, preserve: true }) === true
+  const cookieText = Form.useWatch('cookieText', { form, preserve: true }) ?? ''
+  const kernelVersion = Form.useWatch('kernelVersion', { form, preserve: true }) ?? ''
+  const windowMode = Form.useWatch(['window', 'mode'], { form, preserve: true }) ?? 'auto'
+  const initialFingerprint = useMemo(() => editorValues(profile, suggestedIndex).fingerprint, [profile, suggestedIndex])
+  const watchedFingerprint = Form.useWatch('fingerprint', { form, preserve: true }) as Partial<FingerprintConfig> | undefined
+  // `preserve` makes the watch report the whole fingerprint, not just the few keys that have a
+  // Form.Item; without it clicks looked dead and a partial object crashed the drawer. Gaps (the
+  // render between resetFields and setFieldsValue) are filled from the window being edited.
+  const fp: FingerprintConfig = { ...initialFingerprint }
+  for (const [key, value] of Object.entries(watchedFingerprint ?? {})) {
+    if (value !== undefined) (fp as unknown as Record<string, unknown>)[key] = value
+  }
 
   useEffect(() => {
     if (!open) return
