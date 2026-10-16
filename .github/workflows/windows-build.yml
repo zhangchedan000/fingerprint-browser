@@ -39,7 +39,6 @@ jobs:
         with:
           name: fingerprint-browser-windows
           path: |
-            release/*.msi
             release/*.exe
             release/*.zip
           if-no-files-found: error

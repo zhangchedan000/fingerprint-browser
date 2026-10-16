@@ -18,7 +18,7 @@
 npm ci
 npm test          # 类型检查 + 单元测试 + 内核锁校验
 npm run dev       # 开发模式
-npm run dist:win  # 打包 Windows（msi / portable / zip）
+npm run dist:win  # 打包 Windows（安装版 / 免安装版 / zip）
 ```
 
 打包产物不含内核，可在应用的「浏览器内核」页面导入本地编译的 Chromium。

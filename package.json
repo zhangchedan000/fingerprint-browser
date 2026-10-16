@@ -13,7 +13,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "dist:mac": "npm run build && electron-builder --mac dmg zip",
-    "dist:win": "npm run build && electron-builder --win msi portable zip --x64",
+    "dist:win": "npm run build && electron-builder --win nsis portable zip --x64",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && vitest run --fileParallelism=false && npm run kernel:verify-lock",
@@ -90,18 +90,19 @@
         ]
       },
       "target": [
-        "msi",
+        "nsis",
         "portable",
         "zip"
       ]
     },
-    "msi": {
+    "nsis": {
       "artifactName": "${productName} Setup ${version}.${ext}",
       "oneClick": false,
       "runAfterFinish": false,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "指纹浏览器"
+      "shortcutName": "指纹浏览器",
+      "allowToChangeInstallationDirectory": true
     },
     "portable": {
       "artifactName": "${productName} ${version}.${ext}"
