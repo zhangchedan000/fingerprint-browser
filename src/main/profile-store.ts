@@ -381,6 +381,36 @@ export class ProfileStore {
     return nextProfiles
   }
 
+  /**
+   * Pin (or unpin with '') the kernel of several windows at once.
+   * Running windows keep their current process; the change applies on next launch.
+   * A hand-set brand version is cleared so it follows the new kernel automatically.
+   */
+  async setKernelMany(idsInput: string[], kernelVersionInput: string): Promise<BrowserProfile[]> {
+    if (!Array.isArray(idsInput) || typeof kernelVersionInput !== 'string') throw new Error('批量切换内核参数无效')
+    const ids = [...new Set(idsInput)]
+    if (!ids.length) throw new Error('没有选择浏览器环境')
+    if (ids.length > 500) throw new Error('单次最多修改 500 个浏览器环境')
+    const kernelVersion = kernelVersionInput.trim()
+    if (kernelVersion && !/^\d+(?:\.\d+){3}$/.test(kernelVersion)) {
+      throw new Error('绑定内核版本必须是四段数字，例如 144.0.7559.132')
+    }
+    const now = new Date().toISOString()
+    const nextProfiles = ids.map((id) => {
+      const current = this.get(id)
+      if (current.kernelVersion === kernelVersion) return current
+      return {
+        ...current,
+        kernelVersion,
+        fingerprint: { ...current.fingerprint, brandVersion: '' },
+        updatedAt: now
+      }
+    })
+    for (const profile of nextProfiles) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return nextProfiles
+  }
+
   async removeMany(idsInput: string[]): Promise<void> {
     if (!Array.isArray(idsInput)) throw new Error('批量删除参数无效')
     const ids = [...new Set(idsInput)]

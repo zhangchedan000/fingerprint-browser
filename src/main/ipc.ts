@@ -252,6 +252,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
   })
+  ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {
+    const version = typeof kernelVersion === 'string' ? kernelVersion.trim() : kernelVersion
+    if (version) {
+      const [managed, bundled] = await Promise.all([kernels.installed(), listBundledBrowsers()])
+      const available = mergeKernelCatalog(managed, bundled).some((kernel) => kernel.version === version && kernel.installed && kernel.executable)
+      if (!available) throw new Error(`内核 ${version} 尚未安装，请先在内核管理中导入`)
+    }
+    return (await profiles.setKernelMany(ids, version)).map(publicProfile)
+  })
   ipcMain.handle('profiles:remove-many', async (_event, ids: string[]) => {
     for (const id of ids) {
       if (launcher.isRunning(id)) throw new Error(`环境“${profiles.get(id).name}”正在运行，不能删除`)

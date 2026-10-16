@@ -364,4 +364,36 @@ describe('ProfileStore', () => {
     expect(confirmed.proxyCheck?.exitChanged).toBe(false)
     expect(confirmed.proxyCheck?.previousIp).toBeUndefined()
   })
+  it('pins and unpins kernels for many windows and clears hand-set brand versions', async () => {
+    const repository = await store()
+    const draft = defaultProfileDraft()
+    const [first, second] = await repository.createMany([
+      { ...draft, fingerprint: { ...draft.fingerprint, brandVersion: '143' } },
+      defaultProfileDraft()
+    ])
+
+    const pinned = await repository.setKernelMany([first.id, second.id, first.id], '144.0.7559.132')
+    expect(pinned).toHaveLength(2)
+    expect(repository.get(first.id).kernelVersion).toBe('144.0.7559.132')
+    expect(repository.get(first.id).fingerprint.brandVersion).toBe('')
+    expect(await repository.kernelUsers('144.0.7559.132')).toHaveLength(2)
+
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(second.id).kernelVersion).toBe('144.0.7559.132')
+
+    await repository.setKernelMany([second.id], '')
+    expect(repository.get(second.id).kernelVersion).toBe('')
+    expect(repository.get(first.id).kernelVersion).toBe('144.0.7559.132')
+  })
+
+  it('rejects invalid kernel batch requests without changing anything', async () => {
+    const repository = await store()
+    const profile = await repository.create(defaultProfileDraft())
+
+    await expect(repository.setKernelMany([profile.id], '144')).rejects.toThrow('四段数字')
+    await expect(repository.setKernelMany([], '144.0.7559.132')).rejects.toThrow('没有选择')
+    await expect(repository.setKernelMany([profile.id, 'missing'], '144.0.7559.132')).rejects.toThrow('不存在')
+    expect(repository.get(profile.id).kernelVersion).toBe('')
+  })
 })

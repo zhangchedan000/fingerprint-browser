@@ -1,31 +1,23 @@
 import { LanguageSelector } from './LanguageSelector'
+import { Sidebar, type SidebarTarget } from './Sidebar'
+import { KernelSwitchModal } from './KernelSwitchModal'
 import { t, getLocale, subscribeLocale, translateMessage as mt } from '../../shared/i18n'
 import {
   ApiOutlined,
-  AppstoreOutlined,
-  AppstoreAddOutlined,
-  CheckCircleFilled,
-  ClockCircleOutlined,
   CopyOutlined,
-  CrownOutlined,
   DatabaseOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  DownOutlined,
   EditOutlined,
-  FolderOutlined,
   GlobalOutlined,
   MoreOutlined,
   PlusOutlined,
   PoweroffOutlined,
-  RestOutlined,
-  ReloadOutlined,
-  RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
-  SettingOutlined,
   StarFilled,
   StarOutlined,
-  TagsOutlined,
   UploadOutlined,
   WarningFilled
 } from '@ant-design/icons'
@@ -43,6 +35,7 @@ import {
   Space,
   Spin,
   Table,
+  Tabs,
   Tag,
   Tooltip,
   Typography,
@@ -64,40 +57,77 @@ import { effectiveNetworkIdentity, geoConflictConfirmationMessage } from '../../
 import { orderBatchLaunchProfiles, waitForBatchLaunchGap } from './batch-launch-order'
 import { profileTableSorters } from './profile-table-sort'
 
-const { Sider, Content } = Layout
+const { Content } = Layout
+
+type ListTab = 'all' | 'running' | 'favorites' | 'ungrouped' | 'attention'
+const ACTIVE_STATUSES = new Set(['starting', 'running', 'stopping', 'orphaned'])
 
 function humanError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
   return mt(raw)
 }
 
-function statusTag(profile: BrowserProfileView) {
+function statusDot(profile: BrowserProfileView) {
   const map = {
-    closed: { color: 'default', text: t("已关闭") },
-    starting: { color: 'processing', text: t("启动中") },
-    running: { color: 'success', text: t("运行中") },
-    stopping: { color: 'warning', text: t("关闭中") },
-    orphaned: { color: 'volcano', text: t("进程遗留") },
-    error: { color: 'error', text: t("异常") }
+    closed: t("未运行"),
+    starting: t("启动中"),
+    running: t("运行中"),
+    stopping: t("关闭中"),
+    orphaned: t("进程遗留"),
+    error: t("异常")
   } as const
-  const item = map[profile.status]
-  return <Tooltip title={mt(profile.lastError)}><Tag color={item.color}>{item.text}</Tag></Tooltip>
-}
-
-function proxyCheckTag(profile: BrowserProfileView) {
-  const check = profile.proxyCheck
-  if (!check) return <Typography.Text type="secondary" className="proxy-check-line">{t("未检测")}</Typography.Text>
-  const stale = Date.now() - Date.parse(check.checkedAt) > 24 * 60 * 60 * 1000
-  const detail = check.ok
-    ? [check.ip, check.country, check.city, `${check.latencyMs} ms`, new Date(check.checkedAt).toLocaleString(getLocale())].filter(Boolean).join(' · ')
-    : `${mt(check.error ?? t("连接失败"))} · ${new Date(check.checkedAt).toLocaleString(getLocale())}`
+  const label = map[profile.status]
   return (
-    <Tooltip title={detail}>
-      <Tag color={check.exitChanged ? 'volcano' : check.ok ? stale ? 'warning' : 'success' : 'error'} className="proxy-check-tag">
-        {check.ok ? `${check.ip ?? t("可用")} · ${check.latencyMs} ms${check.exitChanged ? ' · ' + t('出口变化') : stale ? ' · ' + t('已过期') : ''}` : t("检测失败")}
-      </Tag>
+    <Tooltip title={profile.lastError ? `${label} · ${mt(profile.lastError)}` : label}>
+      <span className={`fb-status-dot ${profile.status}`} role="img" aria-label={label} />
     </Tooltip>
   )
+}
+
+function proxyCell(profile: BrowserProfileView) {
+  if (profile.proxy.protocol === 'direct') {
+    return (
+      <div className="fb-proxy-cell">
+        <div><span className="fb-cc muted">—</span><span>{t("直连")}</span></div>
+        <small>{t("本机网络")}</small>
+      </div>
+    )
+  }
+  const check = profile.proxyCheck
+  const protocol = profile.proxy.protocol.toUpperCase()
+  const location = check?.ok ? check.city || check.country || '' : ''
+  return (
+    <div className="fb-proxy-cell">
+      <div>
+        <span className={`fb-cc${check?.ok && check.countryCode ? '' : ' muted'}`}>{check?.ok && check.countryCode ? check.countryCode : '—'}</span>
+        <span className="fb-mono">{check?.ok && check.ip ? check.ip : `${profile.proxy.host}:${profile.proxy.port}`}</span>
+      </div>
+      <small className="fb-ellipsis" title={check?.ok ? [check.country, check.region, check.city].filter(Boolean).join(' · ') : undefined}>{protocol}{location ? ` · ${location}` : ''}</small>
+      {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
+      {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}
+      {check?.exitChanged && <Tooltip title={t("出口 IP 与上次不同")}><small className="fb-proxy-warn">{t("出口变化")}</small></Tooltip>}
+    </div>
+  )
+}
+
+function majorVersion(version: string): string {
+  return version.split('.')[0] || version
+}
+
+function relativeTime(iso: string | undefined, locale: string): string {
+  if (!iso) return t("从未打开")
+  const time = Date.parse(iso)
+  if (Number.isNaN(time)) return t("从未打开")
+  const minutes = Math.floor((Date.now() - time) / 60_000)
+  if (minutes < 1) return t("刚刚")
+  if (minutes < 60) return t("{0} 分钟前", minutes)
+  const date = new Date(time)
+  const clock = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  const today = new Date()
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  if (time >= startOfToday) return t("今天 {0}", clock)
+  if (time >= startOfToday - 86_400_000) return t("昨天 {0}", clock)
+  return date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function formatBytes(bytes: number): string {
@@ -121,9 +151,9 @@ export default function App() {
   const [kernelManagerOpen, setKernelManagerOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState('__all__')
-  const [selectedStatus, setSelectedStatus] = useState('__all__')
-  const [sortMode, setSortMode] = useState<'updated' | 'recent' | 'name' | 'created'>('updated')
-  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const [listTab, setListTab] = useState<ListTab>('all')
+  const [kernelSwitchOpen, setKernelSwitchOpen] = useState(false)
+  const [pageSize, setPageSize] = useState(20)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [batchBusy, setBatchBusy] = useState(false)
   const [batchResult, setBatchResult] = useState<BatchOperationResult>()
@@ -143,7 +173,6 @@ export default function App() {
   const [batchGroup, setBatchGroup] = useState('')
   const [batchTags, setBatchTags] = useState('')
   const [storage, setStorage] = useState<StorageOverview>()
-  const [storageLoading, setStorageLoading] = useState(false)
   const [migrationMode, setMigrationMode] = useState<'export' | 'import' | null>(null)
   const [migrationBusy, setMigrationBusy] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
@@ -184,22 +213,28 @@ export default function App() {
     const normalized = query.trim().toLowerCase()
     const filtered = profiles.filter((profile) => {
       if (selectedGroup !== '__all__' && profile.group !== selectedGroup) return false
-      if (favoritesOnly && !profile.favorite) return false
-      if (selectedStatus === 'closed' && profile.status !== 'closed') return false
-      if (selectedStatus === 'running' && !['starting', 'running', 'stopping'].includes(profile.status)) return false
-      if (selectedStatus === 'attention' && !['orphaned', 'error'].includes(profile.status)) return false
+      if (listTab === 'favorites' && !profile.favorite) return false
+      if (listTab === 'running' && !ACTIVE_STATUSES.has(profile.status)) return false
+      if (listTab === 'ungrouped' && profile.group.trim()) return false
+      if (listTab === 'attention' && !['orphaned', 'error'].includes(profile.status)) return false
       if (!normalized) return true
       return [String(profile.serialNumber), profile.name, profile.note, profile.group, ...profile.tags, profile.proxy.host, profile.fingerprint.timezone]
         .some((value) => value.toLowerCase().includes(normalized))
     })
+    // Newest serial first, like the design; favourites stay on top. Column sorters override this.
     return [...filtered].sort((first, second) => {
       if (first.favorite !== second.favorite) return first.favorite ? -1 : 1
-      if (sortMode === 'name') return first.name.localeCompare(second.name, locale, { numeric: true })
-      if (sortMode === 'recent') return (second.lastOpenedAt ?? '').localeCompare(first.lastOpenedAt ?? '') || second.updatedAt.localeCompare(first.updatedAt)
-      if (sortMode === 'created') return second.createdAt.localeCompare(first.createdAt)
-      return second.updatedAt.localeCompare(first.updatedAt)
+      return second.serialNumber - first.serialNumber
     })
-  }, [profiles, query, selectedGroup, selectedStatus, sortMode, favoritesOnly, locale])
+  }, [profiles, query, selectedGroup, listTab])
+
+  const tabCounts = useMemo(() => ({
+    all: profiles.length,
+    running: profiles.filter((profile) => ACTIVE_STATUSES.has(profile.status)).length,
+    favorites: profiles.filter((profile) => profile.favorite).length,
+    ungrouped: profiles.filter((profile) => !profile.group.trim()).length,
+    attention: profiles.filter((profile) => profile.status === 'orphaned' || profile.status === 'error').length
+  }), [profiles])
 
   const groupOptions = useMemo(() => {
     const counts = new Map<string, number>()
@@ -246,13 +281,10 @@ export default function App() {
   }, [bundledEngine, kernels])
 
   async function refreshStorageOverview(): Promise<void> {
-    setStorageLoading(true)
     try {
       setStorage(await window.browserApi.profiles.storageOverview())
     } catch (error) {
       messageApi.error(humanError(error))
-    } finally {
-      setStorageLoading(false)
     }
   }
 
@@ -613,6 +645,29 @@ export default function App() {
     })
   }
 
+  async function applyKernelSwitch(kernelVersion: string): Promise<void> {
+    const ids = [...selectedIds]
+    setBatchBusy(true)
+    try {
+      const updated = await window.browserApi.profiles.setKernelMany(ids, kernelVersion)
+      for (const profile of updated) upsert(profile)
+      setKernelSwitchOpen(false)
+      messageApi.success(kernelVersion
+        ? t("已将 {0} 个窗口切换到 Chromium {1}", ids.length, kernelVersion)
+        : t("{0} 个窗口已改为跟随默认内核", ids.length))
+    } catch (error) {
+      messageApi.error(humanError(error))
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  function navigate(target: SidebarTarget): void {
+    if (target === 'extensions') setExtensionManagerOpen(true)
+    if (target === 'kernels') setKernelManagerOpen(true)
+    if (target === 'recycle') setRecycleBinOpen(true)
+  }
+
   function profileMenu(profile: BrowserProfileView): MenuProps {
     const editable = profile.status === 'closed' || profile.status === 'error'
     return {
@@ -666,13 +721,30 @@ export default function App() {
 
   const columns: TableColumnsType<BrowserProfileView> = [
     {
-      title: t("环境"),
+      title: t("序号"),
+      dataIndex: 'serialNumber',
+      width: 64,
+      sorter: (first, second) => first.serialNumber - second.serialNumber,
+      render: (serial: number) => <span className="fb-muted">{serial}</span>
+    },
+    {
+      title: t("窗口名称"),
       dataIndex: 'name',
-      width: 250,
+      width: 200,
       sorter: profileTableSorters.environment,
       render: (_value, profile) => (
-        <div className="profile-name-cell">
-          <span className="profile-dot" style={{ background: profile.color }} />
+        <div className="fb-name-cell">
+          {statusDot(profile)}
+          <span className="fb-color-mark" style={{ background: profile.color }} aria-hidden="true" />
+          <div>
+            <strong title={profile.name}>{profile.name}</strong>
+            {profile.tags.length > 0 && (
+              <span className="fb-tags">
+                {profile.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}
+                {profile.tags.length > 2 && <Tooltip title={profile.tags.slice(2).join(', ')}><Tag>+{profile.tags.length - 2}</Tag></Tooltip>}
+              </span>
+            )}
+          </div>
           <Button
             type="text"
             size="small"
@@ -681,88 +753,70 @@ export default function App() {
             icon={profile.favorite ? <StarFilled /> : <StarOutlined />}
             onClick={() => void toggleFavorite(profile)}
           />
-          <div>
-            <Typography.Text strong>#{profile.serialNumber} · {profile.name}</Typography.Text>
-            {profile.note && <Typography.Text type="secondary" className="profile-subtitle">{profile.note}</Typography.Text>}
-          </div>
         </div>
       )
     },
     {
-      title: t("分组 / 标签"),
-      key: 'classification',
-      width: 190,
+      title: t("分组"),
+      dataIndex: 'group',
+      width: 120,
       sorter: profileTableSorters.classification,
-      render: (_value, profile) => (
-        <div className="profile-tags">
-          <Tag icon={<FolderOutlined />}>{profile.group || t("未分组")}</Tag>
-          {profile.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}
-          {profile.tags.length > 2 && <Tooltip title={profile.tags.slice(2).join('、')}><Tag>+{profile.tags.length - 2}</Tag></Tooltip>}
-        </div>
-      )
+      render: (group: string) => <span className={`fb-group${group ? '' : ' empty'}`}>{group || t("未分组")}</span>
     },
     {
-      title: t("状态"),
-      dataIndex: 'status',
-      width: 100,
-      sorter: profileTableSorters.status,
-      render: (_value, profile) => statusTag(profile)
-    },
-    {
-      title: t("代理"),
+      title: t("代理 IP"),
       dataIndex: 'proxy',
-      width: 220,
+      width: 180,
       sorter: profileTableSorters.proxy,
+      render: (_value, profile) => proxyCell(profile)
+    },
+    {
+      title: t("系统 / 内核"),
+      key: 'kernel',
+      width: 150,
+      sorter: (first, second) => (first.kernelVersion || '').localeCompare(second.kernelVersion || '', undefined, { numeric: true }),
       render: (_value, profile) => (
-        <div className="proxy-cell">
-          <div>{profile.proxy.protocol === 'direct'
-            ? <Typography.Text type="secondary">{t("本地网络")}</Typography.Text>
-            : <><Tag>{profile.proxy.protocol.toUpperCase()}</Tag>{profile.proxy.host}:{profile.proxy.port}</>}</div>
-          {proxyCheckTag(profile)}
+        <div className="fb-kernel-cell">
+          <span>{profile.fingerprint.platform === 'windows' ? 'Windows' : 'macOS'} · {profile.fingerprint.brand}</span>
+          {profile.kernelVersion
+            ? <Tooltip title={`Chromium ${profile.kernelVersion}`}><small className="pinned">{t("Chromium {0} · 指定", majorVersion(profile.kernelVersion))}</small></Tooltip>
+            : <Tooltip title={engine?.version ? `Chromium ${engine.version}` : undefined}><small>{engine?.version ? t("Chromium {0} · 默认", majorVersion(engine.version)) : t("默认内核")}</small></Tooltip>}
         </div>
       )
     },
     {
-      title: t("指纹"),
-      dataIndex: 'fingerprint',
-      width: 230,
-      sorter: profileTableSorters.fingerprint,
-      render: (_value, profile) => (
-        <div className="fingerprint-cell">
-          <span>{profile.fingerprint.platform === 'windows' ? 'Windows' : 'macOS'}</span>
-          <span>{profile.fingerprint.screenWidth}×{profile.fingerprint.screenHeight}</span>
-          <span>{effectiveNetworkIdentity(profile.fingerprint, profile.proxyCheck).timezone}</span>
-          <span>{profile.kernelVersion
-            ? <>{t("浏览器内核")}{profile.kernelVersion}</>
-            : t("内核自动")}</span>
-          <span className={`webrtc-badge ${profile.fingerprint.webrtcPolicy}`}>
-            {profile.fingerprint.webrtcPolicy === 'proxy_only' ? t("WebRTC 防泄漏") : profile.fingerprint.webrtcPolicy === 'public_only' ? t("WebRTC 公网") : t("WebRTC 默认")}
-          </span>
-        </div>
-      )
+      title: t("备注"),
+      dataIndex: 'note',
+      width: 120,
+      ellipsis: { showTitle: true },
+      render: (note: string) => note ? note : <span className="fb-muted">—</span>
     },
     {
-      title: t("指纹种子"),
-      dataIndex: ['fingerprint', 'seed'],
-      width: 125,
-      sorter: profileTableSorters.seed,
-      render: (seed: number) => <code className="seed-code">{seed}</code>
+      title: t("最后打开"),
+      dataIndex: 'lastOpenedAt',
+      width: 110,
+      sorter: (first, second) => (first.lastOpenedAt ?? '').localeCompare(second.lastOpenedAt ?? ''),
+      render: (value: string | undefined) => <span className="fb-muted">{relativeTime(value, locale)}</span>
     },
     {
       title: t("操作"),
       key: 'actions',
-      width: 170,
+      width: 168,
       fixed: 'right',
+      align: 'right',
       render: (_value, profile) => {
-        const running = ['starting', 'running', 'stopping', 'orphaned'].includes(profile.status)
+        const running = ACTIVE_STATUSES.has(profile.status)
+        const editable = profile.status === 'closed' || profile.status === 'error'
         return (
-          <Space>
+          <Space size={4}>
             <Button
+              size="small"
               type={running ? 'default' : 'primary'}
               danger={running}
+              className="fb-open-button"
+              autoInsertSpace={false}
               loading={busyIds.has(profile.id) || profile.status === 'starting' || profile.status === 'stopping'}
               disabled={!running && !canLaunchProfile(profile)}
-              icon={running ? <PoweroffOutlined /> : <GlobalOutlined />}
               onClick={() => void withBusy(profile.id, async () => {
                 const next = running
                   ? await window.browserApi.profiles.close(profile.id)
@@ -772,8 +826,11 @@ export default function App() {
             >
               {profile.status === 'orphaned' ? t("结束遗留") : running ? t("关闭") : t("打开")}
             </Button>
+            <Tooltip title={editable ? undefined : t("请先关闭窗口再编辑")}>
+              <Button size="small" type="link" autoInsertSpace={false} disabled={!editable} onClick={() => openEditor(profile)}>{t("编辑")}</Button>
+            </Tooltip>
             <Dropdown menu={profileMenu(profile)} trigger={['click']}>
-              <Button type="text" icon={<MoreOutlined />} />
+              <Button size="small" type="text" icon={<MoreOutlined />} aria-label={t("更多操作")} />
             </Dropdown>
           </Space>
         )
@@ -784,71 +841,28 @@ export default function App() {
   const runningCount = profiles.filter((profile) => profile.status === 'running' || profile.status === 'orphaned').length
 
   return (
-    <Layout className="app-shell">
+    <Layout className="app-shell" hasSider>
       {contextHolder}
-      <Sider width={224} className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">P</div>
-          <div><strong>指纹</strong><span>浏览器</span></div>
-        </div>
-        <div className="sidebar-section-label">{t("工作空间")}</div>
-        <div className="nav-item active"><AppstoreOutlined /><span>{t("浏览器环境")}</span><b>{profiles.length}</b></div>
-        <button className="nav-item sidebar-action" onClick={() => setRecycleBinOpen(true)}>
-          <RestOutlined /><span>{t("环境回收站")}</span>
-        </button>
-        <div className="sidebar-section-label secondary">{t("工具与自动化")}</div>
-        <button className="nav-item sidebar-action" onClick={() => setExtensionManagerOpen(true)}>
-          <AppstoreAddOutlined /><span>{t("浏览器扩展")}</span><b>{extensions.length || ''}</b>
-        </button>
-        <div className="sidebar-spacer" />
-        <button className="engine-card" onClick={() => setKernelManagerOpen(true)}>
-          <span className={`engine-indicator ${engine?.fingerprintKernel ? 'ready' : ''}`} />
-          <span><strong>{engine?.fingerprintKernel ? t("指纹内核已连接") : t("配置浏览器内核")}</strong><small>{mt(engine?.label ?? t("正在检查…"))}</small></span>
-          <SettingOutlined />
-        </button>
-        <div className="version">{t("指纹浏览器")} · v{__APP_VERSION__}</div>
-      </Sider>
+      <Sidebar
+        active="windows"
+        windowCount={profiles.length}
+        extensionCount={extensions.length}
+        engine={engine}
+        onNavigate={navigate}
+      />
 
       <Layout>
-        <Content className="content">
-          <header className="page-header">
-            <div>
-              <span className="page-kicker">{t("工作空间")}</span>
-              <Typography.Title level={2}>{t("浏览器环境")}</Typography.Title>
-              <Typography.Text type="secondary">{t("每个环境的数据、指纹和网络设置彼此独立。")}</Typography.Text>
-            </div>
-            <Space wrap className="header-actions">
-              <LanguageSelector />
-              {runningCount > 0 && (
-                <Button icon={<PoweroffOutlined />} onClick={() => void window.browserApi.profiles.closeAll()}>{t("全部关闭")}</Button>
-              )}
-              <Dropdown
-                menu={{
-                  items: [
-                    { key: 'single', label: t("导入单个 JSON 环境") },
-                    { key: 'batch', label: t("批量导入 CSV") },
-                    { key: 'backup', label: t("导入完整数据备份") },
-                    { key: 'workspace', label: t("导入全部环境迁移包") },
-                    { type: 'divider' },
-                    { key: 'csv-sample', label: t("保存 CSV 示例文件") }
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === 'single') void importProfile()
-                    if (key === 'batch') confirmBatchImport()
-                    if (key === 'backup') confirmProfileBackupImport()
-                    if (key === 'workspace') setMigrationMode('import')
-                    if (key === 'csv-sample') void exportBatchTemplate()
-                  }
-                }}
-                trigger={['click']}
-              >
-                <Button icon={<UploadOutlined />} loading={importing}>{t("导入环境")}</Button>
-              </Dropdown>
-              <Button icon={<DownloadOutlined />} onClick={() => setMigrationMode('export')}>{t("迁移全部环境")}</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建环境")}</Button>
-            </Space>
-          </header>
-
+        <header className="fb-topbar">
+          <h1>{t("窗口管理")}</h1>
+          <span className="fb-muted">{t("共 {0} 个窗口 · 运行中 {1}", profiles.length, runningCount)}</span>
+          <Space className="fb-topbar-actions">
+            <LanguageSelector />
+            {runningCount > 0 && (
+              <Button danger icon={<PoweroffOutlined />} onClick={() => void window.browserApi.profiles.closeAll()}>{t("全部关闭")}</Button>
+            )}
+          </Space>
+        </header>
+        <Content className="fb-content">
           {engine && !engine.fingerprintKernel && (
             <Alert
               className="engine-alert"
@@ -864,13 +878,7 @@ export default function App() {
           )}
 
           {profileStorageHealth?.recoveredFromBackup && (
-            <Alert
-              className="engine-alert"
-              type="warning"
-              showIcon
-              title={t("环境配置已从备份自动恢复")}
-              description={t("环境数据已恢复，可以继续使用。")}
-            />
+            <Alert className="engine-alert" type="warning" showIcon title={t("环境配置已从备份自动恢复")} description={t("环境数据已恢复，可以继续使用。")} />
           )}
 
           {appRecoveryStatus?.previousUnclean && (
@@ -878,6 +886,7 @@ export default function App() {
               className="engine-alert"
               type="warning"
               showIcon
+              closable
               title={t("检测到上次应用未正常退出")}
               description={appRecoveryStatus.markerCorrupt
                 ? t("环境数据未受影响。")
@@ -886,112 +895,123 @@ export default function App() {
           )}
 
           {profileStorageHealth && !profileStorageHealth.backupHealthy && (
-            <Alert
-              className="engine-alert"
-              type="error"
-              showIcon
-              title={t("环境配置备份失败")}
-              description={t("当前数据仍可使用，请检查磁盘空间和目录权限。")}
-            />
+            <Alert className="engine-alert" type="error" showIcon title={t("环境配置备份失败")} description={t("当前数据仍可使用，请检查磁盘空间和目录权限。")} />
           )}
 
-          <section className="summary-row">
-            <div className="summary-card"><span>{t("全部环境")}</span><strong>{profiles.length}</strong></div>
-            <div className="summary-card"><span>{t("运行中")}</span><strong className="running-number">{runningCount}</strong></div>
-            <div className="summary-card engine-summary">
-              <span>{t("浏览器内核")}</span>
-              <strong>{mt(engine?.label ?? t("正在检查"))}</strong>
-              {engine?.fingerprintKernel && <CheckCircleFilled />}
-            </div>
-            <Tooltip title={storage ? t("环境 {0} · 缓存 {1} · 回收站 {2} · 内核 {3} · 扩展 {4}", formatBytes(storage.profilesBytes), formatBytes(storage.cacheBytes), formatBytes(storage.recycleBytes), formatBytes(storage.kernelsBytes), formatBytes(storage.extensionsBytes)) : t("统计本地存储")}>
-              <button className="summary-card storage-summary" onClick={() => void refreshStorageOverview()}>
-                <span>{t("本地数据")}</span>
-                <strong>{storage ? formatBytes(storage.totalBytes) : t("统计中")}</strong>
-                <ReloadOutlined spin={storageLoading} />
-              </button>
+          <div className="fb-toolbar">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建窗口")}</Button>
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'batch', label: t("批量导入 CSV") },
+                  { key: 'single', label: t("导入单个 JSON 环境") },
+                  { key: 'backup', label: t("导入完整数据备份") },
+                  { key: 'workspace', label: t("导入全部环境迁移包") },
+                  { type: 'divider' },
+                  { key: 'csv-sample', label: t("保存 CSV 示例文件") }
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'single') void importProfile()
+                  if (key === 'batch') confirmBatchImport()
+                  if (key === 'backup') confirmProfileBackupImport()
+                  if (key === 'workspace') setMigrationMode('import')
+                  if (key === 'csv-sample') void exportBatchTemplate()
+                }
+              }}
+              trigger={['click']}
+            >
+              <Button icon={<UploadOutlined />} loading={importing}>{t("批量导入")}</Button>
+            </Dropdown>
+            <Tooltip title={selectedIds.length ? undefined : t("先勾选要打开的窗口")}>
+              <Button
+                icon={<GlobalOutlined />}
+                loading={batchBusy}
+                disabled={!profiles.filter((profile) => selectedIds.includes(profile.id)).some((profile) => canLaunchProfile(profile))}
+                onClick={() => void runBatch('launch')}
+              >{t("批量打开")}</Button>
             </Tooltip>
-          </section>
-
-          <section className="profiles-panel">
-            <div className="table-toolbar">
-              <div className="table-title-actions">
-                <Typography.Title level={4}>{t("全部环境")}</Typography.Title>
-                {selectedIds.length > 0 && (
-                  <Space>
-                    <Typography.Text type="secondary">{t("已选择 {0} 项", selectedIds.length)}</Typography.Text>
-                    <Button
-                      size="small"
-                      icon={<GlobalOutlined />}
-                      loading={batchBusy}
-                      disabled={!selectedIds.some((id) => {
-                        const profile = profiles.find((item) => item.id === id)
-                        return profile && canLaunchProfile(profile)
-                      })}
-                      onClick={() => void runBatch('launch')}
-                    >{t("批量打开")}</Button>
-                    <Button size="small" icon={<PoweroffOutlined />} loading={batchBusy} onClick={() => void runBatch('close')}>{t("批量关闭")}</Button>
-                    <Button size="small" icon={<ApiOutlined />} loading={batchBusy} onClick={() => void runProxyChecks(selectedIds)}>{t("检测代理")}</Button>
-                    <Button size="small" icon={<TagsOutlined />} disabled={batchBusy} onClick={() => setBatchClassificationOpen(true)}>{t("分组/标签")}</Button>
-                    <Button size="small" danger icon={<DeleteOutlined />} disabled={batchBusy} onClick={confirmBatchRemove}>{t("移入回收站")}</Button>
-                  </Space>
-                )}
-              </div>
-              <Space>
-                <Button type={favoritesOnly ? 'primary' : 'default'} icon={favoritesOnly ? <StarFilled /> : <StarOutlined />} onClick={() => setFavoritesOnly((value) => !value)}>{t("收藏")}</Button>
-                <Select
-                  value={selectedGroup}
-                  options={groupOptions}
-                  onChange={setSelectedGroup}
-                  className="group-filter"
-                />
-                <Select
-                  value={selectedStatus}
-                  onChange={setSelectedStatus}
-                  className="status-filter"
-                  options={[
-                    { value: '__all__', label: t("全部状态") },
-                    { value: 'closed', label: t("已关闭") },
-                    { value: 'running', label: t("运行中") },
-                    { value: 'attention', label: t("需要处理") }
-                  ]}
-                />
-                <Select
-                  value={sortMode}
-                  onChange={setSortMode}
-                  className="sort-filter"
-                  options={[
-                    { value: 'updated', label: t("最近修改") },
-                    { value: 'recent', label: t("最近打开") },
-                    { value: 'name', label: t("名称排序") },
-                    { value: 'created', label: t("最近创建") }
-                  ]}
-                />
-                <Input
-                  allowClear
-                  prefix={<SearchOutlined />}
-                  placeholder={t("搜索环境、标签或代理…")}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="search-input"
-                />
-              </Space>
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'export-workspace', icon: <DownloadOutlined />, label: t("迁移全部环境") },
+                  { key: 'storage', icon: <DatabaseOutlined />, label: storage ? t("本地数据 {0}", formatBytes(storage.totalBytes)) : t("统计本地数据") }
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'export-workspace') setMigrationMode('export')
+                  if (key === 'storage') void refreshStorageOverview()
+                }
+              }}
+              trigger={['click']}
+            >
+              <Button>{t("更多操作")} <DownOutlined /></Button>
+            </Dropdown>
+            <div className="fb-toolbar-filters">
+              <Select value={selectedGroup} options={groupOptions} onChange={setSelectedGroup} className="group-filter" aria-label={t("按分组筛选")} />
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder={t("搜索名称 / 备注 / 代理 IP")}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="search-input"
+              />
             </div>
+          </div>
+
+          <Tabs
+            className="fb-tabs"
+            activeKey={listTab}
+            onChange={(key) => setListTab(key as ListTab)}
+            items={[
+              { key: 'all', label: <>{t("全部")} <span className="fb-muted">{tabCounts.all}</span></> },
+              { key: 'running', label: <>{t("运行中")} <span className="fb-muted">{tabCounts.running}</span></> },
+              { key: 'favorites', label: <>{t("收藏")} <span className="fb-muted">{tabCounts.favorites}</span></> },
+              { key: 'ungrouped', label: <>{t("未分组")} <span className="fb-muted">{tabCounts.ungrouped}</span></> },
+              ...(tabCounts.attention || listTab === 'attention'
+                ? [{ key: 'attention', label: <span className="fb-attention">{t("需要处理")} {tabCounts.attention}</span> }]
+                : [])
+            ]}
+          />
+
+          {selectedIds.length > 0 && (
+            <div className="fb-batch-bar" role="toolbar" aria-label={t("批量操作")}>
+              <span>{t("已选 {0} 个窗口", selectedIds.length)}</span>
+              <Button size="small" type="link" loading={batchBusy} disabled={!profiles.filter((profile) => selectedIds.includes(profile.id)).some((profile) => canLaunchProfile(profile))} onClick={() => void runBatch('launch')}>{t("打开")}</Button>
+              <Button size="small" type="link" loading={batchBusy} onClick={() => void runBatch('close')}>{t("关闭")}</Button>
+              <Button size="small" type="link" disabled={batchBusy} onClick={() => setBatchClassificationOpen(true)}>{t("移动分组")}</Button>
+              <Button size="small" type="link" disabled={batchBusy} icon={<ApiOutlined />} onClick={() => void runProxyChecks(selectedIds)}>{t("检测代理")}</Button>
+              <Button size="small" type="link" disabled={batchBusy} onClick={() => setKernelSwitchOpen(true)}>{t("切换内核")}</Button>
+              <Button size="small" type="link" danger disabled={batchBusy} icon={<DeleteOutlined />} onClick={confirmBatchRemove}>{t("删除")}</Button>
+              <Button size="small" type="link" className="fb-batch-clear" onClick={() => setSelectedIds([])}>{t("取消选择")}</Button>
+            </div>
+          )}
+
+          <section className="fb-table-panel">
             <Spin spinning={loading}>
               <Table
                 rowKey="id"
+                size="middle"
                 columns={columns}
                 dataSource={visibleProfiles}
+                rowClassName={(profile) => selectedIds.includes(profile.id) ? 'fb-row-selected' : ''}
                 rowSelection={{
                   selectedRowKeys: selectedIds,
                   preserveSelectedRowKeys: true,
                   onChange: (keys) => setSelectedIds(keys.map(String))
                 }}
-                pagination={profiles.length > 12 ? { pageSize: 12 } : false}
-                scroll={{ x: 1240 }}
+                pagination={{
+                  pageSize,
+                  showSizeChanger: true,
+                  pageSizeOptions: [10, 20, 50, 100],
+                  onShowSizeChange: (_current, size) => setPageSize(size),
+                  showTotal: (total) => t("共 {0} 条", total),
+                  hideOnSinglePage: false
+                }}
+                scroll={{ x: 1160 }}
                 locale={{
                   emptyText: (
-                    <Empty description={t("还没有浏览器环境")}>
-                      <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("创建第一个环境")}</Button>
+                    <Empty description={profiles.length ? t("没有符合条件的窗口") : t("还没有浏览器窗口")}>
+                      {!profiles.length && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建第一个窗口")}</Button>}
                     </Empty>
                   )
                 }}
@@ -1067,9 +1087,19 @@ export default function App() {
         }}
       />
       <BatchResultModal result={batchResult} onClose={() => setBatchResult(undefined)} />
+      <KernelSwitchModal
+        open={kernelSwitchOpen}
+        count={selectedIds.length}
+        runningCount={profiles.filter((profile) => selectedIds.includes(profile.id) && ACTIVE_STATUSES.has(profile.status)).length}
+        kernels={selectableKernels}
+        engine={engine}
+        busy={batchBusy}
+        onSubmit={(version) => void applyKernelSwitch(version)}
+        onClose={() => setKernelSwitchOpen(false)}
+      />
       <Modal
         open={batchClassificationOpen}
-        title={t("批量修改 {0} 个环境", selectedIds.length)}
+        title={t("为 {0} 个窗口修改分组", selectedIds.length)}
         okText={t("应用修改")}
         cancelText={t("取消")}
         confirmLoading={batchBusy}

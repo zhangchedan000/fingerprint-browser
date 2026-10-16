@@ -321,6 +321,8 @@ export interface BrowserApi {
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
+    /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
+    setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
     removeMany: (ids: string[]) => Promise<void>
     onChanged: (listener: (profile: BrowserProfileView) => void) => () => void
   }
