@@ -39,6 +39,13 @@ export interface ListPageProps<T extends { id: string }> {
   emptyAction?: ReactNode
   /** Width the table scrolls at. */
   scrollX?: number
+  /** Clicking a row selects it for a detail panel. */
+  onRowClick?: (row: T) => void
+  activeRowId?: string
+  /** Small print under the table. */
+  footnote?: ReactNode
+  /** Rows per page; false shows all rows. */
+  paginate?: boolean
 }
 
 /**
@@ -46,7 +53,8 @@ export interface ListPageProps<T extends { id: string }> {
  * A page only supplies its columns, buttons and filters.
  */
 export function ListPage<T extends { id: string }>({
-  toolbar, filters, header, tabs, activeTab, onTabChange, selection, columns, rows, loading, emptyText, emptyAction, scrollX
+  toolbar, filters, header, tabs, activeTab, onTabChange, selection, columns, rows, loading, emptyText, emptyAction, scrollX,
+  onRowClick, activeRowId, footnote, paginate = true
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
   const selected = new Set(selection?.ids ?? [])
@@ -84,13 +92,17 @@ export function ListPage<T extends { id: string }>({
             size="middle"
             columns={columns}
             dataSource={rows}
-            rowClassName={(row) => selected.has(row.id) ? 'fb-row-selected' : ''}
+            rowClassName={(row) => [
+              selected.has(row.id) || row.id === activeRowId ? 'fb-row-selected' : '',
+              onRowClick ? 'fb-row-clickable' : ''
+            ].filter(Boolean).join(' ')}
+            onRow={onRowClick && ((row) => ({ onClick: () => onRowClick(row) }))}
             rowSelection={selection && {
               selectedRowKeys: selection.ids,
               preserveSelectedRowKeys: true,
               onChange: (keys) => selection.onChange(keys.map(String))
             }}
-            pagination={{
+            pagination={paginate && {
               pageSize,
               showSizeChanger: true,
               pageSizeOptions: [10, 20, 50, 100],
@@ -103,6 +115,7 @@ export function ListPage<T extends { id: string }>({
           />
         </Spin>
       </section>
+      {footnote && <p className="fb-footnote">{footnote}</p>}
     </>
   )
 }

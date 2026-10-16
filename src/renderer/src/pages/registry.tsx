@@ -11,6 +11,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { t } from '../../../shared/i18n'
 import type { Workspace } from '../data/workspace'
 import { ExtensionsDialog } from './extensions'
+import { GroupsPage } from './groups/GroupsPage'
 import { KernelsDialog } from './kernels'
 import { ProxiesPage, proxiesSubtitle } from './proxies/ProxiesPage'
 import { RecycleDialog } from './recycle'
@@ -19,9 +20,15 @@ import { windowsSubtitle, WindowsPage } from './windows/WindowsPage'
 export type PageKey = 'windows' | 'groups' | 'proxies' | 'extensions' | 'kernels' | 'recycle' | 'settings'
 export type SectionKey = 'workspace' | 'tools' | 'system'
 
+/** Context one page can hand to another, e.g. "show this group's windows". */
+export interface PageParams {
+  groupId?: string
+}
+
 /** What a page receives from the app shell. */
 export interface PageProps {
-  navigate: (key: PageKey) => void
+  navigate: (key: PageKey, params?: PageParams) => void
+  params?: PageParams
 }
 
 export interface DialogProps {
@@ -64,9 +71,17 @@ export const PAGES: PageDefinition[] = [
     label: () => t("窗口管理"),
     count: (ws) => ws.profiles.length,
     subtitle: (ws) => windowsSubtitle(ws.profiles),
-    page: ({ navigate }) => <WindowsPage openKernels={() => navigate('kernels')} />
+    page: ({ navigate, params }) => <WindowsPage openKernels={() => navigate('kernels')} groupId={params?.groupId} />
   },
-  { key: 'groups', section: 'workspace', icon: <FolderOutlined />, label: () => t("分组管理"), upcoming: true },
+  {
+    key: 'groups',
+    section: 'workspace',
+    icon: <FolderOutlined />,
+    label: () => t("分组管理"),
+    count: (ws) => ws.groups.length,
+    subtitle: () => t("按业务或平台给窗口分类，方便筛选和批量操作"),
+    page: GroupsPage
+  },
   {
     key: 'proxies',
     section: 'workspace',

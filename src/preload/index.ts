@@ -79,8 +79,8 @@ const api: BrowserApi = {
   },
   groups: {
     list: () => ipcRenderer.invoke('groups:list'),
-    create: (name) => ipcRenderer.invoke('groups:create', name),
-    rename: (id, name) => ipcRenderer.invoke('groups:rename', id, name),
+    create: (draft) => ipcRenderer.invoke('groups:create', draft),
+    update: (id, draft) => ipcRenderer.invoke('groups:update', id, draft),
     remove: (id) => ipcRenderer.invoke('groups:remove', id)
   },
   diagnostics: {

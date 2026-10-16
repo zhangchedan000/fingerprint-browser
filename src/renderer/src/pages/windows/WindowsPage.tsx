@@ -20,14 +20,13 @@ import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tag, Tooltip, typ
 import { useMemo, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, ProfileDraft, StorageOverview } from '../../../../shared/types'
-import { geoConflictConfirmationMessage } from '../../../../shared/network-identity'
 import { AssignModal } from '../../components/AssignModal'
 import { ACTIVE_STATUSES, formatBytes, humanError, isEditable, majorVersion, relativeTime } from '../../components/format'
 import { ListPage, type ListTab } from '../../components/ListPage'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
+import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
-import { orderBatchLaunchProfiles, waitForBatchLaunchGap } from './batch-launch-order'
 import { BatchImportModal } from './BatchImportModal'
 import { BatchResultModal, type BatchOperationResult } from './BatchResultModal'
 import { CrashHistoryModal } from './CrashHistoryModal'
@@ -47,11 +46,12 @@ export function windowsSubtitle(profiles: BrowserProfileView[]): string {
 }
 
 /** Window management (design: Main.dc.html). */
-export function WindowsPage({ openKernels }: { openKernels: () => void }) {
+export function WindowsPage({ openKernels, groupId }: { openKernels: () => void; groupId?: string }) {
   const ws = useWorkspace()
+  const { launch, openMany } = useWindowLauncher()
   const { profiles, proxies, groups, engine, kernels, extensions, notify, locale } = ws
   const [query, setQuery] = useState('')
-  const [groupFilter, setGroupFilter] = useState(ALL_GROUPS)
+  const [groupFilter, setGroupFilter] = useState(groupId ?? ALL_GROUPS)
   const [listTab, setListTab] = useState<ListTabKey>('all')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
@@ -108,7 +108,8 @@ export function WindowsPage({ openKernels }: { openKernels: () => void }) {
 
   const groupOptions = [
     { value: ALL_GROUPS, label: t("全部分组 ({0})", profiles.length) },
-    ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.profileCount})` }))
+    ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.profileCount})` })),
+    { value: '', label: `${t("未分组")} (${profiles.filter((profile) => !profile.groupId).length})` }
   ]
 
   async function withBusy(id: string, action: () => Promise<unknown>): Promise<void> {
@@ -123,38 +124,6 @@ export function WindowsPage({ openKernels }: { openKernels: () => void }) {
         next.delete(id)
         return next
       })
-    }
-  }
-
-  function confirmGeoConflictLaunch(profile: BrowserProfileView, warning: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      let settled = false
-      const settle = (value: boolean): void => {
-        if (settled) return
-        settled = true
-        resolve(value)
-      }
-      Modal.confirm({
-        title: t("#{0} {1} 的代理地区存在冲突", profile.serialNumber, profile.name),
-        content: mt(warning),
-        okText: t("了解风险，继续打开"),
-        cancelText: t("取消"),
-        okButtonProps: { danger: true },
-        onOk: () => settle(true),
-        onCancel: () => settle(false),
-        afterClose: () => settle(false)
-      })
-    })
-  }
-
-  async function launch(profile: BrowserProfileView): Promise<BrowserProfileView | undefined> {
-    try {
-      return await window.browserApi.profiles.launch(profile.id)
-    } catch (error) {
-      const warning = geoConflictConfirmationMessage(humanError(error))
-      if (!warning) throw error
-      if (!await confirmGeoConflictLaunch(profile, warning)) return undefined
-      return window.browserApi.profiles.launch(profile.id, { allowGeoConflict: true })
     }
   }
 
@@ -262,7 +231,7 @@ export function WindowsPage({ openKernels }: { openKernels: () => void }) {
 
   async function runBatch(mode: 'launch' | 'close'): Promise<void> {
     const eligible = selected.filter((profile) => mode === 'launch' ? isEditable(profile) : !isEditable(profile))
-    const candidates = mode === 'launch' ? orderBatchLaunchProfiles(eligible) : eligible
+    const candidates = eligible
     if (!candidates.length) {
       notify.info(mode === 'launch' ? t("所选环境中没有可启动项") : t("所选环境中没有运行项"))
       return
@@ -272,17 +241,7 @@ export function WindowsPage({ openKernels }: { openKernels: () => void }) {
     const errors: string[] = []
     try {
       if (mode === 'launch') {
-        for (let index = 0; index < candidates.length; index++) {
-          const profile = candidates[index]
-          try {
-            const next = await launch(profile)
-            if (next) upsert(next)
-            else errors.push(t("{0}：用户取消了 GeoIP 冲突风险确认", profile.name))
-          } catch (error) {
-            errors.push(`${profile.name}：${humanError(error)}`)
-          }
-          if (index < candidates.length - 1) await waitForBatchLaunchGap()
-        }
+        errors.push(...(await openMany(candidates)).errors)
       } else {
         for (let index = 0; index < candidates.length; index += 3) {
           await Promise.all(candidates.slice(index, index + 3).map(async (profile) => {
@@ -740,7 +699,7 @@ export function WindowsPage({ openKernels }: { openKernels: () => void }) {
         noneLabel={t("未分组")}
         placeholder={t("选择分组，或输入新分组名称")}
         onCreate={async (name) => {
-          const group = await window.browserApi.groups.create(name)
+          const group = await window.browserApi.groups.create({ name })
           await ws.reloadLibraries()
           return group.id
         }}

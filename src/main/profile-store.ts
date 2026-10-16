@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
-  BrowserProfile, DeletedProfileSummary, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
+  BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
   ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, WebRtcPolicy
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
+import { nextGroupColor } from '../shared/group-colors'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
 import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
@@ -333,7 +334,13 @@ export class ProfileStore {
         throw new Error('分组库包含无效记录')
       }
       groupIds.add(stored.id)
-      groups.push({ id: stored.id, name: validateGroupName(stored.name), createdAt: stored.createdAt })
+      groups.push({
+        id: stored.id,
+        name: validateGroupName(stored.name),
+        color: typeof stored.color === 'string' && /^#[\da-f]{6}$/i.test(stored.color) ? stored.color : nextGroupColor(groups.length),
+        note: typeof stored.note === 'string' ? stored.note.slice(0, 200) : '',
+        createdAt: stored.createdAt
+      })
     }
     return new WorkspaceLibrary(proxies, groups)
   }
@@ -675,14 +682,14 @@ export class ProfileStore {
     return this.library.listGroups().map((group) => ({ ...group }))
   }
 
-  async createGroup(name: string): Promise<GroupRecord> {
-    const record = this.library.addGroup(name, new Date().toISOString())
+  async createGroup(draft: GroupDraft): Promise<GroupRecord> {
+    const record = this.library.addGroup(draft, new Date().toISOString())
     await this.persist()
     return { ...record }
   }
 
-  async renameGroup(id: string, name: string): Promise<GroupRecord> {
-    const record = this.library.renameGroup(id, name)
+  async updateGroup(id: string, draft: GroupDraft): Promise<GroupRecord> {
+    const record = this.library.updateGroup(id, draft)
     await this.persist()
     this.notify(this.list().filter((profile) => profile.groupId === id).map((profile) => profile.id))
     return { ...record }

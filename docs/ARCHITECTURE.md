@@ -48,16 +48,19 @@
 ```
 theme/        颜色：tokens.ts 定义全部颜色，index.tsx 提供 applyTheme()
 data/         workspace.tsx：所有页面共用的数据（窗口、代理库、分组库、内核、扩展）
+              window-actions.tsx：打开窗口（含 GeoIP 冲突确认、批量间隔），所有“打开”按钮共用
 components/   共用组件：ListPage（列表模板）、AssignModal（选一个库记录的分配弹窗）、WindowPicker（勾选窗口）、
-              StatCards（统计卡片）、ProxyCell、StatusDot、Sidebar、格式化函数
+              PickWindowsModal（勾选窗口的弹窗）、StatCards（统计卡片）、ProxyCell、StatusDot、Sidebar、格式化函数
 pages/        每个侧边栏页面一个文件夹
   registry.tsx  页面登记表：侧边栏、顶栏、导航都从这里读取
   windows/      窗口管理（列表、编辑抽屉、批量导入等）
   proxies/      代理 IP（代理库：添加、批量导入、检测、分配到窗口、删除时选替换）
+  groups/       分组管理（分组库：新建、重命名/颜色/备注、移入移出、打开本组；“未分组”是固定的一行）
   kernels/ extensions/ recycle/   目前还是弹窗，以后改成页面
 App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 ```
 
+- 页面之间跳转用 `navigate(页面, 参数)`，例如分组页的“查看窗口”是 `navigate('windows', { groupId })`。
 - 页面不直接重复调用主进程拿同一份数据，统一用 `useWorkspace()`。在一个页面改了数据，其他页面会同时更新。
 - 代理被几个窗口使用、分组里有几个窗口，都是 `workspace.tsx` 根据窗口实时算出来的，不另外保存。
 

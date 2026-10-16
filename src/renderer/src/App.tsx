@@ -5,21 +5,26 @@ import { t } from '../../shared/i18n'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
-import { PAGES, pageDefinition, type PageKey } from './pages/registry'
+import { PAGES, pageDefinition, type PageKey, type PageParams } from './pages/registry'
 
 /** The app shell: side menu, top bar and the current page, all driven by pages/registry. */
 function Shell() {
   const ws = useWorkspace()
   const [active, setActive] = useState<PageKey>('windows')
+  const [params, setParams] = useState<PageParams | undefined>()
   const [dialog, setDialog] = useState<PageKey | null>(null)
   const page = pageDefinition(active)
   const Page = page.page
 
-  function navigate(key: PageKey): void {
+  function navigate(key: PageKey, next?: PageParams): void {
     const target = pageDefinition(key)
     if (target.upcoming) return
-    if (target.dialog) setDialog(key)
-    else setActive(key)
+    if (target.dialog) {
+      setDialog(key)
+      return
+    }
+    setActive(key)
+    setParams(next)
   }
 
   const running = ws.profiles.filter((profile) => profile.status === 'running' || profile.status === 'orphaned').length
@@ -38,7 +43,7 @@ function Shell() {
           </Space>
         </header>
         <Layout.Content className="fb-content">
-          {Page && <Page navigate={navigate} />}
+          {Page && <Page key={`${active}:${JSON.stringify(params ?? {})}`} navigate={navigate} params={params} />}
         </Layout.Content>
       </Layout>
       {PAGES.filter((item) => item.dialog).map((item) => {

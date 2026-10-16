@@ -276,3 +276,25 @@ button, input, textarea { font: inherit; }
 .fb-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .fb-modal-footer > span { margin-right: auto; }
 .fb-mono-input { font-family: ui-monospace, Consolas, monospace; }
+
+/* List + detail panel (design: Groups.dc.html) */
+.fb-split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.fb-split-main { min-width: 0; }
+.fb-row-clickable { cursor: pointer; }
+.fb-footnote { margin: 10px 2px 0; color: var(--fb-text-faint); font-size: 12px; }
+.fb-group-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.fb-group-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--fb-accent); }
+.fb-dot.is-system { background: var(--fb-idle); }
+.fb-detail { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--fb-surface); }
+.fb-detail-head { display: flex; flex-direction: column; gap: 6px; }
+.fb-detail-head strong { font-size: 16px; }
+.fb-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.fb-member-list { max-height: calc(100vh - 330px); margin: 0; padding: 0; overflow: auto; list-style: none; }
+.fb-member-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 9px 2px; border-top: 1px solid var(--fb-line-soft); font-size: 13px; }
+.fb-member-list .fb-mono { font-size: 12px; }
+.fb-detail-more { align-self: flex-start; padding-left: 0; }
+.fb-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.fb-swatch { width: 26px; height: 26px; border: 2px solid transparent; border-radius: 50%; cursor: pointer; box-shadow: 0 0 0 1px var(--fb-line); }
+.fb-swatch.is-active { border-color: var(--fb-surface); box-shadow: 0 0 0 2px var(--fb-text); }
+.fb-toolbar + .fb-table-panel { margin-top: 12px; }

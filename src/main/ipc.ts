@@ -446,8 +446,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const windows = profiles.list()
     return profiles.listGroups().map((group) => publicGroupRecord(group, windows))
   })
-  ipcMain.handle('groups:create', async (_event, name: string) => publicGroupRecord(await profiles.createGroup(name), profiles.list()))
-  ipcMain.handle('groups:rename', async (_event, id: string, name: string) => publicGroupRecord(await profiles.renameGroup(id, name), profiles.list()))
+  ipcMain.handle('groups:create', async (_event, draft) => publicGroupRecord(await profiles.createGroup(draft), profiles.list()))
+  ipcMain.handle('groups:update', async (_event, id: string, draft) => publicGroupRecord(await profiles.updateGroup(id, draft), profiles.list()))
   ipcMain.handle('groups:remove', (_event, id: string) => profiles.removeGroup(id))
   ipcMain.handle('diagnostics:session-health', () => appSession.recoveryStatus())
   if (process.env.PRISM_E2E === '1') {

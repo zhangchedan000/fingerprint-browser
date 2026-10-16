@@ -1,5 +1,5 @@
 import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
-import type { HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
+import type { GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -270,4 +270,14 @@ export function validateGroupName(input: unknown): string {
   if (!name) throw new Error('分组名称不能为空')
   if (name.length > 40) throw new Error('环境分组不能超过 40 个字符')
   return name
+}
+
+export function validateGroupDraft(input: GroupDraft): { name: string; color?: string; note: string } {
+  if (!input || typeof input !== 'object') throw new Error('分组名称格式无效')
+  const name = validateGroupName(input.name)
+  const color = typeof input.color === 'string' && input.color.trim() ? input.color.trim() : undefined
+  if (color && !/^#[\da-f]{6}$/i.test(color)) throw new Error('分组颜色必须是六位十六进制颜色')
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length > 200) throw new Error('分组备注不能超过 200 个字符')
+  return { name, ...(color ? { color } : {}), note }
 }

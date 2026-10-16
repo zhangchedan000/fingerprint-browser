@@ -124,7 +124,16 @@ export interface ProxyDraft {
 export interface GroupRecord {
   id: string
   name: string
+  /** Marker colour of the group (user data). */
+  color: string
+  note: string
   createdAt: string
+}
+
+export interface GroupDraft {
+  name: string
+  color?: string
+  note?: string
 }
 
 export type GroupRecordView = GroupRecord & { profileCount: number }
@@ -490,8 +499,9 @@ export interface BrowserApi {
   /** The group library. Windows refer to these groups by id. */
   groups: {
     list: () => Promise<GroupRecordView[]>
-    create: (name: string) => Promise<GroupRecordView>
-    rename: (id: string, name: string) => Promise<GroupRecordView>
+    create: (draft: GroupDraft) => Promise<GroupRecordView>
+    /** Rename, recolour or change the note; every window in it shows the change. */
+    update: (id: string, draft: GroupDraft) => Promise<GroupRecordView>
     /** Its windows become ungrouped. */
     remove: (id: string) => Promise<void>
   }

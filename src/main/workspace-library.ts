@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { GroupRecord, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord } from '../shared/types'
-import { validateGroupName, validateProxyConfig, validateProxyDraft } from '../shared/validation'
+import { nextGroupColor } from '../shared/group-colors'
+import type { GroupDraft, GroupRecord, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord } from '../shared/types'
+import { validateGroupDraft, validateProxyConfig, validateProxyDraft } from '../shared/validation'
 import { sameProxyIdentity } from './profile-secrets'
 
 /**
@@ -157,23 +158,29 @@ export class WorkspaceLibrary {
     if (!name.trim()) return ''
     const existing = this.findGroup(name)
     if (existing) return existing.id
-    return this.addGroup(name, now).id
+    return this.addGroup({ name }, now).id
   }
 
-  addGroup(input: string, now: string): GroupRecord {
-    const name = validateGroupName(input)
-    if (this.findGroup(name)) throw new Error('已有同名分组')
-    const record: GroupRecord = { id: randomUUID(), name, createdAt: now }
+  addGroup(input: GroupDraft, now: string): GroupRecord {
+    const draft = validateGroupDraft(input)
+    if (this.findGroup(draft.name)) throw new Error('已有同名分组')
+    const record: GroupRecord = {
+      id: randomUUID(),
+      name: draft.name,
+      color: draft.color ?? nextGroupColor(this.groups.size),
+      note: draft.note,
+      createdAt: now
+    }
     this.groups.set(record.id, record)
     return record
   }
 
-  renameGroup(id: string, input: string): GroupRecord {
+  updateGroup(id: string, input: GroupDraft): GroupRecord {
     const current = this.getGroup(id)
-    const name = validateGroupName(input)
-    const duplicate = this.findGroup(name)
+    const draft = validateGroupDraft(input)
+    const duplicate = this.findGroup(draft.name)
     if (duplicate && duplicate.id !== id) throw new Error('已有同名分组')
-    const record = { ...current, name }
+    const record = { ...current, name: draft.name, color: draft.color ?? current.color, note: draft.note }
     this.groups.set(id, record)
     return record
   }

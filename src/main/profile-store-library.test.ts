@@ -71,7 +71,7 @@ describe('windows refer to the proxy and group libraries', () => {
     await store.setProxyCheck(a.id, check('198.51.100.7'))
     expect(store.get(b.id).proxyCheck?.ip).toBe('198.51.100.7')
 
-    await store.renameGroup(a.groupId, 'G2')
+    await store.updateGroup(a.groupId, { name: 'G2' })
     expect(store.get(b.id).group).toBe('G2')
     expect(changed).toContain(b.id)
   })
@@ -80,7 +80,7 @@ describe('windows refer to the proxy and group libraries', () => {
     const store = await open()
     const [a, b] = await store.createMany([draft('A'), draft('B')])
     const proxy = await store.createProxy({ ...PROXY, note: '' })
-    const group = await store.createGroup('店铺')
+    const group = await store.createGroup({ name: '店铺', note: '后台' })
     const assigned = await store.assignMany([a.id, b.id], { proxyId: proxy.id, groupId: group.id })
     expect(assigned.every((profile) => profile.proxyId === proxy.id && profile.group === '店铺')).toBe(true)
     expect(store.proxyUsers(proxy.id).map((profile) => profile.name).sort()).toEqual(['A', 'B'])
@@ -208,5 +208,31 @@ describe('adding proxies in bulk and following the proxy IP', () => {
     expect(store.get(a.id).fingerprint.networkIdentityMode).toBe('manual')
     await store.assignMany([a.id], { proxyId: proxy.id, followProxyIdentity: true })
     expect(store.get(a.id).fingerprint.networkIdentityMode).toBe('proxy')
+  })
+})
+
+describe('group colour and note', () => {
+  it('gives new groups a colour in turn, keeps a chosen one and updates name, colour and note together', async () => {
+    const store = await open()
+    const first = await store.createGroup({ name: 'A' })
+    const second = await store.createGroup({ name: 'B', color: '#43a047', note: '备注' })
+    expect(first.color).toMatch(/^#[\da-f]{6}$/i)
+    expect(second).toMatchObject({ color: '#43a047', note: '备注' })
+    const typed = await store.create(draft('W', { group: 'C' }))
+    expect(store.listGroups().find((group) => group.id === typed.groupId)?.color).toMatch(/^#/)
+    await expect(store.createGroup({ name: 'X', color: 'red' })).rejects.toThrow('颜色')
+    await expect(store.updateGroup(first.id, { name: 'B' })).rejects.toThrow('同名')
+    const updated = await store.updateGroup(first.id, { name: 'A2', color: '#1e88e5', note: '新' })
+    expect(updated).toMatchObject({ name: 'A2', color: '#1e88e5', note: '新' })
+  })
+
+  it('reads groups saved before they had a colour', async () => {
+    const path = await vault()
+    await writeFile(join(path, 'profiles.json'), JSON.stringify({
+      schemaVersion: 12, proxies: [], groups: [{ id: 'g1', name: '旧分组', createdAt: '2026-10-01T00:00:00.000Z' }], profiles: []
+    }))
+    const store = await open(path)
+    expect(store.listGroups()[0]).toMatchObject({ name: '旧分组', note: '' })
+    expect(store.listGroups()[0].color).toMatch(/^#/)
   })
 })
