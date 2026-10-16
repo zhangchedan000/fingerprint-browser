@@ -27,6 +27,7 @@ import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
+import { kernelUsers } from '../../data/kernels'
 import { BatchImportModal } from './BatchImportModal'
 import { BatchResultModal, type BatchOperationResult } from './BatchResultModal'
 import { CrashHistoryModal } from './CrashHistoryModal'
@@ -46,12 +47,13 @@ export function windowsSubtitle(profiles: BrowserProfileView[]): string {
 }
 
 /** Window management (design: Main.dc.html). */
-export function WindowsPage({ openKernels, groupId }: { openKernels: () => void; groupId?: string }) {
+export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKernels: () => void; groupId?: string; kernelVersion?: string }) {
   const ws = useWorkspace()
   const { launch, openMany } = useWindowLauncher()
   const { profiles, proxies, groups, engine, kernels, extensions, notify, locale } = ws
   const [query, setQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState(groupId ?? ALL_GROUPS)
+  const [kernelFilter, setKernelFilter] = useState(kernelVersion)
   const [listTab, setListTab] = useState<ListTabKey>('all')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
@@ -82,6 +84,7 @@ export function WindowsPage({ openKernels, groupId }: { openKernels: () => void;
     const normalized = query.trim().toLowerCase()
     const filtered = profiles.filter((profile) => {
       if (groupFilter !== ALL_GROUPS && profile.groupId !== groupFilter) return false
+      if (kernelFilter !== undefined && !kernelUsers([profile], kernelFilter, engine?.version).length) return false
       if (listTab === 'favorites' && !profile.favorite) return false
       if (listTab === 'running' && !ACTIVE_STATUSES.has(profile.status)) return false
       if (listTab === 'ungrouped' && profile.groupId) return false
@@ -95,7 +98,7 @@ export function WindowsPage({ openKernels, groupId }: { openKernels: () => void;
       if (first.favorite !== second.favorite) return first.favorite ? -1 : 1
       return second.serialNumber - first.serialNumber
     })
-  }, [profiles, query, groupFilter, listTab])
+  }, [profiles, query, groupFilter, kernelFilter, engine, listTab])
 
   const attentionCount = profiles.filter((profile) => profile.status === 'orphaned' || profile.status === 'error' || profile.proxyMissing).length
   const tabs: ListTab[] = [
@@ -641,6 +644,9 @@ export function WindowsPage({ openKernels, groupId }: { openKernels: () => void;
         )}
         filters={(
           <>
+            {kernelFilter !== undefined && (
+              <Tag closable className="fb-filter-tag" onClose={() => setKernelFilter(undefined)}>{t("内核：Chromium {0}", kernelFilter)}</Tag>
+            )}
             <Select value={groupFilter} options={groupOptions} onChange={setGroupFilter} className="group-filter" aria-label={t("按分组筛选")} />
             <Input
               allowClear

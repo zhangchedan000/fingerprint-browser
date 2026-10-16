@@ -766,6 +766,7 @@ export class ProfileStore {
           profileId: record.profile.id,
           serialNumber: validProfileSerial(record.profile.serialNumber) ? record.profile.serialNumber : undefined,
           name: record.profile.name,
+          group: typeof record.profile.group === 'string' ? record.profile.group : '',
           deletedAt: record.deletedAt,
           sizeBytes: await safePathSize(join(root, entry.name))
         })
@@ -848,8 +849,8 @@ export class ProfileStore {
   }
 
   /**
-   * Restores a window from the recycle bin. Its proxy and group are looked up again:
-   * the same library record when it still exists, otherwise the saved copy goes back into the library.
+   * Restores a window from the recycle bin. Its proxy is looked up again: the same library record
+   * when it still exists, otherwise the saved copy goes back into the library (never silently direct).
    */
   async restore(trashId: string): Promise<BrowserProfile> {
     if (!/^[a-zA-Z0-9-]+$/.test(trashId)) throw new Error('回收站条目标识无效')
@@ -871,9 +872,11 @@ export class ProfileStore {
       const proxyId = typeof saved.proxyId === 'string' && this.library.proxies.has(saved.proxyId)
         ? saved.proxyId
         : this.library.ensureProxy(savedProxy, now)
-      const groupId = typeof saved.groupId === 'string' && this.library.groups.has(saved.groupId)
-        ? saved.groupId
-        : this.library.ensureGroup(typeof saved.group === 'string' ? saved.group : '', now)
+      // Back into its group; a group deleted meanwhile is not brought back (the window goes to Ungrouped).
+      // Windows deleted before groups had ids find their group by name.
+      const groupId = typeof saved.groupId === 'string'
+        ? (this.library.groups.has(saved.groupId) ? saved.groupId : '')
+        : this.library.findGroup(typeof saved.group === 'string' ? saved.group : '')?.id ?? ''
       const serialNumber = validProfileSerial(saved.serialNumber) && ![...this.profiles.values()].some((item) => item.serialNumber === saved.serialNumber)
         ? saved.serialNumber
         : this.nextSerialNumber++

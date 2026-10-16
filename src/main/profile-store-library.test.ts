@@ -136,7 +136,8 @@ describe('windows refer to the proxy and group libraries', () => {
     const [item] = await store.listTrash()
     const restored = await store.restore(item.trashId)
     expect(restored.proxy).toMatchObject({ host: '203.0.113.9', password: 'secret' })
-    expect(restored.group).toBe('G')
+    // The deleted group is not recreated; the window goes to Ungrouped.
+    expect(restored.group).toBe('')
     expect(store.listProxies()).toHaveLength(1)
   })
 

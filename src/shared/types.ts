@@ -334,6 +334,8 @@ export interface DeletedProfileSummary {
   profileId: string
   serialNumber?: number
   name: string
+  /** Group the window was in when it was deleted. */
+  group?: string
   deletedAt: string
   sizeBytes: number
 }

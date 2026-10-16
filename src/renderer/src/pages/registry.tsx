@@ -12,9 +12,9 @@ import { t } from '../../../shared/i18n'
 import type { Workspace } from '../data/workspace'
 import { ExtensionsDialog } from './extensions'
 import { GroupsPage } from './groups/GroupsPage'
-import { KernelsDialog } from './kernels'
+import { KernelsPage } from './kernels/KernelsPage'
 import { ProxiesPage, proxiesSubtitle } from './proxies/ProxiesPage'
-import { RecycleDialog } from './recycle'
+import { RecyclePage } from './recycle/RecyclePage'
 import { windowsSubtitle, WindowsPage } from './windows/WindowsPage'
 
 export type PageKey = 'windows' | 'groups' | 'proxies' | 'extensions' | 'kernels' | 'recycle' | 'settings'
@@ -23,6 +23,8 @@ export type SectionKey = 'workspace' | 'tools' | 'system'
 /** Context one page can hand to another, e.g. "show this group's windows". */
 export interface PageParams {
   groupId?: string
+  /** Windows running on this kernel version. */
+  kernelVersion?: string
 }
 
 /** What a page receives from the app shell. */
@@ -71,7 +73,7 @@ export const PAGES: PageDefinition[] = [
     label: () => t("窗口管理"),
     count: (ws) => ws.profiles.length,
     subtitle: (ws) => windowsSubtitle(ws.profiles),
-    page: ({ navigate, params }) => <WindowsPage openKernels={() => navigate('kernels')} groupId={params?.groupId} />
+    page: ({ navigate, params }) => <WindowsPage openKernels={() => navigate('kernels')} groupId={params?.groupId} kernelVersion={params?.kernelVersion} />
   },
   {
     key: 'groups',
@@ -99,8 +101,22 @@ export const PAGES: PageDefinition[] = [
     count: (ws) => ws.extensions.length || undefined,
     dialog: ExtensionsDialog
   },
-  { key: 'kernels', section: 'tools', icon: <DeploymentUnitOutlined />, label: () => t("内核管理"), dialog: KernelsDialog },
-  { key: 'recycle', section: 'tools', icon: <RestOutlined />, label: () => t("回收站"), dialog: RecycleDialog },
+  {
+    key: 'kernels',
+    section: 'tools',
+    icon: <DeploymentUnitOutlined />,
+    label: () => t("内核管理"),
+    subtitle: () => t("每个窗口可以单独指定内核；没指定的窗口使用默认内核"),
+    page: KernelsPage
+  },
+  {
+    key: 'recycle',
+    section: 'tools',
+    icon: <RestOutlined />,
+    label: () => t("回收站"),
+    subtitle: () => t("删除的窗口连同 Cookie 和缓存保留在这里，可随时恢复"),
+    page: RecyclePage
+  },
   { key: 'settings', section: 'system', icon: <SettingOutlined />, label: () => t("设置"), upcoming: true }
 ]
 
