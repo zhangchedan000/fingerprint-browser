@@ -33,6 +33,7 @@ import {
 import { effectiveNetworkIdentity } from '../../shared/network-identity'
 import { parsePastedProxy } from '../../shared/proxy-paste'
 import { parseCookieFile } from '../../main/cookie-file'
+import { PLATFORMS } from '../../shared/platforms'
 import type {
   FingerprintOverride,
   BrowserExtension,
@@ -76,16 +77,6 @@ interface ProfileEditorProps {
 }
 
 /** Login pages offered for the most common platforms; any other name can be typed. */
-const PLATFORMS: Array<{ value: string; url: string }> = [
-  { value: 'TikTok Shop', url: 'https://seller-us.tiktok.com/' },
-  { value: 'TikTok', url: 'https://www.tiktok.com/login' },
-  { value: 'Facebook', url: 'https://www.facebook.com/' },
-  { value: 'Meta Business', url: 'https://business.facebook.com/' },
-  { value: 'Google Ads', url: 'https://ads.google.com/' },
-  { value: 'Shopify', url: 'https://accounts.shopify.com/' },
-  { value: 'Amazon Seller', url: 'https://sellercentral.amazon.com/' }
-]
-
 const WINDOWS_VERSIONS = [
   { value: '10.0.0', label: 'Windows 10' },
   { value: '15.0.0', label: 'Windows 11' }

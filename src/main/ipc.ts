@@ -1,7 +1,7 @@
 import { t } from '../shared/i18n'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { lstat, readFile, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { ProfileDraft } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
@@ -17,7 +17,8 @@ import { clearProfileCache, profileStorageInfo, storageOverview } from './profil
 import type { ExtensionStore } from './extension-store'
 import type { CookieManager } from './cookie-manager'
 import { parseCookieFile, serializeCookieFile } from './cookie-file'
-import { parseBatchProfileCsv, serializeBatchProfileTemplate } from './profile-batch-csv'
+import { randomUUID } from 'node:crypto'
+import { analyzeBatchTable, batchTemplateRows, errorRows, importFormat, readImportTable, serializeCsv, serializeXlsx, type AnalyzedTable, type ImportFileFormat } from './profile-batch-import'
 import { proxyForTest, publicProfile, sameProxyIdentity } from './profile-secrets'
 import type { ProfileBackupManager } from './profile-backup'
 import type { AppSessionTracker } from './app-session'
@@ -72,32 +73,91 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     logger.info('环境配置已导入', { profileId: profile.id })
     return publicProfile(profile)
   })
-  ipcMain.handle('profiles:import-batch-csv', async () => {
-    const owner = BrowserWindow.getFocusedWindow()
-    const options: Electron.OpenDialogOptions = {
-      title: t('批量导入浏览器环境'),
-      properties: ['openFile'],
-      filters: [{ name: 'CSV 表格', extensions: ['csv'] }]
+  // One pending import at a time: the preview keeps the checked rows here until commit.
+  let pendingImport: { token: string; fileName: string; format: ImportFileFormat; table: AnalyzedTable; committed: boolean } | undefined
+  const pendingFor = (token: string) => {
+    if (!pendingImport || pendingImport.token !== token) throw new Error('导入预览已失效，请重新选择文件')
+    return pendingImport
+  }
+  ipcMain.handle('profiles:batch-import-preview', async (_event, requestedPath?: string) => {
+    let path = typeof requestedPath === 'string' && requestedPath ? requestedPath : undefined
+    if (!path) {
+      const owner = BrowserWindow.getFocusedWindow()
+      const options: Electron.OpenDialogOptions = {
+        title: t('批量导入窗口'),
+        properties: ['openFile'],
+        filters: [{ name: t('表格文件'), extensions: ['xlsx', 'csv', 'txt'] }]
+      }
+      const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
+      if (result.canceled || !result.filePaths[0]) return null
+      path = result.filePaths[0]
     }
-    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
-    if (result.canceled || !result.filePaths[0]) return null
-    const path = result.filePaths[0]
-    if ((await stat(path)).size > 2 * 1024 * 1024) throw new Error('批量导入 CSV 不能超过 2 MB')
-    const drafts = parseBatchProfileCsv(await readFile(path, 'utf8'), profiles.list().length + 1)
-    const created = await profiles.createMany(drafts)
-    logger.info('已通过 CSV 批量导入浏览器环境', { count: created.length })
-    return created.map(publicProfile)
+    const format = importFormat(path)
+    const info = await stat(path)
+    if (!info.isFile()) throw new Error('只支持 .xlsx、.csv 或 .txt 文件')
+    if (info.size > 5 * 1024 * 1024) throw new Error('导入文件不能超过 5 MB')
+    const table = analyzeBatchTable(await readImportTable(path, await readFile(path)), profiles.list().length + 1)
+    const token = randomUUID()
+    pendingImport = { token, fileName: basename(path), format, table, committed: false }
+    const valid = table.rows.filter((row) => row.draft).length
+    return { token, fileName: basename(path), valid, invalid: table.rows.length - valid, rows: table.rows.map((row) => row.view) }
   })
-  ipcMain.handle('profiles:export-batch-template', async () => {
+  ipcMain.handle('profiles:batch-import-commit', async (_event, token: string, options: { defaultGroup?: unknown }) => {
+    const pending = pendingFor(token)
+    if (pending.committed) throw new Error('这批窗口已经导入')
+    const defaultGroup = typeof options?.defaultGroup === 'string' ? options.defaultGroup.trim() : ''
+    const rows = pending.table.rows.filter((row) => row.draft)
+    if (!rows.length) throw new Error('没有可导入的有效行')
+    pending.committed = true
+    let created
+    try {
+      created = await profiles.createMany(rows.map((row) => ({ ...row.draft!, group: row.draft!.group || defaultGroup })))
+    } catch (error) {
+      pending.committed = false
+      throw error
+    }
+    let cookiesImported = 0
+    const cookieErrors: Array<{ name: string; message: string }> = []
+    for (const [index, row] of rows.entries()) {
+      if (!row.cookieText) continue
+      const profile = created[index]
+      try {
+        cookiesImported += await cookies.importCookies(profile.id, parseCookieFile(row.cookieText))
+      } catch (error) {
+        cookieErrors.push({ name: profile.name, message: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    logger.info('已批量导入窗口', { count: created.length, skipped: pending.table.rows.length - rows.length, cookieErrors: cookieErrors.length })
+    return { created: created.map(publicProfile), skipped: pending.table.rows.length - rows.length, cookiesImported, cookieErrors }
+  })
+  ipcMain.handle('profiles:batch-import-save-errors', async (_event, token: string) => {
+    const pending = pendingFor(token)
+    if (pending.table.rows.every((row) => row.draft)) throw new Error('没有错误行')
+    const extension = pending.format === 'xlsx' ? 'xlsx' : 'csv'
     const owner = BrowserWindow.getFocusedWindow()
     const options: Electron.SaveDialogOptions = {
-      title: t('保存批量导入 CSV 模板'),
-      defaultPath: 'prism-browser-batch-template.csv',
-      filters: [{ name: 'CSV 表格', extensions: ['csv'] }]
+      title: t('保存错误行'),
+      defaultPath: `${pending.fileName.replace(/\.[^.]+$/, '')}-${t('错误行')}.${extension}`,
+      filters: [{ name: t('表格文件'), extensions: [extension] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
-    await writeFile(result.filePath, serializeBatchProfileTemplate(), { encoding: 'utf8', mode: 0o600 })
+    const rows = errorRows(pending.table)
+    await writeFile(result.filePath, extension === 'xlsx' ? await serializeXlsx(rows) : serializeCsv(rows), { mode: 0o600 })
+    return result.filePath
+  })
+  ipcMain.handle('profiles:export-batch-template', async (_event, format: unknown) => {
+    const extension = format === 'csv' ? 'csv' : 'xlsx'
+    const owner = BrowserWindow.getFocusedWindow()
+    const options: Electron.SaveDialogOptions = {
+      title: t('保存导入模板'),
+      defaultPath: `${t('批量导入模板')}.${extension}`,
+      filters: [{ name: t('表格文件'), extensions: [extension] }]
+    }
+    const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    const rows = batchTemplateRows()
+    await writeFile(result.filePath, extension === 'xlsx' ? await serializeXlsx(rows) : serializeCsv(rows), { mode: 0o600 })
     return result.filePath
   })
   ipcMain.handle('profiles:storage-info', async (_event, id: string) => {

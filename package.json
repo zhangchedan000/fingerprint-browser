@@ -35,7 +35,9 @@
     "proxy-chain": "^2.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "read-excel-file": "^9.3.12",
     "undici": "^7.29.0",
+    "write-excel-file": "^4.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -76,6 +76,11 @@ export function formatList(items: readonly string[]): string {
   return items.join(['zh-CN', 'zh-TW', 'ja'].includes(locale) ? '、' : ', ')
 }
 
+/** Joins whole messages, e.g. several problems found in one spreadsheet row. */
+export function joinMessages(items: readonly string[]): string {
+  return items.join(['zh-CN', 'zh-TW', 'ja'].includes(locale) ? '；' : '; ')
+}
+
 const HAN = /[㐀-鿿]/
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const messagePatterns = Object.keys(zhCN)

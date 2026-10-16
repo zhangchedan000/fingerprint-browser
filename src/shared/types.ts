@@ -311,6 +311,38 @@ export interface BrowserCrashRecord {
   phase: 'starting' | 'running'
 }
 
+export interface BatchImportRowView {
+  line: number
+  name: string
+  group: string
+  /** Proxy with the password masked; '' means direct. */
+  proxy: string
+  account: string
+  cookie: boolean
+  /** Source-language messages; empty when the row will be imported. */
+  errors: string[]
+}
+
+export interface BatchImportPreview {
+  token: string
+  fileName: string
+  valid: number
+  invalid: number
+  rows: BatchImportRowView[]
+}
+
+export interface BatchImportOptions {
+  /** Group for rows that leave the group column empty; '' keeps them ungrouped. */
+  defaultGroup: string
+}
+
+export interface BatchImportResult {
+  created: BrowserProfileView[]
+  skipped: number
+  cookiesImported: number
+  cookieErrors: Array<{ name: string; message: string }>
+}
+
 export interface BrowserApi {
   uiLanguage: {
     get(): Promise<UiLocale>
@@ -323,8 +355,13 @@ export interface BrowserApi {
     duplicate: (id: string) => Promise<BrowserProfileView>
     exportConfig: (id: string) => Promise<string | null>
     importConfig: () => Promise<BrowserProfileView | null>
-    importBatchCsv: () => Promise<BrowserProfileView[] | null>
-    exportBatchTemplate: () => Promise<string | null>
+    /** Reads a spreadsheet (picked in a dialog when no path is given) and checks each row. */
+    previewBatchImport: (path?: string) => Promise<BatchImportPreview | null>
+    commitBatchImport: (token: string, options: BatchImportOptions) => Promise<BatchImportResult>
+    saveBatchImportErrors: (token: string) => Promise<string | null>
+    exportBatchTemplate: (format: 'xlsx' | 'csv') => Promise<string | null>
+    /** Local path of a file dropped onto the window. */
+    pathForFile: (file: File) => string
     storageHealth: () => Promise<ProfileStoreHealth>
     storageInfo: (id: string) => Promise<ProfileStorageInfo>
     storageOverview: () => Promise<StorageOverview>

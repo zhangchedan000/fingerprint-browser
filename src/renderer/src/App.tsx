@@ -1,5 +1,6 @@
 import { LanguageSelector } from './LanguageSelector'
 import { Sidebar, type SidebarTarget } from './Sidebar'
+import { BatchImportModal } from './BatchImportModal'
 import { KernelSwitchModal } from './KernelSwitchModal'
 import { t, getLocale, subscribeLocale, translateMessage as mt } from '../../shared/i18n'
 import {
@@ -150,6 +151,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [kernelManagerOpen, setKernelManagerOpen] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [batchImportOpen, setBatchImportOpen] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState('__all__')
   const [listTab, setListTab] = useState<ListTab>('all')
   const [kernelSwitchOpen, setKernelSwitchOpen] = useState(false)
@@ -439,39 +441,6 @@ export default function App() {
       messageApi.error(humanError(error), 8)
     } finally {
       setMigrationBusy(false)
-    }
-  }
-
-  async function importBatchCsv(): Promise<void> {
-    setImporting(true)
-    try {
-      const imported = await window.browserApi.profiles.importBatchCsv()
-      if (!imported) return
-      for (const profile of imported) upsert(profile)
-      messageApi.success(t("已批量创建 {0} 个独立环境", imported.length))
-    } catch (error) {
-      messageApi.error(humanError(error), 6)
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  function confirmBatchImport(): void {
-    Modal.confirm({
-      title: t("批量导入 CSV 环境"),
-      content: t("应用会先校验全部数据，任意一行错误都不会创建环境。CSV 中的代理密码是明文，请只使用可信文件，并在导入后妥善删除。"),
-      okText: t("选择 CSV"),
-      cancelText: t("取消"),
-      onOk: importBatchCsv
-    })
-  }
-
-  async function exportBatchTemplate(): Promise<void> {
-    try {
-      const path = await window.browserApi.profiles.exportBatchTemplate()
-      if (path) messageApi.success(t("CSV 批量导入模板已保存"))
-    } catch (error) {
-      messageApi.error(humanError(error))
     }
   }
 
@@ -911,19 +880,16 @@ export default function App() {
             <Dropdown
               menu={{
                 items: [
-                  { key: 'batch', label: t("批量导入 CSV") },
+                  { key: 'batch', label: t("批量导入窗口") },
                   { key: 'single', label: t("导入单个 JSON 环境") },
                   { key: 'backup', label: t("导入完整数据备份") },
-                  { key: 'workspace', label: t("导入全部环境迁移包") },
-                  { type: 'divider' },
-                  { key: 'csv-sample', label: t("保存 CSV 示例文件") }
+                  { key: 'workspace', label: t("导入全部环境迁移包") }
                 ],
                 onClick: ({ key }) => {
                   if (key === 'single') void importProfile()
-                  if (key === 'batch') confirmBatchImport()
+                  if (key === 'batch') setBatchImportOpen(true)
                   if (key === 'backup') confirmProfileBackupImport()
                   if (key === 'workspace') setMigrationMode('import')
-                  if (key === 'csv-sample') void exportBatchTemplate()
                 }
               }}
               trigger={['click']}
@@ -1095,6 +1061,14 @@ export default function App() {
         }}
       />
       <BatchResultModal result={batchResult} onClose={() => setBatchResult(undefined)} />
+      <BatchImportModal
+        open={batchImportOpen}
+        groups={editableGroups}
+        onImported={(created) => { for (const profile of created) upsert(profile) }}
+        onClose={() => setBatchImportOpen(false)}
+        onError={(error) => messageApi.error(humanError(error), 6)}
+        onNotice={(text) => messageApi.success(text)}
+      />
       <KernelSwitchModal
         open={kernelSwitchOpen}
         count={selectedIds.length}

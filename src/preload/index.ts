@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BrowserApi, BrowserProfileView, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
@@ -13,8 +13,11 @@ const api: BrowserApi = {
     duplicate: (id: string) => ipcRenderer.invoke('profiles:duplicate', id),
     exportConfig: (id: string) => ipcRenderer.invoke('profiles:export-config', id),
     importConfig: () => ipcRenderer.invoke('profiles:import-config'),
-    importBatchCsv: () => ipcRenderer.invoke('profiles:import-batch-csv'),
-    exportBatchTemplate: () => ipcRenderer.invoke('profiles:export-batch-template'),
+    previewBatchImport: (path) => ipcRenderer.invoke('profiles:batch-import-preview', path),
+    commitBatchImport: (token, options) => ipcRenderer.invoke('profiles:batch-import-commit', token, options),
+    saveBatchImportErrors: (token) => ipcRenderer.invoke('profiles:batch-import-save-errors', token),
+    exportBatchTemplate: (format) => ipcRenderer.invoke('profiles:export-batch-template', format),
+    pathForFile: (file) => webUtils.getPathForFile(file),
     storageHealth: () => ipcRenderer.invoke('profiles:storage-health'),
     storageInfo: (id: string) => ipcRenderer.invoke('profiles:storage-info', id),
     storageOverview: () => ipcRenderer.invoke('profiles:storage-overview'),
