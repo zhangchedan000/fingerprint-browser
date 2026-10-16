@@ -15,7 +15,7 @@ import ja from 'antd/locale/ja_JP'
 import hi from 'antd/locale/hi_IN'
 import { getLocale, resolveLocale, setLocale, subscribeLocale } from '../../shared/i18n'
 import App from './App'
-import { applyTheme, DEFAULT_THEME, ThemeProvider } from './theme'
+import { applyThemePreference, ThemeProvider } from './theme'
 import './styles.css'
 
 const ANTD_LOCALES = { 'zh-CN': zhCN, 'zh-TW': zhTW, en, ru, vi, th, 'pt-BR': ptBR, fr, uk, es, tr, ja, hi }
@@ -34,7 +34,8 @@ async function mount(): Promise<void> {
   const selected = await window.browserApi.uiLanguage.get().catch(() => 'en')
   setLocale(resolveLocale(selected))
   document.documentElement.lang = getLocale()
-  applyTheme(DEFAULT_THEME)
+  const preferences = await window.browserApi.app.preferences().catch(() => ({ theme: 'light' as const }))
+  applyThemePreference(preferences.theme)
   ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><PrismApplication /></React.StrictMode>)
 }
 void mount()

@@ -237,3 +237,17 @@ describe('group colour and note', () => {
     expect(store.listGroups()[0].color).toMatch(/^#/)
   })
 })
+
+describe('assigning extensions', () => {
+  it('adds an extension to windows once and takes it off again', async () => {
+    const store = await open()
+    const [a, b] = await store.createMany([draft('A'), draft('B')])
+    const extension = '11111111-2222-3333-4444-555555555555'
+    await store.assignMany([a.id, b.id], { extensionId: extension })
+    await store.assignMany([a.id], { extensionId: extension })
+    expect(store.get(a.id).extensionIds).toEqual([extension])
+    await store.assignMany([b.id], { extensionId: extension, removeExtension: true })
+    expect(store.get(b.id).extensionIds).toEqual([])
+    await expect(store.assignMany([a.id], { extensionId: 'bad' })).rejects.toThrow('扩展')
+  })
+})

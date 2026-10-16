@@ -34,6 +34,9 @@ export interface AssignPatch {
   groupId?: string
   /** With a proxy: let time zone, language and location follow its exit IP. */
   followProxyIdentity?: boolean
+  /** Add an extension to (or with removeExtension, take it off) the windows' extension list. */
+  extensionId?: string
+  removeExtension?: boolean
 }
 
 interface StoreFile {
@@ -537,8 +540,9 @@ export class ProfileStore {
   async assignMany(idsInput: string[], patch: AssignPatch): Promise<BrowserProfile[]> {
     if (!patch || typeof patch !== 'object') throw new Error('批量修改参数无效')
     const ids = this.selection(idsInput)
-    const { proxyId, groupId, followProxyIdentity } = patch
-    if (proxyId === undefined && groupId === undefined) throw new Error('请选择要分配的代理或分组')
+    const { proxyId, groupId, followProxyIdentity, extensionId, removeExtension } = patch
+    if (proxyId === undefined && groupId === undefined && extensionId === undefined) throw new Error('请选择要分配的代理或分组')
+    if (extensionId !== undefined && (typeof extensionId !== 'string' || !/^[a-f\d-]{36}$/i.test(extensionId))) throw new Error('环境扩展配置无效或超过 50 个')
     if (proxyId !== undefined) {
       if (typeof proxyId !== 'string' || (proxyId && !this.library.proxies.has(proxyId))) throw new Error('所选代理已不在代理库中，请重新选择')
       const running = ids.map((id) => this.stored(id)).find((profile) => !isEditable(profile) && profile.proxyId !== proxyId)
@@ -555,6 +559,11 @@ export class ProfileStore {
       if (proxyId !== undefined && proxyId !== current.proxyId) {
         profile.proxyId = proxyId
         delete profile.directCheck
+      }
+      if (extensionId !== undefined) {
+        const others = current.extensionIds.filter((id) => id !== extensionId)
+        profile.extensionIds = removeExtension === true ? others : [...others, extensionId]
+        if (profile.extensionIds.length > 50) throw new Error('环境扩展配置无效或超过 50 个')
       }
       // Time zone, language and location follow the new proxy's exit IP at launch.
       if (proxyId && followProxyIdentity === true) profile.fingerprint = { ...profile.fingerprint, networkIdentityMode: 'proxy' }

@@ -58,7 +58,8 @@ pages/        每个侧边栏页面一个文件夹
   groups/       分组管理（分组库：新建、重命名/颜色/备注、移入移出、打开本组；“未分组”是固定的一行）
   kernels/      内核管理（默认内核、已安装列表、给窗口指定内核；窗口用 kernelVersion 引用，'' = 跟随默认）
   recycle/      回收站（恢复、彻底删除、自动清理天数；恢复时原分组已删则进“未分组”）
-  extensions/   目前还是弹窗，以后改成页面
+  extensions/   扩展中心（窗口用 extensionIds 引用；分配也走 assignMany）
+  settings/     设置（主题、批量打开间隔、数据目录、迁移、关于；做不到的项显示为“开发中”）
 App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 ```
 
@@ -87,6 +88,7 @@ App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 代理页的“分配到窗口”就是这样做的：勾选窗口用 `WindowPicker`，提交走 `assignMany`；按顺序批量分配只是先把代理和窗口配好对（`pages/proxies/pairing.ts`），再按代理分组调用 `assignMany`。
 
 **改颜色 / 加主题 / 深色模式**
+- 设置页的“主题”已经接上：浅色 / 深色 / 跟随系统，保存在 settings.json，启动时用 `applyThemePreference` 应用。
 - 只改 `theme/tokens.ts`：`LIGHT` 是浅色，`DARK` 是深色，`ACCENT_PRESETS` 是可选主题色。
 - 切换主题调用 `applyTheme({ accent, mode })`，自己写的样式和 antd 组件一起变。
 - 写样式时只用 `var(--fb-*)`。`theme/theme.test.ts` 会检查有没有写死的颜色。

@@ -3,7 +3,9 @@ import type { MessageInstance } from 'antd/es/message/interface'
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getLocale, subscribeLocale } from '../../../shared/i18n'
+import { applyThemePreference } from '../theme'
 import type {
+  AppPreferences,
   AppRecoveryStatus, BrowserExtension, BrowserProfileView, EngineStatus, GroupRecordView, KernelRelease, ProfileStoreHealth, ProxyRecordView
 } from '../../../shared/types'
 import { humanError } from '../components/format'
@@ -27,6 +29,9 @@ export interface Workspace {
   extensions: BrowserExtension[]
   storageHealth: ProfileStoreHealth | null
   recovery: AppRecoveryStatus | null
+  /** Settings-page choices (theme, batch open gap). */
+  preferences: AppPreferences
+  setPreferences: (patch: Partial<AppPreferences>) => Promise<void>
   notify: MessageInstance
   upsertProfiles: (profiles: BrowserProfileView[]) => void
   dropProfiles: (ids: string[]) => void
@@ -62,6 +67,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [extensions, setExtensions] = useState<BrowserExtension[]>([])
   const [storageHealth, setStorageHealth] = useState<ProfileStoreHealth | null>(null)
   const [recovery, setRecovery] = useState<AppRecoveryStatus | null>(null)
+  const [preferences, setPreferenceState] = useState<AppPreferences>({ theme: 'light', batchLaunchGapSeconds: 1.5 })
 
   const fail = useCallback((error: unknown, seconds?: number) => { notify.error(humanError(error), seconds) }, [notify])
 
@@ -88,9 +94,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       window.browserApi.engine.installed(),
       window.browserApi.engine.bundled(),
       window.browserApi.diagnostics.sessionHealth(),
+      window.browserApi.app.preferences(),
       reloadLibraries()
     ])
-      .then(([items, engineStatus, extensionItems, health, installed, bundled, recoveryStatus]) => {
+      .then(([items, engineStatus, extensionItems, health, installed, bundled, recoveryStatus, savedPreferences]) => {
+        setPreferenceState(savedPreferences)
         setProfiles(items)
         setEngine(engineStatus)
         setExtensions(extensionItems)
@@ -164,8 +172,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return kernels.some((kernel) => kernel.version === profile.kernelVersion && kernel.executable)
   }, [engine, kernels])
 
+  const setPreferences = useCallback(async (patch: Partial<AppPreferences>) => {
+    const saved = await window.browserApi.app.setPreferences(patch)
+    setPreferenceState(saved)
+    if (patch.theme) applyThemePreference(saved.theme)
+  }, [])
+
   const value: Workspace = {
-    locale, loading, profiles, proxies, groups, engine, kernels, extensions, storageHealth, recovery, notify,
+    locale, loading, profiles, proxies, groups, engine, kernels, extensions, storageHealth, recovery, preferences, setPreferences, notify,
     upsertProfiles, dropProfiles, reloadProfiles, reloadLibraries, setEngine, reloadKernels, setExtensions, canLaunch, fail
   }
   return (

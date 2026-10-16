@@ -6,6 +6,13 @@ const api: BrowserApi = {
     get: () => ipcRenderer.invoke('ui-language:get'),
     set: (locale) => ipcRenderer.invoke('ui-language:set', locale)
   },
+  app: {
+    preferences: () => ipcRenderer.invoke('app:preferences'),
+    setPreferences: (patch) => ipcRenderer.invoke('app:set-preferences', patch),
+    info: () => ipcRenderer.invoke('app:info'),
+    openFolder: (folder) => ipcRenderer.invoke('app:open-folder', folder),
+    openProjectPage: () => ipcRenderer.invoke('app:open-project-page')
+  },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),
     create: (draft: ProfileDraft) => ipcRenderer.invoke('profiles:create', draft),

@@ -2,13 +2,13 @@ import { t } from '../shared/i18n'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { lstat, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { ProfileDraft } from '../shared/types'
+import type { AppPreferences, ProfileDraft } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
 import type { AssignPatch, ProfileStore } from './profile-store'
-import type { SettingsStore } from './settings-store'
+import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
 import { validateProxyConfig } from '../shared/validation'
 import type { AppLogger } from './app-logger'
@@ -245,6 +245,19 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     logger.info('环境回收站已清空', { count })
     return count
   })
+  ipcMain.handle('app:preferences', () => validPreferences(settings.get()))
+  ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
+    const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
+    await settings.update(next)
+    return next
+  })
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
+  ipcMain.handle('app:open-folder', async (_event, folder: unknown) => {
+    if (folder !== 'vault' && folder !== 'logs') throw new Error('目录参数无效')
+    const error = await shell.openPath(folder === 'vault' ? profiles.vaultPath : logger.directory)
+    if (error) throw new Error(error)
+  })
+  ipcMain.handle('app:open-project-page', () => shell.openExternal('https://github.com/zhangchedan000/fingerprint-browser'))
   ipcMain.handle('profiles:recycle-retention', () => settings.get().recycleRetentionDays)
   ipcMain.handle('profiles:set-recycle-retention', async (_event, days: number) => {
     if (days !== 0 && days !== 7 && days !== 30 && days !== 90) throw new Error('回收站保留天数无效')
@@ -321,6 +334,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
   })
   ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: AssignPatch) => {
+    if (patch?.extensionId !== undefined && !(await extensions.list()).some((extension) => extension.id === patch.extensionId)) {
+      throw new Error('扩展不存在或已被移除')
+    }
     return (await profiles.assignMany(ids, patch)).map(publicProfile)
   })
   ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {

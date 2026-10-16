@@ -66,7 +66,7 @@ export function useWindowLauncher() {
       } catch (error) {
         errors.push(`${profile.name}：${humanError(error)}`)
       }
-      if (index < candidates.length - 1) await waitForBatchLaunchGap()
+      if (index < candidates.length - 1) await waitForBatchLaunchGap(ws.preferences.batchLaunchGapSeconds * 1000)
     }
     return { total: candidates.length, succeeded: candidates.length - errors.length, errors }
   }

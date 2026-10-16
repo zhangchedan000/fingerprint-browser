@@ -5,24 +5,19 @@ import { t } from '../../shared/i18n'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
-import { PAGES, pageDefinition, type PageKey, type PageParams } from './pages/registry'
+import { pageDefinition, type PageKey, type PageParams } from './pages/registry'
 
 /** The app shell: side menu, top bar and the current page, all driven by pages/registry. */
 function Shell() {
   const ws = useWorkspace()
   const [active, setActive] = useState<PageKey>('windows')
   const [params, setParams] = useState<PageParams | undefined>()
-  const [dialog, setDialog] = useState<PageKey | null>(null)
   const page = pageDefinition(active)
   const Page = page.page
 
   function navigate(key: PageKey, next?: PageParams): void {
     const target = pageDefinition(key)
     if (target.upcoming) return
-    if (target.dialog) {
-      setDialog(key)
-      return
-    }
     setActive(key)
     setParams(next)
   }
@@ -46,10 +41,6 @@ function Shell() {
           {Page && <Page key={`${active}:${JSON.stringify(params ?? {})}`} navigate={navigate} params={params} />}
         </Layout.Content>
       </Layout>
-      {PAGES.filter((item) => item.dialog).map((item) => {
-        const Dialog = item.dialog!
-        return <Dialog key={item.key} open={dialog === item.key} onClose={() => setDialog(null)} />
-      })}
     </Layout>
   )
 }

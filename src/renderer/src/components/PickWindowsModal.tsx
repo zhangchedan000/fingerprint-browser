@@ -14,16 +14,21 @@ interface PickWindowsModalProps {
   detailTitle: string
   detail: (window: BrowserProfileView) => ReactNode
   okText: string
+  /** Windows ticked when the dialog opens (e.g. those that already have the extension). */
+  initial?: string[]
+  /** Allow submitting with nothing ticked (taking something off every window). */
+  allowEmpty?: boolean
   busy: boolean
   onSubmit: (ids: string[]) => Promise<void> | void
   onClose: () => void
 }
 
 /** A dialog for ticking windows (move into a group, later: give to a member). */
-export function PickWindowsModal({ open, title, windows, detailTitle, detail, okText, busy, onSubmit, onClose }: PickWindowsModalProps) {
+export function PickWindowsModal({ open, title, windows, detailTitle, detail, okText, initial, allowEmpty, busy, onSubmit, onClose }: PickWindowsModalProps) {
   const ws = useWorkspace()
   const [picked, setPicked] = useState<string[]>([])
-  useEffect(() => { if (open) setPicked([]) }, [open])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
+  useEffect(() => { if (open) setPicked(initial ?? []) }, [open])
   return (
     <Modal
       open={open}
@@ -31,7 +36,7 @@ export function PickWindowsModal({ open, title, windows, detailTitle, detail, ok
       width={720}
       okText={okText}
       cancelText={t("取消")}
-      okButtonProps={{ disabled: !picked.length }}
+      okButtonProps={{ disabled: !picked.length && !allowEmpty }}
       confirmLoading={busy}
       onOk={() => void onSubmit(picked)}
       onCancel={onClose}

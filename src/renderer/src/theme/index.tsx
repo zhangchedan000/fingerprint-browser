@@ -66,3 +66,26 @@ export function ThemeProvider({ locale, children }: { locale: ComponentProps<typ
   const choice = useTheme()
   return <ConfigProvider locale={locale} theme={antdTheme(themeTokens(choice), choice.mode)}>{children}</ConfigProvider>
 }
+
+let systemWatch: MediaQueryList | undefined
+let systemListener: (() => void) | undefined
+
+/**
+ * Applies the theme saved in the settings ('system' follows the operating system and keeps
+ * following it while the app runs).
+ */
+export function applyThemePreference(preference: 'light' | 'dark' | 'system', accent = current.accent): void {
+  if (systemWatch && systemListener) systemWatch.removeEventListener('change', systemListener)
+  systemWatch = undefined
+  systemListener = undefined
+  if (preference !== 'system') {
+    applyTheme({ accent, mode: preference })
+    return
+  }
+  const query = window.matchMedia('(prefers-color-scheme: dark)')
+  const follow = (): void => { applyTheme({ accent, mode: query.matches ? 'dark' : 'light' }) }
+  systemWatch = query
+  systemListener = follow
+  query.addEventListener('change', follow)
+  follow()
+}

@@ -25,6 +25,7 @@ import { ACTIVE_STATUSES, formatBytes, humanError, isEditable, majorVersion, rel
 import { ListPage, type ListTab } from '../../components/ListPage'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
+import { useWorkspaceMigration } from '../../data/migration'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import { kernelUsers } from '../../data/kernels'
@@ -36,7 +37,6 @@ import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
 import { ProfileEditor, type ProfileEditorExtras } from './ProfileEditor'
 import { profileTableSorters } from './profile-table-sort'
-import { WorkspaceMigrationModal } from './WorkspaceMigrationModal'
 
 type ListTabKey = 'all' | 'running' | 'favorites' | 'ungrouped' | 'attention'
 const ALL_GROUPS = '__all__'
@@ -50,6 +50,7 @@ export function windowsSubtitle(profiles: BrowserProfileView[]): string {
 export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKernels: () => void; groupId?: string; kernelVersion?: string }) {
   const ws = useWorkspace()
   const { launch, openMany } = useWindowLauncher()
+  const migration = useWorkspaceMigration()
   const { profiles, proxies, groups, engine, kernels, extensions, notify, locale } = ws
   const [query, setQuery] = useState('')
   const [groupFilter, setGroupFilter] = useState(groupId ?? ALL_GROUPS)
@@ -74,8 +75,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [crashRecords, setCrashRecords] = useState<BrowserCrashRecord[]>([])
   const [crashHistoryLoading, setCrashHistoryLoading] = useState(false)
   const [storage, setStorage] = useState<StorageOverview>()
-  const [migrationMode, setMigrationMode] = useState<'export' | 'import' | null>(null)
-  const [migrationBusy, setMigrationBusy] = useState(false)
 
   const selected = profiles.filter((profile) => selectedIds.includes(profile.id))
   const upsert = (profile: BrowserProfileView): void => ws.upsertProfiles([profile])
@@ -201,34 +200,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       setStorage(await window.browserApi.profiles.storageOverview())
     } catch (error) {
       ws.fail(error)
-    }
-  }
-
-  async function runWorkspaceMigration(password: string, conflictPolicy: 'rename' | 'skip'): Promise<void> {
-    if (!migrationMode) return
-    setMigrationBusy(true)
-    try {
-      const result = migrationMode === 'export'
-        ? await window.browserApi.profiles.exportWorkspace(password)
-        : await window.browserApi.profiles.importWorkspace(password, conflictPolicy)
-      if (!result) return
-      if (migrationMode === 'export') {
-        notify.success(t("已加密导出 {0} 个环境、{1}", result.profileCount, formatBytes(result.totalBytes)))
-      } else {
-        await Promise.all([ws.reloadProfiles(), ws.reloadLibraries(), window.browserApi.extensions.list().then(ws.setExtensions)])
-        notify.success(result.renamedCount
-          ? result.skippedCount
-            ? t("已导入 {0} 个环境，自动改名 {1} 个，跳过 {2} 个", result.importedCount, result.renamedCount, result.skippedCount)
-            : t("已导入 {0} 个环境，自动改名 {1} 个", result.importedCount, result.renamedCount)
-          : result.skippedCount
-            ? t("已导入 {0} 个环境，跳过 {1} 个", result.importedCount, result.skippedCount)
-            : t("已导入 {0} 个环境", result.importedCount))
-      }
-      setMigrationMode(null)
-    } catch (error) {
-      ws.fail(error, 8)
-    } finally {
-      setMigrationBusy(false)
     }
   }
 
@@ -616,7 +587,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
                   if (key === 'single') void importProfile()
                   if (key === 'batch') setBatchImportOpen(true)
                   if (key === 'backup') confirmProfileBackupImport()
-                  if (key === 'workspace') setMigrationMode('import')
+                  if (key === 'workspace') migration.start('import')
                 }
               }}
             >
@@ -633,7 +604,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
                   { key: 'storage', icon: <DatabaseOutlined />, label: storage ? t("本地数据 {0}", formatBytes(storage.totalBytes)) : t("统计本地数据") }
                 ],
                 onClick: ({ key }) => {
-                  if (key === 'export-workspace') setMigrationMode('export')
+                  if (key === 'export-workspace') migration.start('export')
                   if (key === 'storage') void refreshStorageOverview()
                 }
               }}
@@ -751,13 +722,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         onError={(error) => ws.fail(error, 6)}
         onNotice={(text) => notify.success(text)}
       />
-      <WorkspaceMigrationModal
-        mode={migrationMode}
-        busy={migrationBusy}
-        profileCount={profiles.length}
-        onSubmit={runWorkspaceMigration}
-        onClose={() => { if (!migrationBusy) setMigrationMode(null) }}
-      />
+      {migration.dialog}
       <ProfileDataModal open={Boolean(dataProfile)} profile={dataProfile} onClose={() => setDataProfile(undefined)} />
       <LaunchDiagnosticsModal
         open={Boolean(diagnosticProfile && diagnosticReport)}

@@ -217,11 +217,25 @@ export interface BrowserExtension {
   globalEnabled: boolean
 }
 
-export interface AppSettings {
+export interface AppSettings extends AppPreferences {
   browserExecutable: string
   fingerprintKernel: boolean
   enginePreference: EnginePreference
   recycleRetentionDays: 0 | 7 | 30 | 90
+}
+
+/** Interface choices from the settings page. */
+export interface AppPreferences {
+  /** 'system' follows the operating system's light / dark setting. */
+  theme: 'light' | 'dark' | 'system'
+  /** Pause between windows opened in one batch. */
+  batchLaunchGapSeconds: number
+}
+
+export interface AppInfo {
+  version: string
+  vaultPath: string
+  logsPath: string
 }
 
 export interface EngineStatus {
@@ -421,6 +435,13 @@ export interface BrowserApi {
     get(): Promise<UiLocale>
     set(locale: UiLocale): Promise<UiLocale>
   }
+  app: {
+    preferences: () => Promise<AppPreferences>
+    setPreferences: (patch: Partial<AppPreferences>) => Promise<AppPreferences>
+    info: () => Promise<AppInfo>
+    openFolder: (folder: 'vault' | 'logs') => Promise<void>
+    openProjectPage: () => Promise<void>
+  }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
     create: (draft: ProfileDraft) => Promise<BrowserProfileView>
@@ -462,7 +483,7 @@ export interface BrowserApi {
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
     /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */
-    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean }) => Promise<BrowserProfileView[]>
+    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean; extensionId?: string; removeExtension?: boolean }) => Promise<BrowserProfileView[]>
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
     /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */

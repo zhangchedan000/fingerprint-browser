@@ -10,11 +10,12 @@ import {
 import type { ComponentType, ReactNode } from 'react'
 import { t } from '../../../shared/i18n'
 import type { Workspace } from '../data/workspace'
-import { ExtensionsDialog } from './extensions'
+import { ExtensionsPage } from './extensions/ExtensionsPage'
 import { GroupsPage } from './groups/GroupsPage'
 import { KernelsPage } from './kernels/KernelsPage'
 import { ProxiesPage, proxiesSubtitle } from './proxies/ProxiesPage'
 import { RecyclePage } from './recycle/RecyclePage'
+import { SettingsPage } from './settings/SettingsPage'
 import { windowsSubtitle, WindowsPage } from './windows/WindowsPage'
 
 export type PageKey = 'windows' | 'groups' | 'proxies' | 'extensions' | 'kernels' | 'recycle' | 'settings'
@@ -33,11 +34,6 @@ export interface PageProps {
   params?: PageParams
 }
 
-export interface DialogProps {
-  open: boolean
-  onClose: () => void
-}
-
 export interface PageDefinition {
   key: PageKey
   section: SectionKey
@@ -49,8 +45,6 @@ export interface PageDefinition {
   subtitle?: (workspace: Workspace) => string
   /** A full page in the main area. */
   page?: ComponentType<PageProps>
-  /** A tool that still opens as a dialog over the current page. */
-  dialog?: ComponentType<DialogProps>
   /** Listed but not built yet. */
   upcoming?: boolean
 }
@@ -99,7 +93,8 @@ export const PAGES: PageDefinition[] = [
     icon: <AppstoreAddOutlined />,
     label: () => t("扩展中心"),
     count: (ws) => ws.extensions.length || undefined,
-    dialog: ExtensionsDialog
+    subtitle: () => t("导入一次，按需分配给窗口；每个窗口的扩展数据彼此独立"),
+    page: ExtensionsPage
   },
   {
     key: 'kernels',
@@ -117,7 +112,7 @@ export const PAGES: PageDefinition[] = [
     subtitle: () => t("删除的窗口连同 Cookie 和缓存保留在这里，可随时恢复"),
     page: RecyclePage
   },
-  { key: 'settings', section: 'system', icon: <SettingOutlined />, label: () => t("设置"), upcoming: true }
+  { key: 'settings', section: 'system', icon: <SettingOutlined />, label: () => t("设置"), page: SettingsPage }
 ]
 
 export function pageDefinition(key: PageKey): PageDefinition {
