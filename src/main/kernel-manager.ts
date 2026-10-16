@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { access, copyFile, cp, link, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Readable, Transform } from 'node:stream'
@@ -567,8 +567,21 @@ export class KernelManager {
     const stagingPath = join(root, 'staging')
     await Promise.all([mkdir(extracted), mkdir(stagingPath)])
     try {
-      const command = `Expand-Archive -LiteralPath '${archivePath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force`
-      await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
+      // Expand-Archive refuses any file not named *.zip, and the download keeps its .download suffix
+      // so an interrupted install can still resume it: extract from a .zip-named link or copy instead.
+      const zipPath = join(root, 'kernel.zip')
+      await link(archivePath, zipPath).catch(() => copyFile(archivePath, zipPath))
+      const command = [
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+        "$ProgressPreference = 'SilentlyContinue'",
+        `Expand-Archive -LiteralPath '${zipPath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force -ErrorAction Stop`
+      ].join('; ')
+      try {
+        await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { maxBuffer: 16 * 1024 * 1024 })
+      } catch (error) {
+        const detail = (error as { stderr?: string }).stderr?.trim().split(/\r?\n/)[0]
+        throw new Error(`解压内核失败${detail ? `：${detail}` : ''}`)
+      }
       const chrome = await findEntry(extracted, (name) => name.toLowerCase() === 'chrome.exe')
       if (!chrome) throw new Error('ZIP 中没有找到 chrome.exe')
       const browserPath = join(stagingPath, 'browser')
