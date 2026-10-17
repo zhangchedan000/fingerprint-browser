@@ -9,6 +9,9 @@ import { Readable } from 'node:stream'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
 
+process.on('uncaughtException', (error) => { console.log(`::error title=Smoke script failed::${String(error?.stack ?? error).replace(/\r?\n/g, '%0A')}`); process.exit(2) })
+process.on('unhandledRejection', (error) => { console.log(`::error title=Smoke script failed::${String(error?.stack ?? error).replace(/\r?\n/g, '%0A')}`); process.exit(2) })
+
 const versions = (process.env.KERNELS || '150').split(',').map((item) => item.trim()).filter(Boolean)
 const urls = (process.env.URLS || 'https://www.baidu.com,https://www.google.com').split(',').map((item) => item.trim())
 const work = mkdtempSync(join(tmpdir(), 'kernel-smoke-'))
