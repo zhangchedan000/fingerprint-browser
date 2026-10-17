@@ -15,7 +15,8 @@ import {
   Switch,
   Tabs,
   Tag,
-  Typography
+  Typography,
+  Upload
 } from 'antd'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
@@ -570,11 +571,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ? <Typography.Text type="danger">{mt(cookiePreview.error)}</Typography.Text>
             : cookiePreview.count !== undefined
               ? t("识别到 {0} 条 Cookie，保存后导入此窗口", cookiePreview.count)
-              : t("粘贴 JSON 格式 Cookie（支持常见插件导出的格式），保存后导入")}
+              : t("可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态")}
       >
         <Form.Item name="cookieText" noStyle>
-          <Input.TextArea disabled={running} autoSize={{ minRows: 3, maxRows: 8 }} placeholder={t("粘贴 JSON 格式 Cookie，或从文件导入")} />
+          <Input.TextArea
+            disabled={running}
+            autoSize={{ minRows: 3, maxRows: 8 }}
+            placeholder={t("支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …")}
+          />
         </Form.Item>
+        <Upload
+          accept=".json,.txt"
+          showUploadList={false}
+          disabled={running}
+          beforeUpload={(file) => {
+            void file.text().then((text) => form.setFieldValue('cookieText', text))
+            return false
+          }}
+        >
+          <Button size="small" disabled={running} className="fb-cookie-file">{t("从文件导入")}</Button>
+        </Upload>
       </Row>
       <Row label={t("备注")}>
         <Form.Item name="note" noStyle>

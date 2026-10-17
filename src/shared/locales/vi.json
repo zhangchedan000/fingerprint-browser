@@ -1761,5 +1761,12 @@
   "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Dùng thiết bị thật; khi chưa cấp quyền, trang web chỉ thấy số lượng, không thấy tên",
   "网页读取不到，无需设置": "Trang web không đọc được; không cần cài đặt",
   "内核暂不支持": "Kernel chưa hỗ trợ",
-  "CPU 核数来源无效": "Nguồn số nhân CPU không hợp lệ"
+  "CPU 核数来源无效": "Nguồn số nhân CPU không hợp lệ",
+  "可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态": "Tùy chọn. Với tài khoản đã đăng nhập ở nơi khác, dán hoặc nhập cookie vào đây, cửa sổ sẽ mở ở trạng thái đã đăng nhập",
+  "支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …": "JSON (xuất từ Cookie-Editor…), văn bản Netscape (cookies.txt), hoặc dòng 1 là địa chỉ trang, dòng 2 là name=value; …",
+  "从文件导入": "Nhập từ tệp",
+  "没有可导入的 Cookie": "Không có cookie để nhập",
+  "Netscape Cookie 第 {0} 条字段不足 7 列": "Cookie Netscape thứ {0} có ít hơn 7 trường",
+  "无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式": "Không nhận ra định dạng cookie: hãy dán JSON, văn bản Netscape hoặc name=value; …",
+  "name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com": "Cookie dạng name=value cần địa chỉ trang ở dòng đầu, ví dụ https://www.tiktok.com"
 }

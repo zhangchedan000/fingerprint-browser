@@ -344,3 +344,4 @@ button, input, textarea { font: inherit; }
 .fb-block-gap { display: block; margin-bottom: 12px; }
 .fb-value-choice { align-self: flex-start; }
 .fb-fp-fixed { align-self: flex-start; padding: 5px 0; color: var(--fb-text-secondary); font-size: 13px; }
+.fb-cookie-file { margin-top: 6px; }

@@ -1761,5 +1761,12 @@
   "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "実機のデバイスを使用。許可がなければサイトには数だけが見え、名前は見えません",
   "网页读取不到，无需设置": "Web ページからは読み取れないため設定不要",
   "内核暂不支持": "カーネルが未対応",
-  "CPU 核数来源无效": "CPU コア数の取得元が無効です"
+  "CPU 核数来源无效": "CPU コア数の取得元が無効です",
+  "可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态": "任意。他の場所でログイン済みのアカウントの Cookie を貼り付けるか取り込むと、このウィンドウはログイン状態で開きます",
+  "支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …": "JSON（Cookie-Editor などの書き出し）、Netscape テキスト（cookies.txt）、または 1 行目にサイトのアドレス、2 行目に name=value; …",
+  "从文件导入": "ファイルから取り込む",
+  "没有可导入的 Cookie": "取り込める Cookie がありません",
+  "Netscape Cookie 第 {0} 条字段不足 7 列": "Netscape Cookie の {0} 件目は列が 7 未満です",
+  "无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式": "Cookie の形式を認識できません。JSON、Netscape テキスト、または name=value; … を貼り付けてください",
+  "name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com": "name=value 形式の Cookie は 1 行目にサイトのアドレスが必要です（例: https://www.tiktok.com）"
 }

@@ -1761,5 +1761,12 @@
   "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Gerçek cihazlar kullanılır; izin olmadan site yalnızca sayısını görür, adlarını görmez",
   "网页读取不到，无需设置": "Web sayfaları bunu okuyamaz; ayar gerekmez",
   "内核暂不支持": "Kernel henüz desteklemiyor",
-  "CPU 核数来源无效": "Geçersiz CPU çekirdek kaynağı"
+  "CPU 核数来源无效": "Geçersiz CPU çekirdek kaynağı",
+  "可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态": "İsteğe bağlı. Başka yerde oturum açılmış hesabın çerezlerini buraya yapıştırın veya içe aktarın; pencere oturum açık açılır",
+  "支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …": "JSON (Cookie-Editor vb. dışa aktarımı), Netscape metni (cookies.txt) ya da 1. satırda site adresi, 2. satırda name=value; …",
+  "从文件导入": "Dosyadan içe aktar",
+  "没有可导入的 Cookie": "İçe aktarılacak çerez yok",
+  "Netscape Cookie 第 {0} 条字段不足 7 列": "{0}. Netscape çerezinde 7'den az alan var",
+  "无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式": "Tanınmayan çerez biçimi: JSON, Netscape metni veya name=value; … yapıştırın",
+  "name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com": "name=value çerezleri için ilk satıra site adresi yazılmalı, ör. https://www.tiktok.com"
 }

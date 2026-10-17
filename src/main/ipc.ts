@@ -296,7 +296,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入环境 Cookie'),
       properties: ['openFile'],
-      filters: [{ name: 'Cookie JSON', extensions: ['json'] }]
+      filters: [{ name: 'Cookie', extensions: ['json', 'txt'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null

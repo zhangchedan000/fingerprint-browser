@@ -1761,5 +1761,12 @@
   "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Usa los dispositivos reales; sin permiso el sitio solo ve cuántos hay, no sus nombres",
   "网页读取不到，无需设置": "Las páginas web no pueden leerlo; no hay que configurarlo",
   "内核暂不支持": "El kernel aún no lo admite",
-  "CPU 核数来源无效": "Origen de núcleos de CPU no válido"
+  "CPU 核数来源无效": "Origen de núcleos de CPU no válido",
+  "可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态": "Opcional. Para una cuenta ya conectada en otro lugar, pega o importa sus cookies aquí y la ventana se abrirá con la sesión iniciada",
+  "支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …": "JSON (exportado de Cookie-Editor, etc.), texto Netscape (cookies.txt), o la dirección del sitio en la línea 1 y name=value; … en la 2",
+  "从文件导入": "Importar desde archivo",
+  "没有可导入的 Cookie": "No hay cookies para importar",
+  "Netscape Cookie 第 {0} 条字段不足 7 列": "La cookie Netscape {0} tiene menos de 7 campos",
+  "无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式": "Formato de cookie no reconocido: pega JSON, texto Netscape o name=value; …",
+  "name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com": "Las cookies name=value necesitan la dirección del sitio en la primera línea, p. ej. https://www.tiktok.com"
 }

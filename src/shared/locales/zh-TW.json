@@ -1761,5 +1761,12 @@
   "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "使用本機真實裝置；網站未經授權只能看到數量，看不到名稱",
   "网页读取不到，无需设置": "網頁讀取不到，無需設定",
   "内核暂不支持": "內核暫不支援",
-  "CPU 核数来源无效": "CPU 核心數來源無效"
+  "CPU 核数来源无效": "CPU 核心數來源無效",
+  "可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态": "選填。已在別處登入的帳號，把 Cookie 貼上或匯入到這裡，儲存後這個視窗直接是登入狀態",
+  "支持 JSON（Cookie-Editor 等插件导出）、Netscape 文本（cookies.txt），或第一行写网址、第二行写 name=value; …": "支援 JSON（Cookie-Editor 等擴充功能匯出）、Netscape 文字（cookies.txt），或第一行寫網址、第二行寫 name=value; …",
+  "从文件导入": "從檔案匯入",
+  "没有可导入的 Cookie": "沒有可匯入的 Cookie",
+  "Netscape Cookie 第 {0} 条字段不足 7 列": "Netscape Cookie 第 {0} 條欄位不足 7 欄",
+  "无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式": "無法識別 Cookie 格式：請貼上 JSON、Netscape 文字，或「name=value; …」格式",
+  "name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com": "name=value 格式的 Cookie 需要在第一行寫上網站位址，例如 https://www.tiktok.com"
 }
