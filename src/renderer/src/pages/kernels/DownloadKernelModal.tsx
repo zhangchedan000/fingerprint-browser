@@ -1,8 +1,9 @@
-import { Alert, Button, Modal, Progress, Table, Tag, type TableColumnsType } from 'antd'
+import { Alert, Button, Modal, Progress, Table, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { EngineStatus, KernelInstallProgress, KernelRelease } from '../../../../shared/types'
 import { formatBytes, humanError } from '../../components/format'
+import { kernelKnownIssue } from '../../../../shared/kernel-known-issues'
 
 interface Props {
   open: boolean
@@ -45,12 +46,19 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   }
 
   const latest = releases?.[0]?.version
+  /** Newest release without a known kernel bug: the one the dialog highlights. */
+  const recommended = releases?.find((release) => !kernelKnownIssue(release.version))?.version ?? latest
   const columns: TableColumnsType<KernelRelease> = [
     {
       title: t("版本"),
       dataIndex: 'version',
       render: (version: string) => (
-        <span>Chromium {version} {version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}</span>
+        <span>
+          Chromium {version}
+          {version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}
+          {version === recommended && version !== latest && <Tag color="green" className="fb-inline-tag">{t("推荐")}</Tag>}
+          {kernelKnownIssue(version) && <Tooltip title={t(kernelKnownIssue(version)!)}><Tag color="orange" className="fb-inline-tag">{t("有已知问题")}</Tag></Tooltip>}
+        </span>
       )
     },
     { title: t("发布时间"), dataIndex: 'publishedAt', render: (value: string) => value.slice(0, 10) },
@@ -61,7 +69,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
       render: (_, release) => release.installed
         ? <span className="fb-muted">{t("已安装")}</span>
         : (
-          <Button size="small" type={release.version === latest ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === release.version} onClick={() => void install(release.version)}>
+          <Button size="small" type={release.version === recommended ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === release.version} onClick={() => void install(release.version)}>
             {t("下载并启用")}
           </Button>
         )

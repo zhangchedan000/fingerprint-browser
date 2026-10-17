@@ -10,6 +10,7 @@ import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
+import { kernelKnownIssue } from '../../../../shared/kernel-known-issues'
 
 const FOLLOW_DEFAULT = ''
 
@@ -114,7 +115,16 @@ export function KernelsPage({ navigate }: PageProps) {
   const ready = kernels.filter((kernel) => kernel.installed && kernel.executable)
 
   const columns: TableColumnsType<KernelRelease> = [
-    { title: t("版本"), dataIndex: 'version', render: (version: string) => <span className="fb-mono">{version}</span> },
+    {
+      title: t("版本"),
+      dataIndex: 'version',
+      render: (version: string) => (
+        <span>
+          <span className="fb-mono">{version}</span>
+          {kernelKnownIssue(version) && <Tooltip title={t(kernelKnownIssue(version)!)}><Tag color="orange" className="fb-inline-tag">{t("有已知问题")}</Tag></Tooltip>}
+        </span>
+      )
+    },
     { title: t("来源"), dataIndex: 'origin', width: 150, render: (origin: KernelRelease['origin']) => originLabel(origin) },
     { title: t("文件状态"), key: 'health', width: 140, render: (_value, kernel) => healthTag(health[kernel.version]) },
     {

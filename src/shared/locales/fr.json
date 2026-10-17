@@ -1833,5 +1833,8 @@
   "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "Version du kernel inconnue, le GPU choisi est inutilisable ; importez-le avec « Importer un kernel local » ou passez à Selon la seed",
   "网页读取不到，仅用于显示和区分窗口": "Les pages web ne peuvent pas le lire ; sert seulement à distinguer les fenêtres",
   "设备名称只能包含字母、数字和连字符，最长 63 个字符": "Le nom de l’appareil ne peut contenir que lettres, chiffres et tirets, 63 caractères max.",
-  "MAC 地址格式应为 7A:C5:6F:F2:C2:84": "L’adresse MAC doit ressembler à 7A:C5:6F:F2:C2:84"
+  "MAC 地址格式应为 7A:C5:6F:F2:C2:84": "L’adresse MAC doit ressembler à 7A:C5:6F:F2:C2:84",
+  "推荐": "Recommandé",
+  "有已知问题": "Problème connu",
+  "开启指纹后部分网站（如百度）会崩溃，建议使用 148 内核": "Avec l’empreinte activée, certains sites (comme Baidu) plantent ; utilisez plutôt le noyau 148"
 }
