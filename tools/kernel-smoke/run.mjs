@@ -47,7 +47,12 @@ for (const major of versions) {
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
   const bisect = process.env.BISECT === '1'
   const variants = []
-  if (bisect) {
+  if (process.env.BISECT === 'surface') {
+    const base = (seed) => [`--user-data-dir=USERDATA`, `--fingerprint=${seed}`]
+    for (const seed of [1000, 1234567, 3150083396]) variants.push({ label: `seed ${seed}`, args: base(seed) })
+    for (const surface of ['font', 'audio', 'canvas', 'clientrects', 'gpu']) variants.push({ label: `seed 1000 off:${surface}`, args: [...base(1000), `--disable-spoofing=${surface}`] })
+    variants.push({ label: 'seed 1000 off:all', args: [...base(1000), '--disable-spoofing=font,audio,canvas,clientrects,gpu'] })
+  } else if (bisect) {
     const full = smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome')
     variants.push({ label: 'no fingerprint args', args: full.filter((arg) => arg.startsWith('--user-data-dir=')) })
     variants.push({ label: 'all args', args: full })
@@ -95,4 +100,4 @@ for (const major of versions) {
   }
 }
 console.log(`::warning title=Smoke results::${summary.join(' | ')}`)
-process.exit(failures.length && process.env.BISECT !== '1' ? 1 : 0)
+process.exit(failures.length && !process.env.BISECT ? 1 : 0)

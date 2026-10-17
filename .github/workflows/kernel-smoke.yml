@@ -7,9 +7,8 @@ on:
         description: Kernel major versions, comma separated
         default: '144,148,150'
       bisect:
-        description: Drop launch arguments one at a time to find the one that crashes
-        type: boolean
-        default: false
+        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time"
+        default: ''
       urls:
         description: Pages to open, comma separated
         default: 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/'
@@ -33,5 +32,5 @@ jobs:
         env:
           KERNELS: ${{ inputs.kernels || '144,148,150' }}
           URLS: ${{ inputs.urls || 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/' }}
-          BISECT: ${{ inputs.bisect && '1' || '' }}
+          BISECT: ${{ inputs.bisect }}
           GITHUB_TOKEN: ${{ github.token }}
