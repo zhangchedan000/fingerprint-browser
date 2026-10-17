@@ -15,21 +15,20 @@ import {
   Switch,
   Tabs,
   Tag,
-  Tooltip,
   Typography
 } from 'antd'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { defaultPlatform, defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
+import { defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
 import { fingerprintVersionWarning } from '../../../../shared/fingerprint-consistency'
 import {
   applyHardwareProfile,
   defaultHardwareProfileId,
+  editableFingerprint,
   effectiveGpu,
   gpuChoices,
-  HARDWARE_PROFILES,
-  hardwareProfile,
-  refreshSeededGpuIdentity
+  noiseCode,
+  type NoiseSurface
 } from '../../../../shared/hardware-profiles'
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
@@ -37,13 +36,11 @@ import { parsePastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
 import type {
-  FingerprintOverride,
   BrowserExtension,
   BrowserPlatform,
   BrowserProfileView,
   EngineStatus,
   FingerprintConfig,
-  HardwareProfileId,
   KernelRelease,
   PlatformAccount,
   ProfileDraft,
@@ -121,9 +118,19 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
       ? { ...profile.account }
       : { platform: '', username: '', password: '' },
     cookieText: '',
-    fingerprint: { ...draft.fingerprint, disabledSpoofing: [...draft.fingerprint.disabledSpoofing] }
+    fingerprint: editableFingerprint({ ...draft.fingerprint, disabledSpoofing: [...draft.fingerprint.disabledSpoofing] })
   }
 }
+
+/** A different item from `list` than `current` (or any item when there is no other). */
+function pickOther<T>(list: readonly T[], current: T): T {
+  const others = list.filter((item) => item !== current)
+  const pool = others.length ? others : list
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
+/** Cores a real desktop commonly has; "换一换" picks from these. */
+const COMMON_CORES = [4, 6, 8, 12, 16]
 
 /** The UA Chrome reports with the reduced user-agent policy for the chosen system and kernel. */
 function userAgentPreview(platform: BrowserPlatform, brand: string, version: string | undefined): string {
@@ -167,15 +174,37 @@ function FieldError({ name }: { name: Array<string | number> | string }) {
   )
 }
 
-/** A choice the current kernel cannot apply yet: shown, never clickable. */
-function Unsupported({ value, reason }: { value: string; reason: string }) {
+/** A fixed value the user can open to pick another (or "real"), plus a button that rolls a new one. */
+function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, label, wide }: {
+  value: string | number
+  options: Array<{ value: string | number; label: string; disabled?: boolean } | { label: string; options: Array<{ value: string | number; label: string; disabled?: boolean }> }>
+  onChange: (value: never) => void
+  onShuffle?: () => void
+  shuffleDisabled?: boolean
+  label: string
+  wide?: boolean
+}) {
   return (
-    <Tooltip title={reason}>
-      <span className="fb-unsupported">
-        <Select className="fb-fp-select" disabled value={value} options={[{ value, label: value }]} />
-      </span>
-    </Tooltip>
+    <Space size={8} className="fb-value-choice">
+      <Select<string | number>
+        className={wide ? 'fb-wide-select' : 'fb-fp-select'}
+        showSearch={wide ? { optionFilterProp: 'label' } : undefined}
+        value={value}
+        onChange={onChange as (value: string | number) => void}
+        options={options}
+        aria-label={label}
+        popupMatchSelectWidth={wide ? false : undefined}
+      />
+      {onShuffle && (
+        <Button type="link" size="small" disabled={shuffleDisabled} onClick={onShuffle} aria-label={t("换一换")}>{t("换一换")}</Button>
+      )}
+    </Space>
   )
+}
+
+/** A line that only explains what happens; there is nothing to choose. */
+function Fixed({ children }: { children: ReactNode }) {
+  return <span className="fb-fp-fixed">{children}</span>
 }
 
 /** Every IANA zone this Chromium knows, for the custom time zone dropdown. */
@@ -262,8 +291,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
-  const selectedHardware = hardwareProfile(fp.hardwareProfileId)
-  const hostMatched = selectedHardware?.hostMatched === true
   // The GPU list depends on the kernel this window will actually run.
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
@@ -279,7 +306,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }))
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
   }, [fp.platform, kernelGpus])
-  const hostPlatform = defaultPlatform()
   const followIp = fp.networkIdentityMode === 'proxy'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
@@ -296,72 +322,103 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     patchFingerprint({ disabledSpoofing: [...current] })
   }
 
-  function spoofControl(surface: SpoofSurface) {
-    const value = hostMatched || fp.disabledSpoofing.includes(surface) ? 'real' : 'random'
+  /** The GPU shown now: the picked one, or what the kernel derives from the seed. */
+  const gpuReal = fp.disabledSpoofing.includes('gpu')
+  const shownGpuKey = fp.gpu ?? (gpu ? gpuKey(gpu) : undefined)
+
+  /** New noise for every surface. The GPU is pinned first so only the noise changes. */
+  function reseedNoise(): void {
+    const current = form.getFieldValue('fingerprint') as FingerprintConfig
+    patchFingerprint({ seed: randomSeed(), gpu: current.gpu ?? shownGpuKey, renderIdentityVersion: 4 })
+  }
+
+  function noiseControl(surface: NoiseSurface, label: string) {
+    const real = fp.disabledSpoofing.includes(surface)
     return (
-      <Select
-        className="fb-fp-select"
-        disabled={hostMatched}
-        value={value}
-        onChange={(next) => setSpoofing(surface, next === 'random')}
-        options={[{ value: 'random', label: t("随机") }, { value: 'real', label: t("关闭") }]}
+      <ValueChoice
+        label={label}
+        value={real ? 'real' : 'noise'}
+        onChange={(next: string) => setSpoofing(surface, next === 'noise')}
+        options={[{ value: 'noise', label: `#${noiseCode(fp.seed, surface)}` }, { value: 'real', label: t("本机真实") }]}
+        onShuffle={reseedNoise}
+        shuffleDisabled={real}
       />
     )
   }
 
-  function chooseHardware(id: HardwareProfileId): void {
-    // A new hardware set brings its own coherent values, so hand-set overrides start over.
-    const next = applyHardwareProfile(form.getFieldValue('fingerprint'), id, { refreshSeededGpu: true })
-    form.setFieldValue('fingerprint', { ...next, overrides: [] })
+  function chooseGpu(value: string): void {
+    const disabled = (form.getFieldValue(['fingerprint', 'disabledSpoofing']) ?? []) as SpoofSurface[]
+    if (value === 'real') {
+      patchFingerprint({ gpu: undefined, disabledSpoofing: [...new Set([...disabled, 'gpu' as const])] })
+      return
+    }
+    patchFingerprint({ gpu: value, renderIdentityVersion: 4, disabledSpoofing: disabled.filter((item) => item !== 'gpu') })
   }
 
-  function setOverride(override: FingerprintOverride, enabled: boolean, patch: Partial<FingerprintConfig> = {}): void {
-    const current = new Set<FingerprintOverride>(form.getFieldValue(['fingerprint', 'overrides']) ?? [])
-    if (enabled) current.add(override)
-    else current.delete(override)
-    patchFingerprint({ ...patch, overrides: [...current] })
+  function shuffleGpu(): void {
+    if (!kernelGpus?.length) return
+    chooseGpu(pickOther(kernelGpus.map(gpuKey), shownGpuKey ?? ''))
   }
 
   function chooseScreen(mode: string): void {
     if (mode === 'host') {
       patchFingerprint({ screenSource: 'host' })
-      return
-    }
-    if (mode === 'template') {
-      const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
-      setOverride('screen', false, { screenSource: 'profile', ...(template ? { screenWidth: template.screenWidth, screenHeight: template.screenHeight } : {}) })
       setScreenCustom(false)
       return
     }
     if (mode === 'custom') {
-      setOverride('screen', true, { screenSource: 'profile' })
+      patchFingerprint({ screenSource: 'profile' })
       setScreenCustom(true)
       return
     }
-    const [width, height] = mode === 'random'
-      ? COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
-      : mode.split('x').map(Number)
-    setOverride('screen', true, { screenSource: 'profile', screenWidth: width, screenHeight: height })
+    const [width, height] = mode.split('x').map(Number)
+    patchFingerprint({ screenSource: 'profile', screenWidth: width, screenHeight: height })
     setScreenCustom(false)
   }
 
-  function chooseCores(value: number | 'template'): void {
-    if (value === 'template') {
-      const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
-      setOverride('cores', false, template ? { hardwareConcurrency: template.hardwareConcurrency } : {})
-    } else {
-      setOverride('cores', true, { hardwareConcurrency: value })
-    }
+  function shuffleScreen(): void {
+    const current = `${fp.screenWidth}x${fp.screenHeight}`
+    chooseScreen(pickOther(COMMON_SCREENS.map(([width, height]) => `${width}x${height}`), current))
+  }
+
+  function chooseCores(value: number | 'host'): void {
+    patchFingerprint(value === 'host' ? { coresSource: 'host' } : { coresSource: 'profile', hardwareConcurrency: value })
   }
 
   function choosePlatformVersion(value: string): void {
-    const template = hardwareProfile(form.getFieldValue(['fingerprint', 'hardwareProfileId']))
-    setOverride('platformVersion', value !== template?.platformVersion, { platformVersion: value })
+    patchFingerprint({ platformVersion: value })
   }
 
   function choosePlatform(platform: BrowserPlatform): void {
     if (platform === fp.platform) return
-    chooseHardware(defaultHardwareProfileId(platform))
+    // A different system brings its own coherent defaults (version, screen, cores); the GPU is
+    // rolled from the new system's list when it is known.
+    const next = applyHardwareProfile(form.getFieldValue('fingerprint'), defaultHardwareProfileId(platform), { refreshSeededGpu: true })
+    const list = kernelGpuList(windowKernelVersion, platform)
+    form.setFieldValue('fingerprint', {
+      ...next,
+      overrides: [],
+      gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
+      disabledSpoofing: next.disabledSpoofing.filter((item) => item !== 'gpu')
+    })
+  }
+
+  /** "一键随机指纹": a new computer — new noise, GPU, cores and screen. */
+  function randomizeAll(): void {
+    const list = kernelGpuList(windowKernelVersion, fp.platform)
+    const [width, height] = COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
+    patchFingerprint({
+      seed: randomSeed(),
+      gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
+      renderIdentityVersion: 4,
+      coresSource: 'profile',
+      hardwareConcurrency: COMMON_CORES[Math.floor(Math.random() * COMMON_CORES.length)],
+      screenSource: 'profile',
+      screenWidth: width,
+      screenHeight: height,
+      disabledSpoofing: []
+    })
+    setScreenCustom(false)
   }
 
   function applyPastedProxy(text: string): void {
@@ -716,17 +773,23 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     </div>
   )
 
-  const hardwareOptions = HARDWARE_PROFILES
-    .filter((item) => item.platform === fp.platform)
-    .map((item) => ({ value: item.id, label: mt(item.label), disabled: item.hostMatched && item.platform !== hostPlatform }))
-  const kernelUnsupported = t("当前内核暂不支持，编译新内核后开放")
   const screenValue = fp.screenSource === 'host'
     ? 'host'
-    : screenCustom
+    : screenCustom || !COMMON_SCREENS.some(([width, height]) => width === fp.screenWidth && height === fp.screenHeight)
       ? 'custom'
-      : fp.overrides?.includes('screen')
-        ? COMMON_SCREENS.some(([width, height]) => width === fp.screenWidth && height === fp.screenHeight) ? `${fp.screenWidth}x${fp.screenHeight}` : 'custom'
-        : 'template'
+      : `${fp.screenWidth}x${fp.screenHeight}`
+  const coreOptions = [...new Set([...CORE_OPTIONS, fp.hardwareConcurrency])].sort((a, b) => a - b)
+  const gpuValue = gpuReal ? 'real' : shownGpuKey ?? 'kernel'
+  const gpuSelectOptions = [
+    { value: 'real', label: t("本机真实") },
+    ...(!gpuReal && !shownGpuKey ? [{ value: 'kernel', label: t("由内核按种子决定") }] : []),
+    ...(gpuOptions.some((option) => !option.disabled)
+      ? [{ label: t("当前内核可用"), options: gpuOptions.filter((option) => !option.disabled) }]
+      : []),
+    ...(gpuOptions.some((option) => option.disabled)
+      ? [{ label: t("需要其他内核版本（换内核后可选）"), options: gpuOptions.filter((option) => option.disabled) }]
+      : [])
+  ]
   const languageOptions = [
     ...LANGUAGES.map(([value, label]) => ({ value, label: `${label} · ${value}` })),
     ...(fp.language && !LANGUAGES.some(([value]) => value === fp.language) ? [{ value: fp.language, label: fp.language }] : [])
@@ -736,13 +799,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     <div className="fb-editor-section">
       <div className="fb-fp-intro">
         <span>{t("每个窗口独立指纹，重启后保持不变。不确定的选项保持默认即可。")}</span>
-        <Button
-          onClick={() => form.setFieldValue('fingerprint', refreshSeededGpuIdentity({ ...form.getFieldValue('fingerprint'), seed: randomSeed() }))}
-        >{t("一键随机指纹")}</Button>
+        <Button onClick={randomizeAll}>{t("一键随机指纹")}</Button>
       </div>
-      {hostMatched && (
-        <Alert type="info" showIcon className="fb-editor-alert" title={t("使用当前设备的硬件信息")} description={t("本机硬件模板会让 Canvas、WebGL、Audio、字体和 ClientRects 都使用真实值。")} />
-      )}
 
       <h3 className="fb-fp-group">{t("基础信息")}</h3>
       <Row label={t("浏览器内核")} hint={t("每个窗口可单独指定，在内核管理里导入更多版本")}>
@@ -778,7 +836,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             aria-label={t("操作系统")}
           />
           <Select
-            disabled={hostMatched}
             className="fb-fp-select-half"
             value={fp.platformVersion}
             onChange={choosePlatformVersion}
@@ -839,8 +896,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </Space>
       </Row>
-      <Row label={t("界面语言")} hint={t("目前与语言保持一致")}>
-        <Unsupported value={t("跟随语言")} reason={kernelUnsupported} />
+      <Row label={t("界面语言")}>
+        <Fixed>{t("与上面的语言保持一致")}</Fixed>
       </Row>
       <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
         <Select
@@ -867,22 +924,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
 
       <h3 className="fb-fp-group">{t("显示")}</h3>
-      <Row label={t("分辨率")} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : `${fp.screenWidth} × ${fp.screenHeight}`}>
+      <Row label={t("分辨率")} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : undefined}>
         <Space wrap size={8}>
-          <Select
-            className="fb-fp-select"
+          <ValueChoice
+            label={t("分辨率")}
             value={screenValue}
             onChange={chooseScreen}
-            aria-label={t("分辨率")}
+            onShuffle={shuffleScreen}
             options={[
-              { value: 'template', label: t("跟随硬件配置（{0}）", selectedHardware ? `${selectedHardware.screenWidth} × ${selectedHardware.screenHeight}` : `${fp.screenWidth} × ${fp.screenHeight}`) },
-              { value: 'random', label: t("随机") },
-              { value: 'host', label: t("跟随电脑") },
+              { value: 'host', label: t("本机真实") },
               ...COMMON_SCREENS.map(([width, height]) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
-              { value: 'custom', label: t("自定义") }
+              { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
             ]}
           />
-          {screenValue === 'custom' && (
+          {screenValue === 'custom' && screenCustom && (
             <>
               <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
               <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
@@ -890,85 +945,62 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </Space>
       </Row>
-      <Row label={t("字体")}>{spoofControl('font')}</Row>
+      <Row label={t("字体")}>{noiseControl('font', t("字体"))}</Row>
 
       <h3 className="fb-fp-group">{t("硬件指纹")}</h3>
-      <Row label={t("硬件配置")} hint={selectedHardware ? `${t("{0} 核", selectedHardware.hardwareConcurrency)} · ${selectedHardware.physicalMemoryGb} GB · ${mt(gpu?.model ?? selectedHardware.gpuModel)}` : t("旧版自定义配置（保持原指纹）")}>
-        <Select
-          className="fb-wide-select"
-          value={fp.hardwareProfileId}
-          onChange={chooseHardware}
-          options={[
-            ...hardwareOptions,
-            ...(fp.hardwareProfileId === 'legacy-custom' ? [{ value: 'legacy-custom' as const, label: t("旧版自定义配置（保持原指纹）"), disabled: false }] : [])
-          ]}
+      <Row
+        label={t("显卡")}
+        hint={gpuReal
+          ? t("使用这台电脑的真实显卡（WebGL、WebGPU 一起）")
+          : [gpu?.renderer, windowKernelVersion && (kernelGpus ? t("内核 {0} 的显卡清单", windowKernelVersion) : t("内核 {0} 还没有显卡清单", windowKernelVersion))].filter(Boolean).join(' · ')}
+      >
+        <ValueChoice
+          wide
+          label={t("显卡")}
+          value={gpuValue}
+          onChange={chooseGpu}
+          onShuffle={shuffleGpu}
+          shuffleDisabled={!kernelGpus?.length}
+          options={gpuSelectOptions}
         />
       </Row>
-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && (
-        <Row
-          label={t("显卡型号")}
-          hint={kernelGpus
-            ? t("当前窗口使用内核 {0}，灰色的显卡这个版本里没有", windowKernelVersion ?? '')
-            : t("当前内核没有显卡清单，只能按种子随机")}
-        >
-          <Select
-            className="fb-wide-select"
-            showSearch={{ optionFilterProp: 'label' }}
-            aria-label={t("显卡型号")}
-            value={fp.gpu ?? 'seed'}
-            onChange={(value: string) => patchFingerprint(value === 'seed' ? { gpu: undefined } : { gpu: value, renderIdentityVersion: 4 })}
-            options={[
-              { value: 'seed', label: !fp.gpu && gpu ? t("按种子随机（当前为 {0}）", gpuLabel(gpu)) : t("按种子随机") },
-              ...gpuOptions
-            ]}
-          />
-        </Row>
-      )}
       {gpuMissing && (
         <Alert type="warning" showIcon className="fb-editor-alert" title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')} />
       )}
-      <Row label="Canvas">{spoofControl('canvas')}</Row>
-      <Row label={t("WebGL 图像")} hint={t("与 WebGL 元数据一起开关")}>
-        <Unsupported value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
-      </Row>
-      <Row label={t("WebGL 元数据")} hint={mt(gpu?.model ?? selectedHardware?.gpuModel ?? '')}>{spoofControl('gpu')}</Row>
-      <Row label="WebGPU" hint={t("与 WebGL 元数据一起开关")}>
-        <Unsupported value={hostMatched || fp.disabledSpoofing.includes('gpu') ? t("关闭") : t("随机")} reason={kernelUnsupported} />
-      </Row>
-      <Row label="AudioContext">{spoofControl('audio')}</Row>
-      <Row label="ClientRects">{spoofControl('clientrects')}</Row>
-      <Row label="SpeechVoices" hint={t("自动与系统和语言保持一致")}>
-        <Unsupported value={t("随机")} reason={kernelUnsupported} />
-      </Row>
-      <Row label={t("媒体设备")}>
-        <Unsupported value={t("随机")} reason={kernelUnsupported} />
-      </Row>
       <Row label={t("硬件并发数")}>
-        <Select
-          disabled={hostMatched}
-          className="fb-fp-select"
-          value={fp.overrides?.includes('cores') ? fp.hardwareConcurrency : 'template'}
+        <ValueChoice
+          label={t("硬件并发数")}
+          value={fp.coresSource === 'host' ? 'host' : fp.hardwareConcurrency}
           onChange={chooseCores}
-          aria-label={t("硬件并发数")}
-          options={[
-            { value: 'template', label: t("跟随硬件配置（{0} 核）", selectedHardware?.hardwareConcurrency ?? fp.hardwareConcurrency) },
-            ...CORE_OPTIONS.map((value) => ({ value, label: t("{0} 核", value) }))
-          ]}
+          onShuffle={() => chooseCores(pickOther(COMMON_CORES, fp.hardwareConcurrency))}
+          options={[{ value: 'host', label: t("本机真实") }, ...coreOptions.map((value) => ({ value, label: t("{0} 核", value) }))]}
         />
       </Row>
       <Row label={t("设备内存")} hint={t("浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效")}>
-        <Select
-          className="fb-fp-select"
+        <ValueChoice
+          label={t("设备内存")}
           value={fp.deviceMemory ?? 8}
           onChange={(value: 2 | 4 | 8) => patchFingerprint({ deviceMemory: value })}
+          onShuffle={() => patchFingerprint({ deviceMemory: pickOther([2, 4, 8] as const, fp.deviceMemory ?? 8) })}
           options={[2, 4, 8].map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
+      <Row label="Canvas">{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="AudioContext">{noiseControl('audio', 'AudioContext')}</Row>
+      <Row label="ClientRects" hint={t("噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
+        {noiseControl('clientrects', 'ClientRects')}
+      </Row>
+      <Row label="SpeechVoices">
+        <Fixed>{t("由内核自动与系统和语言保持一致")}</Fixed>
+      </Row>
+      <Row label={t("媒体设备")}>
+        <Fixed>{t("使用本机真实设备；网站未经授权只能看到数量，看不到名称")}</Fixed>
+      </Row>
       <Row label={t("设备名称")}>
-        <Unsupported value={t("随机")} reason={kernelUnsupported} />
+        <Fixed>{t("网页读取不到，无需设置")}</Fixed>
       </Row>
       <Row label={t("MAC 地址")}>
-        <Unsupported value={t("随机")} reason={kernelUnsupported} />
+        <Fixed>{t("网页读取不到，无需设置")}</Fixed>
       </Row>
 
       <h3 className="fb-fp-group">{t("其他")}</h3>
@@ -981,7 +1013,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       <Row label={t("端口扫描保护")}>
-        <Unsupported value={t("开启")} reason={kernelUnsupported} />
+        <Fixed>{t("内核暂不支持")}</Fixed>
       </Row>
     </div>
   )

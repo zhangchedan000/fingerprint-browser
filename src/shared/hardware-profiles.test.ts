@@ -108,3 +108,29 @@ describe('coherent hardware profiles', () => {
     expect(saved.fingerprint.gpuBucket).toBeUndefined()
   })
 })
+
+describe('editing old templates', () => {
+  it('shows a fixed template as the seeded one with the same GPU', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const fixed = applyHardwareProfile(defaultFingerprint(5), 'windows-11-rtx4060')
+    const editable = editableFingerprint(fixed)
+    expect(editable).toMatchObject({ hardwareProfileId: 'windows-seeded-nvidia', gpu: 'NVIDIA GeForce RTX 4060|0x00002882', hardwareConcurrency: 12 })
+  })
+
+  it('shows a host template as real GPU, cores and rendering', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const host = applyHardwareProfile({ ...defaultFingerprint(5), platform: 'windows' }, 'windows-host')
+    const editable = editableFingerprint(host)
+    expect(editable.hardwareProfileId).toBe('windows-seeded-nvidia')
+    expect(editable.coresSource).toBe('host')
+    expect([...editable.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
+  })
+
+  it('gives every surface its own stable noise code', async () => {
+    const { noiseCode } = await import('./hardware-profiles')
+    expect(noiseCode(1, 'canvas')).toBe(noiseCode(1, 'canvas'))
+    expect(noiseCode(1, 'canvas')).not.toBe(noiseCode(2, 'canvas'))
+    expect(noiseCode(1, 'canvas')).not.toBe(noiseCode(1, 'audio'))
+    expect(noiseCode(1, 'canvas')).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/)
+  })
+})

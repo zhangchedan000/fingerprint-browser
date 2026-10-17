@@ -1745,5 +1745,21 @@
   "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0} does not have GPU {1}; choose another in the window settings",
   "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} has no GPU list yet, so GPU {1} cannot be used; switch to Follow seed or use a supported kernel",
   "Windows · 种子独立显卡（推荐多环境）": "Windows · Seed-based GPU (recommended for many windows)",
-  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8-core CPU, 16GB RAM, 1920×1080; the GPU is picked from the kernel's list by seed, or chosen by hand."
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8-core CPU, 16GB RAM, 1920×1080; the GPU is picked from the kernel's list by seed, or chosen by hand.",
+  "换一换": "Shuffle",
+  "本机真实": "This computer (real)",
+  "由内核按种子决定": "Chosen by the kernel from the seed",
+  "当前内核可用": "Available in this kernel",
+  "需要其他内核版本（换内核后可选）": "Needs another kernel version (switch kernel to pick)",
+  "与上面的语言保持一致": "Same as the language above",
+  "显卡": "GPU",
+  "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Uses this computer's real GPU (WebGL and WebGPU together)",
+  "内核 {0} 的显卡清单": "GPU list of kernel {0}",
+  "内核 {0} 还没有显卡清单": "Kernel {0} has no GPU list yet",
+  "噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换": "Same noise code = same noise. Fonts, Canvas, Audio and ClientRects share one seed, so Shuffle changes them together",
+  "由内核自动与系统和语言保持一致": "The kernel keeps it consistent with the system and language",
+  "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Uses this computer's real devices; without permission sites only see how many, not their names",
+  "网页读取不到，无需设置": "Web pages cannot read this; nothing to set",
+  "内核暂不支持": "Not supported by the kernel yet",
+  "CPU 核数来源无效": "Invalid CPU core source"
 }

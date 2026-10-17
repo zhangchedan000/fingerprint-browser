@@ -50,7 +50,6 @@ export interface PlatformAccount {
 export interface FingerprintConfig {
   seed: number
   hardwareProfileId: HardwareProfileId
-  /** Kernel GPU catalogue bucket pinned for profile-lifetime stability. */
   /** Picked GPU (key from gpu-catalog: model|deviceId). Unset = the kernel picks one by seed. */
   gpu?: string
   /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
@@ -78,6 +77,8 @@ export interface FingerprintConfig {
    * Missing on older profiles, which keep following their template exactly.
    */
   overrides?: FingerprintOverride[]
+  /** 'host' reports this computer's real CPU core count at launch. Default: the stored count. */
+  coresSource?: 'profile' | 'host'
   /** 'host' reports the real primary display size at launch. Default: the stored size. */
   screenSource?: 'profile' | 'host'
   /** Default geolocation permission for sites. Default: ask. */

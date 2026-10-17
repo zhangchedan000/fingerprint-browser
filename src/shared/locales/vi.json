@@ -1745,5 +1745,21 @@
   "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0} không có GPU {1}; hãy chọn lại trong cài đặt cửa sổ",
   "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} chưa có danh sách GPU nên không dùng được GPU {1}; hãy chuyển sang Theo seed hoặc dùng kernel được hỗ trợ",
   "Windows · 种子独立显卡（推荐多环境）": "Windows · GPU theo seed (khuyên dùng cho nhiều cửa sổ)",
-  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU 8 nhân, RAM 16GB, 1920×1080; GPU được chọn theo seed từ danh sách kernel, hoặc chọn thủ công."
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU 8 nhân, RAM 16GB, 1920×1080; GPU được chọn theo seed từ danh sách kernel, hoặc chọn thủ công.",
+  "换一换": "Đổi",
+  "本机真实": "Thật (máy này)",
+  "由内核按种子决定": "Do kernel chọn theo seed",
+  "当前内核可用": "Có trong kernel này",
+  "需要其他内核版本（换内核后可选）": "Cần phiên bản kernel khác (đổi kernel để chọn)",
+  "与上面的语言保持一致": "Giống ngôn ngữ ở trên",
+  "显卡": "GPU",
+  "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Dùng GPU thật của máy này (WebGL và WebGPU cùng lúc)",
+  "内核 {0} 的显卡清单": "Danh sách GPU của kernel {0}",
+  "内核 {0} 还没有显卡清单": "Kernel {0} chưa có danh sách GPU",
+  "噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换": "Cùng mã nhiễu là cùng một bộ nhiễu. Phông chữ, Canvas, Audio, ClientRects dùng chung seed nên Đổi sẽ đổi cùng lúc",
+  "由内核自动与系统和语言保持一致": "Kernel tự khớp với hệ thống và ngôn ngữ",
+  "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Dùng thiết bị thật; khi chưa cấp quyền, trang web chỉ thấy số lượng, không thấy tên",
+  "网页读取不到，无需设置": "Trang web không đọc được; không cần cài đặt",
+  "内核暂不支持": "Kernel chưa hỗ trợ",
+  "CPU 核数来源无效": "Nguồn số nhân CPU không hợp lệ"
 }

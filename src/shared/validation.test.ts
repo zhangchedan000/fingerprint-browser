@@ -123,18 +123,27 @@ describe('profile validation', () => {
     expect(result.tags).toEqual(['重点', '广告'])
   })
 
-  it('keeps the template values unless a value is marked as hand-set', () => {
+  it('keeps each value of a seeded window; old fixed templates still own theirs', () => {
     const draft = defaultProfileDraft()
-    const templated = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 } })
-    expect(templated.fingerprint.screenWidth).toBe(draft.fingerprint.screenWidth)
-    expect(templated.fingerprint.hardwareConcurrency).toBe(draft.fingerprint.hardwareConcurrency)
-    expect(templated.fingerprint.overrides).toBeUndefined()
+    const seeded = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 } })
+    expect(seeded.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 })
 
-    const custom = validateProfileDraft({
+    const fixed = validateProfileDraft({
       ...draft,
-      fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12, platformVersion: '15.0.0', overrides: ['screen', 'cores', 'platformVersion', 'screen'] }
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 }
     })
-    expect(custom.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12, platformVersion: '15.0.0', overrides: ['screen', 'cores', 'platformVersion'] })
+    expect(fixed.fingerprint).toMatchObject({ screenWidth: 2560, screenHeight: 1440, hardwareConcurrency: 16 })
+    const fixedHandSet = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, overrides: ['screen', 'screen'] }
+    })
+    expect(fixedHandSet.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, overrides: ['screen'] })
+  })
+
+  it('stores "real CPU cores" and leaves it out when not used', () => {
+    const draft = defaultProfileDraft()
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'host' } }).fingerprint.coresSource).toBe('host')
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'profile' } }).fingerprint).not.toHaveProperty('coresSource')
   })
 
   it('validates the new site permission and screen options and omits defaults', () => {

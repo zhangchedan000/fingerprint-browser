@@ -342,3 +342,5 @@ button, input, textarea { font: inherit; }
 .fb-settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
 
 .fb-block-gap { display: block; margin-bottom: 12px; }
+.fb-value-choice { align-self: flex-start; }
+.fb-fp-fixed { align-self: flex-start; padding: 5px 0; color: var(--fb-text-secondary); font-size: 13px; }

@@ -31,7 +31,7 @@ export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' |
 export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgumentOptions): string[] {
   const fp = profile.fingerprint
   const hardware = hardwareProfile(fp.hardwareProfileId)
-  const hardwareConcurrency = hardware?.hostMatched && options.hostHardwareConcurrency
+  const hardwareConcurrency = (hardware?.hostMatched || fp.coresSource === 'host') && options.hostHardwareConcurrency
     ? options.hostHardwareConcurrency
     : fp.hardwareConcurrency
   const platformVersion = hardware?.hostMatched && options.hostPlatformVersion

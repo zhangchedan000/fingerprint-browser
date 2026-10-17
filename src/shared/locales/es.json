@@ -1745,5 +1745,21 @@
   "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "El kernel {0} no tiene la GPU {1}; elige otra en la configuración de la ventana",
   "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "El kernel {0} aún no tiene lista de GPU, así que no se puede usar la GPU {1}; cambia a Según la semilla o usa un kernel compatible",
   "Windows · 种子独立显卡（推荐多环境）": "Windows · GPU según semilla (recomendado para muchas ventanas)",
-  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU de 8 núcleos, 16GB de RAM, 1920×1080; la GPU se elige por semilla de la lista del kernel, o a mano."
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU de 8 núcleos, 16GB de RAM, 1920×1080; la GPU se elige por semilla de la lista del kernel, o a mano.",
+  "换一换": "Cambiar",
+  "本机真实": "Real (este equipo)",
+  "由内核按种子决定": "La elige el kernel según la semilla",
+  "当前内核可用": "Disponible en este kernel",
+  "需要其他内核版本（换内核后可选）": "Requiere otra versión del kernel (cambia de kernel)",
+  "与上面的语言保持一致": "Igual que el idioma de arriba",
+  "显卡": "GPU",
+  "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Usa la GPU real de este equipo (WebGL y WebGPU juntos)",
+  "内核 {0} 的显卡清单": "Lista de GPU del kernel {0}",
+  "内核 {0} 还没有显卡清单": "El kernel {0} aún no tiene lista de GPU",
+  "噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换": "Mismo código = mismo ruido. Fuentes, Canvas, Audio y ClientRects comparten una semilla, así que Cambiar los cambia juntos",
+  "由内核自动与系统和语言保持一致": "El kernel lo mantiene coherente con el sistema y el idioma",
+  "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Usa los dispositivos reales; sin permiso el sitio solo ve cuántos hay, no sus nombres",
+  "网页读取不到，无需设置": "Las páginas web no pueden leerlo; no hay que configurarlo",
+  "内核暂不支持": "El kernel aún no lo admite",
+  "CPU 核数来源无效": "Origen de núcleos de CPU no válido"
 }

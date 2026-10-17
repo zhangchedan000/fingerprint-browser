@@ -1,6 +1,6 @@
-import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
+import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
-import type { GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
+import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -93,14 +93,19 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     : undefined
   const templated = applyHardwareProfile({ ...rawFp, gpu: rawFp.gpu ?? legacyGpu, hardwareProfileId }, hardwareProfileId)
   // Hand-set values win over the template; everything else stays coherent with it.
+  // Seeded windows set every value on its own; only old fixed/host templates still own theirs.
+  const ownValues = (item: FingerprintOverride) => overrides.includes(item)
+    || hardwareProfile(hardwareProfileId)?.renderIdentityMode === 'seeded-curated'
   const fp = {
     ...templated,
-    screenWidth: overrides.includes('screen') ? rawFp.screenWidth : templated.screenWidth,
-    screenHeight: overrides.includes('screen') ? rawFp.screenHeight : templated.screenHeight,
-    hardwareConcurrency: overrides.includes('cores') ? rawFp.hardwareConcurrency : templated.hardwareConcurrency,
-    platformVersion: overrides.includes('platformVersion') ? rawFp.platformVersion : templated.platformVersion
+    screenWidth: ownValues('screen') ? rawFp.screenWidth ?? templated.screenWidth : templated.screenWidth,
+    screenHeight: ownValues('screen') ? rawFp.screenHeight ?? templated.screenHeight : templated.screenHeight,
+    hardwareConcurrency: ownValues('cores') ? rawFp.hardwareConcurrency ?? templated.hardwareConcurrency : templated.hardwareConcurrency,
+    platformVersion: ownValues('platformVersion') ? rawFp.platformVersion ?? templated.platformVersion : templated.platformVersion
   }
   if (rawFp.deviceMemory !== undefined && ![2, 4, 8].includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4 或 8 GB')
+  const coresSource = rawFp.coresSource ?? 'profile'
+  if (coresSource !== 'profile' && coresSource !== 'host') throw new Error('CPU 核数来源无效')
   const screenSource = rawFp.screenSource ?? 'profile'
   if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
   const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
@@ -202,6 +207,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       disabledSpoofing: [...fp.disabledSpoofing],
       ...(overrides.length ? { overrides } : {}),
       ...(screenSource !== 'profile' ? { screenSource } : {}),
+      ...(coresSource !== 'profile' ? { coresSource } : {}),
       ...(rawFp.deviceMemory !== undefined && rawFp.deviceMemory !== 8 ? { deviceMemory: rawFp.deviceMemory } : {}),
       ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
       ...(doNotTrack !== 'default' ? { doNotTrack } : {})

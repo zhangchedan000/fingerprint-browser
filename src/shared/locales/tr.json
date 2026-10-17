@@ -1745,5 +1745,21 @@
   "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0}, {1} GPU'suna sahip değil; pencere ayarlarından başka birini seçin",
   "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} için GPU listesi yok, bu yüzden {1} GPU'su kullanılamaz; Seed'e göre seçeneğine geçin veya desteklenen bir kernel kullanın",
   "Windows · 种子独立显卡（推荐多环境）": "Windows · Seed'e göre GPU (çok pencere için önerilir)",
-  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8 çekirdekli CPU, 16GB RAM, 1920×1080; GPU kernel listesinden seed'e göre ya da elle seçilir."
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8 çekirdekli CPU, 16GB RAM, 1920×1080; GPU kernel listesinden seed'e göre ya da elle seçilir.",
+  "换一换": "Değiştir",
+  "本机真实": "Gerçek (bu bilgisayar)",
+  "由内核按种子决定": "Kernel seed'e göre seçer",
+  "当前内核可用": "Bu kernel'de var",
+  "需要其他内核版本（换内核后可选）": "Başka kernel sürümü gerekir (kernel'i değiştirin)",
+  "与上面的语言保持一致": "Yukarıdaki dille aynı",
+  "显卡": "GPU",
+  "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Bu bilgisayarın gerçek GPU'su (WebGL ve WebGPU birlikte)",
+  "内核 {0} 的显卡清单": "Kernel {0} GPU listesi",
+  "内核 {0} 还没有显卡清单": "Kernel {0} için GPU listesi yok",
+  "噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换": "Aynı kod = aynı gürültü. Yazı tipleri, Canvas, Audio ve ClientRects tek seed paylaşır; Değiştir hepsini birlikte değiştirir",
+  "由内核自动与系统和语言保持一致": "Kernel sistem ve dille otomatik uyumlu tutar",
+  "使用本机真实设备；网站未经授权只能看到数量，看不到名称": "Gerçek cihazlar kullanılır; izin olmadan site yalnızca sayısını görür, adlarını görmez",
+  "网页读取不到，无需设置": "Web sayfaları bunu okuyamaz; ayar gerekmez",
+  "内核暂不支持": "Kernel henüz desteklemiyor",
+  "CPU 核数来源无效": "Geçersiz CPU çekirdek kaynağı"
 }
