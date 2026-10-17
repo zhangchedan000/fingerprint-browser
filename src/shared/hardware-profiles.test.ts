@@ -126,11 +126,4 @@ describe('editing old templates', () => {
     expect([...editable.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
   })
 
-  it('gives every surface its own stable noise code', async () => {
-    const { noiseCode } = await import('./hardware-profiles')
-    expect(noiseCode(1, 'canvas')).toBe(noiseCode(1, 'canvas'))
-    expect(noiseCode(1, 'canvas')).not.toBe(noiseCode(2, 'canvas'))
-    expect(noiseCode(1, 'canvas')).not.toBe(noiseCode(1, 'audio'))
-    expect(noiseCode(1, 'canvas')).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/)
-  })
 })

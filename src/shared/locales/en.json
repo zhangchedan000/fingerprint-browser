@@ -1830,5 +1830,8 @@
   "后台线程（Worker）没有响应，无法核对": "The background thread (Worker) did not answer, so it could not be compared",
   "后台线程（Worker）报告的 {0} 与页面不一致": "The background thread (Worker) reports a different {0} than the page",
   "页面与后台线程（Worker）信息一致，没有自动化痕迹": "Page and background thread (Worker) agree; no automation traces",
-  "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "The kernel version is unknown, so a chosen GPU cannot be used; import it with “Import local kernel” under Kernels, or set the GPU to Follow seed"
+  "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "The kernel version is unknown, so a chosen GPU cannot be used; import it with “Import local kernel” under Kernels, or set the GPU to Follow seed",
+  "网页读取不到，仅用于显示和区分窗口": "Web pages cannot read this; shown only to tell windows apart",
+  "设备名称只能包含字母、数字和连字符，最长 63 个字符": "Device name may only contain letters, digits and hyphens, up to 63 characters",
+  "MAC 地址格式应为 7A:C5:6F:F2:C2:84": "MAC address must look like 7A:C5:6F:F2:C2:84"
 }

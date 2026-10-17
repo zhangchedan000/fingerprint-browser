@@ -52,6 +52,10 @@ export interface FingerprintConfig {
   hardwareProfileId: HardwareProfileId
   /** Picked GPU (key from gpu-catalog: model|deviceId). Unset = the kernel picks one by seed. */
   gpu?: string
+  /** Shown in the editor only (web pages cannot read it); unset = derived from the seed. */
+  deviceName?: string
+  /** Shown in the editor only (web pages cannot read it), e.g. 7A:C5:6F:F2:C2:84; unset = derived from the seed. */
+  macAddress?: string
   /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
   gpuBucket?: number
   /** navigator.deviceMemory in GB (2, 4 or 8). Unset = 8. Needs a kernel with patch 045. */
@@ -348,6 +352,7 @@ export interface FingerprintObserved {
   webgpuVendor?: string
   /** Each surface is read twice: real hardware gives the same result both times. */
   canvas: [string, string]
+  /** The audio sample sum detection sites show, e.g. 124.04347527516074. */
   audio: [string, string]
   clientrects: [string, string]
   font: [string, string]

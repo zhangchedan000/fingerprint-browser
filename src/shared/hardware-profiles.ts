@@ -294,17 +294,3 @@ export function editableFingerprint(config: FingerprintConfig): FingerprintConfi
   return { ...rest, hardwareProfileId: seeded, gpu: profile?.gpu ?? config.gpu, renderIdentityVersion: 4 }
 }
 
-export type NoiseSurface = 'canvas' | 'audio' | 'clientrects' | 'font'
-
-/**
- * A short code for the noise a window adds to one surface, e.g. "3F9A-21C7". It only identifies
- * the noise (same code = same noise); the value a site computes needs a real browser run.
- */
-export function noiseCode(seed: number, surface: NoiseSurface): string {
-  let hash = 0x811c9dc5 ^ (seed >>> 0)
-  for (const char of surface) hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193)
-  hash = Math.imul(hash ^ (hash >>> 15), 0x2c1b3c6d)
-  hash = Math.imul(hash ^ (hash >>> 12), 0x297a2d39)
-  const hex = ((hash ^ (hash >>> 15)) >>> 0).toString(16).toUpperCase().padStart(8, '0')
-  return `${hex.slice(0, 4)}-${hex.slice(4)}`
-}

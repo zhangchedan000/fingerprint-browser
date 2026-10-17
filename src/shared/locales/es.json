@@ -1830,5 +1830,8 @@
   "后台线程（Worker）没有响应，无法核对": "El hilo en segundo plano (Worker) no respondió",
   "后台线程（Worker）报告的 {0} 与页面不一致": "El hilo en segundo plano (Worker) informa {0} distinto de la página",
   "页面与后台线程（Worker）信息一致，没有自动化痕迹": "La página y el hilo (Worker) coinciden; sin rastros de automatización",
-  "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "Versión del kernel desconocida, no se puede usar la GPU elegida; impórtalo con “Importar kernel local” o usa Según la semilla"
+  "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "Versión del kernel desconocida, no se puede usar la GPU elegida; impórtalo con “Importar kernel local” o usa Según la semilla",
+  "网页读取不到，仅用于显示和区分窗口": "Las páginas no pueden leerlo; solo sirve para distinguir ventanas",
+  "设备名称只能包含字母、数字和连字符，最长 63 个字符": "El nombre del dispositivo solo admite letras, números y guiones, hasta 63 caracteres",
+  "MAC 地址格式应为 7A:C5:6F:F2:C2:84": "La dirección MAC debe ser como 7A:C5:6F:F2:C2:84"
 }

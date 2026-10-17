@@ -37,7 +37,7 @@ const PROBE = String.raw`(async () => {
     ctx.beginPath(); ctx.arc(240, 30, 18, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke();
     return digest(canvas.toDataURL());
   };
-  const audioHash = async () => {
+  const audioSum = async () => {
     const context = new OfflineAudioContext(1, 5000, 44100);
     const oscillator = context.createOscillator();
     oscillator.type = 'triangle'; oscillator.frequency.value = 10000;
@@ -46,7 +46,7 @@ const PROBE = String.raw`(async () => {
     const buffer = await context.startRendering();
     const data = buffer.getChannelData(0);
     let sum = 0; for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
-    return digest(sum.toString());
+    return sum.toString();
   };
   const rectsHash = async () => {
     const span = document.createElement('span');
@@ -93,7 +93,7 @@ const PROBE = String.raw`(async () => {
     }
   } catch {}
   out.canvas = [await canvasHash(), await canvasHash()];
-  out.audio = [await audioHash(), await audioHash()];
+  out.audio = [await audioSum(), await audioSum()];
   out.clientrects = [await rectsHash(), await rectsHash()];
   out.font = [await fontHash(), await fontHash()];
   try {

@@ -1,3 +1,4 @@
+import { deviceName, macAddress } from './device-identity'
 import { t } from './i18n'
 import type { BrowserPlatform, FingerprintConfig, PlatformAccount, ProfileDraft, ProfileWindowConfig } from './types'
 import { applyHardwareProfile, defaultHardwareProfileId } from './hardware-profiles'
@@ -44,7 +45,11 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     screenHeight: 900,
     disabledSpoofing: []
   }
-  return applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true })
+  return {
+    ...applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true }),
+    deviceName: deviceName(seed, platform),
+    macAddress: macAddress(seed)
+  }
 }
 
 export function defaultProfileWindow(): ProfileWindowConfig {

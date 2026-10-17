@@ -28,10 +28,9 @@ import {
   defaultHardwareProfileId,
   editableFingerprint,
   effectiveGpu,
-  gpuChoices,
-  noiseCode,
-  type NoiseSurface
+  gpuChoices
 } from '../../../../shared/hardware-profiles'
+import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
@@ -239,6 +238,16 @@ function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, lab
   )
 }
 
+/** A typed value with a Shuffle button (device name, MAC address). */
+function TextWithShuffle({ value, onChange, onShuffle, label }: { value: string; onChange: (value: string) => void; onShuffle: () => void; label: string }) {
+  return (
+    <Space size={8} className="fb-value-choice">
+      <Input className="fb-fp-select fb-mono" value={value} onChange={(event) => onChange(event.target.value)} aria-label={label} />
+      <Button type="link" size="small" onClick={onShuffle}>{t("换一换")}</Button>
+    </Space>
+  )
+}
+
 /** A line that only explains what happens; there is nothing to choose. */
 function Fixed({ children }: { children: ReactNode }) {
   return <span className="fb-fp-fixed">{children}</span>
@@ -383,9 +392,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const shownGpuKey = fp.gpu ?? (gpu ? gpuKey(gpu) : undefined)
 
   /** New noise for every surface. The GPU is pinned first so only the noise changes. */
+  // Device name and MAC: stored once shuffled or typed, otherwise derived from the seed.
+  const shownDeviceName = fp.deviceName || deviceName(fp.seed, fp.platform)
+  const shownMacAddress = fp.macAddress || macAddress(fp.seed)
+
+  /** New noise for every surface. GPU, device name and MAC are pinned first so only the noise changes. */
   function reseedNoise(): void {
     const current = form.getFieldValue('fingerprint') as FingerprintConfig
-    patchFingerprint({ seed: randomSeed(), gpu: current.gpu ?? shownGpuKey, renderIdentityVersion: 4 })
+    patchFingerprint({
+      seed: randomSeed(),
+      gpu: current.gpu ?? shownGpuKey,
+      deviceName: shownDeviceName,
+      macAddress: shownMacAddress,
+      renderIdentityVersion: 4
+    })
+  }
+
+  /** The value a site sees: measured by the last check when it is still current, else derived from the seed. */
+  function shownNoise(surface: NoiseSurface): string {
+    if (checkReport && !checkStale) return checkReport.observed[surface][0]
+    return noiseValue(fp.seed, surface)
   }
 
   function noiseControl(surface: NoiseSurface, label: string) {
@@ -395,7 +421,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label={label}
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
-        options={[{ value: 'noise', label: `#${noiseCode(fp.seed, surface)}` }, { value: 'real', label: t("本机真实") }]}
+        options={[{ value: 'noise', label: shownNoise(surface) }, { value: 'real', label: t("本机真实") }]}
         onShuffle={reseedNoise}
         shuffleDisabled={real}
       />
@@ -455,7 +481,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       ...next,
       overrides: [],
       gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
-      disabledSpoofing: next.disabledSpoofing.filter((item) => item !== 'gpu')
+      disabledSpoofing: next.disabledSpoofing.filter((item) => item !== 'gpu'),
+      // "DESKTOP-…" on Windows, "Name-MacBook-Pro" on macOS.
+      deviceName: deviceName(randomSeed(), platform)
     })
   }
 
@@ -472,7 +500,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       screenSource: 'profile',
       screenWidth: width,
       screenHeight: height,
-      disabledSpoofing: []
+      disabledSpoofing: [],
+      deviceName: deviceName(randomSeed(), fp.platform),
+      macAddress: macAddress(randomSeed())
     })
     setScreenCustom(false)
   }
@@ -1090,7 +1120,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row label="Canvas" check={checkFor('canvas')}>{noiseControl('canvas', 'Canvas')}</Row>
       <Row label="AudioContext" check={checkFor('audio')}>{noiseControl('audio', 'AudioContext')}</Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
+      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
         {noiseControl('clientrects', 'ClientRects')}
       </Row>
       <Row label="SpeechVoices">
@@ -1099,11 +1129,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label={t("媒体设备")}>
         <Fixed>{t("使用本机真实设备；网站未经授权只能看到数量，看不到名称")}</Fixed>
       </Row>
-      <Row label={t("设备名称")}>
-        <Fixed>{t("网页读取不到，无需设置")}</Fixed>
+      <Row label={t("设备名称")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
+        <TextWithShuffle
+          label={t("设备名称")}
+          value={shownDeviceName}
+          onChange={(value) => patchFingerprint({ deviceName: value })}
+          onShuffle={() => patchFingerprint({ deviceName: deviceName(randomSeed(), fp.platform) })}
+        />
       </Row>
-      <Row label={t("MAC 地址")}>
-        <Fixed>{t("网页读取不到，无需设置")}</Fixed>
+      <Row label={t("MAC 地址")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
+        <TextWithShuffle
+          label={t("MAC 地址")}
+          value={shownMacAddress}
+          onChange={(value) => patchFingerprint({ macAddress: value })}
+          onShuffle={() => patchFingerprint({ macAddress: macAddress(randomSeed()) })}
+        />
       </Row>
 
       <h3 className="fb-fp-group">{t("其他")}</h3>
