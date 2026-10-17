@@ -30,6 +30,7 @@ function findFile(dir, name, depth = 0) {
 }
 
 const failures = []
+const summary = []
 for (const major of versions) {
   const release = releases.find((item) => item.tag_name.startsWith(`${major}.`))
   const asset = release?.assets.find((item) => item.name.endsWith(assetSuffix))
@@ -41,10 +42,24 @@ for (const major of versions) {
   execFileSync('tar', ['-xf', archive], { cwd: folder })
   const chrome = findFile(folder, process.platform === 'win32' ? 'chrome.exe' : 'chrome')
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
-  for (const platform of ['windows', 'macos']) {
-    for (const brand of ['Chrome', 'Edge']) {
+  const bisect = process.env.BISECT === '1'
+  const variants = []
+  if (bisect) {
+    const full = smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome')
+    variants.push({ label: 'no fingerprint args', args: full.filter((arg) => arg.startsWith('--user-data-dir=')) })
+    variants.push({ label: 'all args', args: full })
+    for (const arg of full) {
+      if (arg.startsWith('--user-data-dir=')) continue
+      variants.push({ label: `without ${arg.split('=')[0]}`, args: full.filter((item) => item !== arg) })
+    }
+  } else {
+    for (const platform of ['windows', 'macos']) {
+      for (const brand of ['Chrome', 'Edge']) variants.push({ label: `${platform} · ${brand}`, args: smokeArgs('USERDATA', release.tag_name, platform, brand) })
+    }
+  }
+  for (const variant of variants) {
       const userDataDir = mkdtempSync(join(work, 'profile-'))
-      const args = smokeArgs(userDataDir, release.tag_name, platform, brand)
+      const args = variant.args.map((arg) => arg.replace('USERDATA', userDataDir))
       const child = spawn(chrome, [...args, '--remote-debugging-port=0', '--enable-logging=stderr', '--v=0', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
       let log = ''
       child.stderr.on('data', (data) => { log += data })
@@ -54,7 +69,7 @@ for (const major of versions) {
         const file = join(userDataDir, 'DevToolsActivePort')
         if (existsSync(file)) port = readFileSync(file, 'utf8').split(/\r?\n/)[0]
       }
-      const label = `kernel ${release.tag_name} · ${platform} · ${brand}`
+      const label = `${major} ${variant.label}`
       if (!port) { failures.push(`${label}: browser did not start (exit ${child.exitCode})`); console.log(log.slice(-3000)); child.kill(); continue }
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
       for (const url of urls) {
@@ -65,6 +80,7 @@ for (const major of versions) {
         await page.waitForTimeout(6000)
         const title = crashed ? '' : await page.title().catch(() => '')
         console.log(`${crashed ? '✗ CRASH' : '✓'} ${label} · ${url} · ${result} · ${title}`)
+        summary.push(`${crashed ? 'CRASH' : 'ok'} ${label} ${new URL(url).hostname}`)
         if (crashed) failures.push(`${label}: renderer crashed on ${url}`)
         await page.close().catch(() => {})
       }
@@ -72,8 +88,7 @@ for (const major of versions) {
       child.kill()
       const interesting = log.split(/\r?\n/).filter((line) => /FATAL|Check failed|NOTREACHED|crash|Renderer process/i.test(line)).slice(0, 20)
       if (interesting.length) console.log(`--- ${label} log\n${interesting.join('\n')}`)
-    }
   }
 }
-for (const failure of failures) console.log(`::error::${failure}`)
-process.exit(failures.length ? 1 : 0)
+console.log(`::warning title=Smoke results::${summary.join(' | ')}`)
+process.exit(failures.length && process.env.BISECT !== '1' ? 1 : 0)
