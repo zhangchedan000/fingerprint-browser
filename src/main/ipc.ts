@@ -1,16 +1,19 @@
 import { t } from '../shared/i18n'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { AppPreferences, ProfileDraft } from '../shared/types'
+import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
-import { listBundledBrowsers, locateBrowser, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
+import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
+import { evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
+import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
+import { hostHardwareSnapshot } from './host-hardware'
 import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
 import type { AssignPatch, ProfileStore } from './profile-store'
 import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
-import { validateProxyConfig } from '../shared/validation'
+import { validateProfileDraft, validateProxyConfig } from '../shared/validation'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
 import { clearProfileCache, profileStorageInfo, storageOverview } from './profile-data'
@@ -166,6 +169,80 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return profileStorageInfo(profiles.profileDataPath(id))
   })
   ipcMain.handle('profiles:storage-overview', () => storageOverview(profiles.vaultPath))
+  // Fingerprint check: the draft's exact launch setup in a throwaway profile, so the window's own
+  // data is never touched and an unsaved draft can be checked too.
+  const fingerprintChecks = new FingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
+  ipcMain.handle('profiles:last-fingerprint-check', (_event, id: string) => fingerprintChecks.get(id))
+  ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
+    const validated = validateProfileDraft(draft)
+    const existing = profileId ? profiles.get(profileId) : undefined
+    let proxy: ProxyConfig
+    if (draft.proxyId) {
+      const { protocol, host, port, username, password } = profiles.getProxy(draft.proxyId)
+      proxy = { protocol, host, port, username, password }
+    } else {
+      proxy = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
+    }
+    const engine = await locateBrowserForProfile(settings, profiles.vaultPath, validated.kernelVersion)
+    if (!engine.executable) {
+      throw new Error(validated.kernelVersion ? `内核 ${validated.kernelVersion} 不可用，请先安装` : '没有找到浏览器内核，请先在内核管理里下载或导入')
+    }
+    const proxyResult = proxy.protocol === 'direct' ? undefined : await testProxy(proxy)
+    if (proxyResult && !proxyResult.ok) throw new Error(`代理不通，无法检测：${proxyResult.error ?? '连接失败'}`)
+    const profile = {
+      ...validated,
+      id: profileId ?? 'fingerprint-check',
+      serialNumber: existing?.serialNumber ?? 0,
+      groupId: '',
+      proxyId: draft.proxyId ?? '',
+      proxy,
+      favorite: false,
+      status: 'closed',
+      createdAt: '',
+      updatedAt: ''
+    } as unknown as BrowserProfile
+    const host = hostHardwareSnapshot()
+    const { width, height } = screen.getPrimaryDisplay().size
+    const runOptions = {
+      profile,
+      engine,
+      proxy: proxyResult,
+      hostHardwareConcurrency: host.hardwareConcurrency,
+      hostPlatformVersion: host.platformVersion,
+      hostScreen: { width, height },
+      // Same switch the launcher honours for automated runs.
+      headless: process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1',
+      logger
+    }
+    const observed = await observeFingerprint(runOptions)
+    const windows = profiles.list()
+    const others = Object.entries(await fingerprintChecks.all())
+      .filter(([id]) => id !== profileId)
+      .flatMap(([id, report]) => {
+        const window = windows.find((item) => item.id === id)
+        return window ? [{ label: `#${window.serialNumber} ${window.name}`, observed: report.observed, disabledSpoofing: window.fingerprint.disabledSpoofing }] : []
+      })
+    const report: FingerprintCheckReport = {
+      checkedAt: new Date().toISOString(),
+      kernelVersion: engine.version,
+      // The editor's own key for what it sent, so a fresh result never reads as out of date there.
+      checkedSettings: typeof settingsKey === 'string' ? settingsKey : checkedSettingsKey(validated.fingerprint, validated.kernelVersion || engine.version, checkProxyKey(draft.proxyId, proxy)),
+      exitIp: proxyResult?.ip,
+      observed,
+      items: evaluateFingerprint({
+        fingerprint: validated.fingerprint,
+        engine,
+        observed,
+        expected: expectedIdentity(profile, runOptions),
+        proxy: proxyResult,
+        usesProxy: proxy.protocol !== 'direct',
+        others
+      })
+    }
+    if (profileId) await fingerprintChecks.set(profileId, report)
+    logger.info('指纹检测完成', { profileId, problems: report.items.filter((item) => item.status === 'bad').length })
+    return report
+  })
   ipcMain.handle('profiles:open-data-folder', async (_event, id: string) => {
     profiles.get(id)
     await profiles.assertProfileDataIdentity(id)

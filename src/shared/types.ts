@@ -316,6 +316,55 @@ export interface ProxyCheckSummary extends ProxyTestResult {
   checkedAt: string
 }
 
+/** Which editor row a fingerprint check result belongs to. */
+export type FingerprintCheckRow =
+  | 'system' | 'platformVersion' | 'timezone' | 'language' | 'webrtc' | 'screen' | 'font'
+  | 'gpu' | 'cores' | 'memory' | 'canvas' | 'audio' | 'clientrects' | 'general'
+
+/** One-click fixes the editor can apply for a result. */
+export type FingerprintCheckFix = 'follow-ip' | 'webrtc-replace' | 'reseed' | 'shuffle-gpu' | 'use-real'
+
+export interface FingerprintCheckItem {
+  row: FingerprintCheckRow
+  status: 'ok' | 'warn' | 'bad'
+  /** Chinese source text, translated in the renderer. */
+  message: string
+  fix?: FingerprintCheckFix
+}
+
+/** What the page inside the checked browser actually saw. */
+export interface FingerprintObserved {
+  userAgent: string
+  uaPlatform?: string
+  uaPlatformVersion?: string
+  cores: number
+  memory?: number
+  screen: [number, number]
+  timezone: string
+  language: string
+  webdriver: boolean
+  webglVendor?: string
+  webglRenderer?: string
+  webgpuVendor?: string
+  /** Each surface is read twice: real hardware gives the same result both times. */
+  canvas: [string, string]
+  audio: [string, string]
+  clientrects: [string, string]
+  font: [string, string]
+  worker?: { userAgent: string; cores: number; language: string; timezone: string }
+  webrtcIps: string[]
+}
+
+export interface FingerprintCheckReport {
+  checkedAt: string
+  kernelVersion?: string
+  /** The fingerprint settings that were checked, to tell when the editor has changed since. */
+  checkedSettings: string
+  exitIp?: string
+  observed: FingerprintObserved
+  items: FingerprintCheckItem[]
+}
+
 export interface ProfileStorageInfo {
   path: string
   totalBytes: number
@@ -467,6 +516,10 @@ export interface BrowserApi {
     storageOverview: () => Promise<StorageOverview>
     openDataFolder: (id: string) => Promise<void>
     clearCache: (id: string) => Promise<ProfileStorageInfo>
+    /** Starts the draft's exact browser setup in a throwaway profile and reports what a site sees. */
+    checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<FingerprintCheckReport>
+    /** Last saved check of a window, or null. */
+    lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>
     exportBackup: (id: string) => Promise<ProfileBackupResult | null>
     importBackup: () => Promise<{ profile: BrowserProfileView; result: ProfileBackupResult } | null>
     exportWorkspace: (password: string) => Promise<WorkspaceMigrationResult | null>

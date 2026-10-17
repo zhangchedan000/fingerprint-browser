@@ -1,4 +1,5 @@
-import { t, translateMessage as mt } from '../../../../shared/i18n'
+import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
+import { relativeTime } from '../../components/format'
 import {
   Alert,
   AutoComplete,
@@ -32,6 +33,7 @@ import {
   type NoiseSurface
 } from '../../../../shared/hardware-profiles'
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
+import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { parsePastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
@@ -41,11 +43,16 @@ import type {
   BrowserPlatform,
   BrowserProfileView,
   EngineStatus,
+  FingerprintCheckFix,
+  FingerprintCheckItem,
+  FingerprintCheckReport,
+  FingerprintCheckRow,
   FingerprintConfig,
   KernelRelease,
   PlatformAccount,
   ProfileDraft,
   ProxyRecordView,
+  ProxyConfig,
   ProxyTestResult
 } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
@@ -151,16 +158,45 @@ function countPastedCookies(text: string): { count?: number; error?: string } {
 }
 
 /** One label + controls line, laid out like the design's two-column rows. */
-function Row({ label, children, hint, required }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean }) {
+function Row({ label, children, hint, required, check }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean; check?: ReactNode }) {
   return (
     <div className="fb-form-row">
       <span className="fb-form-label">{required && <em>*</em>}{label}</span>
       <div className="fb-form-control">
         {children}
         {hint && <span className="fb-form-hint">{hint}</span>}
+        {check}
       </div>
     </div>
   )
+}
+
+/** Fingerprint check results for one row: green / yellow / red, each with an optional one-click fix. */
+function CheckResults({ items, stale, onFix }: { items: FingerprintCheckItem[]; stale: boolean; onFix: (item: FingerprintCheckItem) => void }) {
+  if (!items.length) return null
+  return (
+    <div className={`fb-check-results${stale ? ' is-stale' : ''}`}>
+      {items.map((item, index) => (
+        <div key={index} className={`fb-check-item is-${item.status}`}>
+          <span className="fb-check-dot" />
+          <span className="fb-check-message">{mt(item.message)}</span>
+          {item.fix && !stale && item.status !== 'ok' && (
+            <Button type="link" size="small" onClick={() => onFix(item)}>{fixLabel(item.fix)}</Button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function fixLabel(fix: FingerprintCheckFix): string {
+  switch (fix) {
+    case 'follow-ip': return t("改为跟随 IP")
+    case 'webrtc-replace': return t("改为替换")
+    case 'reseed': return t("换一组")
+    case 'shuffle-gpu': return t("换一块显卡")
+    case 'use-real': return t("改为本机真实")
+  }
 }
 
 /** Shows the first validation message of a field rendered with `noStyle`. */
@@ -243,6 +279,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [pasteError, setPasteError] = useState('')
   const [screenCustom, setScreenCustom] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
+  const [checking, setChecking] = useState(false)
+  const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
+  const [checkError, setCheckError] = useState('')
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
@@ -279,6 +318,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const initial = editorValues(profile, suggestedIndex).fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !COMMON_SCREENS.some(([width, height]) => width === initial.screenWidth && height === initial.screenHeight)))
+    setCheckReport(null)
+    setCheckError('')
+    let current = true
+    if (profile) void window.browserApi.profiles.lastFingerprintCheck(profile.id).then((report) => { if (current) setCheckReport(report) }).catch(() => undefined)
+    return () => { current = false }
   }, [form, open, profile, suggestedIndex])
 
   const pinnedKernel = kernels.find((kernel) => kernel.version === kernelVersion)
@@ -294,6 +338,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
   // The GPU list depends on the kernel this window will actually run.
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
+  // A check describes the settings it ran with; any change since makes it out of date.
+  const typedProxy = Form.useWatch('proxy', { form, preserve: true }) as ProxyConfig | undefined
+  const currentSettingsKey = checkedSettingsKey(
+    fp,
+    kernelVersion || engine?.version,
+    checkProxyKey(proxyMode === 'library' ? proxyId : undefined, typedProxy ?? { protocol: 'direct', host: '' })
+  )
+  const checkStale = Boolean(checkReport && checkReport.checkedSettings !== currentSettingsKey)
+  const checkFor = (...rows: FingerprintCheckRow[]) => checkReport
+    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={checkStale} onFix={applyFix} />
+    : undefined
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
   const gpu = effectiveGpu(fp, windowKernelVersion)
   const gpuMissing = Boolean(fp.gpu && kernelGpus && !kernelGpus.some((item) => gpuKey(item) === fp.gpu))
@@ -497,8 +552,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       return
     }
     const values = form.getFieldsValue(true) as EditorValues
+    await onSave(currentDraft(), { cookieText: values.cookieText ?? '' })
+  }
+
+  /** The window as currently edited, in the shape save and the fingerprint check both take. */
+  function currentDraft(): ProfileDraft {
+    const values = form.getFieldsValue(true) as EditorValues
     const color = typeof values.color === 'string' ? values.color : values.color.toHexString()
-    await onSave({
+    return {
       name: values.name,
       note: values.note,
       group: values.group ?? '',
@@ -514,7 +575,31 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       account: values.account,
       extensionIds: values.extensionIds,
       fingerprint: values.fingerprint
-    }, { cookieText: values.cookieText ?? '' })
+    }
+  }
+
+  async function runCheck(): Promise<void> {
+    setChecking(true)
+    setCheckError('')
+    try {
+      setCheckReport(await window.browserApi.profiles.checkFingerprint(currentDraft(), profile?.id, currentSettingsKey))
+    } catch (error) {
+      setCheckError(mt(error instanceof Error ? error.message : String(error)))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  function applyFix(item: FingerprintCheckItem): void {
+    if (item.fix === 'follow-ip') patchFingerprint({ networkIdentityMode: 'proxy' })
+    else if (item.fix === 'webrtc-replace') patchFingerprint({ webrtcPolicy: 'proxy_only' })
+    else if (item.fix === 'reseed') reseedNoise()
+    else if (item.fix === 'shuffle-gpu') shuffleGpu()
+    else if (item.fix === 'use-real') {
+      if (item.row === 'screen') chooseScreen('host')
+      else if (item.row === 'gpu') chooseGpu('real')
+      else if (item.row === 'canvas' || item.row === 'audio' || item.row === 'clientrects' || item.row === 'font') setSpoofing(item.row, false)
+    }
   }
 
   const basic = (
@@ -842,7 +927,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'Chrome', label: 'Chrome' }, { value: 'Edge', label: 'Edge' }]}
         />
       </Row>
-      <Row label={t("操作系统")}>
+      <Row label={t("操作系统")} check={checkFor('system', 'platformVersion')}>
         <Space wrap size={8}>
           <Select
             className="fb-fp-select-half"
@@ -868,7 +953,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
 
       <h3 className="fb-fp-group">{t("地区与网络")}</h3>
-      <Row label={t("时区")} hint={followIp ? networkIdentity.timezone : t("时区和语言一起跟随 IP 或一起自定义")}>
+      <Row label={t("时区")} check={checkFor('timezone')} hint={followIp ? networkIdentity.timezone : t("时区和语言一起跟随 IP 或一起自定义")}>
         <Space wrap size={8}>
           <Select
             className="fb-fp-select-half"
@@ -890,7 +975,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </Space>
       </Row>
-      <Row label={t("语言")} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : fp.acceptLanguages}>
+      <Row label={t("语言")} check={checkFor('language')} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : fp.acceptLanguages}>
         <Space wrap size={8}>
           <Select
             className="fb-fp-select-half"
@@ -925,6 +1010,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row
         label="WebRTC"
+        check={checkFor('webrtc')}
         hint={fp.webrtcPolicy === 'proxy_only'
           ? t("替换为代理 IP，防止泄露本机 IP")
           : fp.webrtcPolicy === 'public_only'
@@ -940,7 +1026,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
 
       <h3 className="fb-fp-group">{t("显示")}</h3>
-      <Row label={t("分辨率")} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : undefined}>
+      <Row label={t("分辨率")} check={checkFor('screen')} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : undefined}>
         <Space wrap size={8}>
           <ValueChoice
             label={t("分辨率")}
@@ -961,11 +1047,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </Space>
       </Row>
-      <Row label={t("字体")}>{noiseControl('font', t("字体"))}</Row>
+      <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
 
       <h3 className="fb-fp-group">{t("硬件指纹")}</h3>
       <Row
         label={t("显卡")}
+        check={checkFor('gpu')}
         hint={gpuReal
           ? t("使用这台电脑的真实显卡（WebGL、WebGPU 一起）")
           : [gpu?.renderer, windowKernelVersion && (kernelGpus ? t("内核 {0} 的显卡清单", windowKernelVersion) : t("内核 {0} 还没有显卡清单", windowKernelVersion))].filter(Boolean).join(' · ')}
@@ -983,7 +1070,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {gpuMissing && (
         <Alert type="warning" showIcon className="fb-editor-alert" title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')} />
       )}
-      <Row label={t("硬件并发数")}>
+      <Row label={t("硬件并发数")} check={checkFor('cores')}>
         <ValueChoice
           label={t("硬件并发数")}
           value={fp.coresSource === 'host' ? 'host' : fp.hardwareConcurrency}
@@ -992,7 +1079,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'host', label: t("本机真实") }, ...coreOptions.map((value) => ({ value, label: t("{0} 核", value) }))]}
         />
       </Row>
-      <Row label={t("设备内存")} hint={t("浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效")}>
+      <Row label={t("设备内存")} check={checkFor('memory')} hint={t("网站读到的内存由内核决定；指定数值需要自编译内核（补丁 045）")}>
         <ValueChoice
           label={t("设备内存")}
           value={fp.deviceMemory ?? 8}
@@ -1001,9 +1088,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[2, 4, 8].map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
-      <Row label="Canvas">{noiseControl('canvas', 'Canvas')}</Row>
-      <Row label="AudioContext">{noiseControl('audio', 'AudioContext')}</Row>
-      <Row label="ClientRects" hint={t("噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
+      <Row label="Canvas" check={checkFor('canvas')}>{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="AudioContext" check={checkFor('audio')}>{noiseControl('audio', 'AudioContext')}</Row>
+      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("噪声编号相同就是同一组噪声；字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
         {noiseControl('clientrects', 'ClientRects')}
       </Row>
       <Row label="SpeechVoices">
@@ -1031,6 +1118,39 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label={t("端口扫描保护")}>
         <Fixed>{t("内核暂不支持")}</Fixed>
       </Row>
+
+      <h3 className="fb-fp-group">{t("指纹检测")}</h3>
+      <div className="fb-check-panel">
+        <div className="fb-check-head">
+          <span className="fb-check-summary">
+            {checking
+              ? t("正在用这些设置启动一个临时浏览器检测，大约需要 10–30 秒…")
+              : checkReport
+                ? [
+                    t("{0} 项正常", checkReport.items.filter((item) => item.status === 'ok').length),
+                    t("{0} 项有风险", checkReport.items.filter((item) => item.status === 'warn').length),
+                    t("{0} 项需修正", checkReport.items.filter((item) => item.status === 'bad').length),
+                    relativeTime(checkReport.checkedAt, getLocale())
+                  ].join(' · ')
+                : t("用这些设置启动一个临时浏览器，检查网站实际看到的指纹；不会动这个窗口的 Cookie 和登录数据")}
+          </span>
+          <Button type="primary" loading={checking} onClick={() => void runCheck()}>{checkReport ? t("重新检测") : t("检测指纹")}</Button>
+        </div>
+        {checkStale && !checking && <div className="fb-check-stale">{t("设置已修改，结果可能已过时，请重新检测")}</div>}
+        {checkError && <Alert type="error" showIcon title={checkError} />}
+        {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} onFix={applyFix} />}
+        {checkReport && !checkStale && (
+          <div className="fb-check-values">
+            {[
+              ['Canvas', checkReport.observed.canvas[0]],
+              ['AudioContext', checkReport.observed.audio[0]],
+              ['ClientRects', checkReport.observed.clientrects[0]],
+              [t("字体"), checkReport.observed.font[0]],
+              [t("出口 IP"), checkReport.exitIp ?? t("直连")]
+            ].map(([name, value]) => <span key={name}>{name}<b className="fb-mono">{value}</b></span>)}
+          </div>
+        )}
+      </div>
     </div>
   )
 

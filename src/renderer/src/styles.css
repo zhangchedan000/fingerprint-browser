@@ -345,3 +345,20 @@ button, input, textarea { font: inherit; }
 .fb-value-choice { align-self: flex-start; }
 .fb-fp-fixed { align-self: flex-start; padding: 5px 0; color: var(--fb-text-secondary); font-size: 13px; }
 .fb-cookie-file { margin-top: 6px; }
+
+/* Fingerprint check: results under each row, summary at the bottom of the fingerprint tab. */
+.fb-check-results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.fb-check-results.is-stale { opacity: .55; }
+.fb-check-item { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; color: var(--fb-text-secondary); }
+.fb-check-item .ant-btn { height: 20px; padding: 0 4px; font-size: 12px; }
+.fb-check-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-success-dot); }
+.fb-check-item.is-warn .fb-check-dot { background: var(--fb-warning-strong); }
+.fb-check-item.is-warn .fb-check-message { color: var(--fb-warning); }
+.fb-check-item.is-bad .fb-check-dot { background: var(--fb-danger); }
+.fb-check-item.is-bad .fb-check-message { color: var(--fb-danger); }
+.fb-check-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 8px; background: var(--fb-surface-muted); }
+.fb-check-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.fb-check-summary { color: var(--fb-text-secondary); font-size: 13px; }
+.fb-check-stale { color: var(--fb-warning); font-size: 12px; }
+.fb-check-values { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--fb-text-secondary); font-size: 12px; }
+.fb-check-values b { margin-left: 6px; font-weight: 500; color: var(--fb-text); }

@@ -29,8 +29,12 @@ export function assertFingerprintKernelCompatibility(profile: BrowserProfile, en
       && engineMajor !== undefined && requestedMajor !== engineMajor) {
     throw new Error(`品牌版本 ${profile.fingerprint.brandVersion} 与指纹内核 ${engine.version} 的主版本不一致，请留空自动匹配`)
   }
-  if (!engine.fingerprintKernel || !engine.version) return
+  if (!engine.fingerprintKernel) return
   const gpu = profile.fingerprint.gpu
+  if (gpu && !engine.version) {
+    throw new Error('无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机')
+  }
+  if (!engine.version) return
   if (gpu && effectiveFingerprintSeed(profile.fingerprint, engine.version) === undefined) {
     const name = findKernelGpu(gpu, profile.fingerprint.platform)?.model ?? gpu
     throw new Error(kernelGpuList(engine.version, profile.fingerprint.platform)

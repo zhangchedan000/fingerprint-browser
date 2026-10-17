@@ -103,4 +103,5 @@ App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 
 - `npm test`：类型检查、全部单元测试（包括升级旧数据、引用规则、主题检查、翻译检查）、内核锁检查。
 - `npx electron-vite build`：打包检查。
+- 指纹检测：`main/fingerprint-check.ts` 用窗口的启动参数开一个临时浏览器读取网站能看到的值（`observeFingerprint`），再逐项判定红黄绿（`evaluateFingerprint`），结果按设置行显示在编辑器里。和 Cookie 维护共用 `main/devtools-session.ts`。
 - `node tools/app-e2e/library.mjs`：用真实应用（真主进程、真数据文件）检查旧数据升级、代理库/分组库、分配、删除规则、回收站恢复、设置保存和重启后保持。不启动浏览器。
