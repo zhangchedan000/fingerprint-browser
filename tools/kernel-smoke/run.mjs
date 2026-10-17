@@ -70,7 +70,8 @@ for (const major of versions) {
       for (let attempt = 0; attempt < 150 && !port; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200))
         const file = join(userDataDir, 'DevToolsActivePort')
-        if (existsSync(file)) port = readFileSync(file, 'utf8').split(/\r?\n/)[0]
+        // Chromium may still hold the file open while writing it (EBUSY on Windows).
+        try { if (existsSync(file)) port = readFileSync(file, 'utf8').split(/\r?\n/)[0] || undefined } catch {}
       }
       const label = `${major} ${variant.label}`
       if (!port) { failures.push(`${label}: browser did not start (exit ${child.exitCode})`); console.log(log.slice(-3000)); child.kill(); continue }
