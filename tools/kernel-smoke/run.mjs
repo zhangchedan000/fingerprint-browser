@@ -47,7 +47,16 @@ for (const major of versions) {
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
   const bisect = process.env.BISECT === '1'
   const variants = []
-  if (process.env.BISECT === 'surface') {
+  if (process.env.BISECT === 'gpu') {
+    // Every position of the kernel's GPU list, twice with unrelated seeds, per emulated system.
+    for (const [platform, size] of [['windows', Number(process.env.GPU_WINDOWS || 13)], ['macos', Number(process.env.GPU_MACOS || 6)]]) {
+      for (let index = 0; index < size; index += 1) {
+        for (const seed of [index, index + size * 7919]) {
+          variants.push({ label: `${platform} gpu#${index} seed ${seed}`, args: ['--user-data-dir=USERDATA', `--fingerprint=${seed}`, `--fingerprint-platform=${platform}`] })
+        }
+      }
+    }
+  } else if (process.env.BISECT === 'surface') {
     const base = (seed) => [`--user-data-dir=USERDATA`, `--fingerprint=${seed}`]
     for (const seed of [1000, 1234567, 3150083396]) variants.push({ label: `seed ${seed}`, args: base(seed) })
     for (const surface of ['font', 'audio', 'canvas', 'clientrects', 'gpu']) variants.push({ label: `seed 1000 off:${surface}`, args: [...base(1000), `--disable-spoofing=${surface}`] })
