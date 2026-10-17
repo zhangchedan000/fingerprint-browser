@@ -21,6 +21,7 @@ import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaun
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
+import { assertKernelCanOpenProfileData } from './profile-data-version'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -183,6 +184,7 @@ export class BrowserLauncher {
       throw new Error(`${selectedHardware.label} 只能在对应系统上使用；请改用本机模板或成套模拟模板`)
     }
     assertFingerprintKernelCompatibility(profile, engine)
+    await assertKernelCanOpenProfileData(this.profiles.profileDataPath(id), engine.version)
     this.logger?.info('准备启动浏览器环境', { profileId: id, engine: engine.label })
 
     this.onChanged(await this.profiles.setRuntime(id, { status: 'starting', lastError: undefined }))

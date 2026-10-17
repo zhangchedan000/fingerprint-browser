@@ -7,6 +7,7 @@ import { locateBrowserForProfile } from './browser-locator'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
+import { assertKernelCanOpenProfileData } from './profile-data-version'
 
 export class CookieManager {
   private readonly busyProfiles = new Set<string>()
@@ -59,6 +60,7 @@ export class CookieManager {
           : '没有找到浏览器内核')
       }
       const userDataPath = this.profiles.profileDataPath(id)
+      await assertKernelCanOpenProfileData(userDataPath, engine.version)
       const activePort = join(userDataPath, 'DevToolsActivePort')
       await rm(activePort, { force: true })
       const child = spawn(engine.executable, [
