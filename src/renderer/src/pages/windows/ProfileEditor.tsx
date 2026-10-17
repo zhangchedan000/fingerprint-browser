@@ -25,11 +25,13 @@ import { fingerprintVersionWarning } from '../../../../shared/fingerprint-consis
 import {
   applyHardwareProfile,
   defaultHardwareProfileId,
-  effectiveGpuIdentity,
+  effectiveGpu,
+  gpuChoices,
   HARDWARE_PROFILES,
   hardwareProfile,
   refreshSeededGpuIdentity
 } from '../../../../shared/hardware-profiles'
+import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { parsePastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
@@ -262,7 +264,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
   const selectedHardware = hardwareProfile(fp.hardwareProfileId)
   const hostMatched = selectedHardware?.hostMatched === true
-  const gpu = effectiveGpuIdentity({ hardwareProfileId: fp.hardwareProfileId, seed: fp.seed, gpuBucket: fp.gpuBucket })
+  // The GPU list depends on the kernel this window will actually run.
+  const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
+  const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
+  const gpu = effectiveGpu(fp, windowKernelVersion)
+  const gpuMissing = Boolean(fp.gpu && kernelGpus && !kernelGpus.some((item) => gpuKey(item) === fp.gpu))
+  const gpuOptions = useMemo(() => {
+    const available = new Set(kernelGpus?.map(gpuKey))
+    return gpuChoices(fp.platform)
+      .map((choice) => ({
+        value: choice.key,
+        label: `${gpuLabel(choice)} · ${t("内核 {0}", choice.kernels.join('/'))}`,
+        disabled: kernelGpus ? !available.has(choice.key) : false
+      }))
+      .sort((a, b) => Number(a.disabled) - Number(b.disabled))
+  }, [fp.platform, kernelGpus])
   const hostPlatform = defaultPlatform()
   const followIp = fp.networkIdentityMode === 'proxy'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
@@ -888,20 +904,28 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
         />
       </Row>
-      {selectedHardware?.renderIdentityMode === 'seeded-curated' && selectedHardware.gpuPool?.length && (
-        <Row label={t("显卡型号")} hint={t("只列出内核里有完整渲染数据的真实型号；每个窗口可以不同")}>
+      {selectedHardware?.renderIdentityMode === 'seeded-curated' && (
+        <Row
+          label={t("显卡型号")}
+          hint={kernelGpus
+            ? t("当前窗口使用内核 {0}，灰色的显卡这个版本里没有", windowKernelVersion ?? '')
+            : t("当前内核没有显卡清单，只能按种子随机")}
+        >
           <Select
             className="fb-wide-select"
             showSearch={{ optionFilterProp: 'label' }}
             aria-label={t("显卡型号")}
-            value={gpu?.bucket}
-            onChange={(bucket: number) => patchFingerprint({ gpuBucket: bucket, renderIdentityVersion: 4 })}
-            options={selectedHardware.gpuPool.map((identity) => ({
-              value: identity.bucket,
-              label: identity.deviceId ? `${identity.model} · ${identity.deviceId.replace(/^0x0*/, '')}` : identity.model
-            }))}
+            value={fp.gpu ?? 'seed'}
+            onChange={(value: string) => patchFingerprint(value === 'seed' ? { gpu: undefined } : { gpu: value, renderIdentityVersion: 4 })}
+            options={[
+              { value: 'seed', label: !fp.gpu && gpu ? t("按种子随机（当前为 {0}）", gpuLabel(gpu)) : t("按种子随机") },
+              ...gpuOptions
+            ]}
           />
         </Row>
+      )}
+      {gpuMissing && (
+        <Alert type="warning" showIcon className="fb-editor-alert" title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')} />
       )}
       <Row label="Canvas">{spoofControl('canvas')}</Row>
       <Row label={t("WebGL 图像")} hint={t("与 WebGL 元数据一起开关")}>

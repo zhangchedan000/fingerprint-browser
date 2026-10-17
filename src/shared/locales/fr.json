@@ -1732,5 +1732,18 @@
   "显卡型号": "Modèle de GPU",
   "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Seuls les modèles réels dont le kernel a toutes les données de rendu ; chaque fenêtre peut être différente",
   "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Le navigateur indique 8 GB au maximum ; nécessite un kernel compilé (patch 045)",
-  "设备内存只能是 2、4 或 8 GB": "La mémoire de l’appareil doit être de 2, 4 ou 8 GB"
+  "设备内存只能是 2、4 或 8 GB": "La mémoire de l’appareil doit être de 2, 4 ou 8 GB",
+  "内核 {0}": "Kernel {0}",
+  "当前窗口使用内核 {0}，灰色的显卡这个版本里没有": "Cette fenêtre utilise le kernel {0} ; les GPU grisés n’existent pas dans cette version",
+  "当前内核没有显卡清单，只能按种子随机": "Ce kernel n’a pas encore de liste de GPU ; le GPU suit uniquement la seed",
+  "按种子随机（当前为 {0}）": "Selon la seed (actuellement {0})",
+  "按种子随机": "Selon la seed",
+  "内核 {0} 里没有这块显卡，打开窗口前请重新选择": "Le kernel {0} n’a pas ce GPU ; choisissez-en un autre avant d’ouvrir la fenêtre",
+  "按种子从内核显卡清单中选择": "Choisi selon la seed dans la liste de GPU du kernel",
+  "显卡型号无效": "Modèle de GPU non valide",
+  "内核 {0} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡": "Le kernel {0} n’a pas le GPU choisi pour cette fenêtre ; choisissez-en un autre dans ses paramètres",
+  "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Le kernel {0} n’a pas le GPU {1} ; choisissez-en un autre dans les paramètres de la fenêtre",
+  "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Le kernel {0} n’a pas encore de liste de GPU, le GPU {1} est donc indisponible ; passez à Selon la seed ou utilisez un kernel pris en charge",
+  "Windows · 种子独立显卡（推荐多环境）": "Windows · GPU selon la seed (recommandé pour plusieurs fenêtres)",
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU 8 cœurs, 16GB de RAM, 1920×1080 ; le GPU est choisi selon la seed dans la liste du kernel, ou à la main."
 }

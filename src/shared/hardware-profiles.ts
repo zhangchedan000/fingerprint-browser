@@ -1,44 +1,5 @@
 import type { BrowserPlatform, FingerprintConfig, HardwareProfileId } from './types'
-import windowsGpuCatalog from './windows-gpu-catalog.json'
-
-export interface GpuIdentity {
-  bucket: number
-  model: string
-  deviceId?: string
-  deviceClass: 'desktop' | 'integrated'
-}
-
-interface WindowsGpuCatalog {
-  schemaVersion: number
-  kernelCatalogSize: number
-  curatedDesktop: Array<Omit<GpuIdentity, 'deviceClass'>>
-}
-
-const WINDOWS_GPU_CATALOG = windowsGpuCatalog as WindowsGpuCatalog
-
-export const CURATED_WINDOWS_DESKTOP_GPUS: readonly GpuIdentity[] =
-  WINDOWS_GPU_CATALOG.curatedDesktop.map((identity) => ({
-    ...identity,
-    deviceClass: 'desktop' as const
-  }))
-
-export const CURATED_MACOS_GPUS: readonly GpuIdentity[] = [
-  'Apple M1',
-  'Apple M1 Pro',
-  'Apple M2',
-  'Apple M2 Max',
-  'Apple M2 Pro',
-  'Apple M3',
-  'Apple M3 Max',
-  'Apple M3 Pro',
-  'Apple M4',
-  'Apple M4 Max',
-  'Apple M4 Pro'
-].map((model, bucket) => ({
-  bucket,
-  model,
-  deviceClass: 'integrated' as const
-}))
+import { allKernelGpus, findKernelGpu, gpuForSeed, seedForGpu, type GpuChoice, type KernelGpu } from './gpu-catalog'
 
 export interface HardwareProfile {
   id: Exclude<HardwareProfileId, 'legacy-custom'>
@@ -52,16 +13,15 @@ export interface HardwareProfile {
   screenWidth: number
   screenHeight: number
   gpuModel: string
-  gpuBucket?: number
-  gpuBucketCount?: number
-  gpuPool?: readonly GpuIdentity[]
+  /** Fixed templates name their GPU (key from gpu-catalog); seeded ones let the kernel pick by seed. */
+  gpu?: string
   renderIdentityMode: 'host-native' | 'seeded-curated' | 'fixed-template'
   hostMatched: boolean
 }
 
 /**
- * These presets match the GPU ordering in fingerprint patch 011-gpu-info.
- * Keep the bucket values in sync when the kernel GPU catalogue changes.
+ * Hardware presets. GPUs are named by key (see gpu-catalog.ts), so a preset means the same card
+ * on every kernel version that has it.
  */
 export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   {
@@ -90,9 +50,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     browserDeviceMemoryGb: 8,
     screenWidth: 1440,
     screenHeight: 900,
-    gpuModel: '种子固定的 Apple GPU',
-    gpuBucketCount: 11,
-    gpuPool: CURATED_MACOS_GPUS,
+    gpuModel: '按种子从内核显卡清单中选择',
     renderIdentityMode: 'seeded-curated',
     hostMatched: false
   },
@@ -108,8 +66,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1440,
     screenHeight: 900,
     gpuModel: 'Apple M1',
-    gpuBucket: 0,
-    gpuBucketCount: 11,
+    gpu: 'Apple M1',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -125,8 +82,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1512,
     screenHeight: 982,
     gpuModel: 'Apple M3 Pro',
-    gpuBucket: 7,
-    gpuBucketCount: 11,
+    gpu: 'Apple M3 Pro',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -142,8 +98,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1512,
     screenHeight: 982,
     gpuModel: 'Apple M4 Pro',
-    gpuBucket: 10,
-    gpuBucketCount: 11,
+    gpu: 'Apple M4 Pro',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -164,8 +119,8 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   },
   {
     id: 'windows-seeded-nvidia',
-    label: 'Windows · 种子独立 NVIDIA GPU（推荐多环境）',
-    description: '8 核 CPU、16GB 内存、1920×1080；RTX 30/40 系列 GPU 由环境种子固定选择。',
+    label: 'Windows · 种子独立显卡（推荐多环境）',
+    description: '8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。',
     platform: 'windows',
     platformVersion: '10.0.0',
     hardwareConcurrency: 8,
@@ -173,9 +128,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     browserDeviceMemoryGb: 8,
     screenWidth: 1920,
     screenHeight: 1080,
-    gpuModel: '种子固定的 NVIDIA RTX GPU',
-    gpuBucketCount: WINDOWS_GPU_CATALOG.kernelCatalogSize,
-    gpuPool: CURATED_WINDOWS_DESKTOP_GPUS,
+    gpuModel: '按种子从内核显卡清单中选择',
     renderIdentityMode: 'seeded-curated',
     hostMatched: false
   },
@@ -191,8 +144,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1920,
     screenHeight: 1080,
     gpuModel: 'NVIDIA GeForce RTX 3060',
-    gpuBucket: 5,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 3060|0x00002487',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -208,8 +160,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1920,
     screenHeight: 1080,
     gpuModel: 'NVIDIA GeForce RTX 4060',
-    gpuBucket: 29,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 4060|0x00002882',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -225,8 +176,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 2560,
     screenHeight: 1440,
     gpuModel: 'NVIDIA GeForce RTX 4070',
-    gpuBucket: 34,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 4070|0x00002786',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   }
@@ -241,6 +191,7 @@ export function defaultHardwareProfileId(platform: BrowserPlatform): HardwarePro
 }
 
 export interface ApplyHardwareProfileOptions {
+  /** Forget a hand-picked GPU so the kernel picks one by seed again (used by "random fingerprint"). */
   refreshSeededGpu?: boolean
 }
 
@@ -249,33 +200,22 @@ export function applyHardwareProfile(
   id: HardwareProfileId,
   options: ApplyHardwareProfileOptions = {}
 ): FingerprintConfig {
+  const { gpuBucket: _legacyBucket, ...rest } = config
   const profile = hardwareProfile(id)
   if (!profile) {
-    return {
-      ...config,
-      hardwareProfileId: id,
-      gpuBucket: undefined,
-      renderIdentityVersion: undefined
-    }
+    return { ...rest, hardwareProfileId: id, gpu: undefined, renderIdentityVersion: undefined }
   }
-  const seededIdentity = profile.gpuPool?.length && options.refreshSeededGpu
-    ? profile.gpuPool[(config.seed >>> 0) % profile.gpuPool.length]
-    : undefined
-  const preservedSeededBucket = profile.renderIdentityMode === 'seeded-curated'
+  const keepPicked = profile.renderIdentityMode === 'seeded-curated'
     && config.hardwareProfileId === id
-    && Number.isInteger(config.gpuBucket)
-    ? config.gpuBucket
-    : undefined
-  const gpuBucket = seededIdentity?.bucket
-    ?? preservedSeededBucket
-    ?? (profile.renderIdentityMode === 'fixed-template' ? profile.gpuBucket : undefined)
+    && !options.refreshSeededGpu
+  const gpu = profile.renderIdentityMode === 'fixed-template'
+    ? profile.gpu
+    : keepPicked ? config.gpu : undefined
   return {
-    ...config,
+    ...rest,
     hardwareProfileId: profile.id,
-    gpuBucket,
-    renderIdentityVersion: gpuBucket === undefined
-      ? undefined
-      : 4,
+    gpu,
+    renderIdentityVersion: profile.renderIdentityMode === 'host-native' ? undefined : 4,
     platform: profile.platform,
     platformVersion: profile.platformVersion,
     hardwareConcurrency: profile.hardwareConcurrency,
@@ -284,35 +224,29 @@ export function applyHardwareProfile(
   }
 }
 
-export function effectiveFingerprintSeed(config: FingerprintConfig): number {
+/**
+ * The seed handed to the kernel. With a picked GPU it is shifted so `kernelVersion` reports that
+ * GPU; undefined means the kernel does not have it (launching would show a different card).
+ */
+export function effectiveFingerprintSeed(config: FingerprintConfig, kernelVersion?: string | null): number | undefined {
   const seed = config.seed >>> 0
-  const profile = hardwareProfile(config.hardwareProfileId)
-  if (!profile?.gpuBucketCount) return seed
-  const bucket = profile.renderIdentityMode === 'fixed-template'
-    ? profile.gpuBucket
-    : Number.isInteger(config.gpuBucket)
-      ? config.gpuBucket
-      : undefined
-  if (bucket === undefined) return seed
-  const remainder = seed % profile.gpuBucketCount
-  const candidate = seed - remainder + bucket
-  return candidate <= 0xffffffff ? candidate : candidate - profile.gpuBucketCount
+  if (!config.gpu || hardwareProfile(config.hardwareProfileId)?.hostMatched) return seed
+  return seedForGpu(seed, config.gpu, kernelVersion, config.platform)
 }
 
-export function effectiveGpuIdentity(
-  config: Pick<FingerprintConfig, 'seed' | 'hardwareProfileId' | 'gpuBucket'>
-): GpuIdentity | undefined {
-  const profile = hardwareProfile(config.hardwareProfileId)
-  if (!profile) return undefined
-  if (profile.gpuPool?.length && Number.isInteger(config.gpuBucket)) {
-    return profile.gpuPool.find((identity) => identity.bucket === config.gpuBucket)
-  }
-  if (profile.gpuBucket === undefined) return undefined
-  return {
-    bucket: profile.gpuBucket,
-    model: profile.gpuModel,
-    deviceClass: profile.platform === 'windows' ? 'desktop' : 'integrated'
-  }
+/** The GPU a window shows on `kernelVersion`; undefined for host hardware or an unmeasured kernel. */
+export function effectiveGpu(
+  config: Pick<FingerprintConfig, 'seed' | 'hardwareProfileId' | 'gpu' | 'platform'>,
+  kernelVersion?: string | null
+): KernelGpu | undefined {
+  if (hardwareProfile(config.hardwareProfileId)?.hostMatched) return undefined
+  if (config.gpu) return findKernelGpu(config.gpu, config.platform)
+  return gpuForSeed(config.seed, kernelVersion, config.platform)
+}
+
+/** GPUs a window on this platform can pick, each with the kernel versions that have it. */
+export function gpuChoices(platform: BrowserPlatform): GpuChoice[] {
+  return allKernelGpus(platform)
 }
 
 export function refreshSeededGpuIdentity(config: FingerprintConfig): FingerprintConfig {

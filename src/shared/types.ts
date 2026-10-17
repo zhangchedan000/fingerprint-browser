@@ -51,6 +51,9 @@ export interface FingerprintConfig {
   seed: number
   hardwareProfileId: HardwareProfileId
   /** Kernel GPU catalogue bucket pinned for profile-lifetime stability. */
+  /** Picked GPU (key from gpu-catalog: model|deviceId). Unset = the kernel picks one by seed. */
+  gpu?: string
+  /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
   gpuBucket?: number
   /** navigator.deviceMemory in GB (2, 4 or 8). Unset = 8. Needs a kernel with patch 045. */
   deviceMemory?: 2 | 4 | 8

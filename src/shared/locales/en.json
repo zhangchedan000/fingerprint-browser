@@ -1732,5 +1732,18 @@
   "显卡型号": "GPU model",
   "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Only real models the kernel has full render data for; each window can differ",
   "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Browsers report at most 8 GB; needs a self-built kernel (patch 045)",
-  "设备内存只能是 2、4 或 8 GB": "Device memory must be 2, 4 or 8 GB"
+  "设备内存只能是 2、4 或 8 GB": "Device memory must be 2, 4 or 8 GB",
+  "内核 {0}": "Kernel {0}",
+  "当前窗口使用内核 {0}，灰色的显卡这个版本里没有": "This window uses kernel {0}; greyed-out GPUs are not in this version",
+  "当前内核没有显卡清单，只能按种子随机": "This kernel has no GPU list yet; the GPU can only follow the seed",
+  "按种子随机（当前为 {0}）": "Follow seed (currently {0})",
+  "按种子随机": "Follow seed",
+  "内核 {0} 里没有这块显卡，打开窗口前请重新选择": "Kernel {0} does not have this GPU; choose another before opening the window",
+  "按种子从内核显卡清单中选择": "Picked from the kernel's GPU list by seed",
+  "显卡型号无效": "Invalid GPU model",
+  "内核 {0} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡": "Kernel {0} does not have the GPU chosen for this window; choose another in the window settings",
+  "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0} does not have GPU {1}; choose another in the window settings",
+  "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} has no GPU list yet, so GPU {1} cannot be used; switch to Follow seed or use a supported kernel",
+  "Windows · 种子独立显卡（推荐多环境）": "Windows · Seed-based GPU (recommended for many windows)",
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8-core CPU, 16GB RAM, 1920×1080; the GPU is picked from the kernel's list by seed, or chosen by hand."
 }

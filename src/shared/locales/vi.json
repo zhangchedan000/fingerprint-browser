@@ -1732,5 +1732,18 @@
   "显卡型号": "Mẫu GPU",
   "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Chỉ liệt kê mẫu thật có đủ dữ liệu kết xuất trong kernel; mỗi cửa sổ có thể khác nhau",
   "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Trình duyệt báo tối đa 8 GB; cần kernel tự biên dịch (bản vá 045)",
-  "设备内存只能是 2、4 或 8 GB": "Bộ nhớ thiết bị chỉ được là 2, 4 hoặc 8 GB"
+  "设备内存只能是 2、4 或 8 GB": "Bộ nhớ thiết bị chỉ được là 2, 4 hoặc 8 GB",
+  "内核 {0}": "Kernel {0}",
+  "当前窗口使用内核 {0}，灰色的显卡这个版本里没有": "Cửa sổ này dùng kernel {0}; GPU màu xám không có trong phiên bản này",
+  "当前内核没有显卡清单，只能按种子随机": "Kernel này chưa có danh sách GPU; chỉ chọn ngẫu nhiên theo seed",
+  "按种子随机（当前为 {0}）": "Theo seed (hiện là {0})",
+  "按种子随机": "Theo seed",
+  "内核 {0} 里没有这块显卡，打开窗口前请重新选择": "Kernel {0} không có GPU này; hãy chọn lại trước khi mở cửa sổ",
+  "按种子从内核显卡清单中选择": "Chọn theo seed từ danh sách GPU của kernel",
+  "显卡型号无效": "Mẫu GPU không hợp lệ",
+  "内核 {0} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡": "Kernel {0} không có GPU đã chọn cho cửa sổ này; hãy chọn lại trong cài đặt cửa sổ",
+  "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0} không có GPU {1}; hãy chọn lại trong cài đặt cửa sổ",
+  "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} chưa có danh sách GPU nên không dùng được GPU {1}; hãy chuyển sang Theo seed hoặc dùng kernel được hỗ trợ",
+  "Windows · 种子独立显卡（推荐多环境）": "Windows · GPU theo seed (khuyên dùng cho nhiều cửa sổ)",
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "CPU 8 nhân, RAM 16GB, 1920×1080; GPU được chọn theo seed từ danh sách kernel, hoặc chọn thủ công."
 }

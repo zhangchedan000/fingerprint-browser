@@ -62,7 +62,8 @@ describe('ProfileStore', () => {
     expect(copy.serialNumber).toBe(original.serialNumber + 1)
     expect(copy.fingerprint.seed).not.toBe(original.fingerprint.seed)
     expect(copy.fingerprint.renderIdentityVersion).toBe(4)
-    expect(copy.fingerprint.gpuBucket).toBeTypeOf('number')
+    // A copy gets a new seed, so the kernel picks its GPU afresh.
+    expect(copy.fingerprint.gpu).toBeUndefined()
     expect(repository.list()).toHaveLength(2)
   })
 

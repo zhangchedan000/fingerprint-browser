@@ -37,7 +37,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const platformVersion = hardware?.hostMatched && options.hostPlatformVersion
     ? options.hostPlatformVersion
     : fp.platformVersion
-  const seed = effectiveFingerprintSeed(fp)
+  const alignedSeed = options.fingerprintKernel ? effectiveFingerprintSeed(fp, options.engineVersion) : fp.seed >>> 0
+  if (alignedSeed === undefined) {
+    // Checked before launch (assertFingerprintKernelCompatibility); never fall back to another card.
+    throw new Error(`内核 ${options.engineVersion ?? ''} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡`)
+  }
+  const seed = alignedSeed
   const disabledSpoofing = effectiveDisabledSpoofing(fp)
   const brandVersion = resolveFingerprintBrandVersion(fp.brandVersion, {
     fingerprintKernel: options.fingerprintKernel === true,

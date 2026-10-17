@@ -1,4 +1,5 @@
 import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
+import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import type { GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
@@ -86,7 +87,11 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     throw new Error('指纹自定义项无效')
   }
   const overrides = [...new Set(rawFp.overrides ?? [])]
-  const templated = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
+  // Old saves kept a position in the 139–144 GPU list; keep the card it pointed at.
+  const legacyGpu = rawFp.gpu === undefined && Number.isInteger(rawFp.gpuBucket)
+    ? legacyBucketGpuKey(rawFp.gpuBucket!, rawFp.platform)
+    : undefined
+  const templated = applyHardwareProfile({ ...rawFp, gpu: rawFp.gpu ?? legacyGpu, hardwareProfileId }, hardwareProfileId)
   // Hand-set values win over the template; everything else stays coherent with it.
   const fp = {
     ...templated,
@@ -111,12 +116,8 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   if (!Number.isInteger(fp.seed) || fp.seed < 0 || fp.seed > 0xffffffff) {
     throw new Error('指纹种子必须是 0–4294967295 的整数')
   }
-  if (fp.gpuBucket !== undefined && (
-    !Number.isInteger(fp.gpuBucket)
-    || fp.gpuBucket < 0
-    || fp.gpuBucket >= (HARDWARE_PROFILES.find((profile) => profile.id === fp.hardwareProfileId)?.gpuBucketCount ?? 0)
-  )) {
-    throw new Error('GPU 身份 bucket 无效')
+  if (fp.gpu !== undefined && (typeof fp.gpu !== 'string' || !findKernelGpu(fp.gpu, fp.platform))) {
+    throw new Error('显卡型号无效')
   }
   if (fp.renderIdentityVersion !== undefined
     && fp.renderIdentityVersion !== 1
@@ -183,7 +184,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     fingerprint: {
       seed: fp.seed,
       hardwareProfileId: fp.hardwareProfileId,
-      gpuBucket: fp.gpuBucket,
+      ...(fp.gpu ? { gpu: fp.gpu } : {}),
       renderIdentityVersion: fp.renderIdentityVersion,
       platform: fp.platform,
       language: fp.language.trim(),

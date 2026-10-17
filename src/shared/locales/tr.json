@@ -1732,5 +1732,18 @@
   "显卡型号": "GPU modeli",
   "只列出内核里有完整渲染数据的真实型号；每个窗口可以不同": "Yalnızca kernel'de tam render verisi olan gerçek modeller; her pencere farklı olabilir",
   "浏览器最多报告 8 GB；需要自编译内核（补丁 045）才生效": "Tarayıcı en fazla 8 GB bildirir; kendi derlenmiş kernel gerekir (yama 045)",
-  "设备内存只能是 2、4 或 8 GB": "Cihaz belleği 2, 4 veya 8 GB olmalı"
+  "设备内存只能是 2、4 或 8 GB": "Cihaz belleği 2, 4 veya 8 GB olmalı",
+  "内核 {0}": "Kernel {0}",
+  "当前窗口使用内核 {0}，灰色的显卡这个版本里没有": "Bu pencere kernel {0} kullanıyor; gri GPU'lar bu sürümde yok",
+  "当前内核没有显卡清单，只能按种子随机": "Bu kernel için GPU listesi yok; GPU yalnızca seed'e göre seçilir",
+  "按种子随机（当前为 {0}）": "Seed'e göre (şu an {0})",
+  "按种子随机": "Seed'e göre",
+  "内核 {0} 里没有这块显卡，打开窗口前请重新选择": "Kernel {0} bu GPU'ya sahip değil; pencereyi açmadan önce başka birini seçin",
+  "按种子从内核显卡清单中选择": "Kernel GPU listesinden seed'e göre seçilir",
+  "显卡型号无效": "Geçersiz GPU modeli",
+  "内核 {0} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡": "Kernel {0}, bu pencere için seçilen GPU'ya sahip değil; pencere ayarlarından başka birini seçin",
+  "内核 {0} 里没有显卡 {1}，请在窗口设置里重新选择显卡": "Kernel {0}, {1} GPU'suna sahip değil; pencere ayarlarından başka birini seçin",
+  "内核 {0} 还没有显卡清单，无法使用指定的显卡 {1}，请改为按种子随机，或换用已支持的内核": "Kernel {0} için GPU listesi yok, bu yüzden {1} GPU'su kullanılamaz; Seed'e göre seçeneğine geçin veya desteklenen bir kernel kullanın",
+  "Windows · 种子独立显卡（推荐多环境）": "Windows · Seed'e göre GPU (çok pencere için önerilir)",
+  "8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。": "8 çekirdekli CPU, 16GB RAM, 1920×1080; GPU kernel listesinden seed'e göre ya da elle seçilir."
 }

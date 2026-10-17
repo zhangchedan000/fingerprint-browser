@@ -1,5 +1,6 @@
 import type { BrowserProfile, EngineStatus } from './types'
-import { effectiveDisabledSpoofing } from './hardware-profiles'
+import { effectiveDisabledSpoofing, effectiveFingerprintSeed } from './hardware-profiles'
+import { findKernelGpu, kernelGpuList } from './gpu-catalog'
 
 function majorVersion(version: string | undefined): number | undefined {
   const match = version?.trim().match(/^(\d+)/)
@@ -29,6 +30,13 @@ export function assertFingerprintKernelCompatibility(profile: BrowserProfile, en
     throw new Error(`品牌版本 ${profile.fingerprint.brandVersion} 与指纹内核 ${engine.version} 的主版本不一致，请留空自动匹配`)
   }
   if (!engine.fingerprintKernel || !engine.version) return
+  const gpu = profile.fingerprint.gpu
+  if (gpu && effectiveFingerprintSeed(profile.fingerprint, engine.version) === undefined) {
+    const name = findKernelGpu(gpu, profile.fingerprint.platform)?.model ?? gpu
+    throw new Error(kernelGpuList(engine.version, profile.fingerprint.platform)
+      ? `内核 ${engine.version} 里没有显卡 ${name}，请在窗口设置里重新选择显卡`
+      : `内核 ${engine.version} 还没有显卡清单，无法使用指定的显卡 ${name}，请改为按种子随机，或换用已支持的内核`)
+  }
   if (effectiveDisabledSpoofing(profile.fingerprint).length && engineMajor !== undefined && engineMajor < 144) {
     throw new Error(`选择性关闭指纹伪装需要 Fingerprint Chromium 144 或更高版本，当前为 ${engine.version}`)
   }

@@ -8,7 +8,7 @@ Canvas、Audio、字体、Speech voices、ClientRects、Geolocation 和 WebRTC �
 两个不同 seed 会被对齐到同一 GPU 桶，因此同一个固定硬件模板不能因为 seed 改变而漂移。矩阵最后还会
 确认三个模拟模板的 GPU 型号互不相同。
 
-Windows 种子模板只从 `src/shared/windows-gpu-catalog.json` 的桌面 GPU 池分配，不使用 Laptop GPU。
+Windows 种子模板只从 `src/shared/gpu-catalogs.json` 里 144 内核清单的桌面 RTX 30/40 显卡中分配，不使用 Laptop GPU。
 环境会持久化分配后的内核 bucket，软件升级不会重新计算已使用环境的 GPU；复制、从模板创建或主动重新生成
 种子时才会分配新 bucket。
 
