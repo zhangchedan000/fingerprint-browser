@@ -18,21 +18,24 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(profile({ deviceMemory: 4 }), { userDataDir: '/data' })).toContain('--fingerprint-device-memory=4')
   })
 
-  it('uses the stored screen size by default', () => {
+  it('uses the computer\'s screen while the kernel cannot change the resolution', () => {
     const args = buildLaunchArgs(profile(), { userDataDir: '/data', hostScreen: { width: 2560, height: 1440 } })
-    expect(args).toContain('--fingerprint-screen-width=1920')
-    expect(args).toContain('--window-size=1920,1080')
-  })
-
-  it('follows the real display when the window is set to follow the computer', () => {
-    const args = buildLaunchArgs(profile({ screenSource: 'host' }), { userDataDir: '/data', hostScreen: { width: 2560, height: 1440 } })
     expect(args).toContain('--fingerprint-screen-width=2560')
     expect(args).toContain('--fingerprint-screen-height=1440')
-    expect(args).toContain('--window-size=2560,1440')
   })
 
   it('falls back to the stored size when the display size is unknown', () => {
     const args = buildLaunchArgs(profile({ screenSource: 'host' }), { userDataDir: '/data' })
     expect(args).toContain('--fingerprint-screen-width=1920')
+  })
+
+  it('lets the kernel pick its default window size unless the window has a fixed size', () => {
+    const auto = buildLaunchArgs(profile(), { userDataDir: '/data', hostScreen: { width: 2560, height: 1440 } })
+    expect(auto.some((arg) => arg.startsWith('--window-size') || arg.startsWith('--window-position'))).toBe(false)
+    const fixed = profile()
+    fixed.window = { mode: 'custom', width: 1280, height: 800, x: 40, y: 30 }
+    const args = buildLaunchArgs(fixed, { userDataDir: '/data' })
+    expect(args).toContain('--window-size=1280,800')
+    expect(args).toContain('--window-position=40,30')
   })
 })

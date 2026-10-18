@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { effectiveGpu } from '../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../shared/network-identity'
+import { effectiveScreenSource } from '../shared/screen'
 import type {
   BrowserProfile,
   EngineStatus,
@@ -390,7 +391,7 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
 export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostScreen'>): ExpectedIdentity {
   const fp = profile.fingerprint
   const identity = effectiveNetworkIdentity(fp, options.proxy?.ok ? options.proxy : undefined, { allowGeoConflict: true })
-  const screen: [number, number] = fp.screenSource === 'host' && options.hostScreen
+  const screen: [number, number] = effectiveScreenSource(fp) === 'host' && options.hostScreen
     ? [options.hostScreen.width, options.hostScreen.height]
     : [fp.screenWidth, fp.screenHeight]
   return {

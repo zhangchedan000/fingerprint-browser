@@ -388,6 +388,12 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await expect(launcher.crashHistory(ids[0])).resolves.toEqual([
       expect.objectContaining({ code: 23, phase: 'running', pid: controller.children[0].pid })
     ])
+    const [record] = await launcher.crashHistory(ids[0])
+    expect(record.logFile).toMatch(/browser-.+\.log$/)
+    expect(controller.arguments[0]).toContain(`--log-file=${record.logFile}`)
+    expect(record.args).toEqual(controller.arguments[0])
+    await expect(launcher.readLaunchLog(ids[0], record.logFile!)).resolves.toMatchObject({ text: '' })
+    await expect(launcher.readLaunchLog(ids[0], join(tmpdir(), 'browser-other.log'))).rejects.toThrow('日志文件不属于这个环境')
     expect(launcher.runtimeSnapshot().managedProcesses).toBe(0)
     expect(launcher.hasRunning()).toBe(false)
   })

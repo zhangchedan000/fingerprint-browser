@@ -3,6 +3,7 @@ import { effectiveDisabledSpoofing, effectiveFingerprintSeed } from '../shared/h
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { effectiveNetworkIdentity } from '../shared/network-identity'
+import { effectiveScreenSource } from '../shared/screen'
 
 export interface LaunchArgumentOptions {
   userDataDir: string
@@ -51,7 +52,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
     allowGeoConflict: options.allowGeoConflict
   })
-  const followHost = fp.screenSource === 'host' && options.hostScreen
+  const followHost = effectiveScreenSource(fp) === 'host' && options.hostScreen
     && Number.isInteger(options.hostScreen.width) && Number.isInteger(options.hostScreen.height)
   const screenWidth = followHost ? options.hostScreen!.width : fp.screenWidth
   const screenHeight = followHost ? options.hostScreen!.height : fp.screenHeight
@@ -67,7 +68,6 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     `--lang=${networkIdentity.language}`,
     `--accept-lang=${networkIdentity.acceptLanguages}`,
     `--timezone=${networkIdentity.timezone}`,
-    `--window-size=${profile.window.mode === 'custom' ? profile.window.width : screenWidth},${profile.window.mode === 'custom' ? profile.window.height : screenHeight}`,
     `--window-name=${profileWindowName(profile)}`,
     `--prism-profile-serial=${profile.serialNumber}`,
     `--prism-profile-id=${profile.id}`,
@@ -78,7 +78,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     '--disable-component-update'
   ]
 
-  if (profile.window.mode === 'custom') args.push(`--window-position=${profile.window.x},${profile.window.y}`)
+  // Automatic size: no --window-size, so the kernel opens its own default window the way a
+  // fresh Chrome does, and remembers the size the user drags it to.
+  if (profile.window.mode === 'custom') {
+    args.push(`--window-size=${profile.window.width},${profile.window.height}`)
+    args.push(`--window-position=${profile.window.x},${profile.window.y}`)
+  }
 
   if (platformVersion) args.push(`--fingerprint-platform-version=${platformVersion}`)
   if (brandVersion) args.push(`--fingerprint-brand-version=${brandVersion}`)

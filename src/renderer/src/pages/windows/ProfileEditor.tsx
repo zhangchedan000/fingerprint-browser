@@ -1,4 +1,5 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
+import { SCREEN_SPOOFING_SUPPORTED } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
   Alert,
@@ -741,7 +742,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   />
                 </Form.Item>
               </Row>
-              <Row label={t("浏览器窗口")}>
+              <Row label={t("浏览器窗口")} hint={windowMode === 'auto' ? t("和新装的 Chrome 一样打开默认大小的窗口，之后记住你拖动后的大小") : undefined}>
                 <Form.Item name={['window', 'mode']} noStyle>
                   <Radio.Group size="small" optionType="button" options={[{ value: 'auto', label: t("自动尺寸与位置") }, { value: 'custom', label: t("固定尺寸与位置") }]} />
                 </Form.Item>
@@ -1056,27 +1057,33 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
 
       <h3 className="fb-fp-group">{t("显示")}</h3>
-      <Row label={t("分辨率")} check={checkFor('screen')} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : undefined}>
-        <Space wrap size={8}>
-          <ValueChoice
-            label={t("分辨率")}
-            value={screenValue}
-            onChange={chooseScreen}
-            onShuffle={shuffleScreen}
-            options={[
-              { value: 'host', label: t("本机真实") },
-              ...COMMON_SCREENS.map(([width, height]) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
-              { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
-            ]}
-          />
-          {screenValue === 'custom' && screenCustom && (
-            <>
-              <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
-              <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
-            </>
-          )}
-        </Space>
-      </Row>
+      {SCREEN_SPOOFING_SUPPORTED ? (
+        <Row label={t("分辨率")} check={checkFor('screen')} hint={fp.screenSource === 'host' ? t("启动时使用这台电脑的屏幕尺寸") : undefined}>
+          <Space wrap size={8}>
+            <ValueChoice
+              label={t("分辨率")}
+              value={screenValue}
+              onChange={chooseScreen}
+              onShuffle={shuffleScreen}
+              options={[
+                { value: 'host', label: t("本机真实") },
+                ...COMMON_SCREENS.map(([width, height]) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
+                { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
+              ]}
+            />
+            {screenValue === 'custom' && screenCustom && (
+              <>
+                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+              </>
+            )}
+          </Space>
+        </Row>
+      ) : (
+        <Row label={t("分辨率")} check={checkFor('screen')} hint={t("当前内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
+          <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
+        </Row>
+      )}
       <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
 
       <h3 className="fb-fp-group">{t("硬件指纹")}</h3>

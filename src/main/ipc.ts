@@ -1,6 +1,7 @@
 import { t } from '../shared/i18n'
 import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
-import { lstat, readFile, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
@@ -406,6 +407,17 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:diagnose', (_event, id: string) => launcher.diagnose(id))
   ipcMain.handle('profiles:crash-history', (_event, id: string) => launcher.crashHistory(id))
+  ipcMain.handle('profiles:read-launch-log', (_event, id: string, logFile: string) => launcher.readLaunchLog(id, logFile))
+  ipcMain.handle('profiles:open-launch-log-folder', async (_event, id: string, logFile?: string) => {
+    const folder = launcher.launchLogFolder(id)
+    await mkdir(folder, { recursive: true })
+    if (typeof logFile === 'string' && join(folder, basename(logFile)) === logFile && existsSync(logFile)) {
+      shell.showItemInFolder(logFile)
+      return
+    }
+    const error = await shell.openPath(folder)
+    if (error) throw new Error(`无法打开日志目录：${error}`)
+  })
   ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => publicProfile(await profiles.setFavorite(id, favorite)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)

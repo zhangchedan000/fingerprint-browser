@@ -456,6 +456,24 @@ export interface BrowserCrashRecord {
   code: number | null
   signal: NodeJS.Signals | null
   phase: 'starting' | 'running'
+  /** Kernel version the window ran on. */
+  kernelVersion?: string
+  /** Launch log of this run (Chromium's --log-file). */
+  logFile?: string
+  /** The log line that names why the kernel stopped (Check failed, FATAL, ...). */
+  reason?: string
+  /** Last lines of the log before the exit. */
+  logTail?: string[]
+  /** Crashpad dumps written during this run. */
+  dumps?: string[]
+  /** The kernel's command line for this run. */
+  args?: string[]
+}
+
+export interface BrowserLaunchLog {
+  text: string
+  truncated: boolean
+  files: string[]
 }
 
 export interface BatchImportRowView {
@@ -544,6 +562,10 @@ export interface BrowserApi {
     testProxy: (id: string) => Promise<BrowserProfileView>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
+    /** Text of a launch log listed in the crash history. */
+    readLaunchLog: (id: string, logFile: string) => Promise<BrowserLaunchLog>
+    /** Shows the window's launch log folder (or one file in it) in the file manager. */
+    openLaunchLogFolder: (id: string, logFile?: string) => Promise<void>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
     /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */

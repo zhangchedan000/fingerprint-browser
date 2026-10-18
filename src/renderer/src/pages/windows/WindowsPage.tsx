@@ -435,7 +435,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       sorter: profileTableSorters.environment,
       render: (_value, profile) => (
         <div className="fb-name-cell">
-          <StatusDot status={profile.status} error={profile.lastError} />
+          <StatusDot status={profile.status} error={profile.lastError} onOpen={() => void openCrashHistory(profile)} />
           <span className="fb-color-mark" style={{ background: profile.color }} aria-hidden="true" />
           <div>
             <strong title={profile.name}>{profile.name}</strong>

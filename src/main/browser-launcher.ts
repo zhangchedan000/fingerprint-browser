@@ -22,6 +22,8 @@ import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
+import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
+import type { WriteStream } from 'node:fs'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -66,6 +68,17 @@ function validCrashHistory(value: unknown): BrowserCrashRecord[] {
     && ((record as BrowserCrashRecord).signal === null || typeof (record as BrowserCrashRecord).signal === 'string')
     && ['starting', 'running'].includes((record as BrowserCrashRecord).phase)
   )).slice(-MAX_PROFILE_CRASH_RECORDS)
+}
+
+/** Waits (briefly) until captured stderr is on disk. */
+function closeCapture(file: WriteStream | undefined): Promise<void> {
+  if (!file || file.closed) return Promise.resolve()
+  return new Promise((resolve) => {
+    // The child's stderr ends with the process and the pipe then closes the file; only end it
+    // ourselves when that does not happen in time.
+    const timer = setTimeout(() => { file.end(); resolve() }, 1000)
+    file.once('close', () => { clearTimeout(timer); resolve() })
+  })
 }
 
 export class BrowserLauncher {
@@ -236,6 +249,12 @@ export class BrowserLauncher {
       }
       const pipeControlEnabled = process.platform !== 'win32'
       if (pipeControlEnabled) args.push('--remote-debugging-pipe')
+      // Every run writes a log so a crash can be explained in the window list.
+      const launchedAt = new Date()
+      const logFiles = launchLogFiles(runtimePath, launchedAt)
+      await mkdir(logFiles.folder, { recursive: true })
+      await pruneLaunchLogs(logFiles.folder, 9)
+      args.push(...launchLogArgs(logFiles))
       await writeFile(
         join(runtimePath, 'last-launch.json'),
         JSON.stringify({ executable: engine.executable, args, launchedAt: new Date().toISOString() }, null, 2),
@@ -243,10 +262,11 @@ export class BrowserLauncher {
       )
 
       const child = this.browserSpawner(engine.executable, args, {
-        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : 'ignore',
+        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
         windowsHide: false,
         env: { ...process.env }
       })
+      const stderrFile: WriteStream | undefined = captureStream(child.stderr, logFiles.stderrLog)
       let automation: BrowserControlSession | undefined
       if (pipeControlEnabled && Array.isArray(child.stdio)) {
         const writable = child.stdio[3] as Writable | null
@@ -363,13 +383,21 @@ export class BrowserLauncher {
         }
         this.logger?.info('浏览器环境已退出', { profileId: id, code, signal, expected: !unexpected })
         void (async () => {
+          await closeCapture(stderrFile)
           if (unexpected) {
+            const analysis = await analyzeCrash(logFiles, this.profiles.profileDataPath(id), launchedAt)
+              .catch((): CrashAnalysis => ({ logTail: [], dumps: [] }))
+            this.logger?.error('浏览器异常退出', { profileId: id, code, signal, reason: analysis.reason, logFile: logFiles.chromeLog })
             await this.recordCrash(id, {
               occurredAt: new Date().toISOString(),
               pid: child.pid,
               code,
               signal,
-              phase
+              phase,
+              kernelVersion: engine.version,
+              logFile: logFiles.chromeLog,
+              ...analysis,
+              args
             }).catch((error) => {
               this.logger?.error('浏览器崩溃历史写入失败', {
                 profileId: id,
@@ -583,6 +611,18 @@ export class BrowserLauncher {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return []
       throw error
     }
+  }
+
+  /** Text of one of the window's launch logs. Only files in its own log folder are readable. */
+  async readLaunchLog(id: string, logFile: string): Promise<{ text: string; truncated: boolean; files: string[] }> {
+    const folder = this.launchLogFolder(id)
+    if (typeof logFile !== 'string' || !isLaunchLogOf(folder, logFile)) throw new Error('日志文件不属于这个环境')
+    return readLaunchLog(logFile)
+  }
+
+  launchLogFolder(id: string): string {
+    this.profiles.get(id)
+    return launchLogFiles(this.profiles.profileRuntimePath(id)).folder
   }
 
   async crashHistorySnapshot(): Promise<Record<string, BrowserCrashRecord[]>> {
