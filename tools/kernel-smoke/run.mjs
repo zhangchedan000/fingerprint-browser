@@ -61,6 +61,16 @@ for (const major of versions) {
     for (const seed of [1000, 1234567, 3150083396]) variants.push({ label: `seed ${seed}`, args: base(seed) })
     for (const surface of ['font', 'audio', 'canvas', 'clientrects', 'gpu']) variants.push({ label: `seed 1000 off:${surface}`, args: [...base(1000), `--disable-spoofing=${surface}`] })
     variants.push({ label: 'seed 1000 off:all', args: [...base(1000), '--disable-spoofing=font,audio,canvas,clientrects,gpu'] })
+  } else if (process.env.BISECT === 'args') {
+    // A window's exact launch arguments ('|'-separated, as copied from the crash details),
+    // then the same without each one. Paths, logging and start pages are the runner's own.
+    const own = /^--(user-data-dir|log-file|enable-logging|v)(=|$)/
+    const given = (process.env.ARGS || '').split('|').map((item) => item.trim())
+      .filter((item) => item.startsWith('--') && !own.test(item))
+    const full = ['--user-data-dir=USERDATA', ...given]
+    variants.push({ label: 'no fingerprint args', args: ['--user-data-dir=USERDATA'] })
+    variants.push({ label: 'all args', args: full })
+    for (const arg of given) variants.push({ label: `without ${arg.split('=')[0]}`, args: full.filter((item) => item !== arg) })
   } else if (bisect) {
     const full = smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome')
     variants.push({ label: 'no fingerprint args', args: full.filter((arg) => arg.startsWith('--user-data-dir=')) })
@@ -88,7 +98,7 @@ for (const major of versions) {
         try { if (existsSync(file)) port = readFileSync(file, 'utf8').split(/\r?\n/)[0] || undefined } catch {}
       }
       const label = `${major} ${variant.label}`
-      if (!port) { failures.push(`${label}: browser did not start (exit ${child.exitCode})`); console.log(log.slice(-3000)); child.kill(); continue }
+      if (!port) { failures.push(`${label}: browser did not start (exit ${child.exitCode})`); summary.push(`NO-START ${label} exit ${child.exitCode}`); console.log(log.slice(-3000)); child.kill(); continue }
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
       for (const url of urls) {
         const page = await browser.contexts()[0].newPage()
@@ -101,6 +111,13 @@ for (const major of versions) {
         summary.push(`${crashed ? 'CRASH' : 'ok'} ${label} ${new URL(url).hostname}`)
         if (crashed) failures.push(`${label}: renderer crashed on ${url}`)
         await page.close().catch(() => {})
+      }
+      // The whole browser can die too (e.g. a CHECK, 0x80000003), not only a tab.
+      if (child.exitCode !== null) {
+        const code = `0x${(child.exitCode >>> 0).toString(16).toUpperCase()}`
+        console.log(`✗ EXIT ${label} · browser exited ${code}`)
+        summary.push(`EXIT ${code} ${label}`)
+        failures.push(`${label}: browser exited ${code}`)
       }
       await browser.close().catch(() => {})
       child.kill()

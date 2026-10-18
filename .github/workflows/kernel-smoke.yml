@@ -7,7 +7,10 @@ on:
         description: Kernel major versions, comma separated
         default: '144,148,150'
       bisect:
-        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time"
+        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time, args = a window's own arguments (ARGS)"
+        default: ''
+      args:
+        description: "For bisect=args: the window's launch arguments, separated by |"
         default: ''
       urls:
         description: Pages to open, comma separated
@@ -33,4 +36,5 @@ jobs:
           KERNELS: ${{ inputs.kernels || '144,148,150' }}
           URLS: ${{ inputs.urls || 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/' }}
           BISECT: ${{ inputs.bisect }}
+          ARGS: ${{ inputs.args }}
           GITHUB_TOKEN: ${{ github.token }}
