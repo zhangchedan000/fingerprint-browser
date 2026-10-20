@@ -18,7 +18,9 @@ const work = mkdtempSync(join(tmpdir(), 'kernel-smoke-'))
 const headers = { 'user-agent': 'kernel-smoke', ...(process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) }
 
 const bundle = join(work, 'args.mjs')
-await build({ entryPoints: ['tools/kernel-smoke/args.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle, logLevel: 'error' })
+await build({ entryPoints: ['tools/kernel-smoke/args.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle, logLevel: 'error',
+  // proxy-chain is CommonJS and requires Node built-ins.
+  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" } })
 const { smokeArgs, openProxyBridge } = await import(`file://${bundle.replace(/\\/g, '/')}`)
 
 // PROXY (socks5://user:pass@host:port or http://…): every window goes through the app's own proxy
