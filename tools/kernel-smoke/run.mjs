@@ -19,7 +19,27 @@ const headers = { 'user-agent': 'kernel-smoke', ...(process.env.GITHUB_TOKEN ? {
 
 const bundle = join(work, 'args.mjs')
 await build({ entryPoints: ['tools/kernel-smoke/args.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle, logLevel: 'error' })
-const { smokeArgs } = await import(`file://${bundle.replace(/\\/g, '/')}`)
+const { smokeArgs, openProxyBridge } = await import(`file://${bundle.replace(/\\/g, '/')}`)
+
+// PROXY (socks5://user:pass@host:port or http://…): every window goes through the app's own proxy
+// bridge, and curl first checks the proxy itself, so a proxy fault and a kernel fault are told apart.
+const failures = []
+const summary = []
+let bridge
+if (process.env.PROXY) {
+  const upstream = new URL(process.env.PROXY)
+  const proxy = { protocol: upstream.protocol.replace(':', ''), host: upstream.hostname.replace(/^\[|\]$/g, ''), port: Number(upstream.port), username: decodeURIComponent(upstream.username), password: decodeURIComponent(upstream.password) }
+  bridge = await openProxyBridge(proxy, { onFailure: (error) => console.log(`bridge failure: ${error?.message ?? error}`) })
+  const curlProxy = process.env.PROXY.replace(/^socks5:/, 'socks5h:')
+  for (const url of urls) {
+    for (const [label, via] of [['proxy', curlProxy], ['bridge', bridge]]) {
+      let out
+      try { out = execFileSync('curl', ['-sS', '-o', 'NUL', '-m', '30', '-w', '%{http_code}', '-x', via, url], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } catch (error) { out = `fail ${String(error.stderr || error.message).trim().split('\n').pop()}` }
+      console.log(`curl via ${label} · ${url} · ${out}`)
+      summary.push(`curl-${label} ${new URL(url).hostname} ${out}`)
+    }
+  }
+}
 
 const releases = await (await fetch('https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=30', { headers })).json()
 const assetSuffix = process.platform === 'win32' ? '_windows_x64.zip' : 'x86_64_linux.tar.xz'
@@ -37,8 +57,6 @@ function findFile(dir, name, depth = 0) {
   }
 }
 
-const failures = []
-const summary = []
 for (const major of versions) {
   const release = major === 'clearcote'
     ? clearcoteReleases.find((item) => item.assets.some((asset) => asset.name.startsWith('clearcote-') && asset.name.endsWith(clearcoteSuffix)))
@@ -101,7 +119,7 @@ for (const major of versions) {
     }
   } else {
     for (const platform of ['windows', 'macos']) {
-      for (const brand of ['Chrome', 'Edge']) variants.push({ label: `${platform} · ${brand}`, args: smokeArgs('USERDATA', release.tag_name, platform, brand) })
+      for (const brand of ['Chrome', 'Edge']) variants.push({ label: `${platform} · ${brand}`, args: smokeArgs('USERDATA', release.tag_name, platform, brand, bridge) })
     }
   }
   for (const variant of variants) {
@@ -127,6 +145,8 @@ for (const major of versions) {
         const result = await page.goto(url, { timeout: 45_000, waitUntil: 'load' }).then((response) => `HTTP ${response?.status()}`, (error) => error.message.split('\n')[0])
         await page.waitForTimeout(6000)
         const title = crashed ? '' : await page.title().catch(() => '')
+        const failed = !crashed && !/^HTTP [23]/.test(result)
+        if (failed) summary.push(`LOAD-FAIL ${label} ${new URL(url).hostname} ${result.slice(0, 80)}`)
         console.log(`${crashed ? '✗ CRASH' : '✓'} ${label} · ${url} · ${result} · ${title}`)
         summary.push(`${crashed ? 'CRASH' : 'ok'} ${label} ${new URL(url).hostname}`)
         if (crashed) failures.push(`${label}: renderer crashed on ${url}`)
