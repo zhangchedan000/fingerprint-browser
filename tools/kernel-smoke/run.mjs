@@ -23,6 +23,11 @@ const { smokeArgs } = await import(`file://${bundle.replace(/\\/g, '/')}`)
 
 const releases = await (await fetch('https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=30', { headers })).json()
 const assetSuffix = process.platform === 'win32' ? '_windows_x64.zip' : 'x86_64_linux.tar.xz'
+// "clearcote" in KERNELS tests the newest Clearcote release (same --fingerprint switches).
+const clearcoteReleases = versions.includes('clearcote')
+  ? await (await fetch('https://api.github.com/repos/clearcotelabs/clearcote-browser/releases?per_page=10', { headers })).json()
+  : []
+const clearcoteSuffix = process.platform === 'win32' ? '-windows-x64.zip' : '-linux-x64.tar.xz'
 
 function findFile(dir, name, depth = 0) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -35,8 +40,13 @@ function findFile(dir, name, depth = 0) {
 const failures = []
 const summary = []
 for (const major of versions) {
-  const release = releases.find((item) => item.tag_name.startsWith(`${major}.`))
-  const asset = release?.assets.find((item) => item.name.endsWith(assetSuffix))
+  const release = major === 'clearcote'
+    ? clearcoteReleases.find((item) => item.assets.some((asset) => asset.name.startsWith('clearcote-') && asset.name.endsWith(clearcoteSuffix)))
+    : releases.find((item) => item.tag_name.startsWith(`${major}.`))
+  const asset = major === 'clearcote'
+    ? release?.assets.find((item) => item.name.startsWith('clearcote-') && item.name.endsWith(clearcoteSuffix))
+    : release?.assets.find((item) => item.name.endsWith(assetSuffix))
+  if (asset) console.log(`Kernel ${major}: ${release.tag_name} · ${asset.name}`)
   if (!asset) { console.log(`::warning::no ${assetSuffix} for kernel ${major}`); continue }
   const archive = join(work, asset.name)
   await pipeline(Readable.fromWeb((await fetch(asset.browser_download_url, { headers: { 'user-agent': 'kernel-smoke' } })).body), createWriteStream(archive))
@@ -54,6 +64,16 @@ for (const major of versions) {
         for (const seed of [index, index + size * 7919]) {
           variants.push({ label: `${platform} gpu#${index} seed ${seed}`, args: ['--user-data-dir=USERDATA', `--fingerprint=${seed}`, `--fingerprint-platform=${platform}`] })
         }
+      }
+    }
+  } else if (process.env.BISECT === 'seeds') {
+    // The app's arguments for a fresh window with many seeds: kernel bugs that hit only some seeds.
+    const engineVersion = asset.name.match(/(\d+\.\d+\.\d+\.\d+)/)?.[1] ?? release.tag_name
+    for (const platform of ['windows', 'macos']) {
+      for (let index = 0; index < Number(process.env.SEEDS || 8); index += 1) {
+        const seed = (index * 2654435761 + 12345) >>> 0
+        const args = smokeArgs('USERDATA', engineVersion, platform, 'Chrome').map((arg) => arg.startsWith('--fingerprint=') ? `--fingerprint=${seed}` : arg)
+        variants.push({ label: `${platform} seed ${seed}`, args })
       }
     }
   } else if (process.env.BISECT === 'surface') {

@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       kernels:
-        description: Kernel major versions, comma separated
+        description: "Kernel major versions, comma separated; 'clearcote' = newest Clearcote"
         default: '144,148,150'
       bisect:
-        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time, args = a window's own arguments (ARGS)"
+        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time, seeds = app arguments with many seeds, args = a window's own arguments (ARGS)"
         default: ''
       args:
         description: "For bisect=args: the window's launch arguments, separated by |"
