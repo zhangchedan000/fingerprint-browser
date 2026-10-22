@@ -246,6 +246,8 @@ export class BrowserLauncher {
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
         if (process.platform === 'darwin') args.push('--use-mock-keychain')
+        // Test containers run as root, where Chromium refuses its sandbox.
+        if (process.platform === 'linux' && process.getuid?.() === 0) args.push('--no-sandbox')
       }
       const pipeControlEnabled = process.platform !== 'win32'
       if (pipeControlEnabled) args.push('--remote-debugging-pipe')

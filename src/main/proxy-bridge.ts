@@ -145,7 +145,10 @@ export function upstreamProxyUrl(proxy: ProxyConfig): string | undefined {
     ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
     : ''
   const host = isIP(proxy.host) === 6 ? `[${proxy.host}]` : proxy.host
-  return `${proxy.protocol}://${credentials}${host}:${proxy.port}`
+  // socks5h: the proxy resolves site names. With plain socks5, proxy-chain resolves http:// sites
+  // on this computer first, and in China that answer is often poisoned (google.com never loads).
+  const protocol = proxy.protocol === 'socks5' ? 'socks5h' : proxy.protocol
+  return `${protocol}://${credentials}${host}:${proxy.port}`
 }
 
 /** The local proxy a connection to this window proxy would go through, if any. */

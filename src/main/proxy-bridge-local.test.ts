@@ -1,6 +1,6 @@
 import { createConnection, createServer, type Server } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import { connectThrough, isLocalAddress, localProxyFor, parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
+import { closeProxyBridge, connectThrough, isLocalAddress, localProxyFor, openProxyBridge, parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
 import { proxyFailureReason } from './proxy-tester'
 import type { ProxyConfig } from '../shared/types'
 
@@ -59,5 +59,31 @@ describe('local (system) proxy', () => {
     expect(proxyFailureReason('Proxy response (595) !== 200 when HTTP Tunneling', true)).toContain('已经过本机代理')
     expect(proxyFailureReason('Proxy response (594) !== 200', false)).toContain('拒绝连接')
     expect(proxyFailureReason('something else', false)).toBeUndefined()
+  })
+
+  it('lets a SOCKS5 proxy resolve site names, also for plain http:// pages', async () => {
+    const asked: string[] = []
+    const socks = createServer((client) => {
+      client.on('error', () => undefined)
+      client.once('data', () => {
+        client.write(Buffer.from([5, 0]))
+        client.once('data', (request) => {
+          asked.push(request[3] === 3 ? `name ${request.subarray(5, 5 + request[4]).toString()}` : `address type ${request[3]}`)
+          client.end(Buffer.from([5, 4, 0, 1, 0, 0, 0, 0, 0, 0]))
+        })
+      })
+    })
+    await new Promise<void>((resolve) => socks.listen(0, '127.0.0.1', () => resolve()))
+    const bridge = await openProxyBridge({ protocol: 'socks5', host: '127.0.0.1', port: (socks.address() as { port: number }).port, username: '', password: '' } as ProxyConfig)
+    const { request } = await import('node:http')
+    const target = new URL(bridge!)
+    await new Promise<void>((resolve) => {
+      const req = request({ host: target.hostname, port: Number(target.port), path: 'http://site-name.invalid/', headers: { host: 'site-name.invalid' } }, (res) => { res.resume(); res.on('end', resolve) })
+      req.on('error', () => resolve())
+      req.end()
+    })
+    await closeProxyBridge(bridge)
+    socks.close()
+    expect(asked).toEqual(['name site-name.invalid'])
   })
 })
