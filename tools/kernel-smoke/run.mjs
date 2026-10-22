@@ -86,6 +86,16 @@ for (const major of versions) {
     await new Promise((resolve) => setTimeout(resolve, 8000))
     let port; try { port = readFileSync(join(userDataDir, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] } catch {}
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
+    const settings = await browser.contexts()[0].newPage()
+    await settings.goto('chrome://settings/search').catch(() => {})
+    await settings.waitForTimeout(3000)
+    const shown = await settings.evaluate(() => {
+      const texts = []
+      const walk = (node) => { if (node.shadowRoot) walk(node.shadowRoot); for (const child of node.children ?? []) walk(child); if (node.tagName === 'SELECT') texts.push('select=' + node.options[node.selectedIndex]?.textContent); }
+      walk(document.documentElement)
+      return texts.join(' ; ')
+    }).catch((error) => 'settings: ' + error.message)
+    console.log(`::warning title=search settings ${major}::${shown}`)
     await browser.close().catch(() => {})
     child.kill()
     await new Promise((resolve) => setTimeout(resolve, 3000))
