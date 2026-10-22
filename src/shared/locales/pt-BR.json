@@ -1335,7 +1335,6 @@
   "代理地址": "Endereço do proxy",
   "账号 / 密码": "Usuário / senha",
   "快速粘贴": "Colar rápido",
-  "支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入": "Aceita host:port:user:pass, user:pass@host:port e socks5://user:pass@host:port; os campos são preenchidos automaticamente",
   "连接正常": "Conectado",
   "延迟 {0} ms": "latência {0} ms",
   "按 IP 匹配": "Combinar com o IP",
@@ -1556,7 +1555,6 @@
   "例如：住宅 IP、BM 专用": "ex.: IP residencial, para BM",
   "批量导入代理": "Importar proxies",
   "导入 {0} 个代理": "Importar {0} proxies",
-  "每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。": "Um proxy por linha: host:port:user:pass, user:pass@host:port ou socks5://user:pass@host:port. Os que já estão na biblioteca são ignorados.",
   "未写类型的按": "Linhas sem tipo usam",
   "统一备注（可选）": "Observação comum (opcional)",
   "{0} 行无法识别，将跳过": "{0} linhas não reconhecidas serão ignoradas",
@@ -1983,5 +1981,10 @@
   "旧位置的数据已经不存在": "Os dados antigos não existem mais",
   "正在迁移数据目录，请稍候": "A pasta de dados está sendo movida; aguarde",
   "请先关闭全部窗口（还有 {0} 个在运行）": "Feche todas as janelas antes ({0} ainda abertas)",
-  "选择新的数据目录（空文件夹）": "Escolha a nova pasta de dados (vazia)"
+  "选择新的数据目录（空文件夹）": "Escolha a nova pasta de dados (vazia)",
+  "已识别：{0}": "Reconhecido: {0}",
+  "未写协议，按当前选择的类型": "protocolo não informado, usando o tipo selecionado",
+  "请确认代理类型（HTTP / SOCKS5）是否选对": "confira se o tipo de proxy (HTTP / SOCKS5) está correto",
+  "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Aceita host:port:user:pass, user:pass@host:port, links socks5:// e textos como “Endereço: … Porta: … Usuário: … Senha: …”; ao colar, os campos são preenchidos",
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Um proxy por linha: host:port:user:pass, user:pass:host:port, user:pass@host:port, links socks5:// ou blocos de várias linhas “Endereço: … Porta: … Usuário: … Senha: …”; proxies já na biblioteca são ignorados."
 }

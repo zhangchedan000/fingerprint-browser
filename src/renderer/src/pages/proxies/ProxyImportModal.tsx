@@ -1,7 +1,7 @@
 import { Alert, Input, Modal, Radio, Typography } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { joinMessages, t, translateMessage as mt } from '../../../../shared/i18n'
-import { parsePastedProxy } from '../../../../shared/proxy-paste'
+import { parsePastedProxy, splitPastedProxies } from '../../../../shared/proxy-paste'
 import type { ProxyDraft } from '../../../../shared/types'
 
 interface ParsedLine {
@@ -12,9 +12,8 @@ interface ParsedLine {
 
 /** One proxy per line, in any format the quick paste understands. */
 export function parseProxyLines(text: string, protocol: ProxyDraft['protocol'], note: string): ParsedLine[] {
-  return text.split(/\r?\n/).map((raw, index) => ({ raw: raw.trim(), line: index + 1 }))
-    .filter(({ raw }) => raw && !raw.startsWith('#'))
-    .map(({ raw, line }) => {
+  return splitPastedProxies(text)
+    .map(({ text: raw, line }) => {
       try {
         const parsed = parsePastedProxy(raw)
         return { line, draft: { ...parsed, protocol: parsed.protocol ?? protocol, note } }
@@ -59,7 +58,7 @@ export function ProxyImportModal({ open, busy, onSubmit, onClose }: ProxyImportM
       destroyOnHidden
       width={640}
     >
-      <Typography.Paragraph type="secondary">{t("每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。")}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{t("每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。")}</Typography.Paragraph>
       <Input.TextArea
         value={text}
         onChange={(event) => setText(event.target.value)}

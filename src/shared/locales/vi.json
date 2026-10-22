@@ -1335,7 +1335,6 @@
   "代理地址": "Địa chỉ proxy",
   "账号 / 密码": "Tài khoản / mật khẩu",
   "快速粘贴": "Dán nhanh",
-  "支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入": "Hỗ trợ host:port:user:pass, user:pass@host:port và socks5://user:pass@host:port; tự điền sau khi dán",
   "连接正常": "Kết nối tốt",
   "延迟 {0} ms": "độ trễ {0} ms",
   "按 IP 匹配": "Khớp theo IP",
@@ -1556,7 +1555,6 @@
   "例如：住宅 IP、BM 专用": "vd: IP dân cư, dùng cho BM",
   "批量导入代理": "Nhập proxy hàng loạt",
   "导入 {0} 个代理": "Nhập {0} proxy",
-  "每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。": "Mỗi dòng một proxy: host:port:user:pass, user:pass@host:port hoặc socks5://user:pass@host:port; proxy đã có trong kho sẽ được bỏ qua.",
   "未写类型的按": "Dòng không ghi loại dùng",
   "统一备注（可选）": "Ghi chú chung (tùy chọn)",
   "{0} 行无法识别，将跳过": "{0} dòng không nhận dạng được, sẽ bỏ qua",
@@ -1983,5 +1981,10 @@
   "旧位置的数据已经不存在": "Dữ liệu cũ không còn nữa",
   "正在迁移数据目录，请稍候": "Đang chuyển thư mục dữ liệu, vui lòng chờ",
   "请先关闭全部窗口（还有 {0} 个在运行）": "Hãy đóng mọi cửa sổ trước (còn {0} đang chạy)",
-  "选择新的数据目录（空文件夹）": "Chọn thư mục dữ liệu mới (trống)"
+  "选择新的数据目录（空文件夹）": "Chọn thư mục dữ liệu mới (trống)",
+  "已识别：{0}": "Đã nhận dạng: {0}",
+  "未写协议，按当前选择的类型": "không ghi giao thức, dùng loại đang chọn",
+  "请确认代理类型（HTTP / SOCKS5）是否选对": "hãy kiểm tra loại proxy (HTTP / SOCKS5) đã chọn đúng chưa",
+  "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Hỗ trợ host:port:user:pass, user:pass@host:port, liên kết socks5:// và văn bản dạng “Địa chỉ: … Cổng: … Tên người dùng: … Mật khẩu: …”; dán xong sẽ tự điền",
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Mỗi dòng một proxy: host:port:user:pass, user:pass:host:port, user:pass@host:port, liên kết socks5:// hoặc khối nhiều dòng “Địa chỉ: … Cổng: … Tên người dùng: … Mật khẩu: …”; proxy đã có trong thư viện sẽ được bỏ qua."
 }

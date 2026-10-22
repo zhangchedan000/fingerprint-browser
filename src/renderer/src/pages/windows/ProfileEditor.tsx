@@ -35,7 +35,7 @@ import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
-import { parsePastedProxy } from '../../../../shared/proxy-paste'
+import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
 import type {
@@ -289,6 +289,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
+  const [pasted, setPasted] = useState<PastedProxy | null>(null)
   const [screenCustom, setScreenCustom] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
   const [checking, setChecking] = useState(false)
@@ -325,6 +326,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setTab('basic')
     setProxyResult(null)
     setPasteText('')
+    setPasted(null)
     setPasteError('')
     setProxyMode(profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
     const initial = editorValues(profile, suggestedIndex).fingerprint
@@ -512,9 +514,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function applyPastedProxy(text: string): void {
     setPasteText(text)
+    setPasted(null)
     if (!text.trim()) { setPasteError(''); return }
     try {
       const parsed = parsePastedProxy(text)
+      setPasted(parsed)
       const current = form.getFieldValue('proxy')
       const protocol = parsed.protocol ?? (current.protocol === 'direct' ? 'socks5' : current.protocol)
       setProxyMode(protocol)
@@ -855,12 +859,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row
         label={t("快速粘贴")}
-        hint={pasteError ? <Typography.Text type="danger">{pasteError}</Typography.Text> : t("支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入")}
+        hint={pasteError
+          ? <Typography.Text type="danger">{pasteError}</Typography.Text>
+          : pasted && proxyMode !== 'library' && proxyMode !== 'direct'
+            ? <Typography.Text type="success">{t("已识别：{0}", pastedProxySummary(pasted, proxyMode))}{pasted.protocol ? '' : ` · ${t("未写协议，按当前选择的类型")}`}</Typography.Text>
+            : t("支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入")}
       >
-        <Input
+        <Input.TextArea
           className="fb-paste"
+          autoSize={{ minRows: 1, maxRows: 5 }}
           value={pasteText}
-          placeholder="host:port:user:pass"
+          placeholder={PASTE_PLACEHOLDER}
           onChange={(event) => applyPastedProxy(event.target.value)}
         />
       </Row>
@@ -873,7 +882,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               {proxyResult.networkRisk && <Tag color="warning" className="fb-inline-tag">{riskLabels[proxyResult.networkRisk]}</Tag>}
             </span>
           )}
-          {proxyResult && !proxyResult.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(proxyResult.error))}</span>}
+          {proxyResult && !proxyResult.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(proxyResult.error))}{proxyMode !== 'library' ? ` · ${t("请确认代理类型（HTTP / SOCKS5）是否选对")}` : ''}</span>}
         </div>
       </Row>
       {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (

@@ -1335,7 +1335,6 @@
   "代理地址": "Proxy address",
   "账号 / 密码": "Username / password",
   "快速粘贴": "Quick paste",
-  "支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入": "Supports host:port:user:pass, user:pass@host:port and socks5://user:pass@host:port; fields fill in automatically",
   "连接正常": "Connected",
   "延迟 {0} ms": "{0} ms latency",
   "按 IP 匹配": "Match to IP",
@@ -1556,7 +1555,6 @@
   "例如：住宅 IP、BM 专用": "e.g. residential IP, for BM",
   "批量导入代理": "Import proxies",
   "导入 {0} 个代理": "Import {0} proxies",
-  "每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。": "One proxy per line: host:port:user:pass, user:pass@host:port or socks5://user:pass@host:port. Proxies already in the library are skipped.",
   "未写类型的按": "Lines without a type use",
   "统一备注（可选）": "Note for all (optional)",
   "{0} 行无法识别，将跳过": "{0} lines not recognized and will be skipped",
@@ -1983,5 +1981,10 @@
   "旧位置的数据已经不存在": "The old data no longer exists",
   "正在迁移数据目录，请稍候": "The data folder is being moved; please wait",
   "请先关闭全部窗口（还有 {0} 个在运行）": "Close all windows first ({0} still running)",
-  "选择新的数据目录（空文件夹）": "Choose the new data folder (empty)"
+  "选择新的数据目录（空文件夹）": "Choose the new data folder (empty)",
+  "已识别：{0}": "Recognized: {0}",
+  "未写协议，按当前选择的类型": "no protocol given, using the selected type",
+  "请确认代理类型（HTTP / SOCKS5）是否选对": "check that the proxy type (HTTP / SOCKS5) is right",
+  "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Accepts host:port:user:pass, user:pass@host:port, socks5:// links and text like “Address: … Port: … Username: … Password: …”; pasting fills in the fields",
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "One proxy per line: host:port:user:pass, user:pass:host:port, user:pass@host:port, socks5:// links, or multi-line “Address: … Port: … Username: … Password: …” blocks; proxies already in the library are skipped."
 }

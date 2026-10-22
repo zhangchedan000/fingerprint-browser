@@ -1,7 +1,7 @@
 import { Form, Input, InputNumber, Modal, Radio, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
-import { parsePastedProxy } from '../../../../shared/proxy-paste'
+import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import type { ProxyDraft, ProxyRecordView, ProxyTestResult } from '../../../../shared/types'
 import { ProxyTestButton } from './ProxyTestButton'
 
@@ -21,9 +21,11 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const [form] = Form.useForm<ProxyDraft>()
   const [paste, setPaste] = useState('')
   const [pasteError, setPasteError] = useState('')
+  const [pasted, setPasted] = useState<PastedProxy | null>(null)
   const [result, setResult] = useState<ProxyTestResult | null>(null)
   const passwordStored = Form.useWatch('passwordStored', { form, preserve: true }) === true
   const password = Form.useWatch('password', form) ?? ''
+  const protocol = Form.useWatch('protocol', form) ?? 'socks5'
 
   useEffect(() => {
     if (!open) return
@@ -33,15 +35,18 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       : EMPTY)
     setPaste('')
     setPasteError('')
+    setPasted(null)
     setResult(null)
   }, [open, proxy, form])
 
   function applyPaste(text: string): void {
     setPaste(text)
+    setPasted(null)
     if (!text.trim()) { setPasteError(''); return }
     try {
       const parsed = parsePastedProxy(text)
       form.setFieldsValue({ ...parsed, protocol: parsed.protocol ?? form.getFieldValue('protocol'), passwordStored: false })
+      setPasted(parsed)
       setPasteError('')
       setResult(null)
     } catch (error) {
@@ -67,8 +72,15 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       width={560}
     >
       <Form form={form} layout="vertical" requiredMark={false}>
-        <Form.Item label={t("快速粘贴")} help={pasteError ? <Typography.Text type="danger">{pasteError}</Typography.Text> : undefined}>
-          <Input className="fb-paste" value={paste} placeholder="host:port:user:pass / socks5://user:pass@host:port" onChange={(event) => applyPaste(event.target.value)} />
+        <Form.Item
+          label={t("快速粘贴")}
+          help={pasteError
+            ? <Typography.Text type="danger">{pasteError}</Typography.Text>
+            : pasted
+              ? <Typography.Text type="success">{t("已识别：{0}", pastedProxySummary(pasted, protocol))}{pasted.protocol ? '' : ` · ${t("未写协议，按当前选择的类型")}`}</Typography.Text>
+              : undefined}
+        >
+          <Input.TextArea className="fb-paste" autoSize={{ minRows: 1, maxRows: 5 }} value={paste} placeholder={PASTE_PLACEHOLDER} onChange={(event) => applyPaste(event.target.value)} />
         </Form.Item>
         <Form.Item name="protocol" label={t("类型")}>
           <Radio.Group optionType="button" options={[{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }, { value: 'socks5', label: 'SOCKS5' }]} />

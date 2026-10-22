@@ -1335,7 +1335,6 @@
   "代理地址": "Proxy adresi",
   "账号 / 密码": "Kullanıcı / parola",
   "快速粘贴": "Hızlı yapıştır",
-  "支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入": "host:port:user:pass, user:pass@host:port ve socks5://user:pass@host:port desteklenir; alanlar otomatik dolar",
   "连接正常": "Bağlı",
   "延迟 {0} ms": "gecikme {0} ms",
   "按 IP 匹配": "IP'ye göre",
@@ -1556,7 +1555,6 @@
   "例如：住宅 IP、BM 专用": "örn. konut IP, BM için",
   "批量导入代理": "Proxy içe aktar",
   "导入 {0} 个代理": "{0} proxy içe aktar",
-  "每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。": "Her satıra bir proxy: host:port:user:pass, user:pass@host:port veya socks5://user:pass@host:port. Kütüphanede olanlar atlanır.",
   "未写类型的按": "Türü yazılmayan satırlar",
   "统一备注（可选）": "Ortak not (isteğe bağlı)",
   "{0} 行无法识别，将跳过": "{0} satır tanınmadı, atlanacak",
@@ -1983,5 +1981,10 @@
   "旧位置的数据已经不存在": "Eski veriler artık yok",
   "正在迁移数据目录，请稍候": "Veri klasörü taşınıyor; lütfen bekleyin",
   "请先关闭全部窗口（还有 {0} 个在运行）": "Önce tüm pencereleri kapatın ({0} hâlâ çalışıyor)",
-  "选择新的数据目录（空文件夹）": "Yeni veri klasörünü seçin (boş)"
+  "选择新的数据目录（空文件夹）": "Yeni veri klasörünü seçin (boş)",
+  "已识别：{0}": "Tanındı: {0}",
+  "未写协议，按当前选择的类型": "protokol belirtilmemiş, seçili tür kullanılıyor",
+  "请确认代理类型（HTTP / SOCKS5）是否选对": "proxy türünün (HTTP / SOCKS5) doğru seçildiğini kontrol edin",
+  "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "host:port:user:pass, user:pass@host:port, socks5:// bağlantıları ve “Adres: … Port: … Kullanıcı adı: … Şifre: …” gibi metinler desteklenir; yapıştırınca alanlar doldurulur",
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Her satıra bir proxy: host:port:user:pass, user:pass:host:port, user:pass@host:port, socks5:// bağlantıları ya da çok satırlı “Adres: … Port: … Kullanıcı adı: … Şifre: …” blokları; kütüphanede olanlar atlanır."
 }

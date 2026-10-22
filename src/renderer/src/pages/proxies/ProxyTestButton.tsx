@@ -28,7 +28,7 @@ export function ProxyTestButton({ result, onTest }: { result: ProxyTestResult | 
           {t("连接正常")} · {result.ip} · {[result.country, result.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", result.latencyMs)}
         </span>
       )}
-      {result && !result.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(result.error))}</span>}
+      {result && !result.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(result.error))} · {t("请确认代理类型（HTTP / SOCKS5）是否选对")}</span>}
       {error && <span className="fb-proxy-result bad">{mt(error)}</span>}
     </div>
   )

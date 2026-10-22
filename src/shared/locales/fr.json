@@ -1335,7 +1335,6 @@
   "代理地址": "Adresse du proxy",
   "账号 / 密码": "Identifiant / mot de passe",
   "快速粘贴": "Collage rapide",
-  "支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port，粘贴后自动填入": "Formats host:port:user:pass, user:pass@host:port et socks5://user:pass@host:port ; les champs se remplissent seuls",
   "连接正常": "Connecté",
   "延迟 {0} ms": "latence {0} ms",
   "按 IP 匹配": "Selon l'IP",
@@ -1556,7 +1555,6 @@
   "例如：住宅 IP、BM 专用": "ex. : IP résidentielle, pour BM",
   "批量导入代理": "Importer des proxys",
   "导入 {0} 个代理": "Importer {0} proxys",
-  "每行一个代理，支持 host:port:user:pass、user:pass@host:port 和 socks5://user:pass@host:port；代理库里已有的会自动跳过。": "Un proxy par ligne : host:port:user:pass, user:pass@host:port ou socks5://user:pass@host:port. Ceux déjà présents sont ignorés.",
   "未写类型的按": "Lignes sans type :",
   "统一备注（可选）": "Note commune (facultatif)",
   "{0} 行无法识别，将跳过": "{0} lignes non reconnues seront ignorées",
@@ -1983,5 +1981,10 @@
   "旧位置的数据已经不存在": "Les anciennes données n’existent plus",
   "正在迁移数据目录，请稍候": "Déplacement du dossier en cours ; patientez",
   "请先关闭全部窗口（还有 {0} 个在运行）": "Fermez d’abord toutes les fenêtres ({0} encore ouvertes)",
-  "选择新的数据目录（空文件夹）": "Choisissez le nouveau dossier de données (vide)"
+  "选择新的数据目录（空文件夹）": "Choisissez le nouveau dossier de données (vide)",
+  "已识别：{0}": "Reconnu : {0}",
+  "未写协议，按当前选择的类型": "protocole non indiqué, le type sélectionné est utilisé",
+  "请确认代理类型（HTTP / SOCKS5）是否选对": "vérifiez que le type de proxy (HTTP / SOCKS5) est le bon",
+  "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Accepte host:port:user:pass, user:pass@host:port, les liens socks5:// et un texte du type « Adresse : … Port : … Utilisateur : … Mot de passe : … » ; le collage remplit les champs",
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Un proxy par ligne : host:port:user:pass, user:pass:host:port, user:pass@host:port, liens socks5:// ou blocs sur plusieurs lignes « Adresse : … Port : … Utilisateur : … Mot de passe : … » ; les proxys déjà présents sont ignorés."
 }
