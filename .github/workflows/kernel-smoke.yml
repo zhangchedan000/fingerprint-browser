@@ -44,6 +44,7 @@ jobs:
           BISECT: ${{ inputs.bisect }}
           SITE_LANG: ${{ inputs.site_lang }}
           SITE_WAIT: '40000'
+          PREFS_EXISTING: ${{ inputs.args == 'existing' && '1' || '' }}
           ARGS: ${{ inputs.args }}
           PROXY: ${{ inputs.use_proxy == 'yes' && secrets.SMOKE_PROXY || '' }}
           GITHUB_TOKEN: ${{ github.token }}

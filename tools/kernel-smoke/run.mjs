@@ -80,8 +80,19 @@ for (const major of versions) {
     // The app's Default/Preferences (https-first, Google search): does the kernel keep them?
     const { patchPrefs } = await import(`file://${bundle.replace(/\\/g, '/')}`)
     const userDataDir = mkdtempSync(join(work, 'prefs-'))
-    mkdirSync(join(userDataDir, 'Default'))
-    writeFileSync(join(userDataDir, 'Default', 'Preferences'), JSON.stringify(patchPrefs({})))
+    if (process.env.PREFS_EXISTING) {
+      // A window that already ran once before the app wrote these preferences.
+      const first = spawn(chrome, [...smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome'), 'about:blank'], { stdio: 'ignore' })
+      await new Promise((resolve) => setTimeout(resolve, 8000))
+      first.kill()
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      const before = JSON.parse(readFileSync(join(userDataDir, 'Default', 'Preferences'), 'utf8'))
+      console.log(`::warning title=prefs before ${major}::engine=${before.default_search_provider_data?.template_url_data?.short_name}`)
+      writeFileSync(join(userDataDir, 'Default', 'Preferences'), JSON.stringify(patchPrefs(before)))
+    } else {
+      mkdirSync(join(userDataDir, 'Default'))
+      writeFileSync(join(userDataDir, 'Default', 'Preferences'), JSON.stringify(patchPrefs({})))
+    }
     const child = spawn(chrome, [...smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome'), '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
     await new Promise((resolve) => setTimeout(resolve, 8000))
     let port; try { port = readFileSync(join(userDataDir, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] } catch {}
