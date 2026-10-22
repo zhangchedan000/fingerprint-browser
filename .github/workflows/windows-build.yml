@@ -21,6 +21,14 @@ jobs:
         env:
           TUNNEL_CORE_BIN: build/tunnel-core/current/mihomo.exe
         run: npx vitest run --fileParallelism=false --reporter=default --reporter=json --outputFile=vitest.json
+      - name: Report tunnel core tests
+        if: always()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            const rows = r.testResults.flatMap((f) => f.assertionResults).filter((a) => a.fullName.includes("tunnel core"))
+            console.log(`::notice title=Tunnel core tests::${rows.map((a) => a.status + " " + a.title).join(" | ") || "none ran"}`)'
       - name: Report test failures
         if: failure()
         shell: bash
