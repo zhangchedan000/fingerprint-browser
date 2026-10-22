@@ -1,0 +1,36 @@
+name: Release probe
+
+# Reads another project's newest release (names, sizes, SHA-256) and can hand one asset back as an
+# artifact, for components the app downloads at runtime (kernels, the tunnel core).
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: owner/name
+        default: MetaCubeX/mihomo
+      asset:
+        description: Regex of an asset to upload as an artifact ('' = none)
+        default: ''
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List the newest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ inputs.repo }}
+          ASSET: ${{ inputs.asset }}
+        run: |
+          gh api "repos/$REPO/releases?per_page=3" > releases.json
+          jq -r '.[] | "\(.tag_name) prerelease=\(.prerelease) " + ([.assets[] | select(.name | test("windows-amd64|darwin|linux-amd64")) | "\(.name) \(.size) \(.digest)"] | join(" ; "))' releases.json | head -c 3500 > summary.txt
+          echo "::warning title=Release::$(tr '\n' '|' < summary.txt)"
+          if [ -n "$ASSET" ]; then
+            url=$(jq -r --arg re "$ASSET" '[.[] | select(.prerelease == false)][0].assets[] | select(.name | test($re)) | .browser_download_url' releases.json | head -1)
+            mkdir out && curl -sSL -o "out/$(basename "$url")" "$url"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.asset != '' }}
+        with:
+          name: asset
+          path: out/
