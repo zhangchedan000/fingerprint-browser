@@ -1,5 +1,6 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, net, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
+import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -94,6 +95,14 @@ app.whenReady().then(async () => {
   if (profileStorageHealth.recoveredFromBackup) logger.error('环境元数据已从备份恢复', profileStorageHealth)
   if (!profileStorageHealth.backupHealthy) logger.error('环境元数据备份不可用', profileStorageHealth.backupError)
   logger.info('指纹浏览器已启动', { version: app.getVersion(), platform: process.platform, arch: process.arch })
+
+  // Window proxies are reached through the computer's own system proxy (Clash, v2rayN…) when it is on.
+  setLocalProxyResolver(async (host, port) => {
+    const target = `https://${host.includes(':') ? `[${host}]` : host}:${port}/`
+    const via = parseProxyRule(await session.defaultSession.resolveProxy(target))
+    if (via) logger?.info('代理经本机代理连接', { via: `${via.type} ${via.host}:${via.port}` })
+    return via
+  })
 
   launcher = new BrowserLauncher(profiles, settings, (profile) => {
     mainWindow?.webContents.send('profiles:changed', publicProfile(profile))

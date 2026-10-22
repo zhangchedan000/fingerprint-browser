@@ -1882,5 +1882,11 @@
   "被系统或其他程序结束，常见于内存不足": "Bị hệ thống hoặc chương trình khác kết thúc, thường do thiếu bộ nhớ",
   "这条记录早于日志功能，没有日志": "Bản ghi này có trước tính năng nhật ký nên không có nhật ký",
   "进程被强制结束": "Tiến trình bị buộc kết thúc",
-  "退出代码": "Mã thoát"
+  "退出代码": "Mã thoát",
+  "找不到代理服务器，请检查地址是否填对": "Không tìm thấy máy chủ proxy. Hãy kiểm tra địa chỉ.",
+  "代理服务器拒绝连接，请检查端口是否填对，或代理是否已过期": "Máy chủ proxy từ chối kết nối. Hãy kiểm tra cổng hoặc proxy đã hết hạn chưa.",
+  "已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理": "Vẫn không kết nối được proxy này dù đã qua proxy của máy. Hãy kiểm tra phần mềm proxy trên máy hoặc đổi proxy.",
+  "连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理": "Kết nối bị ngắt: mạng này không tới được proxy. Với proxy nước ngoài, hãy bật proxy hệ thống trong phần mềm proxy trên máy (như Clash) trước.",
+  "代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理": "Kết nối proxy quá thời gian. Với proxy nước ngoài, hãy bật proxy hệ thống trong phần mềm proxy trên máy (như Clash) trước, hoặc đổi proxy.",
+  "代理服务器打不开检测网站，可能已过期或限制了访问": "Proxy không mở được trang kiểm tra; có thể đã hết hạn hoặc bị giới hạn truy cập."
 }
