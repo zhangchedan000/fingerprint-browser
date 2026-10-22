@@ -104,4 +104,5 @@ App.tsx       外壳：侧边栏 + 顶栏 + 当前页面
 - `npm test`：类型检查、全部单元测试（包括升级旧数据、引用规则、主题检查、翻译检查）、内核锁检查。
 - `npx electron-vite build`：打包检查。
 - 指纹检测：`main/fingerprint-check.ts` 用窗口的启动参数开一个临时浏览器读取网站能看到的值（`observeFingerprint`），再逐项判定红黄绿（`evaluateFingerprint`），结果按设置行显示在编辑器里。和 Cookie 维护共用 `main/devtools-session.ts`。
+- 代理线路：窗口代理都经 `main/proxy-bridge.ts` 的本地中转。SOCKS5 用 socks5h（域名交给代理解析）。连国外代理时，优先走内置加速通道（`main/tunnel-manager.ts`，打包的 mihomo，版本与校验值在 `tools/tunnel-core/lock.json`，节点在设置 → 网络加速），其次走本机系统代理；上次检测在中国的代理始终直连。检测时经通道不通会改试本机网络并记住。
 - `node tools/app-e2e/library.mjs`：用真实应用（真主进程、真数据文件）检查旧数据升级、代理库/分组库、分配、删除规则、回收站恢复、设置保存和重启后保持。不启动浏览器。
