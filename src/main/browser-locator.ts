@@ -1,3 +1,4 @@
+import { isKernelId } from '../shared/kernel-id'
 import { app } from 'electron'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -62,7 +63,7 @@ export interface MacBundledKernelMigration {
 }
 
 function validKernelVersion(version: string): boolean {
-  return /^\d+(?:\.\d+){3}$/.test(version)
+  return isKernelId(version)
 }
 
 /** Resolve a profile-pinned managed kernel without ever falling back to another browser. */
@@ -183,7 +184,7 @@ export async function migrateMacLegacyKernelSelection(
 
 export function inferFingerprintKernelVersion(executable: string): string | undefined {
   const normalized = executable.replaceAll('\\', '/')
-  return normalized.match(/\/kernels\/(\d+(?:\.\d+){3})(?:\/|$)/)?.[1]
+  return normalized.match(/\/kernels\/((?:clearcote-)?\d+(?:\.\d+){3})(?:\/|$)/)?.[1]
 }
 
 export async function normalizeBrowserSelection(selection: string): Promise<string> {

@@ -1,3 +1,4 @@
+import { kernelChromiumVersion } from '../shared/kernel-id'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -28,7 +29,7 @@ export async function lastChromiumVersion(userDataDir: string): Promise<string |
 export async function assertKernelCanOpenProfileData(userDataDir: string, kernelVersion: string | null | undefined): Promise<void> {
   if (!kernelVersion) return
   const last = await lastChromiumVersion(userDataDir)
-  if (last && compareVersions(last, kernelVersion) > 0) {
+  if (last && compareVersions(last, kernelChromiumVersion(kernelVersion)) > 0) {
     throw new Error(`这个环境的数据已被更新的内核 ${last} 打开过，内核 ${kernelVersion} 无法打开（Chromium 不支持降级）。请把这个环境的内核改回 ${last.split('.')[0]} 或更高版本`)
   }
 }

@@ -1,3 +1,4 @@
+import { isKernelId } from './kernel-id'
 import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
@@ -60,7 +61,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     throw new Error('环境扩展配置无效或超过 50 个')
   }
   const kernelVersion = draft.kernelVersion.trim()
-  if (kernelVersion && !/^\d+(?:\.\d+){3}$/.test(kernelVersion)) {
+  if (kernelVersion && !isKernelId(kernelVersion)) {
     throw new Error('绑定内核版本必须是四段数字，例如 144.0.7559.132')
   }
 

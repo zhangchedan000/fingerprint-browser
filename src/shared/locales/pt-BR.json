@@ -1888,5 +1888,14 @@
   "已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理": "Mesmo pelo proxy deste computador, não foi possível alcançar este proxy. Verifique o app de proxy local ou troque de proxy.",
   "连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理": "A conexão foi interrompida: esta rede não alcança o proxy. Para um proxy estrangeiro, ative antes o proxy do sistema no seu app de proxy local (como o Clash).",
   "代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理": "A conexão com o proxy expirou. Para um proxy estrangeiro, ative antes o proxy do sistema no seu app de proxy local (como o Clash) ou troque de proxy.",
-  "代理服务器打不开检测网站，可能已过期或限制了访问": "O proxy não abre os sites de verificação; pode ter expirado ou restringir o acesso."
+  "代理服务器打不开检测网站，可能已过期或限制了访问": "O proxy não abre os sites de verificação; pode ter expirado ou restringir o acesso.",
+  "已将 {0} 个窗口切换到 {1}": "{0} janelas trocadas para {1}",
+  "把窗口切换到 {0}": "Trocar janelas para {0}",
+  "跟随默认内核（{0}）": "Seguir o kernel padrão ({0})",
+  "内核：{0}": "Kernel: {0}",
+  "{0} · 指定": "{0} · fixado",
+  "{0} · 默认": "{0} · padrão",
+  "试用": "Teste",
+  "Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡": "Kernel de teste Clearcote: código aberto e estável, mas tem só uma GPU, então não é possível escolher a GPU",
+  "Clearcote 是另一个开源指纹内核，目前为试用。": "Clearcote é outro kernel de impressão digital de código aberto, por enquanto em teste."
 }

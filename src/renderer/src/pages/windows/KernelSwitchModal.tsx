@@ -2,6 +2,7 @@ import { Alert, Modal, Select, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { EngineStatus, KernelRelease } from '../../../../shared/types'
+import { kernelName } from '../../../../shared/kernel-id'
 
 /** '' means "follow the default kernel". */
 export const FOLLOW_DEFAULT_KERNEL = ''
@@ -24,11 +25,11 @@ export function KernelSwitchModal({ open, count, runningCount, kernels, engine, 
   const options = [
     {
       value: FOLLOW_DEFAULT_KERNEL,
-      label: engine?.version ? t("跟随默认内核（Chromium {0}）", engine.version) : t("跟随默认内核")
+      label: engine?.version ? t("跟随默认内核（{0}）", kernelName(engine.version)) : t("跟随默认内核")
     },
     ...kernels
       .filter((kernel) => kernel.installed && kernel.executable)
-      .map((kernel) => ({ value: kernel.version, label: `Chromium ${kernel.version}` }))
+      .map((kernel) => ({ value: kernel.version, label: kernelName(kernel.version) }))
   ]
 
   return (

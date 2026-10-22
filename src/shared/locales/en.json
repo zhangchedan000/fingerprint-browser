@@ -1888,5 +1888,14 @@
   "已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理": "Still can’t reach this proxy through this computer’s proxy. Check your local proxy app, or use another proxy.",
   "连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理": "Connection was cut: this network can’t reach the proxy. For a foreign proxy, first turn on the system proxy in your local proxy app (such as Clash).",
   "代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理": "Proxy connection timed out. For a foreign proxy, first turn on the system proxy in your local proxy app (such as Clash), or use another proxy.",
-  "代理服务器打不开检测网站，可能已过期或限制了访问": "The proxy can’t open the check sites; it may have expired or restrict access."
+  "代理服务器打不开检测网站，可能已过期或限制了访问": "The proxy can’t open the check sites; it may have expired or restrict access.",
+  "已将 {0} 个窗口切换到 {1}": "Switched {0} windows to {1}",
+  "把窗口切换到 {0}": "Switch windows to {0}",
+  "跟随默认内核（{0}）": "Follow default kernel ({0})",
+  "内核：{0}": "Kernel: {0}",
+  "{0} · 指定": "{0} · pinned",
+  "{0} · 默认": "{0} · default",
+  "试用": "Trial",
+  "Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡": "Clearcote trial kernel: open source and stable, but it has only one GPU, so the GPU can’t be chosen",
+  "Clearcote 是另一个开源指纹内核，目前为试用。": "Clearcote is another open-source fingerprint kernel, offered as a trial."
 }

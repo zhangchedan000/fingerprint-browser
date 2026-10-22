@@ -1,3 +1,4 @@
+import { kernelChromiumVersion } from '../../../shared/kernel-id'
 import { t, translateMessage as mt } from '../../../shared/i18n'
 import type { ProfileStatus } from '../../../shared/types'
 
@@ -15,7 +16,7 @@ export function humanError(error: unknown): string {
 }
 
 export function majorVersion(version: string): string {
-  return version.split('.')[0] || version
+  return kernelChromiumVersion(version).split('.')[0] || version
 }
 
 export function formatBytes(bytes: number): string {

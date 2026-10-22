@@ -1,3 +1,4 @@
+import { isKernelId } from '../shared/kernel-id'
 import { suffixedProfileName } from '../shared/profile-name'
 import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
@@ -583,7 +584,7 @@ export class ProfileStore {
     if (!Array.isArray(idsInput) || typeof kernelVersionInput !== 'string') throw new Error('批量切换内核参数无效')
     const ids = this.selection(idsInput)
     const kernelVersion = kernelVersionInput.trim()
-    if (kernelVersion && !/^\d+(?:\.\d+){3}$/.test(kernelVersion)) {
+    if (kernelVersion && !isKernelId(kernelVersion)) {
       throw new Error('绑定内核版本必须是四段数字，例如 144.0.7559.132')
     }
     const now = new Date().toISOString()

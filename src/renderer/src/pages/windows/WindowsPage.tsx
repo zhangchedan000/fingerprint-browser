@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, ProfileDraft, StorageOverview } from '../../../../shared/types'
 import { AssignModal } from '../../components/AssignModal'
-import { ACTIVE_STATUSES, formatBytes, humanError, isEditable, majorVersion, relativeTime } from '../../components/format'
+import { ACTIVE_STATUSES, formatBytes, humanError, isEditable, relativeTime } from '../../components/format'
 import { ListPage, type ListTab } from '../../components/ListPage'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
@@ -37,6 +37,7 @@ import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
 import { ProfileEditor, type ProfileEditorExtras } from './ProfileEditor'
 import { profileTableSorters } from './profile-table-sort'
+import { kernelName, kernelShortName } from '../../../../shared/kernel-id'
 
 type ListTabKey = 'all' | 'running' | 'favorites' | 'ungrouped' | 'attention'
 const ALL_GROUPS = '__all__'
@@ -361,7 +362,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       ws.upsertProfiles(await window.browserApi.profiles.setKernelMany(ids, kernelVersion))
       setKernelSwitchOpen(false)
       notify.success(kernelVersion
-        ? t("已将 {0} 个窗口切换到 Chromium {1}", ids.length, kernelVersion)
+        ? t("已将 {0} 个窗口切换到 {1}", ids.length, kernelName(kernelVersion))
         : t("{0} 个窗口已改为跟随默认内核", ids.length))
     } catch (error) {
       ws.fail(error)
@@ -480,8 +481,8 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         <div className="fb-kernel-cell">
           <span>{profile.fingerprint.platform === 'windows' ? 'Windows' : 'macOS'} · {profile.fingerprint.brand}</span>
           {profile.kernelVersion
-            ? <Tooltip title={`Chromium ${profile.kernelVersion}`}><small className="pinned">{t("Chromium {0} · 指定", majorVersion(profile.kernelVersion))}</small></Tooltip>
-            : <Tooltip title={engine?.version ? `Chromium ${engine.version}` : undefined}><small>{engine?.version ? t("Chromium {0} · 默认", majorVersion(engine.version)) : t("默认内核")}</small></Tooltip>}
+            ? <Tooltip title={kernelName(profile.kernelVersion)}><small className="pinned">{t("{0} · 指定", kernelShortName(profile.kernelVersion))}</small></Tooltip>
+            : <Tooltip title={engine?.version ? kernelName(engine.version) : undefined}><small>{engine?.version ? t("{0} · 默认", kernelShortName(engine.version)) : t("默认内核")}</small></Tooltip>}
         </div>
       )
     },
@@ -616,7 +617,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         filters={(
           <>
             {kernelFilter !== undefined && (
-              <Tag closable className="fb-filter-tag" onClose={() => setKernelFilter(undefined)}>{t("内核：Chromium {0}", kernelFilter)}</Tag>
+              <Tag closable className="fb-filter-tag" onClose={() => setKernelFilter(undefined)}>{t("内核：{0}", kernelName(kernelFilter))}</Tag>
             )}
             <Select value={groupFilter} options={groupOptions} onChange={setGroupFilter} className="group-filter" aria-label={t("按分组筛选")} />
             <Input

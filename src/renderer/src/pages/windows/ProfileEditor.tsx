@@ -56,6 +56,7 @@ import type {
   ProxyTestResult
 } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
+import { kernelName } from '../../../../shared/kernel-id'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
 type EditorTab = 'basic' | 'proxy' | 'fingerprint'
@@ -940,8 +941,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Select
             className="fb-wide-select"
             options={[
-              { value: '', label: engine?.version ? t("跟随默认内核（Chromium {0}）", engine.version) : t("跟随默认内核") },
-              ...kernels.map((kernel) => ({ value: kernel.version, label: `Chromium ${kernel.version}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}` })),
+              { value: '', label: engine?.version ? t("跟随默认内核（{0}）", kernelName(engine.version)) : t("跟随默认内核") },
+              ...kernels.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version)}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}` })),
               ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelVersion) }] : [])
             ]}
           />

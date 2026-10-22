@@ -1,9 +1,10 @@
+import { kernelChromiumVersion } from './kernel-id'
 import type { BrowserProfile, EngineStatus } from './types'
 import { effectiveDisabledSpoofing, effectiveFingerprintSeed } from './hardware-profiles'
 import { findKernelGpu, kernelGpuList } from './gpu-catalog'
 
 function majorVersion(version: string | undefined): number | undefined {
-  const match = version?.trim().match(/^(\d+)/)
+  const match = kernelChromiumVersion(version)?.trim().match(/^(\d+)/)
   return match ? Number(match[1]) : undefined
 }
 
@@ -18,7 +19,7 @@ export function fingerprintVersionWarning(brandVersion: string, engine: EngineSt
 }
 
 export function resolveFingerprintBrandVersion(brandVersion: string, engine: Pick<EngineStatus, 'fingerprintKernel' | 'version'>): string {
-  if (engine.fingerprintKernel && engine.version) return engine.version
+  if (engine.fingerprintKernel && engine.version) return kernelChromiumVersion(engine.version)
   return brandVersion.trim()
 }
 

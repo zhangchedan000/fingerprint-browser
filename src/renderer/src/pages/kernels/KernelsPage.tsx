@@ -11,6 +11,7 @@ import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
 import { kernelKnownIssue } from '../../../../shared/kernel-known-issues'
+import { kernelName, kernelVendor } from '../../../../shared/kernel-id'
 
 const FOLLOW_DEFAULT = ''
 
@@ -101,7 +102,7 @@ export function KernelsPage({ navigate }: PageProps) {
       ws.upsertProfiles(await window.browserApi.profiles.setKernelMany(ids, version))
       setAssignTo(null)
       notify.success(version
-        ? t("已将 {0} 个窗口切换到 Chromium {1}", ids.length, version)
+        ? t("已将 {0} 个窗口切换到 {1}", ids.length, kernelName(version))
         : t("{0} 个窗口已改为跟随默认内核", ids.length))
     } catch (error) {
       ws.fail(error)
@@ -121,6 +122,7 @@ export function KernelsPage({ navigate }: PageProps) {
       render: (version: string) => (
         <span>
           <span className="fb-mono">{version}</span>
+          {kernelVendor(version) === 'clearcote' && <Tooltip title={t("Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡")}><Tag color="purple" className="fb-inline-tag">{t("试用")}</Tag></Tooltip>}
           {kernelKnownIssue(version) && <Tooltip title={t(kernelKnownIssue(version)!)}><Tag color="orange" className="fb-inline-tag">{t("有已知问题")}</Tag></Tooltip>}
         </span>
       )
@@ -173,7 +175,7 @@ export function KernelsPage({ navigate }: PageProps) {
   ]
 
   const targetOptions = [
-    ...ready.map((kernel) => ({ value: kernel.version, label: `Chromium ${kernel.version}${kernel.version === defaultVersion ? ` · ${t("默认")}` : ''}` })),
+    ...ready.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version)}${kernel.version === defaultVersion ? ` · ${t("默认")}` : ''}` })),
     { value: FOLLOW_DEFAULT, label: t("跟随默认内核") }
   ]
   const users = defaultVersion ? kernelUsers(profiles, defaultVersion, defaultVersion).length : profiles.filter((profile) => !profile.kernelVersion).length
@@ -193,7 +195,7 @@ export function KernelsPage({ navigate }: PageProps) {
         <DeploymentUnitOutlined className="fb-kernel-icon" />
         <div className="fb-kernel-summary">
           <div className="fb-kernel-title">
-            <strong>{engine?.version ? `Chromium ${engine.version}` : mt(engine?.label ?? t("未配置"))}</strong>
+            <strong>{engine?.version ? kernelName(engine.version) : mt(engine?.label ?? t("未配置"))}</strong>
             <Tag color="blue">{t("默认内核")}</Tag>
             {current && <Tag>{originLabel(current.origin)}</Tag>}
           </div>
@@ -301,7 +303,7 @@ export function KernelsPage({ navigate }: PageProps) {
 
       <PickWindowsModal
         open={assignTo !== null}
-        title={assignTo ? t("把窗口切换到 Chromium {0}", assignTo) : ''}
+        title={assignTo ? t("把窗口切换到 {0}", kernelName(assignTo)) : ''}
         windows={profiles.filter((profile) => profile.kernelVersion !== assignTo)}
         detailTitle={t("当前内核")}
         detail={(window) => <span className="fb-mono fb-muted">{window.kernelVersion || t("跟随默认内核")}</span>}

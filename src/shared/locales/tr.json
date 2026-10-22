@@ -1888,5 +1888,14 @@
   "已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理": "Bilgisayarın proxy’si üzerinden de bu proxy’ye ulaşılamıyor. Yerel proxy uygulamanızı kontrol edin veya proxy değiştirin.",
   "连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理": "Bağlantı kesildi: bu ağ proxy’ye ulaşamıyor. Yurt dışı proxy için önce yerel proxy uygulamanızda (ör. Clash) sistem proxy’sini açın.",
   "代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理": "Proxy bağlantısı zaman aşımına uğradı. Yurt dışı proxy için önce yerel proxy uygulamanızda (ör. Clash) sistem proxy’sini açın veya proxy değiştirin.",
-  "代理服务器打不开检测网站，可能已过期或限制了访问": "Proxy, kontrol sitelerini açamıyor; süresi dolmuş veya erişimi kısıtlıyor olabilir."
+  "代理服务器打不开检测网站，可能已过期或限制了访问": "Proxy, kontrol sitelerini açamıyor; süresi dolmuş veya erişimi kısıtlıyor olabilir.",
+  "已将 {0} 个窗口切换到 {1}": "{0} pencere {1} çekirdeğine geçirildi",
+  "把窗口切换到 {0}": "Pencereleri {0} çekirdeğine geçir",
+  "跟随默认内核（{0}）": "Varsayılan çekirdeği izle ({0})",
+  "内核：{0}": "Çekirdek: {0}",
+  "{0} · 指定": "{0} · sabit",
+  "{0} · 默认": "{0} · varsayılan",
+  "试用": "Deneme",
+  "Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡": "Clearcote deneme çekirdeği: açık kaynak ve kararlı, ancak tek GPU’su var; GPU seçilemez",
+  "Clearcote 是另一个开源指纹内核，目前为试用。": "Clearcote, açık kaynaklı bir başka parmak izi çekirdeğidir; şimdilik deneme sürümüdür."
 }

@@ -1,3 +1,4 @@
+import { isKernelId } from '../shared/kernel-id'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -21,6 +22,9 @@ import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
 const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
+/** Clearcote (trial): same --fingerprint switches, open source; only its newest build is offered. */
+const CLEARCOTE_RELEASES_URL = 'https://api.github.com/repos/clearcotelabs/clearcote-browser/releases?per_page=10'
+const TRUSTED_DOWNLOAD_PATHS = ['/adryfish/fingerprint-chromium/releases/download/', '/clearcotelabs/clearcote-browser/releases/download/']
 
 interface GithubAsset {
   name: string
@@ -62,8 +66,13 @@ function supportedAsset(assets: GithubAsset[]): GithubAsset | undefined {
   return undefined
 }
 
+function clearcoteAsset(assets: GithubAsset[]): GithubAsset | undefined {
+  if (process.platform === 'win32') return assets.find((asset) => /^clearcote-\d+(?:\.\d+){3}-windows-x64\.zip$/.test(asset.name))
+  return undefined
+}
+
 function safeVersion(version: string): string {
-  if (!/^\d+(?:\.\d+){3}$/.test(version)) throw new Error('内核版本号无效')
+  if (!isKernelId(version)) throw new Error('内核版本号无效')
   return version
 }
 
@@ -132,13 +141,12 @@ export class KernelManager {
     }
     const installed = await this.installedManifests()
     let releases: GithubRelease[]
+    const clearcoteReleases = this.fetchReleases(CLEARCOTE_RELEASES_URL).catch((error: unknown) => {
+      this.logger?.error('获取 Clearcote 内核版本失败', error)
+      return [] as GithubRelease[]
+    })
     try {
-      const response = await this.fetchImpl(RELEASES_URL, {
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
-        signal: AbortSignal.timeout(15_000)
-      })
-      if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
-      releases = await response.json() as GithubRelease[]
+      releases = await this.fetchReleases(RELEASES_URL)
     } catch (error) {
       if (installed.size === 0) throw error
       this.logger?.error('获取远程内核版本失败，展示本地版本', error)
@@ -165,6 +173,31 @@ export class KernelManager {
           executable: manifest ? join(this.kernelPath(release.tag_name), manifest.executableRelative) : undefined
         } satisfies KernelRelease]
       })
+    // Clearcote only publishes pre-releases; its newest Windows build is offered as a trial.
+    const clearcote = (await clearcoteReleases)
+      .filter((release) => !release.draft)
+      .flatMap((release) => {
+        const asset = clearcoteAsset(release.assets)
+        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
+        const chromium = asset?.name.match(/\d+(?:\.\d+){3}/)?.[0]
+        if (!asset || !digest || !chromium) return []
+        const version = `clearcote-${chromium}`
+        const manifest = installed.get(version)
+        return [{
+          version,
+          publishedAt: release.published_at,
+          assetName: asset.name,
+          downloadUrl: asset.browser_download_url,
+          size: asset.size,
+          sha256: digest,
+          installed: Boolean(manifest),
+          remoteAvailable: true,
+          origin: 'release',
+          executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined
+        } satisfies KernelRelease]
+      })
+      .slice(0, 1)
+    remote.push(...clearcote)
     const remoteVersions = new Set(remote.map((release) => release.version))
     const localOnly = [...installed.values()]
       .filter((manifest) => !remoteVersions.has(manifest.version))
@@ -181,6 +214,15 @@ export class KernelManager {
         executable: join(this.kernelPath(manifest.version), manifest.executableRelative)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
+  }
+
+  private async fetchReleases(url: string): Promise<GithubRelease[]> {
+    const response = await this.fetchImpl(url, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
+      signal: AbortSignal.timeout(15_000)
+    })
+    if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
+    return await response.json() as GithubRelease[]
   }
 
   async install(versionInput: string): Promise<EngineStatus> {
@@ -694,7 +736,7 @@ export class KernelManager {
   private validateRelease(release: KernelRelease): void {
     const url = new URL(release.downloadUrl)
     if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('内核下载地址不可信')
-    if (!url.pathname.startsWith('/adryfish/fingerprint-chromium/releases/download/')) {
+    if (!TRUSTED_DOWNLOAD_PATHS.some((path) => url.pathname.startsWith(path))) {
       throw new Error('内核下载地址不属于受信任仓库')
     }
     if (!/^[a-f\d]{64}$/i.test(release.sha256)) throw new Error('发行包缺少有效的 SHA-256')

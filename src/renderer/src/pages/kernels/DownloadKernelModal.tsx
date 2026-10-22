@@ -4,6 +4,7 @@ import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { EngineStatus, KernelInstallProgress, KernelRelease } from '../../../../shared/types'
 import { formatBytes, humanError } from '../../components/format'
 import { kernelKnownIssue } from '../../../../shared/kernel-known-issues'
+import { kernelName, kernelVendor } from '../../../../shared/kernel-id'
 
 interface Props {
   open: boolean
@@ -45,16 +46,18 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     }
   }
 
-  const latest = releases?.[0]?.version
+  const main = releases?.filter((release) => kernelVendor(release.version) === 'fingerprint-chromium')
+  const latest = main?.[0]?.version
   /** Newest release without a known kernel bug: the one the dialog highlights. */
-  const recommended = releases?.find((release) => !kernelKnownIssue(release.version))?.version ?? latest
+  const recommended = main?.find((release) => !kernelKnownIssue(release.version))?.version ?? latest
   const columns: TableColumnsType<KernelRelease> = [
     {
       title: t("版本"),
       dataIndex: 'version',
       render: (version: string) => (
         <span>
-          Chromium {version}
+          {kernelName(version)}
+          {kernelVendor(version) === 'clearcote' && <Tooltip title={t("Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡")}><Tag color="purple" className="fb-inline-tag">{t("试用")}</Tag></Tooltip>}
           {version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}
           {version === recommended && version !== latest && <Tag color="green" className="fb-inline-tag">{t("推荐")}</Tag>}
           {kernelKnownIssue(version) && <Tooltip title={t(kernelKnownIssue(version)!)}><Tag color="orange" className="fb-inline-tag">{t("有已知问题")}</Tag></Tooltip>}
@@ -89,7 +92,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
         ? <Button onClick={() => void window.browserApi.engine.cancelInstall(installing)}>{t("取消下载")}</Button>
         : <Button onClick={onClose}>{t("关闭")}</Button>}
     >
-      <p className="fb-muted">{t("来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。")}</p>
+      <p className="fb-muted">{t("来自 fingerprint-chromium 官方发布，下载后会校验文件完整性再安装，并设为默认内核。")} {t("Clearcote 是另一个开源指纹内核，目前为试用。")}</p>
       {error && <Alert type="error" showIcon title={error} className="fb-block-gap" />}
       {active && (
         <div className="fb-block-gap">
