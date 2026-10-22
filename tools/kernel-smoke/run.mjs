@@ -1,7 +1,7 @@
 // Opens real sites in a downloaded fingerprint-chromium kernel with the app's launch arguments and
 // reports renderer crashes ("Aw, Snap!"). Used by .github/workflows/kernel-smoke.yml.
 import { spawn, execFileSync } from 'node:child_process'
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -76,6 +76,37 @@ for (const major of versions) {
   execFileSync('tar', ['-xf', archive], { cwd: folder })
   const chrome = findFile(folder, process.platform === 'win32' ? 'chrome.exe' : 'chrome')
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
+  if (process.env.BISECT === 'stable') {
+    // Same window (same arguments, same data folder) opened several times: canvas must not change.
+    const userDataDir = mkdtempSync(join(work, 'stable-'))
+    const args = smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome')
+    const draw = `(() => {
+      const c = document.createElement('canvas'); c.width = 280; c.height = 60
+      const x = c.getContext('2d'); x.textBaseline = 'top'; x.font = '16px Arial'; x.fillStyle = '#f60'; x.fillRect(100, 1, 62, 20)
+      x.fillStyle = '#069'; x.fillText('Cwm fjordbank glyphs vext quiz, \u{1F603}', 2, 15); x.fillStyle = 'rgba(102,204,0,0.7)'; x.fillText('Cwm fjordbank glyphs vext quiz', 4, 17)
+      x.beginPath(); x.arc(50, 30, 20, 0, Math.PI * 2); x.stroke()
+      const s = c.toDataURL(); let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
+      return (h >>> 0).toString(16)
+    })()`
+    const hashes = []
+    for (let run = 0; run < 3; run++) {
+      const child = spawn(chrome, [...args, '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
+      let port
+      for (let attempt = 0; attempt < 150 && !port; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        try { port = readFileSync(join(userDataDir, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] || undefined } catch {}
+      }
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
+      const page = browser.contexts()[0].pages()[0] ?? await browser.contexts()[0].newPage()
+      hashes.push(`${await page.evaluate(draw)}/${await page.evaluate(draw)}`)
+      await browser.close().catch(() => {})
+      child.kill()
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      try { rmSync(join(userDataDir, 'DevToolsActivePort')) } catch {}
+    }
+    console.log(`::warning title=canvas across launches ${major}::${hashes.join(' | ')}`)
+    continue
+  }
   if (process.env.BISECT === 'deep') {
     // The app's deep check, as the editor runs it, against the real sites.
     const results = await deepCheck({ profile: smokeProfile('windows', 'Chrome'), engine: { executable: chrome, version: release.tag_name, fingerprintKernel: true }, hostHardwareConcurrency: 4, hostScreen: { width: 1920, height: 1080 } })
