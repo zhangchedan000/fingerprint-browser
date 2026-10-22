@@ -12,6 +12,9 @@ on:
       args:
         description: "For bisect=args: the window's launch arguments, separated by |"
         default: ''
+      site_lang:
+        description: "bisect=sites: browser language for the page (e.g. es-MX)"
+        default: ''
       use_proxy:
         description: "'yes' = every window goes through the SMOKE_PROXY secret via the app's proxy bridge"
         default: ''
@@ -39,6 +42,8 @@ jobs:
           KERNELS: ${{ inputs.kernels || '144,148,150' }}
           URLS: ${{ inputs.urls || 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/' }}
           BISECT: ${{ inputs.bisect }}
+          SITE_LANG: ${{ inputs.site_lang }}
+          SITE_WAIT: '40000'
           ARGS: ${{ inputs.args }}
           PROXY: ${{ inputs.use_proxy == 'yes' && secrets.SMOKE_PROXY || '' }}
           GITHUB_TOKEN: ${{ github.token }}

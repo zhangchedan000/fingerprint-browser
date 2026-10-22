@@ -99,7 +99,7 @@ for (const major of versions) {
     }
   } else if (process.env.BISECT === 'sites') {
     // One app-style window; each page's visible text is reported (calibrates the deep check).
-    variants.push({ label: 'windows · Chrome', args: smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome') })
+    variants.push({ label: 'windows · Chrome', args: [...smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome').filter((arg) => !(process.env.SITE_LANG && /^--(lang|accept-lang|fingerprint-language)=/.test(arg))), ...(process.env.SITE_LANG ? [`--lang=${process.env.SITE_LANG}`, `--accept-lang=${process.env.SITE_LANG}`, `--fingerprint-language=${process.env.SITE_LANG}`] : [])] })
   } else if (process.env.BISECT === 'surface') {
     const base = (seed) => [`--user-data-dir=USERDATA`, `--fingerprint=${seed}`]
     for (const seed of [1000, 1234567, 3150083396]) variants.push({ label: `seed ${seed}`, args: base(seed) })
