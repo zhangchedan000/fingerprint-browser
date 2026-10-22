@@ -1,7 +1,7 @@
 // Opens real sites in a downloaded fingerprint-chromium kernel with the app's launch arguments and
 // reports renderer crashes ("Aw, Snap!"). Used by .github/workflows/kernel-smoke.yml.
 import { spawn, execFileSync } from 'node:child_process'
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -76,6 +76,25 @@ for (const major of versions) {
   execFileSync('tar', ['-xf', archive], { cwd: folder })
   const chrome = findFile(folder, process.platform === 'win32' ? 'chrome.exe' : 'chrome')
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
+  if (process.env.BISECT === 'prefs') {
+    // The app's Default/Preferences (https-first, Google search): does the kernel keep them?
+    const { patchPrefs } = await import(`file://${bundle.replace(/\\/g, '/')}`)
+    const userDataDir = mkdtempSync(join(work, 'prefs-'))
+    mkdirSync(join(userDataDir, 'Default'))
+    writeFileSync(join(userDataDir, 'Default', 'Preferences'), JSON.stringify(patchPrefs({})))
+    const child = spawn(chrome, [...smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome'), '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
+    await new Promise((resolve) => setTimeout(resolve, 8000))
+    let port; try { port = readFileSync(join(userDataDir, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] } catch {}
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
+    await browser.close().catch(() => {})
+    child.kill()
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    const prefs = JSON.parse(readFileSync(join(userDataDir, 'Default', 'Preferences'), 'utf8'))
+    let secure = {}; try { secure = JSON.parse(readFileSync(join(userDataDir, 'Default', 'Secure Preferences'), 'utf8')) } catch {}
+    const engine = prefs.default_search_provider_data?.template_url_data
+    console.log(`::warning title=prefs ${major}::https_only=${prefs.https_only_mode_enabled} engine=${engine?.short_name} ${engine?.url} | reset=${JSON.stringify(prefs.prefs?.preference_reset_time ?? prefs.profile?.reset_prompt_memento ?? '')} | secure macs: ${Object.keys(secure.protection?.macs ?? {}).join(',').slice(0, 600)} | secure dsp: ${JSON.stringify(secure.default_search_provider_data ?? '').slice(0, 300)}`)
+    continue
+  }
   if (process.env.BISECT === 'rects') {
     // Different windows (seeds): ClientRects, SVG and canvas should differ; also with the app's args.
     const probe = `(() => {
@@ -99,7 +118,6 @@ for (const major of versions) {
       }
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
       const page = browser.contexts()[0].pages()[0] ?? await browser.contexts()[0].newPage()
-      await page.setContent('<html><body></body></html>')
       rows.push(`seed ${seed}: ${await page.evaluate(probe)}`)
       await browser.close().catch(() => {})
       child.kill()

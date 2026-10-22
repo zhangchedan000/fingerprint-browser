@@ -21,3 +21,10 @@ export function smokeProfile(platform: BrowserPlatform, brand: 'Chrome' | 'Edge'
   draft.fingerprint = { ...applyHardwareProfile({ ...draft.fingerprint, platform }, defaultHardwareProfileId(platform), { refreshSeededGpu: true }), brand }
   return { ...validateProfileDraft(draft), id: 'smoke', serialNumber: 1, groupId: '', proxyId: '', proxy: { protocol: 'direct', host: '', username: '', password: '' }, favorite: false, status: 'closed', createdAt: '', updatedAt: '' } as unknown as BrowserProfile
 }
+
+export { patchChromePreferences } from '../../src/main/chrome-preferences'
+import { patchChromePreferences as patch } from '../../src/main/chrome-preferences'
+/** What the launcher writes into a new window's Default/Preferences. */
+export function patchPrefs(current: Record<string, unknown>): Record<string, unknown> {
+  return patch(current, {}) ?? current
+}
