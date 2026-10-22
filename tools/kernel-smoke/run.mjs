@@ -97,6 +97,9 @@ for (const major of versions) {
         variants.push({ label: `${platform} seed ${seed}`, args })
       }
     }
+  } else if (process.env.BISECT === 'sites') {
+    // One app-style window; each page's visible text is reported (calibrates the deep check).
+    variants.push({ label: 'windows · Chrome', args: smokeArgs('USERDATA', release.tag_name, 'windows', 'Chrome') })
   } else if (process.env.BISECT === 'surface') {
     const base = (seed) => [`--user-data-dir=USERDATA`, `--fingerprint=${seed}`]
     for (const seed of [1000, 1234567, 3150083396]) variants.push({ label: `seed ${seed}`, args: base(seed) })
@@ -147,6 +150,14 @@ for (const major of versions) {
         page.on('crash', () => { crashed = true })
         const result = await page.goto(url, { timeout: 45_000, waitUntil: 'load' }).then((response) => `HTTP ${response?.status()}`, (error) => error.message.split('\n')[0])
         await page.waitForTimeout(6000)
+        if (process.env.BISECT === 'sites' && !crashed) {
+          await page.waitForTimeout(Number(process.env.SITE_WAIT || 20000))
+          const text = await page.evaluate(() => document.body.innerText).catch((error) => `evaluate failed: ${error.message}`)
+          for (let part = 0; part < 3; part++) {
+            const chunk = text.slice(part * 3000, (part + 1) * 3000)
+            if (chunk) console.log(`::warning title=${new URL(url).hostname} text ${part + 1}::${chunk.replace(/%/g, '%25').replace(/\r?\n/g, ' ⏎ ')}`)
+          }
+        }
         const title = crashed ? '' : await page.title().catch(() => '')
         const failed = !crashed && !/^HTTP [23]/.test(result)
         if (failed) summary.push(`LOAD-FAIL ${label} ${new URL(url).hostname} ${result.slice(0, 80)}`)
