@@ -76,6 +76,37 @@ for (const major of versions) {
   execFileSync('tar', ['-xf', archive], { cwd: folder })
   const chrome = findFile(folder, process.platform === 'win32' ? 'chrome.exe' : 'chrome')
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
+  if (process.env.BISECT === 'rects') {
+    // Different windows (seeds): ClientRects, SVG and canvas should differ; also with the app's args.
+    const probe = `(() => {
+      const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16) }
+      const d = document.createElement('div'); d.style.cssText = 'position:absolute;left:10.5px;top:20.25px;font:16px Arial;transform:scale(1.1) rotate(3deg)'; d.textContent = 'Cwm fjordbank glyphs vext quiz'; document.body.appendChild(d)
+      const r = d.getClientRects()[0]; const b = d.getBoundingClientRect()
+      const range = document.createRange(); range.selectNodeContents(d); const rr = range.getBoundingClientRect()
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); const t = document.createElementNS('http://www.w3.org/2000/svg', 'text'); t.textContent = 'Cwm fjordbank'; svg.appendChild(t); document.body.appendChild(svg)
+      const c = document.createElement('canvas'); const x = c.getContext('2d'); x.font = '16px Arial'; x.fillText('Cwm fjordbank glyphs', 2, 20)
+      return 'rects ' + hash([r.x, r.y, r.width, r.height, b.width, rr.width].join(',')) + ' (' + r.width + ') svg ' + t.getComputedTextLength() + ' canvas ' + hash(c.toDataURL()) + ' measure ' + x.measureText('Cwm fjordbank glyphs').width
+    })()`
+    const rows = []
+    for (const seed of [1000, 2000, 3000]) {
+      const userDataDir = mkdtempSync(join(work, 'rects-'))
+      const args = smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome').map((arg) => arg.startsWith('--fingerprint=') ? `--fingerprint=${seed}` : arg)
+      const child = spawn(chrome, [...args, '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
+      let port
+      for (let attempt = 0; attempt < 150 && !port; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        try { port = readFileSync(join(userDataDir, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] || undefined } catch {}
+      }
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
+      const page = browser.contexts()[0].pages()[0] ?? await browser.contexts()[0].newPage()
+      await page.setContent('<html><body></body></html>')
+      rows.push(`seed ${seed}: ${await page.evaluate(probe)}`)
+      await browser.close().catch(() => {})
+      child.kill()
+    }
+    console.log(`::warning title=rects ${major}::${rows.join(' | ')}`)
+    continue
+  }
   if (process.env.BISECT === 'stable') {
     // Same window (same arguments, same data folder) opened several times: canvas must not change.
     const userDataDir = mkdtempSync(join(work, 'stable-'))
