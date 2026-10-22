@@ -519,6 +519,12 @@ export interface BrowserApi {
     info: () => Promise<AppInfo>
     openFolder: (folder: 'vault' | 'logs') => Promise<void>
     openProjectPage: () => Promise<void>
+    vaultLocation: () => Promise<VaultLocationInfo>
+    /** Opens a folder picker, copies the data there and restarts; null when cancelled. */
+    relocateVault: () => Promise<string | null>
+    deletePreviousVault: () => Promise<VaultLocationInfo>
+    revertVault: () => Promise<void>
+    onRelocateProgress: (listener: (progress: RelocateProgress) => void) => () => void
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
@@ -541,6 +547,9 @@ export interface BrowserApi {
     clearCache: (id: string) => Promise<ProfileStorageInfo>
     /** Starts the draft's exact browser setup in a throwaway profile and reports what a site sees. */
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<FingerprintCheckReport>
+    /** Opens public detection sites in a throwaway browser with these settings; results stream in by site. */
+    deepCheck: (draft: ProfileDraft, profileId?: string) => Promise<import('./deep-check').DeepSiteResult[]>
+    onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult) => void) => () => void
     /** Last saved check of a window, or null. */
     lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>
     exportBackup: (id: string) => Promise<ProfileBackupResult | null>
@@ -667,4 +676,18 @@ export interface TunnelStatus {
   sources: TunnelSourceSummary[]
   nodes: TunnelNodeInfo[]
   selected?: string
+}
+
+export interface VaultLocationInfo {
+  path: string
+  defaultPath: string
+  /** The folder the data was moved from, kept until deleted. */
+  previous?: string
+}
+
+export interface RelocateProgress {
+  copiedBytes: number
+  totalBytes: number
+  copiedFiles: number
+  totalFiles: number
 }

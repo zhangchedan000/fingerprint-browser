@@ -1,5 +1,6 @@
+import { DEEP_SITES, parseDeepSite, type DeepSiteResult } from '../shared/deep-check'
 import { spawn } from 'node:child_process'
-import { createServer, type Server } from 'node:http'
+import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -318,22 +319,18 @@ export interface FingerprintRunOptions {
 }
 
 /** Starts the window's exact browser setup in a throwaway profile and reads what a page sees. */
-export async function observeFingerprint(options: FingerprintRunOptions): Promise<FingerprintObserved> {
+/**
+ * A throwaway browser with the window's launch arguments (and proxy), off-screen or headless,
+ * driven over the DevTools protocol. Nothing of the window's own data is touched.
+ */
+async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: string, run: (client: CdpClient) => Promise<T>): Promise<T> {
   const { profile, engine } = options
   if (!engine.executable) throw new Error('没有找到浏览器内核，请先在内核管理里下载或导入')
   const userDataDir = await mkdtemp(join(tmpdir(), 'fb-fingerprint-check-'))
-  let server: Server | undefined
   let proxyUrl: string | undefined
   let child: ReturnType<typeof spawn> | undefined
   let client: CdpClient | undefined
   try {
-    server = createServer((_request, response) => {
-      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-      response.end(PAGE)
-    })
-    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
-    const address = server.address()
-    const pageUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/`
     proxyUrl = await openProxyBridge(profile.proxy)
     // Same window size as a real launch, just placed off-screen.
     const size = expectedIdentity(profile, options).screen
@@ -349,23 +346,17 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
       hostScreen: options.hostScreen
     }).filter((arg) => !arg.startsWith('--window-name='))
     args.push('--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--disable-extensions')
+    // The window sits off-screen: keep its timers and painting at full speed, as for a visible one.
+    args.push('--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling')
     if (options.headless) args.push('--headless=new', '--no-sandbox', '--enable-unsafe-swiftshader')
     if (options.extraArgs) args.push(...options.extraArgs)
-    args.push(pageUrl)
+    args.push(startUrl)
     child = spawn(engine.executable, args, { stdio: 'ignore', windowsHide: true, env: { ...process.env } })
     // A cold first start (antivirus scanning a fresh kernel) can take well over ten seconds.
     const { websocket } = await waitForPage(userDataDir, 30_000)
     client = await CdpClient.connect(websocket)
     await client.send('Page.enable')
-    await client.send('Page.navigate', { url: pageUrl })
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    const result = await client.send<{ result?: { value?: FingerprintObserved }; exceptionDetails?: { text?: string } }>(
-      'Runtime.evaluate',
-      { expression: PROBE, awaitPromise: true, returnByValue: true, userGesture: true },
-      45_000
-    )
-    if (!result.result?.value) throw new Error(`读取指纹失败：${result.exceptionDetails?.text ?? '页面没有返回结果'}`)
-    return result.result.value
+    return await run(client)
   } finally {
     if (client) {
       await Promise.race([client.send('Browser.close').catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 1000))])
@@ -373,7 +364,6 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
     }
     if (child) await stopChild(child)
     await closeProxyBridge(proxyUrl)
-    await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()))
     // Windows can hold files of a just-exited browser for a moment.
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -385,6 +375,62 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
       }
     }
   }
+}
+
+export async function observeFingerprint(options: FingerprintRunOptions): Promise<FingerprintObserved> {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    response.end(PAGE)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  const pageUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/`
+  try {
+    return await withCheckBrowser(options, pageUrl, async (client) => {
+      await client.send('Page.navigate', { url: pageUrl })
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      const result = await client.send<{ result?: { value?: FingerprintObserved }; exceptionDetails?: { text?: string } }>(
+        'Runtime.evaluate',
+        { expression: PROBE, awaitPromise: true, returnByValue: true, userGesture: true },
+        45_000
+      )
+      if (!result.result?.value) throw new Error(`读取指纹失败：${result.exceptionDetails?.text ?? '页面没有返回结果'}`)
+      return result.result.value
+    })
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+}
+
+/** Opens each detection site in the check browser and reads its verdict and a screenshot. */
+export async function deepCheck(options: FingerprintRunOptions, onSite: (result: DeepSiteResult) => void = () => undefined): Promise<DeepSiteResult[]> {
+  return withCheckBrowser(options, 'about:blank', async (client) => {
+    const results: DeepSiteResult[] = []
+    for (const spec of DEEP_SITES) {
+      const result: DeepSiteResult = { site: spec.site, name: spec.name, url: spec.url, status: 'unknown', findings: [] }
+      try {
+        await client.send('Page.navigate', { url: spec.url }, 30_000)
+        const deadline = Date.now() + spec.timeoutMs
+        let parsed: ReturnType<typeof parseDeepSite>
+        while (!parsed && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+          const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
+          parsed = parseDeepSite(spec.site, page?.result?.value ?? '')
+        }
+        if (parsed) Object.assign(result, parsed)
+        else result.error = '没有读到这个网站的结论，请看截图或打开原网页'
+        // Let late parts of the page settle before the picture.
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
+        if (shot?.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`
+      } catch (error) {
+        result.error = error instanceof Error ? error.message : String(error)
+      }
+      results.push(result)
+      onSite(result)
+    }
+    return results
+  })
 }
 
 /** Everything the page should report for this window, computed the same way the launcher does. */

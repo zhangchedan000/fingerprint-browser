@@ -56,6 +56,7 @@ import type {
   ProxyTestResult
 } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
+import { DeepCheck } from './DeepCheck'
 import { kernelName } from '../../../../shared/kernel-id'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
@@ -1198,6 +1199,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ].map(([name, value]) => <span key={name}>{name}<b className="fb-mono">{value}</b></span>)}
           </div>
         )}
+        <DeepCheck draft={currentDraft} profileId={profile?.id} />
       </div>
     </div>
   )

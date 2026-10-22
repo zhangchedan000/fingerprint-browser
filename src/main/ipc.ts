@@ -6,7 +6,8 @@ import { basename, join } from 'node:path'
 import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
-import { evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
+import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
+import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
 import { hostHardwareSnapshot } from './host-hardware'
 import { mergeKernelCatalog } from './kernel-catalog'
@@ -174,7 +175,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   // data is never touched and an unsaved draft can be checked too.
   const fingerprintChecks = new FingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
   ipcMain.handle('profiles:last-fingerprint-check', (_event, id: string) => fingerprintChecks.get(id))
-  ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
+  /** The check browser's settings for an editor draft: same kernel, proxy and hardware as a real launch. */
+  async function checkRunOptions(draft: ProfileDraft, profileId?: string) {
     const validated = validateProfileDraft(draft)
     const existing = profileId ? profiles.get(profileId) : undefined
     let proxy: ProxyConfig
@@ -215,6 +217,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       headless: process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1',
       logger
     }
+    return { validated, proxy, engine, proxyResult, runOptions }
+  }
+
+  ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string): Promise<DeepSiteResult[]> => {
+    const { runOptions } = await checkRunOptions(draft, profileId)
+    return deepCheck(runOptions, (result) => event.sender.send('profiles:deep-check-progress', result))
+  })
+  ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
+    const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
     const observed = await observeFingerprint(runOptions)
     const windows = profiles.list()
     const others = Object.entries(await fingerprintChecks.all())
@@ -234,7 +245,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
         fingerprint: validated.fingerprint,
         engine,
         observed,
-        expected: expectedIdentity(profile, runOptions),
+        expected: expectedIdentity(runOptions.profile, runOptions),
         proxy: proxyResult,
         usesProxy: proxy.protocol !== 'direct',
         others

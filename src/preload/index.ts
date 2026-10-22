@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BrowserApi, BrowserProfileView, KernelInstallProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import type { DeepSiteResult } from '../shared/deep-check'
+import type { BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
@@ -11,7 +12,16 @@ const api: BrowserApi = {
     setPreferences: (patch) => ipcRenderer.invoke('app:set-preferences', patch),
     info: () => ipcRenderer.invoke('app:info'),
     openFolder: (folder) => ipcRenderer.invoke('app:open-folder', folder),
-    openProjectPage: () => ipcRenderer.invoke('app:open-project-page')
+    openProjectPage: () => ipcRenderer.invoke('app:open-project-page'),
+    vaultLocation: () => ipcRenderer.invoke('app:vault-location'),
+    relocateVault: () => ipcRenderer.invoke('app:relocate-vault'),
+    deletePreviousVault: () => ipcRenderer.invoke('app:delete-previous-vault'),
+    revertVault: () => ipcRenderer.invoke('app:revert-vault'),
+    onRelocateProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: RelocateProgress): void => listener(progress)
+      ipcRenderer.on('app:relocate-progress', handler)
+      return () => ipcRenderer.removeListener('app:relocate-progress', handler)
+    }
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),
@@ -31,6 +41,12 @@ const api: BrowserApi = {
     openDataFolder: (id: string) => ipcRenderer.invoke('profiles:open-data-folder', id),
     clearCache: (id: string) => ipcRenderer.invoke('profiles:clear-cache', id),
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:check-fingerprint', draft, profileId, settingsKey),
+    deepCheck: (draft: ProfileDraft, profileId?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId),
+    onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult): void => listener(result)
+      ipcRenderer.on('profiles:deep-check-progress', handler)
+      return () => ipcRenderer.removeListener('profiles:deep-check-progress', handler)
+    },
     lastFingerprintCheck: (id: string) => ipcRenderer.invoke('profiles:last-fingerprint-check', id),
     exportBackup: (id: string) => ipcRenderer.invoke('profiles:export-backup', id),
     importBackup: () => ipcRenderer.invoke('profiles:import-backup'),

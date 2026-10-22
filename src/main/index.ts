@@ -3,6 +3,8 @@ import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electro
 import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
+import { resolveVaultLocation } from './vault-location'
+import { registerVaultIpc } from './vault-ipc'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -73,13 +75,15 @@ if (!hasSingleInstanceLock) app.quit()
 
 app.whenReady().then(async () => {
   await initializeUiLanguage()
-  const vaultPath = join(app.getPath('userData'), 'vault')
+  const vaultLocation = await resolveVaultLocation(app.getPath('userData'))
+  const vaultPath = vaultLocation.path
   logger = new AppLogger(vaultPath)
   appSession = new AppSessionTracker(vaultPath)
   const profiles = new ProfileStore(vaultPath, new ElectronSecretCodec())
   const settings = new SettingsStore(vaultPath)
   const extensions = new ExtensionStore(vaultPath, logger)
   await logger.initialize()
+  if (vaultLocation.missing) logger.error('设置的数据目录不存在，已改用默认位置', { missing: vaultLocation.missing })
   const appSessionSnapshot = await appSession.begin(app.getVersion())
   if (appSessionSnapshot.previousUnclean) {
     logger.error('检测到上次指纹浏览器未正常退出', appSessionSnapshot.previousUnclean)
@@ -107,6 +111,7 @@ app.whenReady().then(async () => {
     (status) => mainWindow?.webContents.send('tunnel:changed', status))
   tunnel = activeTunnel
   registerTunnelIpc(activeTunnel)
+  registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
   void activeTunnel.initialize()
 
   // A window proxy abroad is reached through the built-in tunnel when it runs, otherwise through

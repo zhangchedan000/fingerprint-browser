@@ -21,7 +21,7 @@ const bundle = join(work, 'args.mjs')
 await build({ entryPoints: ['tools/kernel-smoke/args.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle, logLevel: 'error',
   // proxy-chain is CommonJS and requires Node built-ins.
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" } })
-const { smokeArgs, openProxyBridge } = await import(`file://${bundle.replace(/\\/g, '/')}`)
+const { smokeArgs, openProxyBridge, deepCheck, smokeProfile } = await import(`file://${bundle.replace(/\\/g, '/')}`)
 
 // PROXY (socks5://user:pass@host:port or http://…): every window goes through the app's own proxy
 // bridge, and curl first checks the proxy itself, so a proxy fault and a kernel fault are told apart.
@@ -76,6 +76,14 @@ for (const major of versions) {
   execFileSync('tar', ['-xf', archive], { cwd: folder })
   const chrome = findFile(folder, process.platform === 'win32' ? 'chrome.exe' : 'chrome')
   if (!chrome) throw new Error(`chrome not found for ${release.tag_name}`)
+  if (process.env.BISECT === 'deep') {
+    // The app's deep check, as the editor runs it, against the real sites.
+    const results = await deepCheck({ profile: smokeProfile('windows', 'Chrome'), engine: { executable: chrome, version: release.tag_name, fingerprintKernel: true }, hostHardwareConcurrency: 4, hostScreen: { width: 1920, height: 1080 } })
+    for (const result of results) {
+      console.log(`::warning title=deep ${result.site}::${result.status} ${result.score ?? ''} | ${result.findings.join(' ; ')} | ${result.error ?? ''} | screenshot ${result.screenshot ? Math.round(result.screenshot.length / 1024) + 'KB' : 'none'}`)
+    }
+    continue
+  }
   const bisect = process.env.BISECT === '1'
   const variants = []
   if (process.env.BISECT === 'gpu') {

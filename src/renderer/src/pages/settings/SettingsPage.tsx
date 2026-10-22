@@ -1,8 +1,8 @@
-import { Button, InputNumber, Modal, Radio, Select, Switch, Tooltip } from 'antd'
+import { Button, InputNumber, Modal, Progress, Radio, Select, Switch, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { t } from '../../../../shared/i18n'
-import type { AppInfo, StorageOverview } from '../../../../shared/types'
+import type { AppInfo, RelocateProgress, StorageOverview, VaultLocationInfo } from '../../../../shared/types'
 import { formatBytes, isEditable } from '../../components/format'
 import { LanguageSelector } from '../../components/LanguageSelector'
 import { useWorkspaceMigration } from '../../data/migration'
@@ -38,7 +38,62 @@ export function SettingsPage() {
   const [clearing, setClearing] = useState(false)
   const [gap, setGap] = useState(preferences.batchLaunchGapSeconds)
 
+  const [location, setLocation] = useState<VaultLocationInfo>()
+  const [moving, setMoving] = useState<RelocateProgress | 'picking'>()
+
   useEffect(() => { setGap(preferences.batchLaunchGapSeconds) }, [preferences.batchLaunchGapSeconds])
+  useEffect(() => {
+    void window.browserApi.app.vaultLocation().then(setLocation).catch(() => undefined)
+    return window.browserApi.app.onRelocateProgress(setMoving)
+  }, [])
+
+  function relocate(): void {
+    Modal.confirm({
+      title: t("更改数据目录位置"),
+      content: t("会把全部窗口、Cookie、代理、扩展和内核复制到你选的空文件夹，校验无误后自动重启并改用新位置。旧位置的数据会保留，确认没问题后可以删除。需要先关闭全部窗口。"),
+      okText: t("选择文件夹"),
+      cancelText: t("取消"),
+      onOk: async () => {
+        setMoving('picking')
+        try {
+          const target = await window.browserApi.app.relocateVault()
+          if (target) notify.success(t("迁移完成，正在重启…"))
+          else setMoving(undefined)
+        } catch (error) {
+          setMoving(undefined)
+          ws.fail(error)
+        }
+      }
+    })
+  }
+
+  function deletePrevious(): void {
+    Modal.confirm({
+      title: t("删除旧位置的数据？"),
+      content: location?.previous,
+      okText: t("删除"),
+      okButtonProps: { danger: true },
+      cancelText: t("取消"),
+      onOk: async () => {
+        try {
+          setLocation(await window.browserApi.app.deletePreviousVault())
+          notify.success(t("旧位置的数据已删除"))
+        } catch (error) {
+          ws.fail(error)
+        }
+      }
+    })
+  }
+
+  function revert(): void {
+    Modal.confirm({
+      title: t("改回旧位置？"),
+      content: t("旧位置保存的是迁移那一刻的数据；之后在新位置做的修改不会带回去。软件会自动重启。"),
+      okText: t("改回"),
+      cancelText: t("取消"),
+      onOk: () => window.browserApi.app.revertVault().catch(ws.fail)
+    })
+  }
   useEffect(() => {
     void window.browserApi.app.info().then(setInfo).catch(ws.fail)
     void window.browserApi.profiles.storageOverview().then(setStorage).catch(() => undefined)
@@ -139,8 +194,15 @@ export function SettingsPage() {
               <Item label={t("数据目录")}>
                 <span className="fb-mono fb-ellipsis" title={info?.vaultPath}>{info?.vaultPath ?? '—'}</span>
                 <Button size="small" type="link" autoInsertSpace={false} onClick={() => void window.browserApi.app.openFolder('vault').catch(ws.fail)}>{t("打开")}</Button>
-                <NotYet><Button size="small" type="link" disabled autoInsertSpace={false}>{t("更改位置")}</Button></NotYet>
+                <Button size="small" type="link" autoInsertSpace={false} loading={Boolean(moving)} onClick={relocate}>{t("更改位置")}</Button>
               </Item>
+              {location?.previous && (
+                <Item label={t("旧位置")}>
+                  <span className="fb-mono fb-ellipsis" title={location.previous}>{location.previous}</span>
+                  <Button size="small" type="link" danger autoInsertSpace={false} onClick={deletePrevious}>{t("删除旧数据")}</Button>
+                  <Button size="small" type="link" autoInsertSpace={false} onClick={revert}>{t("改回旧位置")}</Button>
+                </Item>
+              )}
               <Item label={t("已用空间")}>
                 <span>{storage ? t("{0}（{1} 个窗口）", formatBytes(storage.totalBytes), profiles.length) : '—'}</span>
                 <Button size="small" type="link" autoInsertSpace={false} loading={clearing} onClick={clearCaches}>{t("清理缓存")}</Button>
@@ -172,6 +234,14 @@ export function SettingsPage() {
         )}
       </section>
       {migration.dialog}
+      <Modal open={typeof moving === 'object'} title={t("正在迁移数据目录")} footer={null} closable={false} maskClosable={false}>
+        {typeof moving === 'object' && (
+          <>
+            <Progress percent={moving.totalBytes ? Math.round(moving.copiedBytes / moving.totalBytes * 100) : 0} />
+            <span className="fb-muted">{t("{0} / {1} 个文件 · {2} / {3}", moving.copiedFiles, moving.totalFiles, formatBytes(moving.copiedBytes), formatBytes(moving.totalBytes))}</span>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

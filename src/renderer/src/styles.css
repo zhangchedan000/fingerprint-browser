@@ -377,3 +377,11 @@ button, input, textarea { font: inherit; }
 .fb-check-stale { color: var(--fb-warning); font-size: 12px; }
 .fb-check-values { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--fb-text-secondary); font-size: 12px; }
 .fb-check-values b { margin-left: 6px; font-weight: 500; color: var(--fb-text); }
+.fb-deep-check { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--fb-line-soft); }
+.fb-deep-results { display: flex; flex-direction: column; gap: 8px; }
+.fb-deep-site { display: flex; align-items: flex-start; gap: 12px; padding: 8px; border-radius: 6px; background: var(--fb-surface); }
+.fb-deep-site.is-pending { align-items: center; gap: 8px; font-size: 13px; }
+.fb-deep-shot { border-radius: 4px; border: 1px solid var(--fb-line-soft); }
+.fb-deep-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; }
+.fb-deep-title { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fb-deep-finding { display: flex; flex-wrap: wrap; gap: 4px 10px; }
