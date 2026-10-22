@@ -23,7 +23,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ inputs.repo || 'MetaCubeX/mihomo' }}
-          ASSET: ${{ inputs.asset || 'linux-amd64-compatible-v[0-9.]+\\.gz$' }}
+          ASSET: ${{ inputs.asset || 'linux-amd64-compatible-v[0-9.]+[.]gz$' }}
         run: |
           gh api "repos/$REPO/releases?per_page=3" > releases.json
           jq -r '[.[] | select(.prerelease == false)][0] | "\(.tag_name) " + ([.assets[] | select(.name | test("windows|darwin-arm64-v|compatible")) | "\(.name) \(.size) \(.digest)"] | join(" ; "))' releases.json > all.txt
