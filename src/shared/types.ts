@@ -597,6 +597,16 @@ export interface BrowserApi {
     cancelInstall: (version: string) => Promise<void>
     onProgress: (listener: (progress: KernelInstallProgress) => void) => () => void
   }
+  tunnel: {
+    status: () => Promise<TunnelStatus>
+    setEnabled: (enabled: boolean) => Promise<TunnelStatus>
+    addSource: (input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
+    removeSource: (id: string) => Promise<TunnelStatus>
+    select: (name: string) => Promise<TunnelStatus>
+    test: () => Promise<TunnelStatus>
+    refresh: () => Promise<TunnelStatus>
+    onChanged: (listener: (status: TunnelStatus) => void) => () => void
+  }
   /** The proxy library. Windows refer to these proxies by id. */
   proxy: {
     /** Tests typed-in settings; an empty password with passwordStored uses the saved one of the window or library proxy. */
@@ -631,4 +641,30 @@ export interface BrowserApi {
     setGlobalEnabled: (id: string, enabled: boolean) => Promise<BrowserExtension>
     remove: (id: string) => Promise<void>
   }
+}
+
+/** Built-in tunnel (main/tunnel-manager.ts): how foreign window proxies are reached from China. */
+export interface TunnelNodeInfo {
+  name: string
+  type: string
+  /** Last measured delay in ms; 0 = timed out; undefined = not measured. */
+  delay?: number
+}
+
+export interface TunnelSourceSummary {
+  id: string
+  name: string
+  kind: 'links' | 'subscription'
+  updatedAt: string
+}
+
+export interface TunnelStatus {
+  /** The tunnel core ships with the app; false in builds without it. */
+  available: boolean
+  enabled: boolean
+  state: 'off' | 'starting' | 'running' | 'error'
+  error?: string
+  sources: TunnelSourceSummary[]
+  nodes: TunnelNodeInfo[]
+  selected?: string
 }

@@ -15,7 +15,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Tunnel core (mihomo, pinned and checksummed)
+        run: node tools/tunnel-core/fetch.mjs win32-x64
       - name: Unit tests
+        env:
+          TUNNEL_CORE_BIN: build/tunnel-core/current/mihomo.exe
         run: npx vitest run --fileParallelism=false --reporter=default --reporter=json --outputFile=vitest.json
       - name: Report test failures
         if: failure()

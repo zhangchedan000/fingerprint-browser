@@ -1,6 +1,8 @@
 import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
 import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
+import { TunnelManager } from './tunnel-manager'
+import { registerTunnelIpc } from './tunnel-ipc'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -21,6 +23,7 @@ let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
 let logger: AppLogger | null = null
 let appSession: AppSessionTracker | null = null
+let tunnel: TunnelManager | null = null
 
 if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.desktop')
 
@@ -96,8 +99,26 @@ app.whenReady().then(async () => {
   if (!profileStorageHealth.backupHealthy) logger.error('环境元数据备份不可用', profileStorageHealth.backupError)
   logger.info('指纹浏览器已启动', { version: app.getVersion(), platform: process.platform, arch: process.arch })
 
-  // Window proxies are reached through the computer's own system proxy (Clash, v2rayN…) when it is on.
+  const tunnelBinary = process.env.TUNNEL_CORE_BIN
+    || (app.isPackaged
+      ? join(process.resourcesPath, 'tunnel-core', process.platform === 'win32' ? 'mihomo.exe' : 'mihomo')
+      : join(app.getAppPath(), 'build', 'tunnel-core', 'current', process.platform === 'win32' ? 'mihomo.exe' : 'mihomo'))
+  const activeTunnel = new TunnelManager(vaultPath, new ElectronSecretCodec(), tunnelBinary, logger,
+    (status) => mainWindow?.webContents.send('tunnel:changed', status))
+  tunnel = activeTunnel
+  registerTunnelIpc(activeTunnel)
+  void activeTunnel.initialize()
+
+  // A window proxy abroad is reached through the built-in tunnel when it runs, otherwise through
+  // the computer's own system proxy (Clash, v2rayN…) when that is on. Domestic proxies stay direct.
   setLocalProxyResolver(async (host, port) => {
+    const tunnelVia = activeTunnel.localProxy()
+    if (tunnelVia) {
+      const record = profiles.listProxies().find((item) => item.host.toLowerCase() === host.toLowerCase() && item.port === port)
+      if (record?.check?.countryCode === 'CN') return undefined
+      logger?.info('代理经加速通道连接', { proxy: `${host}:${port}` })
+      return tunnelVia
+    }
     const target = `https://${host.includes(':') ? `[${host}]` : host}:${port}/`
     const via = parseProxyRule(await session.defaultSession.resolveProxy(target))
     if (via) logger?.info('代理经本机代理连接', { via: `${via.type} ${via.host}:${via.port}` })
@@ -150,6 +171,7 @@ app.on('second-instance', () => {
 })
 
 app.on('before-quit', (event) => {
+  void tunnel?.stop()
   if (!launcher) return
   event.preventDefault()
   const current = launcher

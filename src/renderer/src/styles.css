@@ -348,6 +348,13 @@ button, input, textarea { font: inherit; }
 .fb-settings-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 18px 16px; font-size: 14px; }
 .fb-settings-label { color: var(--fb-text-secondary); }
 .fb-settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.fb-tunnel-intro { margin: 0 0 16px; line-height: 1.6; }
+.fb-tunnel-nodes { margin-top: 20px; }
+.fb-tunnel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.fb-tunnel-actions .fb-muted { flex: 1 1 240px; }
+.fb-tunnel-delay.is-good { color: var(--fb-success); }
+.fb-tunnel-delay.is-fair { color: var(--fb-warning); }
+.fb-tunnel-delay.is-bad { color: var(--fb-danger); }
 
 .fb-block-gap { display: block; margin-bottom: 12px; }
 .fb-value-choice { align-self: flex-start; }

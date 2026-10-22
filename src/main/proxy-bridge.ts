@@ -151,8 +151,18 @@ export function upstreamProxyUrl(proxy: ProxyConfig): string | undefined {
   return `${protocol}://${credentials}${host}:${proxy.port}`
 }
 
+/** Proxies that a check reached only directly: later connections skip the local proxy too. */
+const directOnly = new Set<string>()
+const proxyKey = (proxy: Pick<ProxyConfig, 'host' | 'port'>) => `${proxy.host.toLowerCase()}:${proxy.port}`
+
+export function rememberDirectRoute(proxy: Pick<ProxyConfig, 'host' | 'port'>, direct: boolean): void {
+  if (direct) directOnly.add(proxyKey(proxy))
+  else directOnly.delete(proxyKey(proxy))
+}
+
 /** The local proxy a connection to this window proxy would go through, if any. */
 export async function localProxyFor(proxy: ProxyConfig): Promise<LocalProxy | undefined> {
+  if (directOnly.has(proxyKey(proxy))) return undefined
   // An HTTPS proxy checks its certificate against its own name, which a forwarded port would break.
   if (proxy.protocol === 'direct' || proxy.protocol === 'https' || !proxy.port || isLocalAddress(proxy.host) || !resolveLocalProxy) return undefined
   const via = await resolveLocalProxy(proxy.host, proxy.port).catch(() => undefined)
@@ -160,9 +170,9 @@ export async function localProxyFor(proxy: ProxyConfig): Promise<LocalProxy | un
   return via
 }
 
-export async function openProxyBridge(proxy: ProxyConfig, observer: ProxyBridgeObserver = {}): Promise<string | undefined> {
+export async function openProxyBridge(proxy: ProxyConfig, observer: ProxyBridgeObserver = {}, options: { direct?: boolean } = {}): Promise<string | undefined> {
   if (proxy.protocol === 'direct') return undefined
-  const via = await localProxyFor(proxy)
+  const via = options.direct ? undefined : await localProxyFor(proxy)
   const tunnel = via && proxy.port ? await openTunnel(via, proxy.host, proxy.port, observer) : undefined
   const target = tunnel ? { ...proxy, host: '127.0.0.1', port: (tunnel.address() as AddressInfo).port } : proxy
   const upstream = upstreamProxyUrl(target)!

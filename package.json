@@ -70,6 +70,15 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build/tunnel-core/current",
+        "to": "tunnel-core",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",

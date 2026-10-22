@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { BrowserApi, BrowserProfileView, KernelInstallProgress, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import type { BrowserApi, BrowserProfileView, KernelInstallProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
@@ -85,6 +85,20 @@ const api: BrowserApi = {
       const handler = (_event: Electron.IpcRendererEvent, progress: KernelInstallProgress): void => listener(progress)
       ipcRenderer.on('engine:progress', handler)
       return () => ipcRenderer.removeListener('engine:progress', handler)
+    }
+  },
+  tunnel: {
+    status: () => ipcRenderer.invoke('tunnel:status'),
+    setEnabled: (enabled) => ipcRenderer.invoke('tunnel:set-enabled', enabled),
+    addSource: (input) => ipcRenderer.invoke('tunnel:add-source', input),
+    removeSource: (id) => ipcRenderer.invoke('tunnel:remove-source', id),
+    select: (name) => ipcRenderer.invoke('tunnel:select', name),
+    test: () => ipcRenderer.invoke('tunnel:test'),
+    refresh: () => ipcRenderer.invoke('tunnel:refresh'),
+    onChanged: (listener: (status: TunnelStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: TunnelStatus): void => listener(status)
+      ipcRenderer.on('tunnel:changed', handler)
+      return () => ipcRenderer.removeListener('tunnel:changed', handler)
     }
   },
   proxy: {

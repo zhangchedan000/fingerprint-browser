@@ -1,7 +1,7 @@
 import { ProxyAgent, request } from 'undici'
 import { isIP } from 'node:net'
 import type { ProxyConfig, ProxyTestResult } from '../shared/types'
-import { closeProxyBridge, localProxyFor, openProxyBridge } from './proxy-bridge'
+import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute } from './proxy-bridge'
 import { safeErrorText } from './redaction'
 
 const IP_CHECK_URL = 'https://api.ipify.org?format=json'
@@ -192,12 +192,12 @@ async function lookupJson<T>(url: string, dispatcher?: ProxyAgent): Promise<T> {
   return response.body.json() as Promise<T>
 }
 
-async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
+async function testProxyOnce(config: ProxyConfig, direct = false): Promise<ProxyTestResult> {
   const startedAt = Date.now()
   let localProxy: string | undefined
   let dispatcher: ProxyAgent | undefined
   try {
-    localProxy = await openProxyBridge(config)
+    localProxy = await openProxyBridge(config, {}, { direct })
     dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
     const lookups = await Promise.allSettled([
       lookupJson<GeoLookupResponse>(GEO_CHECK_URL, dispatcher),
@@ -256,7 +256,7 @@ async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
     return {
       ok: false,
       latencyMs: Date.now() - startedAt,
-      error: proxyFailureReason(text, Boolean(await localProxyFor(config).catch(() => undefined))) ?? safeErrorText(error),
+      error: proxyFailureReason(text, !direct && Boolean(await localProxyFor(config).catch(() => undefined))) ?? safeErrorText(error),
       failureKind: classifyProxyFailure(new Error(text))
     }
   } finally {
@@ -266,8 +266,20 @@ async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
 }
 
 export async function testProxy(config: ProxyConfig): Promise<ProxyTestResult> {
+  // Every check (and so every launch) decides the route afresh.
+  rememberDirectRoute(config, false)
+  const via = await localProxyFor(config).catch(() => undefined)
   const first = await testProxyOnce(config)
   if (first.ok || first.failureKind === 'authentication') return first
+  if (via) {
+    // The tunnel or system proxy could not reach this proxy (some nodes block other proxies' ports,
+    // and domestic proxies often refuse foreign visitors): try the computer's own network.
+    const direct = await testProxyOnce(config, true)
+    if (direct.ok) {
+      rememberDirectRoute(config, true)
+      return { ...direct, retried: true, latencyMs: first.latencyMs + direct.latencyMs }
+    }
+  }
   await new Promise((resolve) => setTimeout(resolve, 250))
   const second = await testProxyOnce(config)
   return { ...second, retried: true, latencyMs: first.latencyMs + second.latencyMs + 250 }

@@ -7,8 +7,10 @@ import { formatBytes, isEditable } from '../../components/format'
 import { LanguageSelector } from '../../components/LanguageSelector'
 import { useWorkspaceMigration } from '../../data/migration'
 import { useWorkspace } from '../../data/workspace'
+import { kernelName } from '../../../../shared/kernel-id'
+import { TunnelSettings } from './TunnelSettings'
 
-type SettingsTab = 'general' | 'launch' | 'data' | 'about'
+type SettingsTab = 'general' | 'launch' | 'network' | 'data' | 'about'
 
 /** One label + control row. */
 function Item({ label, children }: { label: ReactNode; children: ReactNode }) {
@@ -72,7 +74,7 @@ export function SettingsPage() {
     })
   }
 
-  const tabs: Array<[SettingsTab, string]> = [['general', t("常规")], ['launch', t("窗口启动")], ['data', t("数据与备份")], ['about', t("关于")]]
+  const tabs: Array<[SettingsTab, string]> = [['general', t("常规")], ['launch', t("窗口启动")], ['network', t("网络加速")], ['data', t("数据与备份")], ['about', t("关于")]]
   return (
     <div className="fb-settings">
       <nav className="fb-settings-tabs" role="tablist" aria-orientation="vertical">
@@ -129,6 +131,7 @@ export function SettingsPage() {
             </div>
           </>
         )}
+        {tab === 'network' && <TunnelSettings />}
         {tab === 'data' && (
           <>
             <h2>{t("数据与备份")}</h2>
@@ -156,7 +159,7 @@ export function SettingsPage() {
             <h2>{t("关于")}</h2>
             <div className="fb-settings-grid">
               <Item label={t("版本")}>{t("指纹浏览器 v{0}（本地版）", info?.version ?? __APP_VERSION__)}</Item>
-              <Item label={t("内核")}>{engine?.version ? `Chromium ${engine.version}` : '—'}</Item>
+              <Item label={t("内核")}>{engine?.version ? kernelName(engine.version) : '—'}</Item>
               <Item label={t("项目主页")}>
                 <Button size="small" type="link" className="fb-link-cell" onClick={() => void window.browserApi.app.openProjectPage().catch(ws.fail)}>github.com/zhangchedan000/fingerprint-browser</Button>
               </Item>
