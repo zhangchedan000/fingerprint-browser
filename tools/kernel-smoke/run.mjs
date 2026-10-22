@@ -67,6 +67,7 @@ for (const major of versions) {
     ? release?.assets.find((item) => item.name.startsWith('clearcote-') && item.name.endsWith(clearcoteSuffix))
     : release?.assets.find((item) => item.name.endsWith(assetSuffix))
   if (asset) console.log(`Kernel ${major}: ${release.tag_name} · ${asset.name}`)
+  if (asset) summary.push(`release ${major}: tag=${release.tag_name} prerelease=${release.prerelease} asset=${asset.name} size=${asset.size} digest=${asset.digest} url=${asset.browser_download_url}`)
   if (!asset) { console.log(`::warning::no ${assetSuffix} for kernel ${major}`); continue }
   const archive = join(work, asset.name)
   await pipeline(Readable.fromWeb((await fetch(asset.browser_download_url, { headers: { 'user-agent': 'kernel-smoke' } })).body), createWriteStream(archive))
