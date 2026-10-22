@@ -44,6 +44,7 @@ jobs:
           BISECT: ${{ inputs.bisect }}
           SITE_LANG: ${{ inputs.site_lang }}
           SITE_WAIT: '40000'
+          RECTS_FLAGS: ${{ inputs.args == 'flags' && '1' || '' }}
           RECTS_SCALE: ${{ inputs.args == 'scale' && '1' || '' }}
           PREFS_EXISTING: ${{ inputs.args == 'existing' && '1' || '' }}
           ARGS: ${{ inputs.args }}

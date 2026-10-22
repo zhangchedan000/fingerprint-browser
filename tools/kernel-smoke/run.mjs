@@ -132,14 +132,19 @@ for (const major of versions) {
       return 'rects ' + hash([r.x, r.y, r.width, r.height, b.width, rr.width].join(',')) + ' (' + r.width + ') svg ' + t.getComputedTextLength() + ' canvas ' + hash(c.toDataURL()) + ' measure ' + x.measureText('Cwm fjordbank glyphs').width + ' dpr ' + devicePixelRatio
     })()`
     const rows = []
-    const cases = process.env.RECTS_SCALE
+    const cases = process.env.RECTS_FLAGS
+      ? [['app 1000', 1000], ['app 2000', 2000],
+         ['rects flag 1000', 1000, null, null, ['--fingerprinting-client-rects-noise']], ['rects flag 2000', 2000, null, null, ['--fingerprinting-client-rects-noise']],
+         ['blink rects 1000', 1000, null, null, ['--enable-blink-features=FingerprintingClientRectsNoise']], ['blink rects 2000', 2000, null, null, ['--enable-blink-features=FingerprintingClientRectsNoise']],
+         ['no measure noise', 1000, null, null, ['--disable-blink-features=FingerprintingCanvasMeasureTextNoise']]]
+      : process.env.RECTS_SCALE
       ? ['1', '1.25', '1.5', '1.75', '2'].map((scale) => [`app scale ${scale}`, 1000, null, scale])
       : [['plain', null], ['seed only', 1000], ['app 1000', 1000], ['app 2000', 2000], ['app off:canvas', 1000, 'canvas'], ['app off:font', 1000, 'font']]
-    for (const [label, seed, off, scale] of cases) {
+    for (const [label, seed, off, scale, extra = []] of cases) {
       const userDataDir = mkdtempSync(join(work, 'rects-'))
       const app = smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome').map((arg) => arg.startsWith('--fingerprint=') ? `--fingerprint=${seed}` : arg)
       const scaled = scale ? [`--force-device-scale-factor=${scale}`] : []
-      const args = scale ? [...app, ...scaled] : label === 'plain' ? [`--user-data-dir=${userDataDir}`] : label === 'seed only' ? [`--user-data-dir=${userDataDir}`, `--fingerprint=${seed}`] : off ? [...app.filter((arg) => !arg.startsWith('--disable-spoofing=')), `--disable-spoofing=${off}`] : app
+      const args = extra.length ? [...app, ...extra] : scale ? [...app, ...scaled] : label === 'plain' ? [`--user-data-dir=${userDataDir}`] : label === 'seed only' ? [`--user-data-dir=${userDataDir}`, `--fingerprint=${seed}`] : off ? [...app.filter((arg) => !arg.startsWith('--disable-spoofing=')), `--disable-spoofing=${off}`] : app
       const child = spawn(chrome, [...args, '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
       let port
       for (let attempt = 0; attempt < 150 && !port; attempt += 1) {
