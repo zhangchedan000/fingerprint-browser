@@ -117,9 +117,11 @@ for (const major of versions) {
       return 'rects ' + hash([r.x, r.y, r.width, r.height, b.width, rr.width].join(',')) + ' (' + r.width + ') svg ' + t.getComputedTextLength() + ' canvas ' + hash(c.toDataURL()) + ' measure ' + x.measureText('Cwm fjordbank glyphs').width
     })()`
     const rows = []
-    for (const seed of [1000, 2000, 3000]) {
+    const cases = [['plain', null], ['seed only', 1000], ['app 1000', 1000], ['app 2000', 2000], ['app off:canvas', 1000, 'canvas'], ['app off:font', 1000, 'font']]
+    for (const [label, seed, off] of cases) {
       const userDataDir = mkdtempSync(join(work, 'rects-'))
-      const args = smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome').map((arg) => arg.startsWith('--fingerprint=') ? `--fingerprint=${seed}` : arg)
+      const app = smokeArgs(userDataDir, release.tag_name, 'windows', 'Chrome').map((arg) => arg.startsWith('--fingerprint=') ? `--fingerprint=${seed}` : arg)
+      const args = label === 'plain' ? [`--user-data-dir=${userDataDir}`] : label === 'seed only' ? [`--user-data-dir=${userDataDir}`, `--fingerprint=${seed}`] : off ? [...app.filter((arg) => !arg.startsWith('--disable-spoofing=')), `--disable-spoofing=${off}`] : app
       const child = spawn(chrome, [...args, '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' })
       let port
       for (let attempt = 0; attempt < 150 && !port; attempt += 1) {
@@ -128,7 +130,7 @@ for (const major of versions) {
       }
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
       const page = browser.contexts()[0].pages()[0] ?? await browser.contexts()[0].newPage()
-      rows.push(`seed ${seed}: ${await page.evaluate(probe)}`)
+      rows.push(`${label}: ${await page.evaluate(probe)}`)
       await browser.close().catch(() => {})
       child.kill()
     }
