@@ -107,6 +107,9 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     args.push('--no-pings')
     args.push(`--proxy-server=${options.proxyUrl}`)
     args.push('--proxy-bypass-list=localhost;127.0.0.1')
+  } else {
+    // 直连 means this computer's own network: never the system proxy (Clash, v2rayN…) it may have on.
+    args.push('--no-proxy-server')
   }
   if (options.remoteDebuggingPort) args.push(`--remote-debugging-port=${options.remoteDebuggingPort}`)
   if (options.extensionPaths?.length) args.push(`--load-extension=${options.extensionPaths.join(',')}`)
