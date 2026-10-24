@@ -2,15 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { defaultFingerprint } from './defaults'
 import {
   applyHardwareProfile,
-  CURATED_WINDOWS_DESKTOP_GPUS,
   effectiveDisabledSpoofing,
   effectiveFingerprintSeed,
-  effectiveGpuIdentity,
+  effectiveGpu,
   HARDWARE_PROFILES,
   hardwareProfile,
   defaultHardwareProfileId,
   refreshSeededGpuIdentity
 } from './hardware-profiles'
+import { gpuKey, kernelGpuList, MEASURED_KERNELS } from './gpu-catalog'
+import { validateProfileDraft } from './validation'
+import { defaultProfileDraft } from './defaults'
 
 describe('coherent hardware profiles', () => {
   it('defines complete CPU, memory, GPU, OS and screen contracts', () => {
@@ -40,11 +42,15 @@ describe('coherent hardware profiles', () => {
     })
   })
 
-  it('keeps every preset seed in the GPU bucket declared by the kernel catalogue', () => {
-    for (const profile of HARDWARE_PROFILES.filter((item) => item.gpuBucket !== undefined)) {
-      for (const seed of [0, 1, 42, 0xfffffffe, 0xffffffff]) {
-        const config = applyHardwareProfile(defaultFingerprint(seed), profile.id)
-        expect(effectiveFingerprintSeed(config) % profile.gpuBucketCount!).toBe(profile.gpuBucket)
+  it('names every fixed preset GPU from the measured kernel lists', () => {
+    for (const profile of HARDWARE_PROFILES.filter((item) => item.renderIdentityMode === 'fixed-template')) {
+      expect(profile.gpu).toBeTruthy()
+      const config = applyHardwareProfile(defaultFingerprint(7), profile.id)
+      // 139–144 have every preset GPU; the seed must make the kernel report exactly that card.
+      for (const version of ['139.0.7258.154', '144.0.7559.132']) {
+        const seed = effectiveFingerprintSeed(config, version)!
+        const list = kernelGpuList(version, profile.platform)!
+        expect(gpuKey(list[seed % list.length])).toBe(profile.gpu)
       }
     }
   })
@@ -54,68 +60,70 @@ describe('coherent hardware profiles', () => {
     expect(effectiveDisabledSpoofing(config)).toEqual(['font', 'audio', 'canvas', 'clientrects', 'gpu'])
   })
 
-  it('enables coherent seed-bound rendering surfaces for simulated profiles', () => {
+  it('enables coherent rendering surfaces for simulated profiles', () => {
     const config = applyHardwareProfile(defaultFingerprint(1), 'macos-m3-pro')
     expect(effectiveDisabledSpoofing(config)).toEqual([])
-    expect(effectiveFingerprintSeed(config) % hardwareProfile('macos-m3-pro')!.gpuBucketCount!)
-      .toBe(hardwareProfile('macos-m3-pro')!.gpuBucket)
     expect(config.renderIdentityVersion).toBe(4)
   })
 
-  it('uses a seed-selected GPU template by default for independent environments', () => {
+  it('lets the kernel pick by seed unless a GPU was chosen', () => {
     expect(defaultHardwareProfileId('windows')).toBe('windows-seeded-nvidia')
     expect(defaultHardwareProfileId('macos')).toBe('macos-seeded-apple')
-    const first = applyHardwareProfile(defaultFingerprint(1), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-    const second = applyHardwareProfile(defaultFingerprint(2), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-    expect(effectiveFingerprintSeed(first) % 57).not.toBe(effectiveFingerprintSeed(second) % 57)
-    expect(effectiveGpuIdentity(first)).not.toEqual(effectiveGpuIdentity(second))
-    expect(effectiveDisabledSpoofing(first)).toEqual([])
-    expect(first.renderIdentityVersion).toBe(4)
-    expect(second.renderIdentityVersion).toBe(4)
+    const seeded = applyHardwareProfile(defaultFingerprint(42), 'windows-seeded-nvidia', { refreshSeededGpu: true })
+    expect(seeded.gpu).toBeUndefined()
+    expect(seeded.renderIdentityVersion).toBe(4)
+    expect(effectiveFingerprintSeed(seeded, '150.0.7871.186')).toBe(42)
+    // Same seed, different kernels, different cards: each kernel uses its own list.
+    expect(effectiveGpu(seeded, '150.0.7871.186')).toEqual(kernelGpuList('150.0.7871.186', 'windows')![42 % 13])
+    expect(effectiveGpu(seeded, '144.0.7559.132')).toEqual(kernelGpuList('144.0.7559.132', 'windows')![42 % 57])
   })
 
-  it('maps seeded Windows identities only to curated desktop GPUs', () => {
-    expect(CURATED_WINDOWS_DESKTOP_GPUS.length).toBeGreaterThanOrEqual(20)
-    expect(new Set(CURATED_WINDOWS_DESKTOP_GPUS.map((item) => item.bucket)).size)
-      .toBe(CURATED_WINDOWS_DESKTOP_GPUS.length)
-    expect(CURATED_WINDOWS_DESKTOP_GPUS.every((item) => (
-      item.deviceClass === 'desktop'
-      && !/Laptop/i.test(item.model)
-      && item.bucket >= 0
-      && item.bucket < 57
-    ))).toBe(true)
-
-    for (const seed of [0, 1, 42, 100001, 200003, 0xfffffffe, 0xffffffff]) {
-      const config = applyHardwareProfile(defaultFingerprint(seed), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-      const identity = effectiveGpuIdentity(config)!
-      expect(effectiveFingerprintSeed(config) % 57).toBe(identity.bucket)
+  it('makes every kernel report a chosen GPU, or refuses when the kernel lacks it', () => {
+    for (const major of MEASURED_KERNELS) {
+      const version = `${major}.0.0.0`
+      for (const platform of ['windows', 'macos'] as const) {
+        const list = kernelGpuList(version, platform)!
+        for (const gpu of list) {
+          const config = { ...defaultFingerprint(123456789), platform, hardwareProfileId: defaultHardwareProfileId(platform), gpu: gpuKey(gpu) }
+          for (const seed of [0, 1, 0xfffffffe, 0xffffffff]) {
+            const aligned = effectiveFingerprintSeed({ ...config, seed }, version)!
+            expect(aligned).toBeLessThanOrEqual(0xffffffff)
+            expect(gpuKey(list[aligned % list.length])).toBe(gpuKey(gpu))
+          }
+        }
+      }
     }
+    const rtx4070 = applyHardwareProfile(defaultFingerprint(1), 'windows-11-rtx4070')
+    expect(effectiveFingerprintSeed(rtx4070, '150.0.7871.186')).toBeUndefined()
+    expect(effectiveFingerprintSeed(rtx4070, '120.0.0.0')).toBeUndefined()
   })
 
-  it('does not silently remap an existing seeded profile without a pinned bucket', () => {
-    const legacySeeded = {
-      ...defaultFingerprint(42),
-      hardwareProfileId: 'windows-seeded-nvidia' as const,
-      platform: 'windows' as const,
-      gpuBucket: undefined,
-      renderIdentityVersion: undefined
-    }
-
-    expect(effectiveFingerprintSeed(legacySeeded)).toBe(42)
-    expect(effectiveGpuIdentity(legacySeeded)).toBeUndefined()
-  })
-
-  it('migrates stored render identity contracts to v4 without changing the pinned GPU bucket', () => {
-    const legacy = {
-      ...applyHardwareProfile(defaultFingerprint(42), 'windows-seeded-nvidia', { refreshSeededGpu: true }),
-      renderIdentityVersion: 1 as const
-    }
-    const pinnedBucket = legacy.gpuBucket
-
-    expect(applyHardwareProfile(legacy, legacy.hardwareProfileId)).toMatchObject({
-      renderIdentityVersion: 4,
-      gpuBucket: pinnedBucket
+  it('keeps the GPU an old save pointed at', () => {
+    const draft = defaultProfileDraft()
+    const saved = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-seeded-nvidia', gpuBucket: 29, gpu: undefined }
     })
-    expect(refreshSeededGpuIdentity(legacy).renderIdentityVersion).toBe(4)
+    expect(saved.fingerprint.gpu).toBe('NVIDIA GeForce RTX 4060|0x00002882')
+    expect(saved.fingerprint.gpuBucket).toBeUndefined()
   })
+})
+
+describe('editing old templates', () => {
+  it('shows a fixed template as the seeded one with the same GPU', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const fixed = applyHardwareProfile(defaultFingerprint(5), 'windows-11-rtx4060')
+    const editable = editableFingerprint(fixed)
+    expect(editable).toMatchObject({ hardwareProfileId: 'windows-seeded-nvidia', gpu: 'NVIDIA GeForce RTX 4060|0x00002882', hardwareConcurrency: 12 })
+  })
+
+  it('shows a host template as real GPU, cores and rendering', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const host = applyHardwareProfile({ ...defaultFingerprint(5), platform: 'windows' }, 'windows-host')
+    const editable = editableFingerprint(host)
+    expect(editable.hardwareProfileId).toBe('windows-seeded-nvidia')
+    expect(editable.coresSource).toBe('host')
+    expect([...editable.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
+  })
+
 })

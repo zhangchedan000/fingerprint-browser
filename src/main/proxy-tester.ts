@@ -1,7 +1,7 @@
 import { ProxyAgent, request } from 'undici'
 import { isIP } from 'node:net'
 import type { ProxyConfig, ProxyTestResult } from '../shared/types'
-import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute } from './proxy-bridge'
 import { safeErrorText } from './redaction'
 
 const IP_CHECK_URL = 'https://api.ipify.org?format=json'
@@ -140,9 +140,38 @@ export function mergeGeoLookups(primary: ProxyTestResult, secondary: ProxyTestRe
   }
 }
 
+function errorText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error ?? '')
+  const cause = (error as Error & { cause?: unknown }).cause
+  return `${error.name} ${error.message} ${(error as NodeJS.ErrnoException).code ?? ''}${cause ? ` ${errorText(cause)}` : ''}`
+}
+
+/**
+ * A plain reason for a failed check. The bridge answers the browser with proxy-chain's status
+ * codes (593 not found, 594 refused, 595 reset, 597 auth, 599 upstream error), which undici
+ * reports as "Proxy response (595) !== 200 when HTTP Tunneling".
+ */
+export function proxyFailureReason(text: string, viaLocalProxy: boolean): string | undefined {
+  if (/\b(407|597)\b|proxy authentication|authentication failed|auth failed/i.test(text)) return '代理认证失败，请检查用户名和密码'
+  if (/\b593\b|ENOTFOUND|EAI_AGAIN/i.test(text)) return '找不到代理服务器，请检查地址是否填对'
+  if (/\b594\b|ECONNREFUSED/i.test(text)) return '代理服务器拒绝连接，请检查端口是否填对，或代理是否已过期'
+  if (/\b59[56]\b|ECONNRESET|EPIPE|socket hang up|Socket closed/i.test(text)) {
+    return viaLocalProxy
+      ? '已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理'
+      : '连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理'
+  }
+  if (/timeout|timed out|ETIMEDOUT/i.test(text)) {
+    return viaLocalProxy
+      ? '代理连接超时，请检查线路或更换代理'
+      : '代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理'
+  }
+  if (/\b(590|592|599)\b/.test(text)) return '代理服务器打不开检测网站，可能已过期或限制了访问'
+  return undefined
+}
+
 export function classifyProxyFailure(error: unknown): NonNullable<ProxyTestResult['failureKind']> {
   const text = error instanceof Error ? `${error.name} ${error.message} ${(error as NodeJS.ErrnoException).code ?? ''}` : String(error)
-  if (/407|proxy authentication|authentication failed|auth required|credentials/i.test(text)) return 'authentication'
+  if (/\b(407|597)\b|proxy authentication|authentication failed|auth failed|auth required|credentials/i.test(text)) return 'authentication'
   if (/timeout|timed out|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT|ETIMEDOUT/i.test(text)) return 'timeout'
   if (/\b59\d\b|ECONN|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN|ENOTFOUND|socket|connect|TLS|certificate/i.test(text)) return 'connection'
   return 'unknown'
@@ -163,12 +192,12 @@ async function lookupJson<T>(url: string, dispatcher?: ProxyAgent): Promise<T> {
   return response.body.json() as Promise<T>
 }
 
-async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
+async function testProxyOnce(config: ProxyConfig, direct = false): Promise<ProxyTestResult> {
   const startedAt = Date.now()
   let localProxy: string | undefined
   let dispatcher: ProxyAgent | undefined
   try {
-    localProxy = await openProxyBridge(config)
+    localProxy = await openProxyBridge(config, {}, { direct })
     dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
     const lookups = await Promise.allSettled([
       lookupJson<GeoLookupResponse>(GEO_CHECK_URL, dispatcher),
@@ -222,11 +251,13 @@ async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
       throw new AggregateError([primaryError, secondaryError, ipError], '代理出口检测失败')
     }
   } catch (error) {
+    const causes = error instanceof AggregateError ? error.errors : [error]
+    const text = causes.map(errorText).join(' | ')
     return {
       ok: false,
       latencyMs: Date.now() - startedAt,
-      error: safeErrorText(error),
-      failureKind: classifyProxyFailure(error)
+      error: proxyFailureReason(text, !direct && Boolean(await localProxyFor(config).catch(() => undefined))) ?? safeErrorText(error),
+      failureKind: classifyProxyFailure(new Error(text))
     }
   } finally {
     await dispatcher?.close().catch(() => undefined)
@@ -235,8 +266,20 @@ async function testProxyOnce(config: ProxyConfig): Promise<ProxyTestResult> {
 }
 
 export async function testProxy(config: ProxyConfig): Promise<ProxyTestResult> {
+  // Every check (and so every launch) decides the route afresh.
+  rememberDirectRoute(config, false)
+  const via = await localProxyFor(config).catch(() => undefined)
   const first = await testProxyOnce(config)
   if (first.ok || first.failureKind === 'authentication') return first
+  if (via) {
+    // The tunnel or system proxy could not reach this proxy (some nodes block other proxies' ports,
+    // and domestic proxies often refuse foreign visitors): try the computer's own network.
+    const direct = await testProxyOnce(config, true)
+    if (direct.ok) {
+      rememberDirectRoute(config, true)
+      return { ...direct, retried: true, latencyMs: first.latencyMs + direct.latencyMs }
+    }
+  }
   await new Promise((resolve) => setTimeout(resolve, 250))
   const second = await testProxyOnce(config)
   return { ...second, retried: true, latencyMs: first.latencyMs + second.latencyMs + 250 }

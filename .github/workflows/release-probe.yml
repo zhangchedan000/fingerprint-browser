@@ -1,0 +1,40 @@
+name: Release probe
+
+# Reads another project's newest release (names, sizes, SHA-256) and can hand one asset back as an
+# artifact, for components the app downloads at runtime (kernels, the tunnel core).
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: owner/name
+        default: MetaCubeX/mihomo
+      asset:
+        description: Regex of an asset to upload as an artifact ('' = none)
+        default: ''
+  push:
+    branches: [refactor-core]
+    paths: [.github/workflows/release-probe.yml]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List the newest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ inputs.repo || 'MetaCubeX/mihomo' }}
+          ASSET: ${{ inputs.asset || 'linux-amd64-compatible-v[0-9.]+[.]gz$' }}
+        run: |
+          gh api "repos/$REPO/releases?per_page=3" > releases.json
+          jq -r '[.[] | select(.prerelease == false)][0] | "\(.tag_name) " + ([.assets[] | select(.name | test("windows|darwin-arm64-v|compatible")) | "\(.name) \(.size) \(.digest)"] | join(" ; "))' releases.json > all.txt
+          cut -c1-3500 all.txt > summary.txt
+          echo "::warning title=Release::$(tr '\n' '|' < summary.txt)"
+          if [ -n "$ASSET" ]; then
+            url=$(jq -r --arg re "$ASSET" '[.[] | select(.prerelease == false)][0].assets[] | select(.name | test($re)) | .browser_download_url' releases.json | head -1)
+            mkdir out && curl -sSL -o "out/$(basename "$url")" "$url"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.asset != '' || github.event_name == 'push' }}
+        with:
+          name: asset
+          path: out/

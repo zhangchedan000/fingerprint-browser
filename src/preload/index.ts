@@ -1,10 +1,27 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import type { BrowserApi, BrowserProfileView, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { DeepSiteResult } from '../shared/deep-check'
+import type { BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
     get: () => ipcRenderer.invoke('ui-language:get'),
     set: (locale) => ipcRenderer.invoke('ui-language:set', locale)
+  },
+  app: {
+    preferences: () => ipcRenderer.invoke('app:preferences'),
+    setPreferences: (patch) => ipcRenderer.invoke('app:set-preferences', patch),
+    info: () => ipcRenderer.invoke('app:info'),
+    openFolder: (folder) => ipcRenderer.invoke('app:open-folder', folder),
+    openProjectPage: () => ipcRenderer.invoke('app:open-project-page'),
+    vaultLocation: () => ipcRenderer.invoke('app:vault-location'),
+    relocateVault: () => ipcRenderer.invoke('app:relocate-vault'),
+    deletePreviousVault: () => ipcRenderer.invoke('app:delete-previous-vault'),
+    revertVault: () => ipcRenderer.invoke('app:revert-vault'),
+    onRelocateProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: RelocateProgress): void => listener(progress)
+      ipcRenderer.on('app:relocate-progress', handler)
+      return () => ipcRenderer.removeListener('app:relocate-progress', handler)
+    }
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),
@@ -13,13 +30,24 @@ const api: BrowserApi = {
     duplicate: (id: string) => ipcRenderer.invoke('profiles:duplicate', id),
     exportConfig: (id: string) => ipcRenderer.invoke('profiles:export-config', id),
     importConfig: () => ipcRenderer.invoke('profiles:import-config'),
-    importBatchCsv: () => ipcRenderer.invoke('profiles:import-batch-csv'),
-    exportBatchTemplate: () => ipcRenderer.invoke('profiles:export-batch-template'),
+    previewBatchImport: (path) => ipcRenderer.invoke('profiles:batch-import-preview', path),
+    commitBatchImport: (token, options) => ipcRenderer.invoke('profiles:batch-import-commit', token, options),
+    saveBatchImportErrors: (token) => ipcRenderer.invoke('profiles:batch-import-save-errors', token),
+    exportBatchTemplate: (format) => ipcRenderer.invoke('profiles:export-batch-template', format),
+    pathForFile: (file) => webUtils.getPathForFile(file),
     storageHealth: () => ipcRenderer.invoke('profiles:storage-health'),
     storageInfo: (id: string) => ipcRenderer.invoke('profiles:storage-info', id),
     storageOverview: () => ipcRenderer.invoke('profiles:storage-overview'),
     openDataFolder: (id: string) => ipcRenderer.invoke('profiles:open-data-folder', id),
     clearCache: (id: string) => ipcRenderer.invoke('profiles:clear-cache', id),
+    checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:check-fingerprint', draft, profileId, settingsKey),
+    deepCheck: (draft: ProfileDraft, profileId?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId),
+    onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult): void => listener(result)
+      ipcRenderer.on('profiles:deep-check-progress', handler)
+      return () => ipcRenderer.removeListener('profiles:deep-check-progress', handler)
+    },
+    lastFingerprintCheck: (id: string) => ipcRenderer.invoke('profiles:last-fingerprint-check', id),
     exportBackup: (id: string) => ipcRenderer.invoke('profiles:export-backup', id),
     importBackup: () => ipcRenderer.invoke('profiles:import-backup'),
     exportWorkspace: (password: string) => ipcRenderer.invoke('profiles:export-workspace', password),
@@ -39,8 +67,13 @@ const api: BrowserApi = {
     testProxy: (id: string) => ipcRenderer.invoke('profiles:test-proxy', id),
     diagnose: (id: string) => ipcRenderer.invoke('profiles:diagnose', id),
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),
+    readLaunchLog: (id: string, logFile: string) => ipcRenderer.invoke('profiles:read-launch-log', id, logFile),
+    openLaunchLogFolder: (id: string, logFile?: string) => ipcRenderer.invoke('profiles:open-launch-log-folder', id, logFile),
     setFavorite: (id: string, favorite: boolean) => ipcRenderer.invoke('profiles:set-favorite', id, favorite),
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),
+    assignMany: (ids, patch) => ipcRenderer.invoke('profiles:assign-many', ids, patch),
+    setKernelMany: (ids: string[], kernelVersion: string) => ipcRenderer.invoke('profiles:set-kernel-many', ids, kernelVersion),
+    importCookiesText: (id: string, text: string) => ipcRenderer.invoke('profiles:import-cookies-text', id, text),
     removeMany: (ids: string[]) => ipcRenderer.invoke('profiles:remove-many', ids),
     onChanged: (listener: (profile: BrowserProfileView) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, profile: BrowserProfileView): void => listener(profile)
@@ -60,79 +93,48 @@ const api: BrowserApi = {
     rollbackAvailable: () => ipcRenderer.invoke('engine:rollback-available'),
     rollback: () => ipcRenderer.invoke('engine:rollback'),
     remove: (version: string) => ipcRenderer.invoke('engine:remove', version),
-    verify: (version: string) => ipcRenderer.invoke('engine:verify', version)
-  },
-  updates: {
-    status: () => ipcRenderer.invoke('updates:status'),
-    check: () => ipcRenderer.invoke('updates:check'),
-    download: () => ipcRenderer.invoke('updates:download'),
-    openInstaller: () => ipcRenderer.invoke('updates:open-installer'),
-    onChanged: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
-      ipcRenderer.on('updates:changed', handler)
-      return () => ipcRenderer.removeListener('updates:changed', handler)
+    verify: (version: string) => ipcRenderer.invoke('engine:verify', version),
+    releases: () => ipcRenderer.invoke('engine:releases'),
+    install: (version: string) => ipcRenderer.invoke('engine:install', version),
+    cancelInstall: (version: string) => ipcRenderer.invoke('engine:cancel-install', version),
+    onProgress: (listener: (progress: KernelInstallProgress) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: KernelInstallProgress): void => listener(progress)
+      ipcRenderer.on('engine:progress', handler)
+      return () => ipcRenderer.removeListener('engine:progress', handler)
     }
   },
-  announcements: {
-    status: () => ipcRenderer.invoke('announcements:status'),
-    check: () => ipcRenderer.invoke('announcements:check'),
-    openAction: () => ipcRenderer.invoke('announcements:open-action')
+  tunnel: {
+    status: () => ipcRenderer.invoke('tunnel:status'),
+    setEnabled: (enabled) => ipcRenderer.invoke('tunnel:set-enabled', enabled),
+    addSource: (input) => ipcRenderer.invoke('tunnel:add-source', input),
+    removeSource: (id) => ipcRenderer.invoke('tunnel:remove-source', id),
+    select: (name) => ipcRenderer.invoke('tunnel:select', name),
+    test: () => ipcRenderer.invoke('tunnel:test'),
+    refresh: () => ipcRenderer.invoke('tunnel:refresh'),
+    onChanged: (listener: (status: TunnelStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: TunnelStatus): void => listener(status)
+      ipcRenderer.on('tunnel:changed', handler)
+      return () => ipcRenderer.removeListener('tunnel:changed', handler)
+    }
   },
   proxy: {
-    test: (config, profileId) => ipcRenderer.invoke('proxy:test', config, profileId)
+    test: (config, profileId, proxyId) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId),
+    list: () => ipcRenderer.invoke('proxy:list'),
+    create: (draft) => ipcRenderer.invoke('proxy:create', draft),
+    createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),
+    update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
+    remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
+    check: (id) => ipcRenderer.invoke('proxy:check', id)
+  },
+  groups: {
+    list: () => ipcRenderer.invoke('groups:list'),
+    create: (draft) => ipcRenderer.invoke('groups:create', draft),
+    update: (id, draft) => ipcRenderer.invoke('groups:update', id, draft),
+    remove: (id) => ipcRenderer.invoke('groups:remove', id)
   },
   diagnostics: {
     sessionHealth: () => ipcRenderer.invoke('diagnostics:session-health'),
     e2eQuit: () => ipcRenderer.invoke('diagnostics:e2e-quit')
-  },
-  licensing: {
-    status: () => ipcRenderer.invoke('licensing:status'),
-    sync: () => ipcRenderer.invoke('licensing:sync'),
-    activate: (activationCode: string) => ipcRenderer.invoke('licensing:activate', activationCode),
-    deactivate: () => ipcRenderer.invoke('licensing:deactivate'),
-    openPurchase: () => ipcRenderer.invoke('licensing:open-purchase'),
-    onChanged: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
-      ipcRenderer.on('licensing:changed', handler)
-      return () => ipcRenderer.removeListener('licensing:changed', handler)
-    }
-  },
-  automation: {
-    status: () => ipcRenderer.invoke('automation:status'),
-    start: () => ipcRenderer.invoke('automation:start'),
-    stop: () => ipcRenderer.invoke('automation:stop'),
-    emergencyStop: () => ipcRenderer.invoke('automation:emergency-stop'),
-    onChanged: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
-      ipcRenderer.on('automation:changed', handler)
-      return () => ipcRenderer.removeListener('automation:changed', handler)
-    }
-  },
-  scheduler: {
-    list: () => ipcRenderer.invoke('scheduler:list'),
-    create: (draft) => ipcRenderer.invoke('scheduler:create', draft),
-    update: (id, draft) => ipcRenderer.invoke('scheduler:update', id, draft),
-    remove: (id) => ipcRenderer.invoke('scheduler:remove', id),
-    setEnabled: (id, enabled) => ipcRenderer.invoke('scheduler:set-enabled', id, enabled),
-    runNow: (id) => ipcRenderer.invoke('scheduler:run-now', id),
-    onChanged: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, tasks: Parameters<typeof listener>[0]) => listener(tasks)
-      ipcRenderer.on('scheduler:changed', handler)
-      return () => ipcRenderer.removeListener('scheduler:changed', handler)
-    }
-  },
-  mcp: {
-    status: () => ipcRenderer.invoke('mcp:status'),
-    permissions: () => ipcRenderer.invoke('mcp:permissions'),
-    setPermission: (profileId, enabled) => ipcRenderer.invoke('mcp:set-permission', profileId, enabled),
-    start: () => ipcRenderer.invoke('mcp:start'),
-    stop: () => ipcRenderer.invoke('mcp:stop'),
-    emergencyStop: () => ipcRenderer.invoke('mcp:emergency-stop'),
-    onChanged: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
-      ipcRenderer.on('mcp:changed', handler)
-      return () => ipcRenderer.removeListener('mcp:changed', handler)
-    }
   },
   extensions: {
     list: () => ipcRenderer.invoke('extensions:list'),

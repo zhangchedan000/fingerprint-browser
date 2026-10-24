@@ -27,3 +27,12 @@ describe('SettingsStore', () => {
     expect(reopened.get().enginePreference).toBe('system')
   })
 })
+
+describe('interface preferences', () => {
+  it('keeps valid theme and batch gap values and falls back otherwise', async () => {
+    const { validPreferences, DEFAULT_PREFERENCES } = await import('./settings-store')
+    expect(validPreferences({})).toEqual(DEFAULT_PREFERENCES)
+    expect(validPreferences({ theme: 'dark', batchLaunchGapSeconds: 3.04 })).toEqual({ theme: 'dark', batchLaunchGapSeconds: 3 })
+    expect(validPreferences({ theme: 'neon' as never, batchLaunchGapSeconds: 99 })).toEqual(DEFAULT_PREFERENCES)
+  })
+})

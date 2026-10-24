@@ -8,10 +8,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url))
 const AUDIT_TOOL = resolve(TOOL_DIR, '../fingerprint-audit/run.mjs')
-const WINDOWS_GPU_CATALOG = JSON.parse(await readFile(
-  resolve(TOOL_DIR, '../../src/shared/windows-gpu-catalog.json'),
+// This matrix audits the 144 kernel; its GPU list comes from the measured catalogs.
+const KERNEL_144_WINDOWS_GPUS = JSON.parse(await readFile(
+  resolve(TOOL_DIR, '../../src/shared/gpu-catalogs.json'),
   'utf8'
-))
+))['144'].windows
+const WINDOWS_GPU_CATALOG = {
+  kernelCatalogSize: KERNEL_144_WINDOWS_GPUS.length,
+  curatedDesktop: KERNEL_144_WINDOWS_GPUS
+    .map((gpu, bucket) => ({ bucket, model: gpu.model, deviceId: gpu.deviceId }))
+    .filter((gpu) => /^NVIDIA GeForce RTX [34]0/.test(gpu.model) && !/Laptop/.test(gpu.model))
+}
 const MACOS_GPU_CATALOG = [
   'Apple M1',
   'Apple M1 Pro',

@@ -1,35 +1,33 @@
 import { t } from '../shared/i18n'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { lstat, readFile, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import type { ProfileDraft } from '../shared/types'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
+import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
-import { listBundledBrowsers, locateBrowser, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
+import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
+import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
+import type { DeepSiteResult } from '../shared/deep-check'
+import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
+import { hostHardwareSnapshot } from './host-hardware'
 import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
-import type { ProfileStore } from './profile-store'
-import type { SettingsStore } from './settings-store'
+import type { AssignPatch, ProfileStore } from './profile-store'
+import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
-import { validateProxyConfig } from '../shared/validation'
+import { validateProfileDraft, validateProxyConfig } from '../shared/validation'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
 import { clearProfileCache, profileStorageInfo, storageOverview } from './profile-data'
 import type { ExtensionStore } from './extension-store'
 import type { CookieManager } from './cookie-manager'
 import { parseCookieFile, serializeCookieFile } from './cookie-file'
-import { parseBatchProfileCsv, serializeBatchProfileTemplate } from './profile-batch-csv'
-import { proxyForTest, publicProfile, sameProxyIdentity } from './profile-secrets'
+import { randomUUID } from 'node:crypto'
+import { analyzeBatchTable, batchTemplateRows, errorRows, importFormat, readImportTable, serializeCsv, serializeXlsx, type AnalyzedTable, type ImportFileFormat } from './profile-batch-import'
+import { proxyForTest, publicGroupRecord, publicProfile, publicProxyRecord, sameProxyIdentity } from './profile-secrets'
 import type { ProfileBackupManager } from './profile-backup'
 import type { AppSessionTracker } from './app-session'
-import type { UpdateManager } from './update-manager'
-import type { LicenseManager } from './license-manager'
 import type { WorkspaceMigrationManager } from './workspace-migration'
-import type { ProAgentManager } from './pro-agent-manager'
-import type { SchedulerManager } from './scheduler-manager'
-import type { McpControlManager } from './mcp-control-manager'
-import type { AnnouncementManager } from './announcement-manager'
-
-export const PRO_PURCHASE_URL = 'https://pay.ldxp.cn/item/q23itv'
 
 interface IpcDependencies {
   profiles: ProfileStore
@@ -42,15 +40,9 @@ interface IpcDependencies {
   backups: ProfileBackupManager
   workspaceMigration: WorkspaceMigrationManager
   appSession: AppSessionTracker
-  updater: UpdateManager
-  licensing: LicenseManager
-  automation: ProAgentManager
-  scheduler: SchedulerManager
-  mcp: McpControlManager
-  announcements: AnnouncementManager
 }
 
-export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, updater, licensing, automation, scheduler, mcp, announcements }: IpcDependencies): void {
+export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => publicProfile(await profiles.create(draft)))
@@ -63,7 +55,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.SaveDialogOptions = {
       title: t('导出环境配置'),
       defaultPath: safeProfileFileName(profile.name),
-      filters: [{ name: 'Prism Browser 环境配置', extensions: ['json'] }]
+      filters: [{ name: '指纹浏览器环境配置', extensions: ['json'] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
@@ -76,7 +68,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入环境配置'),
       properties: ['openFile'],
-      filters: [{ name: 'Prism Browser 环境配置', extensions: ['json'] }]
+      filters: [{ name: '指纹浏览器环境配置', extensions: ['json'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
@@ -86,32 +78,91 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     logger.info('环境配置已导入', { profileId: profile.id })
     return publicProfile(profile)
   })
-  ipcMain.handle('profiles:import-batch-csv', async () => {
-    const owner = BrowserWindow.getFocusedWindow()
-    const options: Electron.OpenDialogOptions = {
-      title: t('批量导入浏览器环境'),
-      properties: ['openFile'],
-      filters: [{ name: 'CSV 表格', extensions: ['csv'] }]
+  // One pending import at a time: the preview keeps the checked rows here until commit.
+  let pendingImport: { token: string; fileName: string; format: ImportFileFormat; table: AnalyzedTable; committed: boolean } | undefined
+  const pendingFor = (token: string) => {
+    if (!pendingImport || pendingImport.token !== token) throw new Error('导入预览已失效，请重新选择文件')
+    return pendingImport
+  }
+  ipcMain.handle('profiles:batch-import-preview', async (_event, requestedPath?: string) => {
+    let path = typeof requestedPath === 'string' && requestedPath ? requestedPath : undefined
+    if (!path) {
+      const owner = BrowserWindow.getFocusedWindow()
+      const options: Electron.OpenDialogOptions = {
+        title: t('批量导入窗口'),
+        properties: ['openFile'],
+        filters: [{ name: t('表格文件'), extensions: ['xlsx', 'csv', 'txt'] }]
+      }
+      const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
+      if (result.canceled || !result.filePaths[0]) return null
+      path = result.filePaths[0]
     }
-    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
-    if (result.canceled || !result.filePaths[0]) return null
-    const path = result.filePaths[0]
-    if ((await stat(path)).size > 2 * 1024 * 1024) throw new Error('批量导入 CSV 不能超过 2 MB')
-    const drafts = parseBatchProfileCsv(await readFile(path, 'utf8'), profiles.list().length + 1)
-    const created = await profiles.createMany(drafts)
-    logger.info('已通过 CSV 批量导入浏览器环境', { count: created.length })
-    return created.map(publicProfile)
+    const format = importFormat(path)
+    const info = await stat(path)
+    if (!info.isFile()) throw new Error('只支持 .xlsx、.csv 或 .txt 文件')
+    if (info.size > 5 * 1024 * 1024) throw new Error('导入文件不能超过 5 MB')
+    const table = analyzeBatchTable(await readImportTable(path, await readFile(path)), profiles.list().length + 1)
+    const token = randomUUID()
+    pendingImport = { token, fileName: basename(path), format, table, committed: false }
+    const valid = table.rows.filter((row) => row.draft).length
+    return { token, fileName: basename(path), valid, invalid: table.rows.length - valid, rows: table.rows.map((row) => row.view) }
   })
-  ipcMain.handle('profiles:export-batch-template', async () => {
+  ipcMain.handle('profiles:batch-import-commit', async (_event, token: string, options: { defaultGroup?: unknown }) => {
+    const pending = pendingFor(token)
+    if (pending.committed) throw new Error('这批窗口已经导入')
+    const defaultGroup = typeof options?.defaultGroup === 'string' ? options.defaultGroup.trim() : ''
+    const rows = pending.table.rows.filter((row) => row.draft)
+    if (!rows.length) throw new Error('没有可导入的有效行')
+    pending.committed = true
+    let created
+    try {
+      created = await profiles.createMany(rows.map((row) => ({ ...row.draft!, group: row.draft!.group || defaultGroup })))
+    } catch (error) {
+      pending.committed = false
+      throw error
+    }
+    let cookiesImported = 0
+    const cookieErrors: Array<{ name: string; message: string }> = []
+    for (const [index, row] of rows.entries()) {
+      if (!row.cookieText) continue
+      const profile = created[index]
+      try {
+        cookiesImported += await cookies.importCookies(profile.id, parseCookieFile(row.cookieText))
+      } catch (error) {
+        cookieErrors.push({ name: profile.name, message: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    logger.info('已批量导入窗口', { count: created.length, skipped: pending.table.rows.length - rows.length, cookieErrors: cookieErrors.length })
+    return { created: created.map(publicProfile), skipped: pending.table.rows.length - rows.length, cookiesImported, cookieErrors }
+  })
+  ipcMain.handle('profiles:batch-import-save-errors', async (_event, token: string) => {
+    const pending = pendingFor(token)
+    if (pending.table.rows.every((row) => row.draft)) throw new Error('没有错误行')
+    const extension = pending.format === 'xlsx' ? 'xlsx' : 'csv'
     const owner = BrowserWindow.getFocusedWindow()
     const options: Electron.SaveDialogOptions = {
-      title: t('保存批量导入 CSV 模板'),
-      defaultPath: 'prism-browser-batch-template.csv',
-      filters: [{ name: 'CSV 表格', extensions: ['csv'] }]
+      title: t('保存错误行'),
+      defaultPath: `${pending.fileName.replace(/\.[^.]+$/, '')}-${t('错误行')}.${extension}`,
+      filters: [{ name: t('表格文件'), extensions: [extension] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
-    await writeFile(result.filePath, serializeBatchProfileTemplate(), { encoding: 'utf8', mode: 0o600 })
+    const rows = errorRows(pending.table)
+    await writeFile(result.filePath, extension === 'xlsx' ? await serializeXlsx(rows) : serializeCsv(rows), { mode: 0o600 })
+    return result.filePath
+  })
+  ipcMain.handle('profiles:export-batch-template', async (_event, format: unknown) => {
+    const extension = format === 'csv' ? 'csv' : 'xlsx'
+    const owner = BrowserWindow.getFocusedWindow()
+    const options: Electron.SaveDialogOptions = {
+      title: t('保存导入模板'),
+      defaultPath: `${t('批量导入模板')}.${extension}`,
+      filters: [{ name: t('表格文件'), extensions: [extension] }]
+    }
+    const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    const rows = batchTemplateRows()
+    await writeFile(result.filePath, extension === 'xlsx' ? await serializeXlsx(rows) : serializeCsv(rows), { mode: 0o600 })
     return result.filePath
   })
   ipcMain.handle('profiles:storage-info', async (_event, id: string) => {
@@ -120,6 +171,90 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return profileStorageInfo(profiles.profileDataPath(id))
   })
   ipcMain.handle('profiles:storage-overview', () => storageOverview(profiles.vaultPath))
+  // Fingerprint check: the draft's exact launch setup in a throwaway profile, so the window's own
+  // data is never touched and an unsaved draft can be checked too.
+  const fingerprintChecks = new FingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
+  ipcMain.handle('profiles:last-fingerprint-check', (_event, id: string) => fingerprintChecks.get(id))
+  /** The check browser's settings for an editor draft: same kernel, proxy and hardware as a real launch. */
+  async function checkRunOptions(draft: ProfileDraft, profileId?: string) {
+    const validated = validateProfileDraft(draft)
+    const existing = profileId ? profiles.get(profileId) : undefined
+    let proxy: ProxyConfig
+    if (draft.proxyId) {
+      const { protocol, host, port, username, password } = profiles.getProxy(draft.proxyId)
+      proxy = { protocol, host, port, username, password }
+    } else {
+      proxy = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
+    }
+    const engine = await locateBrowserForProfile(settings, profiles.vaultPath, validated.kernelVersion)
+    if (!engine.executable) {
+      throw new Error(validated.kernelVersion ? `内核 ${validated.kernelVersion} 不可用，请先安装` : '没有找到浏览器内核，请先在内核管理里下载或导入')
+    }
+    const proxyResult = proxy.protocol === 'direct' ? undefined : await testProxy(proxy)
+    if (proxyResult && !proxyResult.ok) throw new Error(`代理不通，无法检测：${proxyResult.error ?? '连接失败'}`)
+    const profile = {
+      ...validated,
+      id: profileId ?? 'fingerprint-check',
+      serialNumber: existing?.serialNumber ?? 0,
+      groupId: '',
+      proxyId: draft.proxyId ?? '',
+      proxy,
+      favorite: false,
+      status: 'closed',
+      createdAt: '',
+      updatedAt: ''
+    } as unknown as BrowserProfile
+    const host = hostHardwareSnapshot()
+    const { width, height } = screen.getPrimaryDisplay().size
+    const runOptions = {
+      profile,
+      engine,
+      proxy: proxyResult,
+      hostHardwareConcurrency: host.hardwareConcurrency,
+      hostPlatformVersion: host.platformVersion,
+      hostScreen: { width, height },
+      // Same switch the launcher honours for automated runs.
+      headless: process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1',
+      logger
+    }
+    return { validated, proxy, engine, proxyResult, runOptions }
+  }
+
+  ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string): Promise<DeepSiteResult[]> => {
+    const { runOptions } = await checkRunOptions(draft, profileId)
+    return deepCheck(runOptions, (result) => event.sender.send('profiles:deep-check-progress', result))
+  })
+  ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
+    const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
+    const observed = await observeFingerprint(runOptions)
+    const windows = profiles.list()
+    const others = Object.entries(await fingerprintChecks.all())
+      .filter(([id]) => id !== profileId)
+      .flatMap(([id, report]) => {
+        const window = windows.find((item) => item.id === id)
+        return window ? [{ label: `#${window.serialNumber} ${window.name}`, observed: report.observed, disabledSpoofing: window.fingerprint.disabledSpoofing }] : []
+      })
+    const report: FingerprintCheckReport = {
+      checkedAt: new Date().toISOString(),
+      kernelVersion: engine.version,
+      // The editor's own key for what it sent, so a fresh result never reads as out of date there.
+      checkedSettings: typeof settingsKey === 'string' ? settingsKey : checkedSettingsKey(validated.fingerprint, validated.kernelVersion || engine.version, checkProxyKey(draft.proxyId, proxy)),
+      exitIp: proxyResult?.ip,
+      observed,
+      items: evaluateFingerprint({
+        fingerprint: validated.fingerprint,
+        engine,
+        observed,
+        expected: expectedIdentity(runOptions.profile, runOptions),
+        proxy: proxyResult,
+        usesProxy: proxy.protocol !== 'direct',
+        others
+      })
+    }
+    if (profileId) await fingerprintChecks.set(profileId, report)
+    logger.info('指纹检测完成', { profileId, problems: report.items.filter((item) => item.status === 'bad').length })
+    return report
+  })
   ipcMain.handle('profiles:open-data-folder', async (_event, id: string) => {
     profiles.get(id)
     await profiles.assertProfileDataIdentity(id)
@@ -151,7 +286,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:import-backup', async () => {
     const owner = BrowserWindow.getFocusedWindow()
-    const options: Electron.OpenDialogOptions = { title: t('选择 Prism 环境数据备份目录'), properties: ['openDirectory'] }
+    const options: Electron.OpenDialogOptions = { title: t('选择指纹浏览器环境数据备份目录'), properties: ['openDirectory'] }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
     const imported = await backups.import(result.filePaths[0])
@@ -164,8 +299,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const stamp = new Date().toISOString().slice(0, 10)
     const options: Electron.SaveDialogOptions = {
       title: t('导出全部环境加密迁移包'),
-      defaultPath: `Prism 全部环境 ${stamp}.prism-migration`,
-      filters: [{ name: 'Prism 加密迁移包', extensions: ['prism-migration'] }]
+      defaultPath: `指纹浏览器全部环境 ${stamp}.prism-migration`,
+      filters: [{ name: '指纹浏览器加密迁移包', extensions: ['prism-migration'] }]
     }
     const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
@@ -178,7 +313,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入全部环境加密迁移包'),
       properties: ['openFile'],
-      filters: [{ name: 'Prism 加密迁移包', extensions: ['prism-migration'] }]
+      filters: [{ name: '指纹浏览器加密迁移包', extensions: ['prism-migration'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
@@ -199,6 +334,19 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     logger.info('环境回收站已清空', { count })
     return count
   })
+  ipcMain.handle('app:preferences', () => validPreferences(settings.get()))
+  ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
+    const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
+    await settings.update(next)
+    return next
+  })
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
+  ipcMain.handle('app:open-folder', async (_event, folder: unknown) => {
+    if (folder !== 'vault' && folder !== 'logs') throw new Error('目录参数无效')
+    const error = await shell.openPath(folder === 'vault' ? profiles.vaultPath : logger.directory)
+    if (error) throw new Error(error)
+  })
+  ipcMain.handle('app:open-project-page', () => shell.openExternal('https://github.com/zhangchedan000/fingerprint-browser'))
   ipcMain.handle('profiles:recycle-retention', () => settings.get().recycleRetentionDays)
   ipcMain.handle('profiles:set-recycle-retention', async (_event, days: number) => {
     if (days !== 0 && days !== 7 && days !== 30 && days !== 90) throw new Error('回收站保留天数无效')
@@ -222,6 +370,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await writeFile(result.filePath, serializeCookieFile(profile.name, exported), { encoding: 'utf8', mode: 0o600 })
     return { count: exported.length, filePath: result.filePath }
   })
+  ipcMain.handle('profiles:import-cookies-text', async (_event, id: string, text: string) => {
+    profiles.get(id)
+    if (typeof text !== 'string' || !text.trim()) throw new Error('请粘贴 Cookie 内容')
+    if (Buffer.byteLength(text, 'utf8') > 10 * 1024 * 1024) throw new Error('Cookie 文件不能超过 10 MB')
+    if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导入 Cookie')
+    const imported = parseCookieFile(text)
+    return { count: await cookies.importCookies(id, imported) }
+  })
   ipcMain.handle('profiles:import-cookies', async (_event, id: string) => {
     profiles.get(id)
     if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导入 Cookie')
@@ -229,7 +385,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const options: Electron.OpenDialogOptions = {
       title: t('导入环境 Cookie'),
       properties: ['openFile'],
-      filters: [{ name: 'Cookie JSON', extensions: ['json'] }]
+      filters: [{ name: 'Cookie', extensions: ['json', 'txt'] }]
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
@@ -242,9 +398,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:remove', async (_event, id: string) => {
     if (launcher.isRunning(id)) throw new Error('请先关闭运行中的环境')
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
-    if (scheduler.profileTasks(id).length) throw new Error('该环境仍被计划任务引用，请先删除对应计划任务')
     await profiles.remove(id)
-    await mcp.removeProfile(id)
   })
   ipcMain.handle('profiles:launch', (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
@@ -264,18 +418,42 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:diagnose', (_event, id: string) => launcher.diagnose(id))
   ipcMain.handle('profiles:crash-history', (_event, id: string) => launcher.crashHistory(id))
+  ipcMain.handle('profiles:read-launch-log', (_event, id: string, logFile: string) => launcher.readLaunchLog(id, logFile))
+  ipcMain.handle('profiles:open-launch-log-folder', async (_event, id: string, logFile?: string) => {
+    const folder = launcher.launchLogFolder(id)
+    await mkdir(folder, { recursive: true })
+    if (typeof logFile === 'string' && join(folder, basename(logFile)) === logFile && existsSync(logFile)) {
+      shell.showItemInFolder(logFile)
+      return
+    }
+    const error = await shell.openPath(folder)
+    if (error) throw new Error(`无法打开日志目录：${error}`)
+  })
   ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => publicProfile(await profiles.setFavorite(id, favorite)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
+  })
+  ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: AssignPatch) => {
+    if (patch?.extensionId !== undefined && !(await extensions.list()).some((extension) => extension.id === patch.extensionId)) {
+      throw new Error('扩展不存在或已被移除')
+    }
+    return (await profiles.assignMany(ids, patch)).map(publicProfile)
+  })
+  ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {
+    const version = typeof kernelVersion === 'string' ? kernelVersion.trim() : kernelVersion
+    if (version) {
+      const [managed, bundled] = await Promise.all([kernels.installed(), listBundledBrowsers()])
+      const available = mergeKernelCatalog(managed, bundled).some((kernel) => kernel.version === version && kernel.installed && kernel.executable)
+      if (!available) throw new Error(`内核 ${version} 尚未安装，请先在内核管理中导入`)
+    }
+    return (await profiles.setKernelMany(ids, version)).map(publicProfile)
   })
   ipcMain.handle('profiles:remove-many', async (_event, ids: string[]) => {
     for (const id of ids) {
       if (launcher.isRunning(id)) throw new Error(`环境“${profiles.get(id).name}”正在运行，不能删除`)
       if (cookies.isBusy(id)) throw new Error(`环境“${profiles.get(id).name}”正在执行 Cookie 操作`)
-      if (scheduler.profileTasks(id).length) throw new Error(`环境“${profiles.get(id).name}”仍被计划任务引用，请先删除对应计划任务`)
     }
     await profiles.removeMany(ids)
-    await Promise.all(ids.map((id) => mcp.removeProfile(id)))
   })
 
   ipcMain.handle('engine:status', () => locateBrowser(settings))
@@ -330,6 +508,12 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       bundled.executable
     )
   })
+  ipcMain.handle('engine:releases', () => kernels.releases())
+  ipcMain.handle('engine:install', (_event, version: string) => {
+    if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再导入并切换内核')
+    return kernels.install(version)
+  })
+  ipcMain.handle('engine:cancel-install', (_event, version: string) => kernels.cancel(version))
   ipcMain.handle('engine:rollback-available', () => kernels.rollbackAvailable())
   ipcMain.handle('engine:rollback', () => {
     if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再回滚内核')
@@ -342,66 +526,55 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       return {
         version,
         status: 'healthy',
-        message: '随 Prism Browser 发布的内核完整性正常',
+        message: '随指纹浏览器发布的内核完整性正常',
         checkedAt: new Date().toISOString()
       }
     }
     return kernels.verify(version)
   })
-  ipcMain.handle('updates:status', () => updater.status())
-  ipcMain.handle('updates:check', () => updater.check())
-  ipcMain.handle('updates:download', () => updater.download())
-  ipcMain.handle('updates:open-installer', async () => {
-    const error = await shell.openPath(await updater.downloadedPath())
-    if (error) throw new Error(`无法打开更新安装程序：${error}`)
-  })
-  ipcMain.handle('announcements:status', () => announcements.status())
-  ipcMain.handle('announcements:check', () => announcements.check())
-  ipcMain.handle('announcements:open-action', async () => {
-    const status = announcements.status()
-    if (status.state !== 'available' || !status.announcement?.action) throw new Error('当前公告没有可打开的链接')
-    await shell.openExternal(status.announcement.action.url)
-  })
-  ipcMain.handle('proxy:test', (_event, config, profileId?: string) => {
+  ipcMain.handle('proxy:test', (_event, config, profileId?: string, proxyId?: string) => {
     const validated = validateProxyConfig(config)
-    const profile = profileId ? profiles.get(profileId) : undefined
-    return testProxy(proxyForTest(validated, profile))
+    const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
+    return testProxy(proxyForTest(validated, saved))
   })
+  // Proxy and group libraries: windows refer to these records by id.
+  const proxyView = (id: string) => publicProxyRecord(profiles.getProxy(id), profiles.list())
+  ipcMain.handle('proxy:list', () => {
+    const windows = profiles.list()
+    return profiles.listProxies().map((proxy) => publicProxyRecord(proxy, windows))
+  })
+  ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(draft)).id))
+  ipcMain.handle('proxy:create-many', async (_event, drafts) => {
+    const result = await profiles.createProxies(drafts)
+    const windows = profiles.list()
+    return { ...result, created: result.created.map((proxy) => publicProxyRecord(proxy, windows)) }
+  })
+  ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, draft)).id))
+  ipcMain.handle('proxy:remove', (_event, id: string, replaceWith?: unknown) => {
+    if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
+    return profiles.removeProxy(id, replaceWith)
+  })
+  ipcMain.handle('proxy:check', async (_event, id: string) => {
+    const tested = profiles.getProxy(id)
+    const result = await testProxy(tested)
+    const current = profiles.getProxy(id)
+    if (!sameProxyIdentity(tested, current) || tested.password !== current.password) {
+      throw new Error('检测期间代理配置已变更，本次结果未保存')
+    }
+    await profiles.setLibraryProxyCheck(id, { ...result, checkedAt: new Date().toISOString() })
+    return proxyView(id)
+  })
+  ipcMain.handle('groups:list', () => {
+    const windows = profiles.list()
+    return profiles.listGroups().map((group) => publicGroupRecord(group, windows))
+  })
+  ipcMain.handle('groups:create', async (_event, draft) => publicGroupRecord(await profiles.createGroup(draft), profiles.list()))
+  ipcMain.handle('groups:update', async (_event, id: string, draft) => publicGroupRecord(await profiles.updateGroup(id, draft), profiles.list()))
+  ipcMain.handle('groups:remove', (_event, id: string) => profiles.removeGroup(id))
   ipcMain.handle('diagnostics:session-health', () => appSession.recoveryStatus())
   if (process.env.PRISM_E2E === '1') {
     ipcMain.handle('diagnostics:e2e-quit', () => app.quit())
   }
-  ipcMain.handle('licensing:status', () => licensing.status())
-  ipcMain.handle('licensing:sync', () => licensing.synchronize())
-  ipcMain.handle('licensing:activate', (_event, activationCode: string) => licensing.activate(activationCode))
-  ipcMain.handle('licensing:deactivate', () => licensing.deactivate())
-  ipcMain.handle('licensing:open-purchase', async () => {
-    await shell.openExternal(PRO_PURCHASE_URL)
-  })
-  ipcMain.handle('automation:status', () => automation.status())
-  ipcMain.handle('automation:start', () => automation.start())
-  ipcMain.handle('automation:stop', () => automation.stop(false))
-  ipcMain.handle('automation:emergency-stop', () => automation.stop(true))
-  ipcMain.handle('scheduler:list', () => scheduler.list())
-  ipcMain.handle('scheduler:create', (_event, draft) => scheduler.create(draft))
-  ipcMain.handle('scheduler:update', (_event, id: string, draft) => scheduler.update(id, draft))
-  ipcMain.handle('scheduler:remove', (_event, id: string) => scheduler.remove(id))
-  ipcMain.handle('scheduler:set-enabled', (_event, id: string, enabled: boolean) => scheduler.setEnabled(id, enabled))
-  ipcMain.handle('scheduler:run-now', (_event, id: string) => scheduler.runNow(id))
-  ipcMain.handle('mcp:status', () => mcp.status(automation.status().state === 'running'))
-  ipcMain.handle('mcp:permissions', () => mcp.permissionList())
-  ipcMain.handle('mcp:set-permission', (_event, profileId: string, enabled: boolean) => mcp.setPermission(profileId, enabled))
-  ipcMain.handle('mcp:start', () => automation.mcpConnection())
-  ipcMain.handle('mcp:stop', async () => {
-    await automation.stop(false)
-    mcp.resetSessions()
-    return mcp.status(false)
-  })
-  ipcMain.handle('mcp:emergency-stop', async () => {
-    await mcp.emergencyStop()
-    await automation.stop(false)
-    return mcp.status(false)
-  })
   ipcMain.handle('extensions:list', () => extensions.list())
   ipcMain.handle('extensions:import-directory', async () => {
     const owner = BrowserWindow.getFocusedWindow()

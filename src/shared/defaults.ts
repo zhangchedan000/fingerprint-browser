@@ -1,5 +1,6 @@
+import { deviceName, macAddress } from './device-identity'
 import { t } from './i18n'
-import type { BrowserPlatform, FingerprintConfig, ProfileDraft, ProfileWindowConfig } from './types'
+import type { BrowserPlatform, FingerprintConfig, PlatformAccount, ProfileDraft, ProfileWindowConfig } from './types'
 import { applyHardwareProfile, defaultHardwareProfileId } from './hardware-profiles'
 
 export const PROFILE_COLORS = ['#5965e8', '#1d9a6c', '#d97706', '#d9506b', '#7c4dce', '#0784a8']
@@ -44,14 +45,18 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     screenHeight: 900,
     disabledSpoofing: []
   }
-  return applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true })
+  return {
+    ...applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true }),
+    deviceName: deviceName(seed, platform),
+    macAddress: macAddress(seed)
+  }
 }
 
 export function defaultProfileWindow(): ProfileWindowConfig {
   return { mode: 'auto', x: 0, y: 0, width: 1200, height: 800 }
 }
 
-export function defaultProfileDraft(index = 1): ProfileDraft {
+export function defaultProfileDraft(index = 1): ProfileDraft & { account: PlatformAccount } {
   return {
     name: t('环境 {0}', index),
     note: '',
@@ -68,6 +73,7 @@ export function defaultProfileDraft(index = 1): ProfileDraft {
       username: '',
       password: ''
     },
+    account: { platform: '', username: '', password: '' },
     fingerprint: defaultFingerprint()
   }
 }

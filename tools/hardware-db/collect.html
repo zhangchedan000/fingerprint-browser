@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>真机参数采集</title>
+<style>
+  :root { --bg: #f5f6f8; --card: #fff; --text: #1d2129; --muted: #6b7280; --accent: #2f6bff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15171c; --card: #1f2229; --text: #e6e8ec; --muted: #9aa1ad; --accent: #5b8cff; } }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; background: var(--card); border-radius: 12px; padding: 24px; }
+  h1 { margin: 0 0 8px; font-size: 20px; }
+  p { color: var(--muted); margin: 0 0 16px; }
+  button { padding: 10px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 15px; cursor: pointer; margin-right: 8px; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { margin-top: 16px; max-height: 420px; overflow: auto; padding: 12px; border-radius: 8px; background: var(--bg); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  #status { margin-top: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>真机参数采集</h1>
+  <p>用普通 Chrome（不要用指纹浏览器）打开。点“开始采集”，大约 5 秒，完成后点“下载结果”，把下载的 JSON 文件发回来。只读取浏览器能看到的硬件和显示参数，不读取任何个人文件或账号信息。</p>
+  <button id="run">开始采集</button><button id="save" disabled>下载结果</button>
+  <div id="status"></div>
+  <pre id="out" hidden></pre>
+</main>
+<script>
+const $ = (id) => document.getElementById(id)
+let result
+
+function glInfo(version) {
+  const canvas = document.createElement('canvas')
+  const gl = canvas.getContext(version === 2 ? 'webgl2' : 'webgl')
+  if (!gl) return null
+  const info = { params: {}, extensions: gl.getSupportedExtensions(), precision: {} }
+  const debug = gl.getExtension('WEBGL_debug_renderer_info')
+  if (debug) {
+    info.unmaskedVendor = gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)
+    info.unmaskedRenderer = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+  }
+  const names = ['VENDOR', 'RENDERER', 'VERSION', 'SHADING_LANGUAGE_VERSION', 'MAX_TEXTURE_SIZE', 'MAX_CUBE_MAP_TEXTURE_SIZE', 'MAX_RENDERBUFFER_SIZE',
+    'MAX_VIEWPORT_DIMS', 'MAX_VERTEX_ATTRIBS', 'MAX_VERTEX_UNIFORM_VECTORS', 'MAX_FRAGMENT_UNIFORM_VECTORS', 'MAX_VARYING_VECTORS',
+    'MAX_TEXTURE_IMAGE_UNITS', 'MAX_VERTEX_TEXTURE_IMAGE_UNITS', 'MAX_COMBINED_TEXTURE_IMAGE_UNITS', 'ALIASED_LINE_WIDTH_RANGE', 'ALIASED_POINT_SIZE_RANGE',
+    'RED_BITS', 'GREEN_BITS', 'BLUE_BITS', 'ALPHA_BITS', 'DEPTH_BITS', 'STENCIL_BITS', 'SUBPIXEL_BITS', 'SAMPLES', 'SAMPLE_BUFFERS',
+    'MAX_3D_TEXTURE_SIZE', 'MAX_ARRAY_TEXTURE_LAYERS', 'MAX_COLOR_ATTACHMENTS', 'MAX_DRAW_BUFFERS', 'MAX_ELEMENT_INDEX', 'MAX_ELEMENTS_INDICES',
+    'MAX_ELEMENTS_VERTICES', 'MAX_FRAGMENT_INPUT_COMPONENTS', 'MAX_FRAGMENT_UNIFORM_BLOCKS', 'MAX_FRAGMENT_UNIFORM_COMPONENTS', 'MAX_PROGRAM_TEXEL_OFFSET',
+    'MIN_PROGRAM_TEXEL_OFFSET', 'MAX_SAMPLES', 'MAX_SERVER_WAIT_TIMEOUT', 'MAX_TEXTURE_LOD_BIAS', 'MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS',
+    'MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS', 'MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS', 'MAX_UNIFORM_BLOCK_SIZE', 'MAX_UNIFORM_BUFFER_BINDINGS',
+    'MAX_VARYING_COMPONENTS', 'MAX_VERTEX_OUTPUT_COMPONENTS', 'MAX_VERTEX_UNIFORM_BLOCKS', 'MAX_VERTEX_UNIFORM_COMPONENTS', 'MAX_COMBINED_UNIFORM_BLOCKS',
+    'MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS', 'MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS', 'UNIFORM_BUFFER_OFFSET_ALIGNMENT']
+  for (const name of names) {
+    if (gl[name] === undefined) continue
+    const value = gl.getParameter(gl[name])
+    info.params[name] = value && typeof value === 'object' ? Array.from(value) : value
+  }
+  const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
+  if (aniso) info.params.MAX_TEXTURE_MAX_ANISOTROPY_EXT = gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)
+  for (const shader of ['VERTEX_SHADER', 'FRAGMENT_SHADER']) {
+    for (const type of ['LOW_FLOAT', 'MEDIUM_FLOAT', 'HIGH_FLOAT', 'LOW_INT', 'MEDIUM_INT', 'HIGH_INT']) {
+      const p = gl.getShaderPrecisionFormat(gl[shader], gl[type])
+      info.precision[`${shader}.${type}`] = p ? [p.rangeMin, p.rangeMax, p.precision] : null
+    }
+  }
+  const attrs = gl.getContextAttributes()
+  info.contextAttributes = attrs
+  return info
+}
+
+async function webgpuInfo() {
+  if (!navigator.gpu) return { available: false }
+  try {
+    const adapter = await navigator.gpu.requestAdapter()
+    if (!adapter) return { available: true, adapter: null }
+    const info = adapter.info ?? (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {})
+    const limits = {}
+    for (const key in adapter.limits) limits[key] = adapter.limits[key]
+    return {
+      available: true,
+      info: { vendor: info.vendor, architecture: info.architecture, device: info.device, description: info.description, subgroupMinSize: info.subgroupMinSize, subgroupMaxSize: info.subgroupMaxSize, isFallbackAdapter: info.isFallbackAdapter },
+      features: [...adapter.features].sort(),
+      limits,
+      preferredCanvasFormat: navigator.gpu.getPreferredCanvasFormat()
+    }
+  } catch (error) {
+    return { available: true, error: String(error) }
+  }
+}
+
+// Which stock Windows fonts this machine has (document.fonts.check against local fonts only).
+async function fontCheck() {
+  const names = ['Arial', 'Bahnschrift', 'Calibri', 'Cambria', 'Candara', 'Cascadia Code', 'Cascadia Mono', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel', 'Courier New', 'Ebrima', 'Franklin Gothic Medium', 'Gabriola', 'Gadugi', 'Georgia', 'HoloLens MDL2 Assets', 'Impact', 'Ink Free', 'Javanese Text', 'Leelawadee UI', 'Lucida Console', 'Lucida Sans Unicode', 'Malgun Gothic', 'Marlett', 'Microsoft Himalaya', 'Microsoft JhengHei', 'Microsoft New Tai Lue', 'Microsoft PhagsPa', 'Microsoft Sans Serif', 'Microsoft Tai Le', 'Microsoft YaHei', 'Microsoft Yi Baiti', 'MingLiU-ExtB', 'Mongolian Baiti', 'MS Gothic', 'MV Boli', 'Myanmar Text', 'Nirmala UI', 'Palatino Linotype', 'Segoe Fluent Icons', 'Segoe MDL2 Assets', 'Segoe Print', 'Segoe Script', 'Segoe UI', 'Segoe UI Emoji', 'Segoe UI Historic', 'Segoe UI Symbol', 'Segoe UI Variable', 'SimSun', 'Sitka', 'Sylfaen', 'Symbol', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Webdings', 'Wingdings', 'Yu Gothic']
+  // document.fonts.check() only knows web fonts, so measure: a font is present when text drawn
+  // with it falls back to neither of two different generic fonts.
+  const ctx = document.createElement('canvas').getContext('2d')
+  const text = 'mmmmmmmmmmlli 字体测试 WwQq'
+  const width = (family) => { ctx.font = `48px ${family}`; return ctx.measureText(text).width }
+  const bases = ['monospace', 'serif', 'sans-serif'].map((base) => [base, width(base)])
+  const result = {}
+  for (const name of names) {
+    result[name] = bases.some(([base, w]) => width(`"${name}", ${base}`) !== w)
+  }
+  return result
+}
+
+function refreshRate() {
+  return new Promise((resolve) => {
+    const times = []
+    function frame(t) {
+      times.push(t)
+      if (times.length < 121) requestAnimationFrame(frame)
+      else {
+        const gaps = times.slice(1).map((v, i) => v - times[i]).sort((a, b) => a - b)
+        resolve(Math.round(1000 / gaps[Math.floor(gaps.length / 2)]))
+      }
+    }
+    requestAnimationFrame(frame)
+  })
+}
+
+async function audioInfo() {
+  try {
+    const context = new AudioContext()
+    const info = { sampleRate: context.sampleRate, baseLatency: context.baseLatency, outputLatency: context.outputLatency, maxChannelCount: context.destination.maxChannelCount }
+    await context.close()
+    return info
+  } catch (error) {
+    return { error: String(error) }
+  }
+}
+
+async function mediaDevices() {
+  try {
+    const list = await navigator.mediaDevices.enumerateDevices()
+    const count = {}
+    for (const device of list) count[device.kind] = (count[device.kind] ?? 0) + 1
+    return count
+  } catch (error) {
+    return { error: String(error) }
+  }
+}
+
+function speechVoices() {
+  if (!('speechSynthesis' in window)) return Promise.resolve(null)
+  const read = () => speechSynthesis.getVoices().map((v) => ({ name: v.name, lang: v.lang, localService: v.localService, default: v.default, voiceURI: v.voiceURI }))
+  return new Promise((resolve) => {
+    const now = read()
+    if (now.length) return resolve(now)
+    const done = () => resolve(read())
+    speechSynthesis.addEventListener('voiceschanged', done, { once: true })
+    setTimeout(done, 3000)
+  })
+}
+
+async function run() {
+  $('run').disabled = true
+  $('status').textContent = '正在采集…'
+  const uaData = navigator.userAgentData
+    ? await navigator.userAgentData.getHighEntropyValues(['architecture', 'bitness', 'model', 'platformVersion', 'fullVersionList', 'wow64', 'formFactors']).catch(String)
+    : null
+  result = {
+    collectedAt: new Date().toISOString(),
+    tool: 'fingerprint-browser hardware-db collect v2',
+    userAgent: navigator.userAgent,
+    userAgentData: uaData,
+    platform: navigator.platform,
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    deviceMemory: navigator.deviceMemory,
+    maxTouchPoints: navigator.maxTouchPoints,
+    languages: navigator.languages,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen: {
+      width: screen.width, height: screen.height, availWidth: screen.availWidth, availHeight: screen.availHeight,
+      colorDepth: screen.colorDepth, pixelDepth: screen.pixelDepth, devicePixelRatio: devicePixelRatio,
+      orientation: screen.orientation?.type, isExtended: screen.isExtended,
+      refreshRate: await refreshRate()
+    },
+    media: {
+      colorGamutP3: matchMedia('(color-gamut: p3)').matches,
+      dynamicRangeHigh: matchMedia('(dynamic-range: high)').matches,
+      prefersColorScheme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    },
+    battery: navigator.getBattery ? await navigator.getBattery().then((b) => ({ charging: b.charging, level: b.level, chargingTime: b.chargingTime, dischargingTime: b.dischargingTime })).catch(String) : null,
+    connection: navigator.connection ? { effectiveType: navigator.connection.effectiveType, rtt: navigator.connection.rtt, downlink: navigator.connection.downlink } : null,
+    audio: await audioInfo(),
+    mediaDevices: await mediaDevices(),
+    speechVoices: await speechVoices(),
+    fonts: await fontCheck(),
+    webgl: glInfo(1),
+    webgl2: glInfo(2),
+    webgpu: await webgpuInfo()
+  }
+  const text = JSON.stringify(result, null, 2)
+  $('out').textContent = text
+  $('out').hidden = false
+  $('status').textContent = `完成：${result.webgl?.unmaskedRenderer ?? '未读到显卡'}`
+  $('save').disabled = false
+  $('run').disabled = false
+}
+
+$('run').addEventListener('click', () => void run())
+$('save').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `hardware-${(result.webgl?.unmaskedRenderer ?? 'unknown').replace(/[^A-Za-z0-9]+/g, '-').slice(0, 60)}.json`
+  link.click()
+})
+</script>
+</body>
+</html>

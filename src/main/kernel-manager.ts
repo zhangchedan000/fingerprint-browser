@@ -1,7 +1,8 @@
+import { isKernelId } from '../shared/kernel-id'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { access, copyFile, cp, link, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Readable, Transform } from 'node:stream'
@@ -18,10 +19,12 @@ import {
 import type { SettingsStore } from './settings-store'
 import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
-import { kernelRequiresPro } from '../shared/kernel-policy'
 
 const execFileAsync = promisify(execFile)
 const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
+/** Clearcote (trial): same --fingerprint switches, open source; only its newest build is offered. */
+const CLEARCOTE_RELEASES_URL = 'https://api.github.com/repos/clearcotelabs/clearcote-browser/releases?per_page=10'
+const TRUSTED_DOWNLOAD_PATHS = ['/adryfish/fingerprint-chromium/releases/download/', '/clearcotelabs/clearcote-browser/releases/download/']
 
 interface GithubAsset {
   name: string
@@ -63,8 +66,13 @@ function supportedAsset(assets: GithubAsset[]): GithubAsset | undefined {
   return undefined
 }
 
+function clearcoteAsset(assets: GithubAsset[]): GithubAsset | undefined {
+  if (process.platform === 'win32') return assets.find((asset) => /^clearcote-\d+(?:\.\d+){3}-windows-x64\.zip$/.test(asset.name))
+  return undefined
+}
+
 function safeVersion(version: string): string {
-  if (!/^\d+(?:\.\d+){3}$/.test(version)) throw new Error('内核版本号无效')
+  if (!isKernelId(version)) throw new Error('内核版本号无效')
   return version
 }
 
@@ -93,25 +101,16 @@ async function findEntry(root: string, predicate: (name: string) => boolean, dep
 export class KernelManager {
   private installingVersion: string | null = null
   private installAbort: AbortController | null = null
-  private canUseProKernel: () => boolean = () => true
 
   constructor(
     private readonly vaultPath: string,
     private readonly settings: SettingsStore,
     private readonly onProgress: (progress: KernelInstallProgress) => void,
     private readonly logger?: Logger,
-    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => []
+    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => [],
+    /** Electron passes net.fetch so downloads follow the system proxy. */
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init)
   ) {}
-
-  setProKernelAccessCheck(check: () => boolean): void {
-    this.canUseProKernel = check
-  }
-
-  private assertKernelEntitlement(version: string): void {
-    if (kernelRequiresPro(version) && !this.canUseProKernel()) {
-      throw new Error(`Chromium ${version} 是 Prism Pro 内核，请先激活 Pro`)
-    }
-  }
 
   async installed(): Promise<KernelRelease[]> {
     const manifests = await this.installedManifests()
@@ -142,13 +141,12 @@ export class KernelManager {
     }
     const installed = await this.installedManifests()
     let releases: GithubRelease[]
+    const clearcoteReleases = this.fetchReleases(CLEARCOTE_RELEASES_URL).catch((error: unknown) => {
+      this.logger?.error('获取 Clearcote 内核版本失败', error)
+      return [] as GithubRelease[]
+    })
     try {
-      const response = await fetch(RELEASES_URL, {
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'Prism-Browser/0.1' },
-        signal: AbortSignal.timeout(15_000)
-      })
-      if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
-      releases = await response.json() as GithubRelease[]
+      releases = await this.fetchReleases(RELEASES_URL)
     } catch (error) {
       if (installed.size === 0) throw error
       this.logger?.error('获取远程内核版本失败，展示本地版本', error)
@@ -175,6 +173,31 @@ export class KernelManager {
           executable: manifest ? join(this.kernelPath(release.tag_name), manifest.executableRelative) : undefined
         } satisfies KernelRelease]
       })
+    // Clearcote only publishes pre-releases; its newest Windows build is offered as a trial.
+    const clearcote = (await clearcoteReleases)
+      .filter((release) => !release.draft)
+      .flatMap((release) => {
+        const asset = clearcoteAsset(release.assets)
+        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
+        const chromium = asset?.name.match(/\d+(?:\.\d+){3}/)?.[0]
+        if (!asset || !digest || !chromium) return []
+        const version = `clearcote-${chromium}`
+        const manifest = installed.get(version)
+        return [{
+          version,
+          publishedAt: release.published_at,
+          assetName: asset.name,
+          downloadUrl: asset.browser_download_url,
+          size: asset.size,
+          sha256: digest,
+          installed: Boolean(manifest),
+          remoteAvailable: true,
+          origin: 'release',
+          executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined
+        } satisfies KernelRelease]
+      })
+      .slice(0, 1)
+    remote.push(...clearcote)
     const remoteVersions = new Set(remote.map((release) => release.version))
     const localOnly = [...installed.values()]
       .filter((manifest) => !remoteVersions.has(manifest.version))
@@ -193,9 +216,17 @@ export class KernelManager {
     return [...remote, ...localOnly]
   }
 
+  private async fetchReleases(url: string): Promise<GithubRelease[]> {
+    const response = await this.fetchImpl(url, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
+      signal: AbortSignal.timeout(15_000)
+    })
+    if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
+    return await response.json() as GithubRelease[]
+  }
+
   async install(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
-    this.assertKernelEntitlement(version)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const existing = await this.readManifest(version)
     if (existing) return this.activate(version)
@@ -246,7 +277,6 @@ export class KernelManager {
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
     const { version, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
-    this.assertKernelEntitlement(version)
     const destination = this.kernelPath(version)
     const existing = await this.readManifest(version)
     if (existing) {
@@ -322,7 +352,6 @@ export class KernelManager {
 
   async activate(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
-    this.assertKernelEntitlement(version)
     const manifest = await this.readManifest(version)
     if (!manifest) throw new Error('该内核尚未安装')
     const executable = join(this.kernelPath(version), manifest.executableRelative)
@@ -338,7 +367,6 @@ export class KernelManager {
   async configure(patch: Pick<AppSettings, 'browserExecutable' | 'fingerprintKernel' | 'enginePreference'>, resolvedExecutable = patch.browserExecutable): Promise<EngineStatus> {
     if (patch.fingerprintKernel && resolvedExecutable) {
       const { version } = await this.inspectLocalBuild(resolvedExecutable)
-      this.assertKernelEntitlement(version)
     }
     await this.rememberPreviousKernel(resolvedExecutable)
     await this.settings.update(patch)
@@ -380,14 +408,14 @@ export class KernelManager {
     const checkedAt = new Date().toISOString()
     try {
       const manifest = await this.readManifest(version)
-      if (!manifest) return { version, status: 'corrupt', message: '内核文件不完整，请重新导入或安装新版 Prism Browser', checkedAt }
+      if (!manifest) return { version, status: 'corrupt', message: '内核文件不完整，请重新导入或安装新版指纹浏览器', checkedAt }
       const executable = join(this.kernelPath(version), manifest.executableRelative)
       const info = await stat(executable)
-      if (!info.isFile() || info.size <= 0) return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+      if (!info.isFile() || info.size <= 0) return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       const integrity = await verifyKernelIntegrity(this.kernelPath(version), manifest.executableRelative, manifest)
       if (integrity.status === 'corrupt') {
         this.logger?.error('浏览器内核完整性检查失败', { version, reason: integrity.reason })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
       if (integrity.status === 'healthy') {
         return {
@@ -399,18 +427,18 @@ export class KernelManager {
       }
       if (!manifest.executableSha256 || !manifest.executableSize) {
         this.logger?.info('浏览器内核无法完成完整性检查', { version, reason: integrity.reason })
-        return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版指纹浏览器', checkedAt }
       }
       if (info.size !== manifest.executableSize) {
         this.logger?.error('浏览器内核入口大小异常', { version, expected: manifest.executableSize, actual: info.size })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
       const actual = await this.hashFile(executable)
       if (actual !== manifest.executableSha256) {
         this.logger?.error('浏览器内核入口摘要与安装记录不一致', { version })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
-      return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版 Prism Browser', checkedAt }
+      return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版指纹浏览器', checkedAt }
     } catch (error) {
       return { version, status: 'corrupt', message: error instanceof Error ? error.message : String(error), checkedAt }
     }
@@ -486,10 +514,10 @@ export class KernelManager {
     }
     const headers: Record<string, string> = {
       accept: 'application/octet-stream',
-      'user-agent': 'Prism-Browser/0.1'
+      'user-agent': 'Fingerprint-Browser/0.1'
     }
     if (existingBytes > 0 && existingBytes < release.size) headers.range = `bytes=${existingBytes}-`
-    const response = await fetch(release.downloadUrl, {
+    const response = await this.fetchImpl(release.downloadUrl, {
       headers,
       redirect: 'follow',
       signal: AbortSignal.any([AbortSignal.timeout(15 * 60_000), this.installAbort?.signal ?? new AbortController().signal])
@@ -581,8 +609,21 @@ export class KernelManager {
     const stagingPath = join(root, 'staging')
     await Promise.all([mkdir(extracted), mkdir(stagingPath)])
     try {
-      const command = `Expand-Archive -LiteralPath '${archivePath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force`
-      await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
+      // Expand-Archive refuses any file not named *.zip, and the download keeps its .download suffix
+      // so an interrupted install can still resume it: extract from a .zip-named link or copy instead.
+      const zipPath = join(root, 'kernel.zip')
+      await link(archivePath, zipPath).catch(() => copyFile(archivePath, zipPath))
+      const command = [
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+        "$ProgressPreference = 'SilentlyContinue'",
+        `Expand-Archive -LiteralPath '${zipPath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force -ErrorAction Stop`
+      ].join('; ')
+      try {
+        await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { maxBuffer: 16 * 1024 * 1024 })
+      } catch (error) {
+        const detail = (error as { stderr?: string }).stderr?.trim().split(/\r?\n/)[0]
+        throw new Error(`解压内核失败${detail ? `：${detail}` : ''}`)
+      }
       const chrome = await findEntry(extracted, (name) => name.toLowerCase() === 'chrome.exe')
       if (!chrome) throw new Error('ZIP 中没有找到 chrome.exe')
       const browserPath = join(stagingPath, 'browser')
@@ -695,7 +736,7 @@ export class KernelManager {
   private validateRelease(release: KernelRelease): void {
     const url = new URL(release.downloadUrl)
     if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('内核下载地址不可信')
-    if (!url.pathname.startsWith('/adryfish/fingerprint-chromium/releases/download/')) {
+    if (!TRUSTED_DOWNLOAD_PATHS.some((path) => url.pathname.startsWith(path))) {
       throw new Error('内核下载地址不属于受信任仓库')
     }
     if (!/^[a-f\d]{64}$/i.test(release.sha256)) throw new Error('发行包缺少有效的 SHA-256')

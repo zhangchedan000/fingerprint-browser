@@ -1,5 +1,10 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
+import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
+import { TunnelManager } from './tunnel-manager'
+import { registerTunnelIpc } from './tunnel-ipc'
+import { resolveVaultLocation } from './vault-location'
+import { registerVaultIpc } from './vault-ipc'
 import { isAbsolute, join } from 'node:path'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
@@ -13,30 +18,16 @@ import { CookieManager } from './cookie-manager'
 import { publicProfile } from './profile-secrets'
 import { ProfileBackupManager } from './profile-backup'
 import { AppSessionTracker } from './app-session'
-import { UpdateManager } from './update-manager'
 import { migrateMacLegacyKernelSelection } from './browser-locator'
-import { LicenseManager } from './license-manager'
 import { WorkspaceMigrationManager } from './workspace-migration'
-import { ElectronDeviceKeyProtector } from './electron-device-key-protector'
-import { AutomationAuditLog } from './automation-audit'
-import { ProAgentManager } from './pro-agent-manager'
-import { SchedulerStore } from './scheduler-store'
-import { SchedulerAuditLog } from './scheduler-audit'
-import { SchedulerManager } from './scheduler-manager'
-import { McpPermissionStore } from './mcp-permission-store'
-import { McpAuditLog } from './mcp-audit'
-import { McpControlManager } from './mcp-control-manager'
-import { AnnouncementManager } from './announcement-manager'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
 let logger: AppLogger | null = null
 let appSession: AppSessionTracker | null = null
-let automation: ProAgentManager | null = null
-let scheduler: SchedulerManager | null = null
-let mcp: McpControlManager | null = null
+let tunnel: TunnelManager | null = null
 
-if (process.platform === 'win32') app.setAppUserModelId('com.prismbrowser.desktop')
+if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.desktop')
 
 if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_USER_DATA && isAbsolute(process.env.PRISM_E2E_USER_DATA)) {
   app.setPath('userData', process.env.PRISM_E2E_USER_DATA)
@@ -49,7 +40,7 @@ function createWindow(): BrowserWindow {
     minWidth: 1040,
     minHeight: 680,
     show: false,
-    title: 'Prism Browser',
+    title: '指纹浏览器',
     backgroundColor: '#f3f5f9',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
@@ -84,20 +75,18 @@ if (!hasSingleInstanceLock) app.quit()
 
 app.whenReady().then(async () => {
   await initializeUiLanguage()
-  const vaultPath = join(app.getPath('userData'), 'vault')
+  const vaultLocation = await resolveVaultLocation(app.getPath('userData'))
+  const vaultPath = vaultLocation.path
   logger = new AppLogger(vaultPath)
   appSession = new AppSessionTracker(vaultPath)
   const profiles = new ProfileStore(vaultPath, new ElectronSecretCodec())
   const settings = new SettingsStore(vaultPath)
   const extensions = new ExtensionStore(vaultPath, logger)
-  const automationAudit = new AutomationAuditLog(vaultPath)
-  const schedulerAudit = new SchedulerAuditLog(vaultPath)
-  const mcpAudit = new McpAuditLog(vaultPath)
   await logger.initialize()
-  await Promise.all([automationAudit.initialize(), schedulerAudit.initialize(), mcpAudit.initialize()])
+  if (vaultLocation.missing) logger.error('设置的数据目录不存在，已改用默认位置', { missing: vaultLocation.missing })
   const appSessionSnapshot = await appSession.begin(app.getVersion())
   if (appSessionSnapshot.previousUnclean) {
-    logger.error('检测到上次 Prism Browser 未正常退出', appSessionSnapshot.previousUnclean)
+    logger.error('检测到上次指纹浏览器未正常退出', appSessionSnapshot.previousUnclean)
   }
   await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
   const kernelMigration = await migrateMacLegacyKernelSelection(settings, vaultPath)
@@ -112,75 +101,69 @@ app.whenReady().then(async () => {
   const profileStorageHealth = profiles.storageHealth()
   if (profileStorageHealth.recoveredFromBackup) logger.error('环境元数据已从备份恢复', profileStorageHealth)
   if (!profileStorageHealth.backupHealthy) logger.error('环境元数据备份不可用', profileStorageHealth.backupError)
-  logger.info('Prism Browser 已启动', { version: app.getVersion(), platform: process.platform, arch: process.arch })
+  logger.info('指纹浏览器已启动', { version: app.getVersion(), platform: process.platform, arch: process.arch })
+
+  const tunnelBinary = process.env.TUNNEL_CORE_BIN
+    || (app.isPackaged
+      ? join(process.resourcesPath, 'tunnel-core', process.platform === 'win32' ? 'mihomo.exe' : 'mihomo')
+      : join(app.getAppPath(), 'build', 'tunnel-core', 'current', process.platform === 'win32' ? 'mihomo.exe' : 'mihomo'))
+  const activeTunnel = new TunnelManager(vaultPath, new ElectronSecretCodec(), tunnelBinary, logger,
+    (status) => mainWindow?.webContents.send('tunnel:changed', status))
+  tunnel = activeTunnel
+  registerTunnelIpc(activeTunnel)
+  registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
+  void activeTunnel.initialize()
+
+  // A window proxy abroad is reached through the built-in tunnel when it runs, otherwise through
+  // the computer's own system proxy (Clash, v2rayN…) when that is on. Domestic proxies stay direct.
+  setLocalProxyResolver(async (host, port) => {
+    const tunnelVia = activeTunnel.localProxy()
+    if (tunnelVia) {
+      const record = profiles.listProxies().find((item) => item.host.toLowerCase() === host.toLowerCase() && item.port === port)
+      if (record?.check?.countryCode === 'CN') return undefined
+      logger?.info('代理经加速通道连接', { proxy: `${host}:${port}` })
+      return tunnelVia
+    }
+    const target = `https://${host.includes(':') ? `[${host}]` : host}:${port}/`
+    const via = parseProxyRule(await session.defaultSession.resolveProxy(target))
+    if (via) logger?.info('代理经本机代理连接', { via: `${via.type} ${via.host}:${via.port}` })
+    return via
+  })
 
   launcher = new BrowserLauncher(profiles, settings, (profile) => {
     mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   }, extensions, logger)
+  // A proxy or group edited in its library changes how other windows look.
+  profiles.onProfilesChanged((changed) => {
+    for (const profile of changed) mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
+  })
+  launcher.setHostScreenProvider(() => {
+    const { width, height } = screen.getPrimaryDisplay().size
+    return { width, height }
+  })
   await launcher.initialize()
-  const kernels = new KernelManager(vaultPath, settings, () => undefined, logger, (version) => profiles.kernelUsers(version))
+  const kernels = new KernelManager(
+    vaultPath,
+    settings,
+    (progress) => mainWindow?.webContents.send('engine:progress', progress),
+    logger,
+    (version) => profiles.kernelUsers(version),
+    (input, init) => net.fetch(input as string, init)
+  )
   const cookies = new CookieManager(profiles, settings, logger)
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)
-  const updater = new UpdateManager(vaultPath, app.getVersion(), process.resourcesPath, (status) => {
-    mainWindow?.webContents.send('updates:changed', status)
-  }, logger)
-  const announcements = new AnnouncementManager(process.resourcesPath, app.getVersion(), logger)
-  const licensing = new LicenseManager(
-    vaultPath,
-    process.resourcesPath,
-    app.getVersion(),
-    new ElectronDeviceKeyProtector(),
-    (status) => {
-      mainWindow?.webContents.send('licensing:changed', status)
-      if (status.plan !== 'pro') void automation?.stop(true).catch(() => undefined)
-      if (status.plan !== 'pro') void mcp?.emergencyStop().catch(() => undefined)
-      scheduler?.refreshEntitlement()
-    },
-    logger
-  )
-  await Promise.all([updater.initialize(), licensing.initialize()])
-  launcher.setProKernelAccessCheck(() => licensing.status().plan === 'pro')
-  kernels.setProKernelAccessCheck(() => licensing.status().plan === 'pro')
-  mcp = new McpControlManager(
-    new McpPermissionStore(vaultPath), profiles, launcher, licensing, mcpAudit,
-    (status) => mainWindow?.webContents.send('mcp:changed', status)
-  )
-  await mcp.initialize()
-  automation = new ProAgentManager(
-    profiles,
-    launcher,
-    licensing,
-    automationAudit,
-    process.resourcesPath,
-    (status) => mainWindow?.webContents.send('automation:changed', status),
-    logger
-  )
-  automation.attachMcpBroker(mcp)
-  scheduler = new SchedulerManager(
-    new SchedulerStore(vaultPath),
-    profiles,
-    launcher,
-    licensing,
-    schedulerAudit,
-    (tasks) => mainWindow?.webContents.send('scheduler:changed', tasks),
-    logger
-  )
-  await scheduler.initialize()
-  registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, updater, licensing, automation, scheduler, mcp, announcements })
+  registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession })
   mainWindow = createWindow()
-  if (app.isPackaged && process.env.PRISM_E2E !== '1') {
-    setTimeout(() => void updater.check().catch(() => undefined), 10_000)
-  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
   })
 }).catch(async (error) => {
-  logger?.error('Prism Browser 启动失败', error)
+  logger?.error('指纹浏览器启动失败', error)
   await logger?.flush()
   dialog.showErrorBox(
-    'Prism Browser 无法启动',
+    '指纹浏览器无法启动',
     '应用启动失败，但现有环境数据没有被修改。请重新启动；如仍然失败，请查看日志文件。'
   )
   app.quit()
@@ -193,14 +176,13 @@ app.on('second-instance', () => {
 })
 
 app.on('before-quit', (event) => {
+  void tunnel?.stop()
   if (!launcher) return
   event.preventDefault()
   const current = launcher
   launcher = null
-  void Promise.allSettled([scheduler?.shutdown() ?? Promise.resolve(), mcp?.shutdown() ?? Promise.resolve()]).then(() => Promise.allSettled([
-    current.closeAll(), automation?.stop(false) ?? Promise.resolve()
-  ])).finally(async () => {
-    logger?.info('Prism Browser 已退出')
+  void current.closeAll().catch((error) => logger?.error('关闭浏览器环境失败', error)).finally(async () => {
+    logger?.info('指纹浏览器已退出')
     await appSession?.complete().catch((error) => logger?.error('清理应用会话标记失败', error))
     await logger?.flush()
     app.quit()

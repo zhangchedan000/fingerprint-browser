@@ -122,4 +122,40 @@ describe('profile validation', () => {
     expect(result.group).toBe('美国店铺')
     expect(result.tags).toEqual(['重点', '广告'])
   })
+
+  it('keeps each value of a seeded window; old fixed templates still own theirs', () => {
+    const draft = defaultProfileDraft()
+    const seeded = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 } })
+    expect(seeded.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 })
+
+    const fixed = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 }
+    })
+    expect(fixed.fingerprint).toMatchObject({ screenWidth: 2560, screenHeight: 1440, hardwareConcurrency: 16 })
+    const fixedHandSet = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, overrides: ['screen', 'screen'] }
+    })
+    expect(fixedHandSet.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, overrides: ['screen'] })
+  })
+
+  it('stores "real CPU cores" and leaves it out when not used', () => {
+    const draft = defaultProfileDraft()
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'host' } }).fingerprint.coresSource).toBe('host')
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'profile' } }).fingerprint).not.toHaveProperty('coresSource')
+  })
+
+  it('validates the new site permission and screen options and omits defaults', () => {
+    const draft = defaultProfileDraft()
+    const chosen = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' } })
+    expect(chosen.fingerprint).toMatchObject({ geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' })
+    const defaults = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'ask', doNotTrack: 'default', screenSource: 'profile' } })
+    expect(defaults.fingerprint).not.toHaveProperty('geolocationPermission')
+    expect(defaults.fingerprint).not.toHaveProperty('doNotTrack')
+    expect(defaults.fingerprint).not.toHaveProperty('screenSource')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'maybe' as never } })).toThrow('地理位置')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, overrides: ['gpu' as never] } })).toThrow('自定义项')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 9000, overrides: ['screen'] } })).toThrow('7680')
+  })
 })

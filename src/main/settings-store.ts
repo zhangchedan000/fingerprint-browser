@@ -1,10 +1,20 @@
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { AppSettings } from '../shared/types'
+import type { AppPreferences, AppSettings } from '../shared/types'
+
+export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5 }
+
+/** Keeps only valid preference values; anything else falls back to the default. */
+export function validPreferences(input: Partial<AppPreferences>, base: AppPreferences = DEFAULT_PREFERENCES): AppPreferences {
+  const theme = input.theme === 'light' || input.theme === 'dark' || input.theme === 'system' ? input.theme : base.theme
+  const gap = Number(input.batchLaunchGapSeconds)
+  const batchLaunchGapSeconds = Number.isFinite(gap) && gap >= 0.5 && gap <= 30 ? Math.round(gap * 10) / 10 : base.batchLaunchGapSeconds
+  return { theme, batchLaunchGapSeconds }
+}
 
 export class SettingsStore {
-  private settings: AppSettings = { browserExecutable: '', fingerprintKernel: false, enginePreference: 'auto', recycleRetentionDays: 0 }
+  private settings: AppSettings = { browserExecutable: '', fingerprintKernel: false, enginePreference: 'auto', recycleRetentionDays: 0, ...DEFAULT_PREFERENCES }
   private readonly path: string
 
   constructor(vaultPath: string) {
@@ -20,7 +30,8 @@ export class SettingsStore {
         enginePreference: stored.enginePreference === 'bundled' || stored.enginePreference === 'system' ? stored.enginePreference : 'auto',
         recycleRetentionDays: stored.recycleRetentionDays === 7 || stored.recycleRetentionDays === 30 || stored.recycleRetentionDays === 90
           ? stored.recycleRetentionDays
-          : 0
+          : 0,
+        ...validPreferences(stored)
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error

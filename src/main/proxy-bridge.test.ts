@@ -77,7 +77,7 @@ describe('upstreamProxyUrl', () => {
   it('safely encodes proxy credentials', () => {
     expect(upstreamProxyUrl({
       protocol: 'socks5', host: 'proxy.example.com', port: 1080, username: 'user@example.com', password: 'p@ss/word'
-    })).toBe('socks5://user%40example.com:p%40ss%2Fword@proxy.example.com:1080')
+    })).toBe('socks5h://user%40example.com:p%40ss%2Fword@proxy.example.com:1080')
   })
 
   it('brackets IPv6 upstreams and does not silently drop password-only credentials', () => {
