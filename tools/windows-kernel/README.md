@@ -8,7 +8,7 @@
 - Windows 平台仓库标签：`156.0.8078.47-1.1`
 - Windows 平台提交：`258d663c6ee6dd3d4cfe2e05eb8e863627e3a5af`
 - 补丁基线 ungoogled-chromium 标签：`156.0.8078.47-1`（提交 `0673f8701c94e5688c33ef8ce5e36602d311d246`）
-- 指纹补丁：`kernel-patches/` 里 11 个补丁，清单和 SHA-256 以 `kernel-lock.json` 的 `patches` 为准。
+- 指纹补丁：`kernel-patches/` 里 12 个补丁，清单和 SHA-256 以 `kernel-lock.json` 的 `patches` 为准。
   fingerprint-chromium 在 144 之后不再公开源码，它 144 版的补丁已移植到 156 并与我们的补丁合并在这里。
 - 架构：Windows x64
 

@@ -143,6 +143,16 @@
         "chrome/browser/ui/views/frame/browser_view.cc::prism-profile-serial",
         "chrome/browser/ui/views/frame/browser_window_property_manager_win.cc::SchedulePrismProfileOverlay"
       ]
+    },
+    {
+      "id": "speech-voices",
+      "seriesPath": "extra/fingerprint/012-speech-voices.patch",
+      "insertAfterSeriesPath": "extra/fingerprint/011-window-identity.patch",
+      "file": "012-speech-voices.patch",
+      "sha256": "9df06e2d1c0c401d8887cd6a14cfc01964062f4c045e87544f1bde363aa46182",
+      "appliedMarkers": [
+        "third_party/blink/renderer/modules/speech/speech_synthesis.cc::kGoogleNetworkVoices"
+      ]
     }
   ],
   "acceptance": {

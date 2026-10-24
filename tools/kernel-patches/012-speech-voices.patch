@@ -1,0 +1,94 @@
+diff --git third_party/blink/renderer/modules/speech/speech_synthesis.cc third_party/blink/renderer/modules/speech/speech_synthesis.cc
+index 891a815..3e882de 100644
+--- a/third_party/blink/renderer/modules/speech/speech_synthesis.cc
++++ b/third_party/blink/renderer/modules/speech/speech_synthesis.cc
+@@ -27,7 +27,10 @@
+ 
+ #include <tuple>
+ 
++#include "base/command_line.h"
++#include "base/strings/string_util.h"
+ #include "build/build_config.h"
++#include "components/ungoogled/ungoogled_switches.h"
+ #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
+ #include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
+ #include "third_party/blink/public/platform/platform.h"
+@@ -82,13 +85,78 @@ SpeechSynthesis::SpeechSynthesis(LocalDOMWindow& window)
+       receiver_(this, &window),
+       mojom_synthesis_(&window) {}
+ 
++namespace {
++
++// fingerprint: Google Chrome on desktop lists Google's network voices after the
++// system voices; Chromium builds have none, which a page can see. Names and
++// languages exactly as Chrome 156 on Windows reports them (getVoices() on a
++// real machine, tools/hardware-db/samples), written as UTF-8 bytes; two of the
++// names really use a no-break space (\xC2\xA0) after "Google". They are not
++// local services, so speaking with one falls back to a system voice.
++struct GoogleNetworkVoice {
++  const char* name;
++  const char* lang;
++};
++
++constexpr GoogleNetworkVoice kGoogleNetworkVoices[] = {
++    {"Google Deutsch", "de-DE"},
++    {"Google US English", "en-US"},
++    {"Google UK English Female", "en-GB"},
++    {"Google UK English Male", "en-GB"},
++    {"Google espa\xC3\xB1ol", "es-ES"},
++    {"Google espa\xC3\xB1ol de Estados Unidos", "es-US"},
++    {"Google fran\xC3\xA7" "ais", "fr-FR"},
++    {"Google \xE0\xA4\xB9\xE0\xA4\xBF\xE0\xA4\xA8\xE0\xA5\x8D\xE0\xA4\xA6\xE0\xA5\x80", "hi-IN"},
++    {"Google Bahasa Indonesia", "id-ID"},
++    {"Google italiano", "it-IT"},
++    {"Google \xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E", "ja-JP"},
++    {"Google \xED\x95\x9C\xEA\xB5\xAD\xEC\x9D\x98", "ko-KR"},
++    {"Google Nederlands", "nl-NL"},
++    {"Google polski", "pl-PL"},
++    {"Google portugu\xC3\xAAs do Brasil", "pt-BR"},
++    {"Google \xD1\x80\xD1\x83\xD1\x81\xD1\x81\xD0\xBA\xD0\xB8\xD0\xB9", "ru-RU"},
++    {"Google\xC2\xA0\xE6\x99\xAE\xE9\x80\x9A\xE8\xAF\x9D\xEF\xBC\x88\xE4\xB8\xAD\xE5\x9B\xBD\xE5\xA4\xA7\xE9\x99\x86\xEF\xBC\x89", "zh-CN"},
++    {"Google\xC2\xA0\xE7\xB2\xA4\xE8\xAA\x9E\xEF\xBC\x88\xE9\xA6\x99\xE6\xB8\xAF\xEF\xBC\x89", "zh-HK"},
++    {"Google \xE5\x9C\x8B\xE8\xAA\x9E\xEF\xBC\x88\xE8\x87\xBA\xE7\x81\xA3\xEF\xBC\x89", "zh-TW"},
++};
++
++bool ShouldListGoogleNetworkVoices() {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  if (command_line->HasSwitch(switches::kDisableSpoofing) &&
++      command_line->GetSwitchValueASCII(switches::kDisableSpoofing)
++              .find("speech") != std::string::npos) {
++    return false;
++  }
++  return base::ToLowerASCII(command_line->GetSwitchValueASCII(
++             switches::kFingerprintBrand)) == "chrome";
++}
++
++}  // namespace
++
+ void SpeechSynthesis::OnSetVoiceList(
+     Vector<mojom::blink::SpeechSynthesisVoicePtr> mojom_voices) {
+   voice_list_.clear();
++  bool has_google_voice = false;
+   for (auto& mojom_voice : mojom_voices) {
++    if (mojom_voice->name.StartsWith("Google")) {
++      has_google_voice = true;
++    }
+     voice_list_.push_back(
+         MakeGarbageCollected<SpeechSynthesisVoice>(std::move(mojom_voice)));
+   }
++  if (!has_google_voice && ShouldListGoogleNetworkVoices()) {
++    for (const GoogleNetworkVoice& google_voice : kGoogleNetworkVoices) {
++      auto voice = mojom::blink::SpeechSynthesisVoice::New();
++      voice->voice_uri = String::FromUTF8(google_voice.name);
++      voice->name = String::FromUTF8(google_voice.name);
++      voice->lang = String::FromUTF8(google_voice.lang);
++      voice->is_local_service = false;
++      voice->is_default = false;
++      voice_list_.push_back(
++          MakeGarbageCollected<SpeechSynthesisVoice>(std::move(voice)));
++    }
++  }
+   VoicesDidChange();
+ }
+ 
