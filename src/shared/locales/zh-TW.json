@@ -1986,5 +1986,7 @@
   "未写协议，按当前选择的类型": "未寫協定，依目前選擇的類型",
   "请确认代理类型（HTTP / SOCKS5）是否选对": "請確認代理類型（HTTP / SOCKS5）是否選對",
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "支援 host:port:user:pass、user:pass@host:port、socks5:// 連結，以及「地址：… 埠：… 使用者名稱：… 密碼：…」這類文字，貼上後自動填入",
-  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "每行一個代理，支援 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 連結，以及多行的「地址：… 埠：… 使用者名稱：… 密碼：…」；代理庫裡已有的會自動略過。"
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "每行一個代理，支援 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 連結，以及多行的「地址：… 埠：… 使用者名稱：… 密碼：…」；代理庫裡已有的會自動略過。",
+  "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "網站讀到的記憶體由核心決定：核心 147 及以上可選 16、32 GB，舊核心最多 8 GB",
+  "设备内存只能是 2、4、8、16 或 32 GB": "裝置記憶體只能是 2、4、8、16 或 32 GB"
 }

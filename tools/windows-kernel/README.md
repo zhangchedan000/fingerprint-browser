@@ -4,12 +4,12 @@
 
 实际固定值以构建包内的 `kernel-lock.json` 为唯一依据；下列内容是当前锁的可读摘要：
 
-- Chromium：`144.0.7559.132`
-- Windows 平台仓库标签：`144.0.7559.132-1.1`
-- Windows 平台提交：`469861bcfd3f4c871986437502b05f3076cad15e`
-- Fingerprint Chromium 标签：`144.0.7559.132`
-- 指纹补丁提交：`831623f2965e34554304caabfc3a1e4e3741db1f`
-- 指纹补丁：`kernel-patches/` 里全部补丁，清单和 SHA-256 以 `kernel-lock.json` 的 `patches` 为准
+- Chromium：`156.0.8078.47`（2026-10-20 发布的 Chrome 稳定版）
+- Windows 平台仓库标签：`156.0.8078.47-1.1`
+- Windows 平台提交：`258d663c6ee6dd3d4cfe2e05eb8e863627e3a5af`
+- 补丁基线 ungoogled-chromium 标签：`156.0.8078.47-1`（提交 `0673f8701c94e5688c33ef8ce5e36602d311d246`）
+- 指纹补丁：`kernel-patches/` 里 11 个补丁，清单和 SHA-256 以 `kernel-lock.json` 的 `patches` 为准。
+  fingerprint-chromium 在 144 之后不再公开源码，它 144 版的补丁已移植到 156 并与我们的补丁合并在这里。
 - 架构：Windows x64
 
 ## 一、机器要求
@@ -26,13 +26,13 @@
 
 ## 二、安装依赖
 
-1. 安装 Visual Studio 2022（17.x）或 Visual Studio 2026（18.x）Community。
+1. 安装 **Visual Studio 2026（18.x）** Community。Chromium 156 不再支持 Visual Studio 2022。
 2. 在 Visual Studio Installer 中选择：
-   - `Desktop development with C++`；
+   - `Desktop development with C++`（使用 C++ 的桌面开发）；
    - C++ ATL；
    - C++ MFC；
-   - Windows 11 SDK `10.0.26100.x`。
-3. 给 Windows SDK 安装 `Debugging Tools for Windows`。
+   - Windows 11 SDK `10.0.28000.2270`（在“单个组件”里勾选）。
+3. 给 Windows SDK 安装 `Debugging Tools for Windows`（10.0.26100.3323 或更高）。
 4. 安装 Python 3.12 x64，并创建不继承 Anaconda 包的干净 venv：
 
 ```powershell
@@ -100,13 +100,13 @@ cd D:\windows-kernel-build-kit
 成功后文件位于：
 
 ```text
-D:\prism-chromium\artifacts\144.0.7559.132-windows-x64
+D:\prism-chromium\artifacts\156.0.8078.47-windows-x64
 ```
 
 主要文件包括：
 
-- `ungoogled-chromium_144.0.7559.132-1.1_windows_x64.zip`
-- `ungoogled-chromium_144.0.7559.132-1.1_installer_x64.exe`
+- `ungoogled-chromium_156.0.8078.47-1.1_windows_x64.zip`
+- `ungoogled-chromium_156.0.8078.47-1.1_installer_x64.exe`
 - `chromedriver.exe`
 - `args.gn`
 - `prism-build-lock.json`
@@ -122,10 +122,10 @@ D:\prism-chromium\artifacts\144.0.7559.132-windows-x64
 - 第一次完整编译可能持续数小时到一天以上，取决于 CPU、内存、磁盘和网络；
 - 不要把源码放在 exFAT、FAT32、网络盘、OneDrive 同步目录或路径包含空格的位置；
 - 不要用 `Remove-Item -Recurse -Force` 清理不确定的路径；
-- Windows 编译与 macOS 后续开发可以同时进行，互不阻塞。
 
 ## 上游依据
 
 - Windows 平台构建仓库：<https://github.com/ungoogled-software/ungoogled-chromium-windows>
-- Fingerprint Chromium：<https://github.com/adryfish/fingerprint-chromium/tree/144.0.7559.132>
-- Chromium 144 Windows 构建要求：<https://github.com/chromium/chromium/blob/144.0.7559.132/docs/windows_build_instructions.md>
+- ungoogled-chromium 156：<https://github.com/ungoogled-software/ungoogled-chromium/tree/156.0.8078.47-1>
+- Fingerprint Chromium 144（被移植的上游补丁）：<https://github.com/adryfish/fingerprint-chromium/tree/144.0.7559.132>
+- Chromium 156 Windows 构建要求：<https://github.com/chromium/chromium/blob/156.0.8078.47/docs/windows_build_instructions.md>

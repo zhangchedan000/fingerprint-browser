@@ -1986,5 +1986,7 @@
   "未写协议，按当前选择的类型": "プロトコルの記載がないため、選択中の種類を使用します",
   "请确认代理类型（HTTP / SOCKS5）是否选对": "プロキシの種類（HTTP / SOCKS5）が正しいか確認してください",
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "host:port:user:pass、user:pass@host:port、socks5:// リンク、「アドレス：… ポート：… ユーザー名：… パスワード：…」のようなテキストに対応し、貼り付けると自動入力します",
-  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "1 行に 1 つのプロキシ：host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// リンク、または複数行の「アドレス：… ポート：… ユーザー名：… パスワード：…」。ライブラリにあるものはスキップします。"
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "1 行に 1 つのプロキシ：host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// リンク、または複数行の「アドレス：… ポート：… ユーザー名：… パスワード：…」。ライブラリにあるものはスキップします。",
+  "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "サイトが読むメモリ量はカーネルが決めます：カーネル 147 以降は 16・32 GB を選べ、古いカーネルは最大 8 GB",
+  "设备内存只能是 2、4、8、16 或 32 GB": "デバイスメモリは 2・4・8・16・32 GB のいずれかです"
 }

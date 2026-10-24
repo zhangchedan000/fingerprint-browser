@@ -195,9 +195,9 @@ function Assert-PinnedSource {
 
 function Invoke-ResumeNinja {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    $vsPath = (& $vswhere -latest -prerelease -products * -version "[17.0,19.0)" -property installationPath) -join ""
+    $vsPath = (& $vswhere -latest -prerelease -products * -version "[18.0,19.0)" -property installationPath) -join ""
     if ([string]::IsNullOrWhiteSpace($vsPath)) {
-        throw "Visual Studio 2022 or 2026 was not found."
+        throw "Visual Studio 2026 was not found (Chromium 156 requires 18.x)."
     }
 
     $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"

@@ -645,6 +645,20 @@
    "deviceId": "0xE20C",
    "chip": "Battlemage G21",
    "pciName": "Battlemage G21 [Arc B570]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10de",
+   "deviceId": "0x2507",
+   "chip": "GA106",
+   "pciName": "GA106 [Geforce RTX 3050]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10de",
+   "deviceId": "0x2508",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3050 OEM]"
   }
  ]
 }

@@ -87,6 +87,22 @@ async function webgpuInfo() {
   }
 }
 
+// Which stock Windows fonts this machine has (document.fonts.check against local fonts only).
+async function fontCheck() {
+  const names = ['Arial', 'Bahnschrift', 'Calibri', 'Cambria', 'Candara', 'Cascadia Code', 'Cascadia Mono', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel', 'Courier New', 'Ebrima', 'Franklin Gothic Medium', 'Gabriola', 'Gadugi', 'Georgia', 'HoloLens MDL2 Assets', 'Impact', 'Ink Free', 'Javanese Text', 'Leelawadee UI', 'Lucida Console', 'Lucida Sans Unicode', 'Malgun Gothic', 'Marlett', 'Microsoft Himalaya', 'Microsoft JhengHei', 'Microsoft New Tai Lue', 'Microsoft PhagsPa', 'Microsoft Sans Serif', 'Microsoft Tai Le', 'Microsoft YaHei', 'Microsoft Yi Baiti', 'MingLiU-ExtB', 'Mongolian Baiti', 'MS Gothic', 'MV Boli', 'Myanmar Text', 'Nirmala UI', 'Palatino Linotype', 'Segoe Fluent Icons', 'Segoe MDL2 Assets', 'Segoe Print', 'Segoe Script', 'Segoe UI', 'Segoe UI Emoji', 'Segoe UI Historic', 'Segoe UI Symbol', 'Segoe UI Variable', 'SimSun', 'Sitka', 'Sylfaen', 'Symbol', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Webdings', 'Wingdings', 'Yu Gothic']
+  // document.fonts.check() only knows web fonts, so measure: a font is present when text drawn
+  // with it falls back to neither of two different generic fonts.
+  const ctx = document.createElement('canvas').getContext('2d')
+  const text = 'mmmmmmmmmmlli 字体测试 WwQq'
+  const width = (family) => { ctx.font = `48px ${family}`; return ctx.measureText(text).width }
+  const bases = ['monospace', 'serif', 'sans-serif'].map((base) => [base, width(base)])
+  const result = {}
+  for (const name of names) {
+    result[name] = bases.some(([base, w]) => width(`"${name}", ${base}`) !== w)
+  }
+  return result
+}
+
 function refreshRate() {
   return new Promise((resolve) => {
     const times = []
@@ -124,6 +140,18 @@ async function mediaDevices() {
   }
 }
 
+function speechVoices() {
+  if (!('speechSynthesis' in window)) return Promise.resolve(null)
+  const read = () => speechSynthesis.getVoices().map((v) => ({ name: v.name, lang: v.lang, localService: v.localService, default: v.default, voiceURI: v.voiceURI }))
+  return new Promise((resolve) => {
+    const now = read()
+    if (now.length) return resolve(now)
+    const done = () => resolve(read())
+    speechSynthesis.addEventListener('voiceschanged', done, { once: true })
+    setTimeout(done, 3000)
+  })
+}
+
 async function run() {
   $('run').disabled = true
   $('status').textContent = '正在采集…'
@@ -132,7 +160,7 @@ async function run() {
     : null
   result = {
     collectedAt: new Date().toISOString(),
-    tool: 'fingerprint-browser hardware-db collect v1',
+    tool: 'fingerprint-browser hardware-db collect v2',
     userAgent: navigator.userAgent,
     userAgentData: uaData,
     platform: navigator.platform,
@@ -156,6 +184,8 @@ async function run() {
     connection: navigator.connection ? { effectiveType: navigator.connection.effectiveType, rtt: navigator.connection.rtt, downlink: navigator.connection.downlink } : null,
     audio: await audioInfo(),
     mediaDevices: await mediaDevices(),
+    speechVoices: await speechVoices(),
+    fonts: await fontCheck(),
     webgl: glInfo(1),
     webgl2: glInfo(2),
     webgpu: await webgpuInfo()

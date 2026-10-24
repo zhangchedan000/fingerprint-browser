@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { defaultProfileDraft } from '../shared/defaults'
 import type { BrowserProfile } from '../shared/types'
 import { buildLaunchArgs } from './launch-args'
+import { defaultHardwareProfileId } from '../shared/hardware-profiles'
+
+const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
 
 function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): BrowserProfile {
   const draft = defaultProfileDraft()
@@ -37,5 +40,28 @@ describe('launch arguments', () => {
     const args = buildLaunchArgs(fixed, { userDataDir: '/data' })
     expect(args).toContain('--window-size=1280,800')
     expect(args).toContain('--window-position=40,30')
+  })
+
+  it('names the GPU explicitly on our 156 kernel, with the real driver name and PCI ids', () => {
+    const args = buildLaunchArgs(profile({ ...WINDOWS, gpu: 'NVIDIA GeForce RTX 3080 Ti|0x00002208', platformVersion: '10.0.0' }), {
+      userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47'
+    })
+    expect(args).toContain('--fingerprint-gpu-vendor-id=0x10DE')
+    expect(args).toContain('--fingerprint-gpu-device-id=0x00002208')
+    expect(args).toContain('--fingerprint-gpu-description=NVIDIA GeForce RTX 3080 Ti')
+    // Windows version follows the computer on our kernels (fonts and taskbar are the real ones).
+    expect(args.some((arg) => arg.startsWith('--fingerprint-platform-version'))).toBe(false)
+  })
+
+  it('refuses a laptop or unknown GPU on the 156 kernel instead of showing another card', () => {
+    expect(() => buildLaunchArgs(profile({ ...WINDOWS, gpu: 'NVIDIA GeForce RTX 4060 Laptop GPU|0x000028A0' }), {
+      userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47'
+    })).toThrow()
+  })
+
+  it('reports 16 or 32 GB only on kernels whose Chromium can', () => {
+    const big = profile({ deviceMemory: 32 })
+    expect(buildLaunchArgs(big, { userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47' })).toContain('--fingerprint-device-memory=32')
+    expect(buildLaunchArgs(big, { userDataDir: '/data', fingerprintKernel: true, engineVersion: '144.0.7559.132' })).toContain('--fingerprint-device-memory=8')
   })
 })

@@ -55,6 +55,7 @@ import type {
   ProxyConfig,
   ProxyTestResult
 } from '../../../../shared/types'
+import { DEVICE_MEMORY_CHOICES, type DeviceMemoryGb } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
 import { DeepCheck } from './DeepCheck'
 import { kernelName } from '../../../../shared/kernel-id'
@@ -1127,13 +1128,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'host', label: t("本机真实") }, ...coreOptions.map((value) => ({ value, label: t("{0} 核", value) }))]}
         />
       </Row>
-      <Row label={t("设备内存")} check={checkFor('memory')} hint={t("网站读到的内存由内核决定；指定数值需要自编译内核（补丁 045）")}>
+      <Row label={t("设备内存")} check={checkFor('memory')} hint={t("网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB")}>
         <ValueChoice
           label={t("设备内存")}
           value={fp.deviceMemory ?? 8}
-          onChange={(value: 2 | 4 | 8) => patchFingerprint({ deviceMemory: value })}
-          onShuffle={() => patchFingerprint({ deviceMemory: pickOther([2, 4, 8] as const, fp.deviceMemory ?? 8) })}
-          options={[2, 4, 8].map((value) => ({ value, label: `${value} GB` }))}
+          onChange={(value: DeviceMemoryGb) => patchFingerprint({ deviceMemory: value })}
+          onShuffle={() => patchFingerprint({ deviceMemory: pickOther(DEVICE_MEMORY_CHOICES, fp.deviceMemory ?? 8) })}
+          options={DEVICE_MEMORY_CHOICES.map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
       <Row label="Canvas" check={checkFor('canvas')}>{noiseControl('canvas', 'Canvas')}</Row>

@@ -58,8 +58,11 @@ export interface FingerprintConfig {
   macAddress?: string
   /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
   gpuBucket?: number
-  /** navigator.deviceMemory in GB (2, 4 or 8). Unset = 8. Needs a kernel with patch 045. */
-  deviceMemory?: 2 | 4 | 8
+  /**
+   * navigator.deviceMemory in GB. Unset = 8. 16 and 32 only exist from Chromium 147; older
+   * kernels are given at most 8 (see maxDeviceMemoryGb).
+   */
+  deviceMemory?: DeviceMemoryGb
   /** Version of the render identity allocation contract. */
   renderIdentityVersion?: 1 | 2 | 3 | 4
   platform: BrowserPlatform
@@ -691,3 +694,7 @@ export interface RelocateProgress {
   copiedFiles: number
   totalFiles: number
 }
+
+/** Values desktop Chrome itself reports for navigator.deviceMemory (147+: 2/4/8/16/32). */
+export type DeviceMemoryGb = 2 | 4 | 8 | 16 | 32
+export const DEVICE_MEMORY_CHOICES: readonly DeviceMemoryGb[] = [2, 4, 8, 16, 32]

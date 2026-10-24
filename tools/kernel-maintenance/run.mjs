@@ -43,7 +43,8 @@ async function readLock() {
     throw new Error('Kernel lock schema or Chromium version is invalid')
   }
   if (!/^[a-f\d]{40}$/.test(lock.fingerprint?.commit ?? '')) throw new Error('Fingerprint commit is invalid')
-  for (const platform of ['macos-arm64', 'windows-x64']) {
+  // Windows-only product: desktop Windows PCs are the only profiles we build.
+  for (const platform of ['windows-x64']) {
     const contract = lock.platforms?.[platform]
     if (!contract || !/^https:\/\/github\.com\/.+\.git$/.test(contract.repository)
       || !contract.tag || !/^[a-f\d]{40}$/.test(contract.commit)) {
@@ -88,7 +89,7 @@ async function gitHead(path) {
 }
 
 async function verifySource(options) {
-  if (!['macos-arm64', 'windows-x64'].includes(options.platform)
+  if (!['windows-x64'].includes(options.platform)
     || !options.platformRoot || !options.fingerprintRoot) {
     throw new Error('verify-source requires --platform, --platform-root and --fingerprint-root')
   }
@@ -255,7 +256,6 @@ async function probeUpstream() {
   const lock = await readLock()
   const repositories = {
     fingerprint: lock.fingerprint.repository,
-    'macos-arm64': lock.platforms['macos-arm64'].repository,
     'windows-x64': lock.platforms['windows-x64'].repository
   }
   const entries = await Promise.all(Object.entries(repositories).map(async ([id, repository]) => {
@@ -311,7 +311,7 @@ async function exportKits(outputRoot) {
     await cp(join(TOOLS_DIR, 'kernel-maintenance'), join(staging, 'kernel-maintenance'), { recursive: true })
     await cp(LOCK_PATH, join(staging, 'kernel-lock.json'))
     await cp(PATCH_DIR, join(staging, 'kernel-patches'), { recursive: true })
-    for (const platform of ['macos-kernel', 'windows-kernel']) {
+    for (const platform of ['windows-kernel']) {
       const destination = join(staging, platform)
       await cp(join(TOOLS_DIR, platform), destination, { recursive: true })
       await cp(LOCK_PATH, join(destination, 'kernel-lock.json'))

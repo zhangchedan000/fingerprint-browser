@@ -1986,5 +1986,7 @@
   "未写协议，按当前选择的类型": "protocolo não informado, usando o tipo selecionado",
   "请确认代理类型（HTTP / SOCKS5）是否选对": "confira se o tipo de proxy (HTTP / SOCKS5) está correto",
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Aceita host:port:user:pass, user:pass@host:port, links socks5:// e textos como “Endereço: … Porta: … Usuário: … Senha: …”; ao colar, os campos são preenchidos",
-  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Um proxy por linha: host:port:user:pass, user:pass:host:port, user:pass@host:port, links socks5:// ou blocos de várias linhas “Endereço: … Porta: … Usuário: … Senha: …”; proxies já na biblioteca são ignorados."
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Um proxy por linha: host:port:user:pass, user:pass:host:port, user:pass@host:port, links socks5:// ou blocos de várias linhas “Endereço: … Porta: … Usuário: … Senha: …”; proxies já na biblioteca são ignorados.",
+  "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "Os sites leem a memória que o kernel informa: kernel 147 ou mais novo pode informar 16 ou 32 GB, kernels antigos no máximo 8 GB",
+  "设备内存只能是 2、4、8、16 或 32 GB": "A memória do dispositivo deve ser 2, 4, 8, 16 ou 32 GB"
 }

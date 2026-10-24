@@ -1425,5 +1425,313 @@
         "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)"
       }
     ]
+  },
+  "156": {
+    "kernelVersion": "156.0.8078.47",
+    "measuredAt": "2026-10-24",
+    "windows": [
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2060",
+        "deviceId": "0x00001E89",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001E89) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2060",
+        "deviceId": "0x00001F08",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001F08) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2060 SUPER",
+        "deviceId": "0x00001F06",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 SUPER (0x00001F06) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2070",
+        "deviceId": "0x00001F02",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 (0x00001F02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2070 SUPER",
+        "deviceId": "0x00001E84",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2080",
+        "deviceId": "0x00001E87",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 (0x00001E87) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2080 SUPER",
+        "deviceId": "0x00001E81",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 SUPER (0x00001E81) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 2080 Ti",
+        "deviceId": "0x00001E07",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 Ti (0x00001E07) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3050",
+        "deviceId": "0x00002507",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002507) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3050",
+        "deviceId": "0x00002582",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002582) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3050",
+        "deviceId": "0x00002584",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002584) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3050 OEM",
+        "deviceId": "0x00002508",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 OEM (0x00002508) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060",
+        "deviceId": "0x00002487",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002487) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060",
+        "deviceId": "0x00002503",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002503) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060",
+        "deviceId": "0x00002504",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060 Ti",
+        "deviceId": "0x00002486",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002486) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060 Ti",
+        "deviceId": "0x00002489",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3060 Ti",
+        "deviceId": "0x000024C9",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x000024C9) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3070",
+        "deviceId": "0x00002484",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3070",
+        "deviceId": "0x00002488",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002488) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3070 Ti",
+        "deviceId": "0x00002482",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Ti (0x00002482) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3080",
+        "deviceId": "0x00002206",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002206) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3080",
+        "deviceId": "0x0000220A",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x0000220A) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3080",
+        "deviceId": "0x00002216",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002216) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3080 Ti",
+        "deviceId": "0x00002208",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Ti (0x00002208) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3090",
+        "deviceId": "0x00002204",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 (0x00002204) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 3090 Ti",
+        "deviceId": "0x00002203",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 Ti (0x00002203) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4060",
+        "deviceId": "0x00002882",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4060 Ti",
+        "deviceId": "0x00002788",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002788) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4060 Ti",
+        "deviceId": "0x00002803",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002803) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4060 Ti",
+        "deviceId": "0x00002805",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002805) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "pci-ids"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4070",
+        "deviceId": "0x00002709",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002709) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4070",
+        "deviceId": "0x00002786",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4070 SUPER",
+        "deviceId": "0x00002783",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 SUPER (0x00002783) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4070 Ti",
+        "deviceId": "0x00002782",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti (0x00002782) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4070 Ti SUPER",
+        "deviceId": "0x00002705",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti SUPER (0x00002705) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4080",
+        "deviceId": "0x00002704",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 (0x00002704) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4080 SUPER",
+        "deviceId": "0x00002702",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 4090",
+        "deviceId": "0x00002684",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "observed"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 5070",
+        "deviceId": "0x00002F04",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "pci-ids"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 5070 Ti",
+        "deviceId": "0x00002C05",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "pci-ids"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 5080",
+        "deviceId": "0x00002C02",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "pci-ids"
+      },
+      {
+        "vendor": "NVIDIA",
+        "model": "NVIDIA GeForce RTX 5090",
+        "deviceId": "0x00002B85",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5090 (0x00002B85) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "source": "pci-ids"
+      }
+    ],
+    "macos": []
   }
 }

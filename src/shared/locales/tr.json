@@ -1986,5 +1986,7 @@
   "未写协议，按当前选择的类型": "protokol belirtilmemiş, seçili tür kullanılıyor",
   "请确认代理类型（HTTP / SOCKS5）是否选对": "proxy türünün (HTTP / SOCKS5) doğru seçildiğini kontrol edin",
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "host:port:user:pass, user:pass@host:port, socks5:// bağlantıları ve “Adres: … Port: … Kullanıcı adı: … Şifre: …” gibi metinler desteklenir; yapıştırınca alanlar doldurulur",
-  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Her satıra bir proxy: host:port:user:pass, user:pass:host:port, user:pass@host:port, socks5:// bağlantıları ya da çok satırlı “Adres: … Port: … Kullanıcı adı: … Şifre: …” blokları; kütüphanede olanlar atlanır."
+  "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Her satıra bir proxy: host:port:user:pass, user:pass:host:port, user:pass@host:port, socks5:// bağlantıları ya da çok satırlı “Adres: … Port: … Kullanıcı adı: … Şifre: …” blokları; kütüphanede olanlar atlanır.",
+  "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "Siteler çekirdeğin bildirdiği belleği okur: çekirdek 147 ve sonrası 16 veya 32 GB bildirebilir, eski çekirdekler en fazla 8 GB",
+  "设备内存只能是 2、4、8、16 或 32 GB": "Cihaz belleği 2, 4, 8, 16 veya 32 GB olmalıdır"
 }

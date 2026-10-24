@@ -1,5 +1,6 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
-import { effectiveDisabledSpoofing, effectiveFingerprintSeed } from '../shared/hardware-profiles'
+import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu } from '../shared/hardware-profiles'
+import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { effectiveNetworkIdentity } from '../shared/network-identity'
@@ -85,7 +86,21 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     args.push(`--window-position=${profile.window.x},${profile.window.y}`)
   }
 
-  if (platformVersion) args.push(`--fingerprint-platform-version=${platformVersion}`)
+  const explicitGpuKernel = options.fingerprintKernel === true && kernelTakesExplicitGpu(options.engineVersion)
+  // On our own kernels a Windows profile reports the computer's real Windows version: fonts, the
+  // taskbar height and system UI come from the real system, so claiming another version would not match.
+  if (platformVersion && !(explicitGpuKernel && fp.platform === 'windows')) {
+    args.push(`--fingerprint-platform-version=${platformVersion}`)
+  }
+  if (explicitGpuKernel && !disabledSpoofing.includes('gpu')) {
+    const gpu = effectiveGpu(fp, options.engineVersion)
+    const vendorId = gpu ? GPU_VENDOR_IDS[gpu.vendor] : undefined
+    if (gpu?.deviceId && vendorId) {
+      args.push(`--fingerprint-gpu-vendor-id=${vendorId}`)
+      args.push(`--fingerprint-gpu-device-id=${gpu.deviceId}`)
+      args.push(`--fingerprint-gpu-description=${gpu.model}`)
+    }
+  }
   if (brandVersion) args.push(`--fingerprint-brand-version=${brandVersion}`)
   if (fp.renderIdentityVersion !== undefined) {
     args.push(`--fingerprint-render-identity=v${fp.renderIdentityVersion}`)
@@ -93,7 +108,10 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (networkIdentity.latitude !== undefined && networkIdentity.longitude !== undefined) {
     args.push(`--fingerprint-location=${networkIdentity.latitude},${networkIdentity.longitude},${networkIdentity.accuracyMeters ?? 25000}`)
   }
-  if (fp.deviceMemory) args.push(`--fingerprint-device-memory=${fp.deviceMemory}`)
+  if (fp.deviceMemory) {
+    const memory = Math.min(fp.deviceMemory, maxDeviceMemoryGb(options.engineVersion))
+    args.push(`--fingerprint-device-memory=${memory}`)
+  }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')

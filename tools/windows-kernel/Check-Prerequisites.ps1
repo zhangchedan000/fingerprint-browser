@@ -120,9 +120,9 @@ Write-Check "7-Zip" ($sevenZipCandidates.Count -gt 0) $sevenZipDetail
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
-    Write-Check "Visual Studio" $false "vswhere.exe was not found; install Visual Studio 2022 or 2026"
+    Write-Check "Visual Studio" $false "vswhere.exe was not found; install Visual Studio 2026"
 } else {
-    $vsPath = (& $vswhere -latest -prerelease -products * -version "[17.0,19.0)" `
+    $vsPath = (& $vswhere -latest -prerelease -products * -version "[18.0,19.0)" `
         -requires Microsoft.VisualStudio.Workload.NativeDesktop `
         Microsoft.VisualStudio.Component.VC.ATLMFC `
         -property installationPath) -join ""
@@ -130,13 +130,13 @@ if (-not (Test-Path $vswhere)) {
     if (-not [string]::IsNullOrWhiteSpace($vsPath)) {
         $vsDetail = $vsPath
     }
-    Write-Check "Visual Studio 2022/2026" (-not [string]::IsNullOrWhiteSpace($vsPath)) $vsDetail
+    Write-Check "Visual Studio 2026 (Chromium 156 requires 18.x)" (-not [string]::IsNullOrWhiteSpace($vsPath)) $vsDetail
 }
 
 $sdkRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-$sdkInclude = Join-Path $sdkRoot "Include\10.0.26100.0"
+$sdkInclude = Join-Path $sdkRoot "Include\10.0.28000.0"
 $sdkDebugger = Join-Path $sdkRoot "Debuggers\x64\cdb.exe"
-Write-Check "Windows 11 SDK" (Test-Path $sdkInclude) "10.0.26100.x headers are required"
+Write-Check "Windows 11 SDK" (Test-Path $sdkInclude) "Windows 11 SDK 10.0.28000.2270 is required (Visual Studio Installer, Individual components)"
 Write-Check "SDK debugging tools" (Test-Path $sdkDebugger) "$sdkDebugger"
 
 $depotTools = Get-Command gclient.bat -ErrorAction SilentlyContinue
