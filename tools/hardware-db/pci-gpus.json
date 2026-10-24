@@ -1,0 +1,650 @@
+{
+ "source": "https://pci-ids.ucw.cz (github.com/pciutils/pciids)",
+ "note": "Desktop retail GPUs, RTX 20+, RX 5000+, Arc A/B. Mobile, engineering and OEM entries removed.",
+ "gpus": [
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x7340",
+   "chip": "Navi 14",
+   "pciName": "Navi 14 [Radeon RX 5500/5500M / Pro 5300/5300M/5500M]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73A5",
+   "chip": "Navi 21",
+   "pciName": "Navi 21 [Radeon RX 6950 XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73AF",
+   "chip": "Navi 21",
+   "pciName": "Navi 21 [Radeon RX 6900 XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73BF",
+   "chip": "Navi 21",
+   "pciName": "Navi 21 [Radeon RX 6800/6800 XT / 6900 XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73DF",
+   "chip": "Navi 22",
+   "pciName": "Navi 22 [Radeon RX 6700/6700 XT/6750 XT / 6800M/6850M XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73EF",
+   "chip": "Navi 23",
+   "pciName": "Navi 23 [Radeon RX 6650 XT / 6700S / 6800S]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73F0",
+   "chip": "Navi 33",
+   "pciName": "Navi 33 [Radeon RX 7600M XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x73FF",
+   "chip": "Navi 23",
+   "pciName": "Navi 23 [Radeon RX 6600/6600 XT/6600M]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x743F",
+   "chip": "Navi 24",
+   "pciName": "Navi 24 [Radeon RX 6400/6500 XT/6500M]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x744C",
+   "chip": "Navi 31",
+   "pciName": "Navi 31 [Radeon RX 7900 XT/7900 XTX/7900 GRE/7900M]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x747E",
+   "chip": "Navi 32",
+   "pciName": "Navi 32 [Radeon RX 7700 XT / 7800 XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x7480",
+   "chip": "Navi 33",
+   "pciName": "Navi 33 [Radeon RX 7600/7600 XT/7600M XT/7600S/7700S / PRO W7600]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x7483",
+   "chip": "Navi 33",
+   "pciName": "Navi 33 [Radeon RX 7600M/7600M XT]"
+  },
+  {
+   "vendor": "AMD",
+   "vendorId": "0x1002",
+   "deviceId": "0x7550",
+   "chip": "Navi 48",
+   "pciName": "Navi 48 [Radeon RX 9070/9070 XT/9070 GRE]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E03",
+   "chip": "TU102",
+   "pciName": "TU102 [GeForce RTX 2080 Ti 12GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E04",
+   "chip": "TU102",
+   "pciName": "TU102 [GeForce RTX 2080 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E07",
+   "chip": "TU102",
+   "pciName": "TU102 [GeForce RTX 2080 Ti Rev. A]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E81",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2080 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E82",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2080]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E84",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2070 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E87",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2080 Rev. A]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1E89",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1EC2",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2070 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1EC7",
+   "chip": "TU104",
+   "pciName": "TU104 [GeForce RTX 2070 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F02",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F03",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2060 12GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F06",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2060 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F07",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2070 Rev. A]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F08",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2060 Rev. A]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F42",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2060 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x1F47",
+   "chip": "TU106",
+   "pciName": "TU106 [GeForce RTX 2060 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2203",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3090 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2204",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3090]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2205",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3080 Ti 20GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2206",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3080]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2207",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3070 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2208",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3080 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x220A",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3080 12GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2216",
+   "chip": "GA102",
+   "pciName": "GA102 [GeForce RTX 3080 Lite Hash Rate]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2414",
+   "chip": "GA103",
+   "pciName": "GA103 [GeForce RTX 3060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2482",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2484",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2486",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2487",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2488",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070 Lite Hash Rate]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2489",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060 Ti Lite Hash Rate]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x248C",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x248D",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x248E",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x24C7",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060 8GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x24C8",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3070 GDDR6X]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x24C9",
+   "chip": "GA104",
+   "pciName": "GA104 [GeForce RTX 3060 Ti GDDR6X]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2501",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2503",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2504",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3060 Lite Hash Rate]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2509",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3060 12GB Rev. 2]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2544",
+   "chip": "GA106",
+   "pciName": "GA106 [GeForce RTX 3060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2582",
+   "chip": "GA107",
+   "pciName": "GA107 [GeForce RTX 3050 8GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2583",
+   "chip": "GA107",
+   "pciName": "GA107 [GeForce RTX 3050 4GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2584",
+   "chip": "GA107",
+   "pciName": "GA107 [GeForce RTX 3050 6GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2684",
+   "chip": "AD102",
+   "pciName": "AD102 [GeForce RTX 4090]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2685",
+   "chip": "AD102",
+   "pciName": "AD102 [GeForce RTX 4090 D]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2689",
+   "chip": "AD102",
+   "pciName": "AD102 [GeForce RTX 4070 Ti SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2702",
+   "chip": "AD103",
+   "pciName": "AD103 [GeForce RTX 4080 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2703",
+   "chip": "AD103",
+   "pciName": "AD103 [GeForce RTX 4080 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2704",
+   "chip": "AD103",
+   "pciName": "AD103 [GeForce RTX 4080]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2705",
+   "chip": "AD103",
+   "pciName": "AD103 [GeForce RTX 4070 Ti SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2709",
+   "chip": "AD103",
+   "pciName": "AD103 [GeForce RTX 4070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2782",
+   "chip": "AD104",
+   "pciName": "AD104 [GeForce RTX 4070 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2783",
+   "chip": "AD104",
+   "pciName": "AD104 [GeForce RTX 4070 SUPER]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2786",
+   "chip": "AD104",
+   "pciName": "AD104 [GeForce RTX 4070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2788",
+   "chip": "AD104",
+   "pciName": "AD104 [GeForce RTX 4060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2803",
+   "chip": "AD106",
+   "pciName": "AD106 [GeForce RTX 4060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2805",
+   "chip": "AD106",
+   "pciName": "AD106 [GeForce RTX 4060 Ti 16GB]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2808",
+   "chip": "AD106",
+   "pciName": "AD106 [GeForce RTX 4060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2882",
+   "chip": "AD107",
+   "pciName": "AD107 [GeForce RTX 4060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2B85",
+   "chip": "GB202",
+   "pciName": "GB202 [GeForce RTX 5090]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2B87",
+   "chip": "GB202",
+   "pciName": "GB202 [GeForce RTX 5090 D]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2B8C",
+   "chip": "GB202",
+   "pciName": "GB202 [GeForce RTX 5090 D V2]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2C02",
+   "chip": "GB203",
+   "pciName": "GB203 [GeForce RTX 5080]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2C05",
+   "chip": "GB203",
+   "pciName": "GB203 [GeForce RTX 5070 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2C09",
+   "chip": "GB203",
+   "pciName": "GB203 [GeForce RTX 5070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2D04",
+   "chip": "GB206",
+   "pciName": "GB206 [GeForce RTX 5060 Ti]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2D05",
+   "chip": "GB206",
+   "pciName": "GB206 [GeForce RTX 5060]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2D83",
+   "chip": "GB207",
+   "pciName": "GB207 [GeForce RTX 5050]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2F04",
+   "chip": "GB205",
+   "pciName": "GB205 [GeForce RTX 5070]"
+  },
+  {
+   "vendor": "NVIDIA",
+   "vendorId": "0x10DE",
+   "deviceId": "0x2F06",
+   "chip": "GB205",
+   "pciName": "GB205 [GeForce RTX 5060]"
+  },
+  {
+   "vendor": "Intel",
+   "vendorId": "0x8086",
+   "deviceId": "0x56A0",
+   "chip": "DG2",
+   "pciName": "DG2 [Arc A770]"
+  },
+  {
+   "vendor": "Intel",
+   "vendorId": "0x8086",
+   "deviceId": "0x56A1",
+   "chip": "DG2",
+   "pciName": "DG2 [Arc A750]"
+  },
+  {
+   "vendor": "Intel",
+   "vendorId": "0x8086",
+   "deviceId": "0x56A2",
+   "chip": "DG2",
+   "pciName": "DG2 [Arc A580]"
+  },
+  {
+   "vendor": "Intel",
+   "vendorId": "0x8086",
+   "deviceId": "0xE20B",
+   "chip": "Battlemage G21",
+   "pciName": "Battlemage G21 [Arc B580]"
+  },
+  {
+   "vendor": "Intel",
+   "vendorId": "0x8086",
+   "deviceId": "0xE20C",
+   "chip": "Battlemage G21",
+   "pciName": "Battlemage G21 [Arc B570]"
+  }
+ ]
+}
