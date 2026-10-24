@@ -128,6 +128,27 @@ $cloneLine
     }
 }
 
+function Enable-NinjaKeepGoing {
+    # A compile error should not hide the others: "-k 0" lets ninja build everything it can and
+    # list every failing file in one run, so all patch fixes can come back in one round.
+    $buildDriverPath = Join-Path $RepositoryPath "build.py"
+    $buildDriver = [System.IO.File]::ReadAllText($buildDriverPath)
+    $marker = "# PRISM_NINJA_KEEP_GOING"
+    if ($buildDriver.Contains($marker)) {
+        return
+    }
+    $anchor = "    ninja_commandline.append('-C')"
+    if (-not $buildDriver.Contains($anchor)) {
+        throw "Pinned build.py no longer contains the expected ninja command line."
+    }
+    $buildDriver = $buildDriver.Replace($anchor, "    ninja_commandline += ['-k', '0']  $marker`n$anchor")
+    [System.IO.File]::WriteAllText(
+        $buildDriverPath,
+        $buildDriver,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+}
+
 function Write-BuildState {
     param(
         [string]$Status,
@@ -209,7 +230,7 @@ function Invoke-ResumeNinja {
         throw "Ninja was not found: $ninja"
     }
 
-    $command = "call `"$vcvars`" >nul && set DEPOT_TOOLS_WIN_TOOLCHAIN=0 && `"$ninja`" -C `"$OutputPath`" -j $Jobs chrome chromedriver mini_installer"
+    $command = "call `"$vcvars`" >nul && set DEPOT_TOOLS_WIN_TOOLCHAIN=0 && `"$ninja`" -C `"$OutputPath`" -j $Jobs -k 0 chrome chromedriver mini_installer"
     & cmd.exe /d /s /c $command
     if ($LASTEXITCODE -ne 0) {
         throw "Ninja exited with code $LASTEXITCODE. Run this same script again to resume."
@@ -302,6 +323,7 @@ $python = Get-PythonExecutable
 Assert-CleanPythonEnvironment $python
 Enable-Python3Shim $python
 Enable-Vs2026SourceCompatibility
+Enable-NinjaKeepGoing
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $transcriptPath = Join-Path $LogDirectory "windows-kernel-$timestamp.log"
 $statePath = Join-Path $LogDirectory "windows-kernel-latest.json"
