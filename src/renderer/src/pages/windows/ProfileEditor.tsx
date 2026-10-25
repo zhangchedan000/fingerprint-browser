@@ -32,7 +32,7 @@ import {
   gpuChoices
 } from '../../../../shared/hardware-profiles'
 import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../../shared/device-identity'
-import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
+import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -372,7 +372,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return gpuChoices(fp.platform)
       .map((choice) => ({
         value: choice.key,
-        label: `${gpuLabel(choice)} · ${t("内核 {0}", choice.kernels.join('/'))}`,
+        label: `${gpuLabel(choice)} · ${t("内核 {0}", choice.kernels.map(kernelListLabel).join('/'))}`,
         disabled: kernelGpus ? !available.has(choice.key) : false
       }))
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))

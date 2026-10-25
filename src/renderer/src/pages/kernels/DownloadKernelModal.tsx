@@ -46,7 +46,9 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     }
   }
 
-  const main = releases?.filter((release) => kernelVendor(release.version) === 'fingerprint-chromium')
+  // Our own Prism builds are the main line where they exist (Windows); otherwise fingerprint-chromium.
+  const prism = releases?.filter((release) => kernelVendor(release.version) === 'prism')
+  const main = prism?.length ? prism : releases?.filter((release) => kernelVendor(release.version) === 'fingerprint-chromium')
   const latest = main?.[0]?.version
   /** Newest release without a known kernel bug: the one the dialog highlights. */
   const recommended = main?.find((release) => !kernelKnownIssue(release.version))?.version ?? latest

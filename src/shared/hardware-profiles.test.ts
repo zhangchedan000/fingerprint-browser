@@ -80,7 +80,7 @@ describe('coherent hardware profiles', () => {
 
   it('makes every kernel report a chosen GPU, or refuses when the kernel lacks it', () => {
     for (const major of MEASURED_KERNELS) {
-      const version = `${major}.0.0.0`
+      const version = major === 'prism' ? 'prism-156.0.8078.47' : `${major}.0.0.0`
       for (const platform of ['windows', 'macos'] as const) {
         const list = kernelGpuList(version, platform)!
         for (const gpu of list) {
@@ -126,4 +126,20 @@ describe('editing old templates', () => {
     expect([...editable.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
   })
 
+})
+
+describe('Prism kernels', () => {
+  it('are named, versioned and given the desktop GPU list by the prism prefix', async () => {
+    const { kernelName, kernelChromiumVersion, isKernelId } = await import('./kernel-id')
+    const { kernelTakesExplicitGpu, maxDeviceMemoryGb } = await import('./kernel-capabilities')
+    expect(isKernelId('prism-155.0.8059.84')).toBe(true)
+    expect(kernelName('prism-156.0.8078.47')).toBe('Prism 156.0.8078.47')
+    expect(kernelChromiumVersion('prism-156.0.8078.47')).toBe('156.0.8078.47')
+    expect(kernelTakesExplicitGpu('prism-155.0.8059.84')).toBe(true)
+    expect(kernelTakesExplicitGpu('150.0.7871.186')).toBe(false)
+    expect(maxDeviceMemoryGb('prism-155.0.8059.84')).toBe(32)
+    const list = kernelGpuList('prism-155.0.8059.84', 'windows')!
+    expect(list.length).toBeGreaterThan(40)
+    expect(list.every((gpu) => gpu.vendor === 'NVIDIA' && !/Laptop/.test(gpu.model))).toBe(true)
+  })
 })

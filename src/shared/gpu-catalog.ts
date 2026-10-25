@@ -1,5 +1,6 @@
 import catalogs from './gpu-catalogs.json'
 import type { BrowserPlatform } from './types'
+import { kernelVendor } from './kernel-id'
 
 /**
  * The GPUs built into each fingerprint-chromium kernel, measured with tools/gpu-catalog/probe.mjs.
@@ -39,12 +40,21 @@ function majorOf(version: string | null | undefined): string | undefined {
 
 /** The list a kernel version picks from, or undefined for versions that were never measured. */
 export function kernelGpuList(version: string | null | undefined, platform: BrowserPlatform): readonly KernelGpu[] | undefined {
+  // Prism kernels take the GPU on the command line; every version accepts the same desktop list.
+  if (kernelVendor(version) === 'prism') return CATALOGS.prism?.[platform]
+  if (kernelVendor(version) !== 'fingerprint-chromium') return undefined
   const major = majorOf(version)
   return major ? CATALOGS[major]?.[platform] : undefined
 }
 
-/** Kernel major versions that have a measured list, oldest first. */
-export const MEASURED_KERNELS: readonly string[] = Object.keys(CATALOGS).sort((a, b) => Number(a) - Number(b))
+/** Kernel lists: fingerprint-chromium major versions oldest first, then "prism". */
+export const MEASURED_KERNELS: readonly string[] = Object.keys(CATALOGS)
+  .sort((a, b) => (Number(a) || Infinity) - (Number(b) || Infinity))
+
+/** "144" stays a version; the Prism list reads "Prism". */
+export function kernelListLabel(key: string): string {
+  return key === 'prism' ? 'Prism' : key
+}
 
 export interface GpuChoice extends KernelGpu {
   key: string

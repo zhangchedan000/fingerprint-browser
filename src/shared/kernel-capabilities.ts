@@ -1,10 +1,6 @@
 import { kernelChromiumVersion, kernelVendor } from './kernel-id'
 
-/**
- * What a kernel can be told on its command line. Our own builds start at Chromium 156
- * (fingerprint-chromium stopped publishing sources after 144, and no upstream 156 build exists),
- * so a fingerprint kernel of 156 or newer is one built from tools/kernel-patches.
- */
+/** What a kernel can be told on its command line. */
 export function kernelMajor(version: string | null | undefined): number | undefined {
   const major = Number(kernelChromiumVersion(version)?.split('.')[0])
   return Number.isInteger(major) && major > 0 ? major : undefined
@@ -12,7 +8,7 @@ export function kernelMajor(version: string | null | undefined): number | undefi
 
 /** Takes the GPU by --fingerprint-gpu-* (vendor id, device id, driver name) instead of a seeded pick. */
 export function kernelTakesExplicitGpu(version: string | null | undefined): boolean {
-  return kernelVendor(version) === 'fingerprint-chromium' && (kernelMajor(version) ?? 0) >= 156
+  return kernelVendor(version) === 'prism'
 }
 
 /**

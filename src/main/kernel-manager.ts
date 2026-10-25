@@ -24,7 +24,17 @@ const execFileAsync = promisify(execFile)
 const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
 /** Clearcote (trial): same --fingerprint switches, open source; only its newest build is offered. */
 const CLEARCOTE_RELEASES_URL = 'https://api.github.com/repos/clearcotelabs/clearcote-browser/releases?per_page=10'
-const TRUSTED_DOWNLOAD_PATHS = ['/adryfish/fingerprint-chromium/releases/download/', '/clearcotelabs/clearcote-browser/releases/download/']
+/**
+ * Prism (our own builds, Windows): the build repository is private, so each finished kernel is
+ * also published on this app's public repository as a release tagged "kernel-<chromium>-prismN".
+ */
+const PRISM_RELEASES_URL = 'https://api.github.com/repos/zhangchedan000/fingerprint-browser/releases?per_page=30'
+const PRISM_TAG_PATTERN = /^kernel-(\d+(?:\.\d+){3})-prism\d+$/
+const TRUSTED_DOWNLOAD_PATHS = [
+  '/adryfish/fingerprint-chromium/releases/download/',
+  '/clearcotelabs/clearcote-browser/releases/download/',
+  '/zhangchedan000/fingerprint-browser/releases/download/'
+]
 
 interface GithubAsset {
   name: string
@@ -71,9 +81,39 @@ function clearcoteAsset(assets: GithubAsset[]): GithubAsset | undefined {
   return undefined
 }
 
+function prismAsset(assets: GithubAsset[], chromium: string): GithubAsset | undefined {
+  if (process.platform !== 'win32') return undefined
+  return assets.find((asset) => asset.name === `ungoogled-chromium_${chromium}-1.1_windows_x64.zip`)
+}
+
 function safeVersion(version: string): string {
   if (!isKernelId(version)) throw new Error('内核版本号无效')
   return version
+}
+
+const PRISM_MARKER = Buffer.from('fingerprint-gpu-description')
+
+/** Whether a file contains `needle`, read in chunks (chrome.dll is a few hundred MB). */
+async function fileContains(path: string, needle: Buffer): Promise<boolean> {
+  let tail = Buffer.alloc(0)
+  try {
+    for await (const chunk of createReadStream(path, { highWaterMark: 4 * 1024 * 1024 })) {
+      const window = Buffer.concat([tail, chunk as Buffer])
+      if (window.includes(needle)) return true
+      tail = window.subarray(Math.max(0, window.length - needle.length + 1))
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+/** chrome.dll sits next to chrome.exe in packaged builds and in a version folder in installed ones. */
+async function isPrismBuild(browserRoot: string, chromiumVersion: string): Promise<boolean> {
+  for (const dll of [join(browserRoot, 'chrome.dll'), join(browserRoot, chromiumVersion, 'chrome.dll')]) {
+    if (await pathExists(dll)) return fileContains(dll, PRISM_MARKER)
+  }
+  return false
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -145,6 +185,10 @@ export class KernelManager {
       this.logger?.error('获取 Clearcote 内核版本失败', error)
       return [] as GithubRelease[]
     })
+    const prismReleases = this.fetchReleases(PRISM_RELEASES_URL).catch((error: unknown) => {
+      this.logger?.error('获取 Prism 内核版本失败', error)
+      return [] as GithubRelease[]
+    })
     try {
       releases = await this.fetchReleases(RELEASES_URL)
     } catch (error) {
@@ -197,6 +241,31 @@ export class KernelManager {
         } satisfies KernelRelease]
       })
       .slice(0, 1)
+    // Prism: our own builds, newest first. They come before fingerprint-chromium in the list.
+    const prism = (await prismReleases)
+      .filter((release) => !release.draft && !release.prerelease)
+      .flatMap((release) => {
+        const chromium = release.tag_name.match(PRISM_TAG_PATTERN)?.[1]
+        const asset = chromium ? prismAsset(release.assets, chromium) : undefined
+        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
+        if (!chromium || !asset || !digest) return []
+        const version = `prism-${chromium}`
+        const manifest = installed.get(version)
+        return [{
+          version,
+          publishedAt: release.published_at,
+          assetName: asset.name,
+          downloadUrl: asset.browser_download_url,
+          size: asset.size,
+          sha256: digest,
+          installed: Boolean(manifest),
+          remoteAvailable: true,
+          origin: manifest?.source ?? 'release',
+          executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined
+        } satisfies KernelRelease]
+      })
+      .sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
+    remote.unshift(...prism)
     remote.push(...clearcote)
     const remoteVersions = new Set(remote.map((release) => release.version))
     const localOnly = [...installed.values()]
@@ -676,7 +745,13 @@ export class KernelManager {
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
     const match = stdout.match(/\d+(?:\.\d+){3}/)
     if (!match) throw new Error('无法从 chrome.exe 读取四段式 Chromium 版本')
-    return { version: safeVersion(match[0]), sourceRoot: dirname(executable), executableRelative: join('browser', 'chrome.exe') }
+    // A Prism build is recognised by the switch only our patches add (004-gpu-identity).
+    const prism = await isPrismBuild(dirname(executable), match[0])
+    return {
+      version: safeVersion(prism ? `prism-${match[0]}` : match[0]),
+      sourceRoot: dirname(executable),
+      executableRelative: join('browser', 'chrome.exe')
+    }
   }
 
   private async hashFile(path: string): Promise<string> {
