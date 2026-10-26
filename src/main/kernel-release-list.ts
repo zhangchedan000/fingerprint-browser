@@ -20,6 +20,7 @@ export interface GithubRelease {
 
 export interface ReleaseCandidate {
   source: string
+  tag: string
   chromium: string
   publishedAt: string
   asset: GithubAsset
@@ -51,7 +52,7 @@ export function releaseCandidates(source: string, releases: readonly GithubRelea
       if (!asset || !chromium) return []
       const sha256 = asset.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length).toLowerCase() : ''
       const checksumAsset = sha256 ? undefined : release.assets.find((item) => /sha256sums?\.txt$|\.sha256$/i.test(item.name))
-      return [{ source, chromium, publishedAt: release.published_at, asset, sha256, checksumAsset }]
+      return [{ source, tag: release.tag_name, chromium, publishedAt: release.published_at, asset, sha256, checksumAsset }]
     })
     .sort((first, second) => second.publishedAt.localeCompare(first.publishedAt))
 }
@@ -77,4 +78,53 @@ export function isSourceDownloadUrl(url: string, sources: readonly string[]): bo
   if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com') return false
   const path = parsed.pathname.toLowerCase()
   return sources.some((source) => path.startsWith(`/${source.toLowerCase()}/releases/download/`))
+}
+
+/** An installed kernel as the update check sees it. */
+export interface InstalledKernel {
+  version: string
+  chromium: string
+  sha256: string
+  /** "owner/repo" when it was downloaded from a source; unset for local imports. */
+  sourceRepo?: string
+  /** When the installed build was published (downloads) or imported (local builds). */
+  builtAt: string
+}
+
+export type PlannedRow<R extends ReleaseCandidate> =
+  | { kind: 'installed'; installed: InstalledKernel; release: R }
+  | { kind: 'update'; installed: InstalledKernel; release: R }
+  | { kind: 'new'; release: R }
+
+/**
+ * One row per installed kernel that a source still publishes (installed, or an update when the
+ * same Chromium version has a newer build there), then one "new" row per Chromium version no
+ * installed kernel covers. Only the newest build of each version per source is offered.
+ */
+export function planKernelRows<R extends ReleaseCandidate>(installed: readonly InstalledKernel[], releases: readonly R[]): PlannedRow<R>[] {
+  const newest = new Map<string, R>()
+  for (const release of [...releases].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))) {
+    const key = `${release.source.toLowerCase()}|${release.chromium}`
+    if (!newest.has(key)) newest.set(key, release)
+  }
+  const latest = [...newest.values()]
+  const rows: PlannedRow<R>[] = []
+  const covered = new Set<string>()
+  for (const kernel of installed) {
+    const same = latest
+      .filter((release) => release.chromium === kernel.chromium)
+      .filter((release) => !kernel.sourceRepo || release.source.toLowerCase() === kernel.sourceRepo.toLowerCase())
+    const release = same[0]
+    if (!release) continue
+    covered.add(release.chromium)
+    if (release.sha256 === kernel.sha256) rows.push({ kind: 'installed', installed: kernel, release })
+    else if (release.publishedAt > kernel.builtAt) rows.push({ kind: 'update', installed: kernel, release })
+    else rows.push({ kind: 'installed', installed: kernel, release })
+  }
+  const installedShas = new Set(installed.map((kernel) => kernel.sha256))
+  for (const release of latest) {
+    if (covered.has(release.chromium) || installedShas.has(release.sha256)) continue
+    rows.push({ kind: 'new', release })
+  }
+  return rows
 }

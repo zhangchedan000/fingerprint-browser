@@ -2028,5 +2028,9 @@
   "自动 · {0}": "Tự động · {0}",
   "设备名称跟随语言": "Tên thiết bị theo ngôn ngữ",
   "与 Chrome 一致：网页访问本机和局域网需要用户授权": "Giống Chrome: trang web cần người dùng cho phép mới truy cập được máy này hoặc mạng cục bộ",
-  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} loa · {2} camera"
+  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} loa · {2} camera",
+  "更新": "Cập nhật",
+  "有更新": "Có bản cập nhật",
+  "正在更新浏览器内核…": "Đang cập nhật nhân trình duyệt…",
+  "内核已更新，使用它的窗口下次启动即用新版": "Đã cập nhật nhân; các cửa sổ dùng nhân này sẽ dùng bản mới ở lần khởi động tới"
 }

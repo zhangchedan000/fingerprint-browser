@@ -295,6 +295,9 @@ export interface KernelRelease {
   executable?: string
   /** GitHub project ("owner/repo") a downloadable release comes from. */
   source?: string
+  tag?: string
+  /** A newer build of this installed kernel; installing it replaces the kernel in place. */
+  update?: boolean
 }
 
 export type KernelInstallStage = 'downloading' | 'verifying' | 'installing' | 'ready' | 'cancelled' | 'error'

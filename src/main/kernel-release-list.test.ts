@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checksumFor, isSourceDownloadUrl, releaseCandidates, windowsKernelAsset, type GithubRelease } from './kernel-release-list'
+import { checksumFor, isSourceDownloadUrl, planKernelRows, releaseCandidates, windowsKernelAsset, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 
 const asset = (name: string, digest: string | null = null) => ({ name, size: 200_000_000, browser_download_url: `https://github.com/a/b/releases/download/t/${name}`, digest })
 const release = (tag: string, assets: GithubRelease['assets'], extra: Partial<GithubRelease> = {}): GithubRelease =>
@@ -37,5 +37,23 @@ describe('kernel releases from a GitHub project', () => {
     expect(isSourceDownloadUrl('https://github.com/A/B/releases/download/t/x.zip', ['a/b'])).toBe(true)
     expect(isSourceDownloadUrl('https://github.com/a/c/releases/download/t/x.zip', ['a/b'])).toBe(false)
     expect(isSourceDownloadUrl('http://github.com/a/b/releases/download/t/x.zip', ['a/b'])).toBe(false)
+  })
+
+  it('offers an update for an installed version instead of a second download', () => {
+    const candidate = (chromium: string, publishedAt: string, sha256: string): ReleaseCandidate =>
+      ({ source: 'a/b', tag: 't', chromium, publishedAt, asset: asset('x.zip'), sha256 })
+    const releases = [
+      candidate('156.0.8078.47', '2026-10-26T14:00:00Z', 'new156'),
+      candidate('156.0.8078.47', '2026-10-26T12:00:00Z', 'old156'),
+      candidate('155.0.8059.84', '2026-10-26T12:00:00Z', 'old155'),
+      candidate('157.0.1.1', '2026-10-27T00:00:00Z', 'new157')
+    ]
+    const rows = planKernelRows([
+      { version: 'prism-156.0.8078.47', chromium: '156.0.8078.47', sha256: 'old156', sourceRepo: 'a/b', builtAt: '2026-10-26T12:00:00Z' },
+      { version: 'prism-155.0.8059.84', chromium: '155.0.8059.84', sha256: 'local', builtAt: '2026-10-26T11:00:00Z' }
+    ], releases)
+    expect(rows.map((row) => `${row.kind}:${row.release.sha256}`)).toEqual(['update:new156', 'update:old155', 'new:new157'])
+    const current = planKernelRows([{ version: 'prism-157.0.1.1', chromium: '157.0.1.1', sha256: 'new157', builtAt: '2026-10-27T00:00:00Z' }], releases)
+    expect(current.filter((row) => row.kind === 'installed')).toHaveLength(1)
   })
 })

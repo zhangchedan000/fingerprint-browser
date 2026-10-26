@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { EngineStatus, KernelInstallProgress, KernelRelease } from '../../../../shared/types'
 import { formatBytes, humanError } from '../../components/format'
-import { kernelName, kernelVendor } from '../../../../shared/kernel-id'
+import { kernelChromiumVersion, kernelName, kernelVendor } from '../../../../shared/kernel-id'
 import { normalizeKernelSource, OFFICIAL_KERNEL_SOURCE } from '../../../../shared/kernel-sources'
 
 interface Props {
@@ -13,7 +13,20 @@ interface Props {
   onInstalled: (status: EngineStatus, version: string) => void
 }
 
-/** Lists kernel releases from the added GitHub projects; one click downloads, checks and installs. */
+function compareVersions(a: string, b: string): number {
+  const left = a.split('.').map(Number)
+  const right = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0)
+    if (diff) return diff
+  }
+  return 0
+}
+
+/**
+ * Lists kernel releases from the added GitHub projects; one click downloads, checks and installs.
+ * An installed kernel with a newer build of its version shows "update", which replaces it in place.
+ */
 export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   const [releases, setReleases] = useState<KernelRelease[]>()
   const [error, setError] = useState<string>()
@@ -34,7 +47,9 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     setError(undefined)
     setReleases(undefined)
     window.browserApi.engine.releases()
-      .then((items) => setReleases(items.filter((item) => item.remoteAvailable)))
+      .then((items) => setReleases(items
+        .filter((item) => item.remoteAvailable)
+        .sort((a, b) => compareVersions(kernelChromiumVersion(b.version), kernelChromiumVersion(a.version)) || b.publishedAt.localeCompare(a.publishedAt))))
       .catch((reason: unknown) => setError(humanError(reason)))
   }, [open, reload])
 
@@ -90,6 +105,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   }
 
   const main = releases?.filter((release) => kernelVendor(release.version) === 'prism')
+  // The highest Chromium version; rows are already sorted by it.
   const latest = main?.[0]?.version
   /** Newest release without a known kernel bug: the one the dialog highlights. */
   const recommended = latest
@@ -101,6 +117,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
         <span>
           {kernelName(version)}
           {version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}
+          {releases?.find((item) => item.version === version)?.update && <Tag color="orange" className="fb-inline-tag">{t("有更新")}</Tag>}
           {version === recommended && version !== latest && <Tag color="green" className="fb-inline-tag">{t("推荐")}</Tag>}
         </span>
       )
@@ -111,7 +128,13 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     {
       title: t("操作"),
       align: 'right',
-      render: (_, release) => release.installed
+      render: (_, release) => release.installed && release.update
+        ? (
+          <Button size="small" type="primary" disabled={Boolean(installing)} loading={installing === release.version} onClick={() => confirmInstall(release)}>
+            {t("更新")}
+          </Button>
+        )
+        : release.installed
         ? <span className="fb-muted">{t("已安装")}</span>
         : (
           <Button size="small" type={release.version === recommended ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === release.version} onClick={() => confirmInstall(release)}>

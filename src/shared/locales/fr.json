@@ -2028,5 +2028,9 @@
   "自动 · {0}": "Auto · {0}",
   "设备名称跟随语言": "Noms des appareils selon la langue",
   "与 Chrome 一致：网页访问本机和局域网需要用户授权": "Comme Chrome : les pages doivent obtenir l’autorisation de l’utilisateur pour accéder à cet ordinateur ou au réseau local",
-  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} haut-parleur · {2} caméra"
+  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} haut-parleur · {2} caméra",
+  "更新": "Mettre à jour",
+  "有更新": "Mise à jour disponible",
+  "正在更新浏览器内核…": "Mise à jour du noyau du navigateur…",
+  "内核已更新，使用它的窗口下次启动即用新版": "Noyau mis à jour ; les fenêtres qui l’utilisent auront la nouvelle version au prochain démarrage"
 }

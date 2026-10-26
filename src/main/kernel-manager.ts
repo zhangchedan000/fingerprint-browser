@@ -1,4 +1,4 @@
-import { isKernelId, kernelBuildId } from '../shared/kernel-id'
+import { isKernelId, kernelBuildId, kernelChromiumVersion } from '../shared/kernel-id'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -17,7 +17,7 @@ import {
   type KernelIntegrityFields
 } from './kernel-integrity'
 import type { SettingsStore } from './settings-store'
-import { checksumFor, isSourceDownloadUrl, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { checksumFor, isSourceDownloadUrl, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
@@ -40,6 +40,10 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   executableSize?: number
   source?: 'release' | 'local-build'
   target?: string
+  /** Downloads: the GitHub project and release the build came from, and when it was published. */
+  sourceRepo?: string
+  releaseTag?: string
+  publishedAt?: string
 }
 
 interface KernelActivationBackup {
@@ -152,36 +156,48 @@ export class KernelManager {
     const failures = listed.flatMap((item) => item.error ? [item.error] : [])
     if (sources.length && failures.length === sources.length && installed.size === 0) throw new Error(failures.join('；'))
 
-    const installedBySha = new Map([...installed.values()].map((manifest) => [manifest.sha256.toLowerCase(), manifest]))
-    const used = new Set<string>()
-    const remote: KernelRelease[] = []
+    const withSha: Array<ReleaseCandidate & { sha256: string }> = []
     for (const candidate of listed.flatMap((item) => item.candidates)) {
       const sha256 = candidate.sha256 || await this.checksumFromFile(candidate)
-      if (!sha256) continue
-      const manifest = installedBySha.get(sha256)
-      // The same Chromium version from another release or project gets its publish time as a suffix.
-      let version = manifest?.version ?? `prism-${candidate.chromium}`
-      if (!manifest) {
-        const at = new Date(candidate.publishedAt)
+      if (sha256) withSha.push({ ...candidate, sha256 })
+    }
+    const rows = planKernelRows([...installed.values()].map((manifest) => ({
+      version: manifest.version,
+      chromium: kernelChromiumVersion(manifest.version),
+      sha256: manifest.sha256.toLowerCase(),
+      sourceRepo: manifest.sourceRepo,
+      builtAt: manifest.publishedAt ?? manifest.installedAt
+    })), withSha)
+    const used = new Set<string>()
+    const remote: KernelRelease[] = []
+    for (const row of rows) {
+      const { release } = row
+      let version = row.kind === 'new' ? `prism-${release.chromium}` : row.installed.version
+      if (row.kind === 'new') {
+        // Another build of a version that is installed from elsewhere gets its publish time as a suffix.
+        const at = new Date(release.publishedAt)
         while (used.has(version) || installed.has(version)) {
-          version = kernelBuildId(`prism-${candidate.chromium}`, at)
+          version = kernelBuildId(`prism-${release.chromium}`, at)
           at.setMinutes(at.getMinutes() + 1)
         }
       }
       if (!isKernelId(version) || used.has(version)) continue
       used.add(version)
+      const manifest = installed.get(version)
       remote.push({
         version,
-        publishedAt: candidate.publishedAt,
-        assetName: candidate.asset.name,
-        downloadUrl: candidate.asset.browser_download_url,
-        size: candidate.asset.size,
-        sha256,
+        publishedAt: release.publishedAt,
+        assetName: release.asset.name,
+        downloadUrl: release.asset.browser_download_url,
+        size: release.asset.size,
+        sha256: release.sha256,
         installed: Boolean(manifest),
         remoteAvailable: true,
         origin: manifest?.source ?? 'release',
         executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
-        source: candidate.source
+        source: release.source,
+        tag: release.tag,
+        ...(row.kind === 'update' ? { update: true } : {})
       })
     }
     const localOnly = [...installed.values()]
@@ -232,12 +248,11 @@ export class KernelManager {
     const version = safeVersion(versionInput)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const existing = await this.readManifest(version)
-    if (existing) {
+    const release = (await this.releases()).find((item) => item.version === version)
+    if (existing && !release?.update) {
       await this.makeDefaultIfNone(version)
       return locateBrowser(this.settings)
     }
-
-    const release = (await this.releases()).find((item) => item.version === version)
     if (!release) throw new Error('没有找到适用于当前系统的内核发行包')
     this.validateRelease(release)
     this.installingVersion = version
@@ -251,13 +266,13 @@ export class KernelManager {
     try {
       await this.assertDownloadSpace(downloadsPath, archivePath, release.size)
       await this.download(release, archivePath)
-      this.emit(release, 'installing', release.size, release.size, '正在安装浏览器内核…')
+      this.emit(release, 'installing', release.size, release.size, release.update ? '正在更新浏览器内核…' : '正在安装浏览器内核…')
       if (process.platform === 'darwin') await this.installMac(release, archivePath)
       else await this.installWindows(release, archivePath)
       await rm(archivePath, { force: true })
       await this.makeDefaultIfNone(version)
       this.logger?.info('浏览器内核安装完成', { version })
-      this.emit(release, 'ready', release.size, release.size, '内核安装完成')
+      this.emit(release, 'ready', release.size, release.size, release.update ? '内核已更新，使用它的窗口下次启动即用新版' : '内核安装完成')
       return locateBrowser(this.settings)
     } catch (error) {
       const cancelled = this.installAbort.signal.aborted
@@ -618,7 +633,7 @@ export class KernelManager {
       if (!await pathExists(executable)) throw new Error('Chromium.app 内缺少可执行文件')
       const manifest = await this.createManifest(release, stagingPath, relative(stagingPath, executable))
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await rename(stagingPath, this.kernelPath(release.version))
+      await this.replaceKernelFolder(stagingPath, release.version)
       return manifest
     } finally {
       if (mounted) await execFileAsync('hdiutil', ['detach', mountPath, '-force']).catch(() => undefined)
@@ -654,11 +669,29 @@ export class KernelManager {
       const executable = join(browserPath, 'chrome.exe')
       const manifest = await this.createManifest(release, stagingPath, relative(stagingPath, executable))
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await rename(stagingPath, this.kernelPath(release.version))
+      await this.replaceKernelFolder(stagingPath, release.version)
       return manifest
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  }
+
+  /** Moves a staged kernel into place; an installed one is kept aside until the new one is in. */
+  private async replaceKernelFolder(staging: string, version: string): Promise<void> {
+    const target = this.kernelPath(version)
+    if (!await pathExists(target)) {
+      await rename(staging, target)
+      return
+    }
+    const previous = `${target}.old-${Date.now()}`
+    await rename(target, previous)
+    try {
+      await rename(staging, target)
+    } catch (error) {
+      await rename(previous, target).catch(() => undefined)
+      throw error
+    }
+    await rm(previous, { recursive: true, force: true })
   }
 
   private async createManifest(release: KernelRelease, root: string, executableRelative: string): Promise<InstalledKernelManifest> {
@@ -676,7 +709,10 @@ export class KernelManager {
       executableSize: executableInfo.size,
       ...integrity,
       source: 'release',
-      target: `${process.platform}-${process.arch}`
+      target: `${process.platform}-${process.arch}`,
+      ...(release.source ? { sourceRepo: release.source } : {}),
+      ...(release.tag ? { releaseTag: release.tag } : {}),
+      publishedAt: release.publishedAt
     }
   }
 
