@@ -397,10 +397,29 @@ describe('ProfileStore', () => {
     const repository = await store()
     const profile = await repository.create(defaultProfileDraft())
 
-    await expect(repository.setKernelMany([profile.id], '144')).rejects.toThrow('四段数字')
+    await expect(repository.setKernelMany([profile.id], '144')).rejects.toThrow('版本号无效')
     await expect(repository.setKernelMany([], '144.0.7559.132')).rejects.toThrow('没有选择')
     await expect(repository.setKernelMany([profile.id, 'missing'], '144.0.7559.132')).rejects.toThrow('不存在')
     expect(repository.get(profile.id).kernelVersion).toBe('')
+  })
+
+  it('pins a new window to the default kernel and pins existing followers once', async () => {
+    const repository = await store()
+    const follower = await repository.create(defaultProfileDraft())
+    expect(follower.kernelVersion).toBe('')
+
+    repository.setDefaultKernelResolver(async () => 'prism-156.0.8078.47')
+    const created = await repository.create(defaultProfileDraft())
+    expect(created.kernelVersion).toBe('prism-156.0.8078.47')
+    const chosen = await repository.create({ ...defaultProfileDraft(), kernelVersion: 'prism-156.0.8078.47-202610261501' })
+    expect(chosen.kernelVersion).toBe('prism-156.0.8078.47-202610261501')
+
+    const before = repository.get(follower.id).updatedAt
+    expect(await repository.pinUnboundKernels('prism-155.0.8059.84')).toBe(1)
+    expect(repository.get(follower.id).kernelVersion).toBe('prism-155.0.8059.84')
+    expect(repository.get(follower.id).updatedAt).toBe(before)
+    expect(repository.get(created.id).kernelVersion).toBe('prism-156.0.8078.47')
+    expect(await repository.pinUnboundKernels('prism-155.0.8059.84')).toBe(0)
   })
 
   it('keeps the platform account password across edits, restarts and the recycle bin', async () => {

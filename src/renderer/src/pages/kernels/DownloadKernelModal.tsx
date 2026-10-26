@@ -9,7 +9,7 @@ interface Props {
   open: boolean
   onClose: () => void
   /** Called with the new default kernel once one is installed. */
-  onInstalled: (status: EngineStatus) => void
+  onInstalled: (status: EngineStatus, version: string) => void
 }
 
 /** Lists Prism kernel releases for this system; one click downloads, checks, installs and makes it the default. */
@@ -36,7 +36,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     setError(undefined)
     try {
       const status = await window.browserApi.engine.install(version)
-      onInstalled(status)
+      onInstalled(status, version)
       onClose()
     } catch (reason) {
       setError(humanError(reason))
@@ -70,7 +70,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
         ? <span className="fb-muted">{t("已安装")}</span>
         : (
           <Button size="small" type={release.version === recommended ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === release.version} onClick={() => void install(release.version)}>
-            {t("下载并启用")}
+            {t("下载")}
           </Button>
         )
     }

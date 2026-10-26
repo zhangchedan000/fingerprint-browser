@@ -1,4 +1,4 @@
-import { isKernelId } from '../shared/kernel-id'
+import { isKernelId, kernelBuildId } from '../shared/kernel-id'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -7,7 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { pipeline } from 'node:stream/promises'
 import { Readable, Transform } from 'node:stream'
 import { promisify } from 'node:util'
-import type { EngineStatus, KernelHealth, KernelInstallProgress, KernelRelease } from '../shared/types'
+import type { EngineStatus, KernelHealth, KernelImportResult, KernelInstallProgress, KernelRelease } from '../shared/types'
 import { locateBrowser, locateBrowserSelection, normalizeBrowserSelection } from './browser-locator'
 import {
   collectKernelIntegrity,
@@ -222,7 +222,10 @@ export class KernelManager {
     const version = safeVersion(versionInput)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const existing = await this.readManifest(version)
-    if (existing) return this.activate(version)
+    if (existing) {
+      await this.makeDefaultIfNone(version)
+      return locateBrowser(this.settings)
+    }
 
     const release = (await this.releases()).find((item) => item.version === version)
     if (!release) throw new Error('没有找到适用于当前系统的内核发行包')
@@ -239,16 +242,10 @@ export class KernelManager {
       await this.assertDownloadSpace(downloadsPath, archivePath, release.size)
       await this.download(release, archivePath)
       this.emit(release, 'installing', release.size, release.size, '正在安装浏览器内核…')
-      const manifest = process.platform === 'darwin'
-        ? await this.installMac(release, archivePath)
-        : await this.installWindows(release, archivePath)
+      if (process.platform === 'darwin') await this.installMac(release, archivePath)
+      else await this.installWindows(release, archivePath)
       await rm(archivePath, { force: true })
-      await this.rememberPreviousKernel(join(this.kernelPath(version), manifest.executableRelative))
-      await this.settings.update({
-        browserExecutable: join(this.kernelPath(version), manifest.executableRelative),
-        fingerprintKernel: true,
-        enginePreference: 'auto'
-      })
+      await this.makeDefaultIfNone(version)
       this.logger?.info('浏览器内核安装完成', { version })
       this.emit(release, 'ready', release.size, release.size, '内核安装完成')
       return locateBrowser(this.settings)
@@ -263,39 +260,53 @@ export class KernelManager {
     }
   }
 
-  async importLocal(selection: string): Promise<EngineStatus> {
+  /**
+   * Adds a local build to the installed kernels. It never takes over the default kernel (windows
+   * that follow the default would silently change kernel); it only becomes the default when there
+   * is no fingerprint kernel to fall back to. A second, different build of an installed version is
+   * kept side by side under an id with the import time.
+   */
+  async importLocal(selection: string): Promise<KernelImportResult> {
     if (process.platform !== 'darwin' && process.platform !== 'win32') {
       throw new Error('当前只支持导入 macOS 和 Windows 本地内核')
     }
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
-    const { version, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
-    const destination = this.kernelPath(version)
-    const existing = await this.readManifest(version)
-    let replacing = false
-    if (existing) {
-      const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
-      const sourceExecutableRelative = process.platform === 'darwin'
-        ? join(basename(sourceRoot), 'Contents', 'MacOS', basename(executable))
-        : basename(executable)
-      const [existingIntegrity, sourceIntegrity] = await Promise.all([
-        collectKernelIntegrity(destination, existing.executableRelative),
-        collectKernelIntegrity(sourceIntegrityRoot, sourceExecutableRelative)
-      ])
-      if (existing.source === 'local-build'
-        && kernelPayloadIdentity(existingIntegrity, existing.executableRelative)
-          === kernelPayloadIdentity(sourceIntegrity, sourceExecutableRelative)) {
-        if (!existing.criticalFiles || !existing.criticalFilesSha256) {
-          const upgraded: InstalledKernelManifest = { ...existing, schemaVersion: 2, ...existingIntegrity }
-          await writeFile(join(destination, 'manifest.json'), JSON.stringify(upgraded, null, 2), { mode: 0o600 })
-          this.logger?.info('本地内核完整性清单已升级', { version, files: existingIntegrity.criticalFiles.length })
-        }
-        return this.activate(version)
+    const { version: baseVersion, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
+    const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
+    const sourceExecutableRelative = process.platform === 'darwin'
+      ? join(basename(sourceRoot), 'Contents', 'MacOS', basename(executable))
+      : basename(executable)
+    const sourceIdentity = kernelPayloadIdentity(
+      await collectKernelIntegrity(sourceIntegrityRoot, sourceExecutableRelative),
+      sourceExecutableRelative
+    )
+
+    // The same build imported again: keep the installed copy.
+    for (const [id, existing] of await this.installedManifests()) {
+      if (id !== baseVersion && !id.startsWith(`${baseVersion}-`)) continue
+      if (existing.source !== 'local-build') continue
+      const existingIntegrity = await collectKernelIntegrity(this.kernelPath(id), existing.executableRelative)
+      if (kernelPayloadIdentity(existingIntegrity, existing.executableRelative) !== sourceIdentity) continue
+      if (!existing.criticalFiles || !existing.criticalFilesSha256) {
+        const upgraded: InstalledKernelManifest = { ...existing, schemaVersion: 2, ...existingIntegrity }
+        await writeFile(join(this.kernelPath(id), 'manifest.json'), JSON.stringify(upgraded, null, 2), { mode: 0o600 })
+        this.logger?.info('本地内核完整性清单已升级', { version: id, files: existingIntegrity.criticalFiles.length })
       }
-      // Same version, new build: the new files replace the installed ones.
-      replacing = true
+      const madeDefault = await this.makeDefaultIfNone(id)
+      return { version: id, alreadyInstalled: true, madeDefault, engine: await locateBrowser(this.settings) }
     }
-    if (!replacing && await pathExists(destination)) throw new Error(`内核目录 ${version} 已存在但缺少有效清单，请先人工检查`)
+
+    let version = baseVersion
+    if (await pathExists(this.kernelPath(version))) {
+      const at = new Date()
+      version = safeVersion(kernelBuildId(baseVersion, at))
+      while (await pathExists(this.kernelPath(version))) {
+        at.setMinutes(at.getMinutes() + 1)
+        version = safeVersion(kernelBuildId(baseVersion, at))
+      }
+    }
+    const destination = this.kernelPath(version)
 
     const kernelsPath = join(this.vaultPath, 'kernels')
     await mkdir(kernelsPath, { recursive: true })
@@ -329,29 +340,21 @@ export class KernelManager {
         target: `${process.platform}-${process.arch}`
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      if (replacing) {
-        const retired = join(root, 'retired')
-        try {
-          await rename(destination, retired)
-        } catch {
-          throw new Error(`内核 ${version} 正在被打开的浏览器窗口使用，请先关闭所有窗口再导入`)
-        }
-        try {
-          await rename(stagingPath, destination)
-        } catch (error) {
-          await rename(retired, destination)
-          throw error
-        }
-      } else {
-        await rename(stagingPath, destination)
-      }
-      await this.rememberPreviousKernel(join(destination, executableRelative))
-      await this.settings.update({ browserExecutable: join(destination, executableRelative), fingerprintKernel: true, enginePreference: 'auto' })
-      this.logger?.info('本地构建内核已导入并启用', { version, target: manifest.target })
-      return locateBrowser(this.settings)
+      await rename(stagingPath, destination)
+      const madeDefault = await this.makeDefaultIfNone(version)
+      this.logger?.info('本地构建内核已导入', { version, target: manifest.target, madeDefault })
+      return { version, alreadyInstalled: false, madeDefault, engine: await locateBrowser(this.settings) }
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  }
+
+  /** Makes `version` the default only when no fingerprint kernel is usable as the default now. */
+  private async makeDefaultIfNone(version: string): Promise<boolean> {
+    const current = await locateBrowser(this.settings)
+    if (current.executable && current.fingerprintKernel) return false
+    await this.activate(version)
+    return true
   }
 
   cancel(versionInput: string): void {

@@ -2005,5 +2005,12 @@
   "旧的第三方内核，已不再支持，可以删除": "Ancien noyau tiers, plus pris en charge ; vous pouvez le supprimer",
   "我们自己编译的 Prism 内核，下载后会校验文件完整性再安装，并设为默认内核。": "Nos propres builds du noyau Prism. Chaque téléchargement est vérifié avant installation puis défini par défaut.",
   "导入本地 Prism 内核": "Importer un noyau Prism local",
-  "选择 Prism 内核": "Choisir un noyau Prism"
+  "选择 Prism 内核": "Choisir un noyau Prism",
+  "{0} 已导入，并设为默认内核": "{0} importé et défini comme kernel par défaut",
+  "{0} 已经导入过，没有重复添加": "{0} est déjà importé, rien n’a été ajouté",
+  "{0} 已导入。已有窗口的内核不变，要用它请点“设为默认”或给窗口单独指定": "{0} importé. Les fenêtres existantes gardent leur kernel ; cliquez sur « Par défaut » ou attribuez-le aux fenêtres",
+  "内核 {0} 已安装": "Kernel {0} installé",
+  "下载": "Télécharger",
+  "绑定的内核版本号无效": "La version du kernel attribuée est invalide",
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.dll manque à côté de chrome.exe, le dossier du navigateur est incomplet : décompressez entièrement windows_x64.zip puis choisissez le chrome.exe qu’il contient"
 }

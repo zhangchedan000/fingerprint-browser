@@ -981,13 +981,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             options={[
               { value: '', label: engine?.version ? t("跟随默认内核（{0}）", kernelName(engine.version)) : t("跟随默认内核") },
               ...kernels.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version)}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}` })),
-              ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelVersion) }] : [])
+              ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelName(kernelVersion)) }] : [])
             ]}
           />
         </Form.Item>
       </Row>
       {kernelVersion && !pinnedKernel && (
-        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用", kernelVersion)} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
+        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用", kernelName(kernelVersion))} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
       )}
       <Row label={t("浏览器品牌")}>
         <Select

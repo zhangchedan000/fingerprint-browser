@@ -184,7 +184,7 @@ export async function migrateMacLegacyKernelSelection(
 
 export function inferFingerprintKernelVersion(executable: string): string | undefined {
   const normalized = executable.replaceAll('\\', '/')
-  return normalized.match(/\/kernels\/((?:(?:clearcote|prism)-)?\d+(?:\.\d+){3})(?:\/|$)/)?.[1]
+  return normalized.match(/\/kernels\/((?:(?:clearcote|prism)-)?\d+(?:\.\d+){3}(?:-\d{12})?)(?:\/|$)/)?.[1]
 }
 
 export async function normalizeBrowserSelection(selection: string): Promise<string> {

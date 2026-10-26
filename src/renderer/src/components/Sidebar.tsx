@@ -1,3 +1,4 @@
+import { kernelName } from '../../../shared/kernel-id'
 import { Tooltip } from 'antd'
 import { t, translateMessage as mt } from '../../../shared/i18n'
 import { useWorkspace } from '../data/workspace'
@@ -51,7 +52,7 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
         <span className={`fb-kernel-dot${engine?.fingerprintKernel ? ' ready' : ''}`} />
         <span>
           <strong>{engine?.fingerprintKernel ? t("内核已连接") : t("配置浏览器内核")}</strong>
-          <small>{engine?.version ? `Chromium ${engine.version}` : mt(engine?.label ?? t("正在检查…"))}</small>
+          <small>{engine?.version ? kernelName(engine.version) : mt(engine?.label ?? t("正在检查…"))}</small>
         </span>
       </button>
     </nav>

@@ -479,7 +479,6 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return kernels.configure({ browserExecutable: executable, fingerprintKernel: true, enginePreference: 'auto' })
   })
   ipcMain.handle('engine:import-local', async () => {
-    if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再导入并切换内核')
     const owner = BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
       title: t('导入本地 Prism 内核'),
@@ -487,7 +486,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       filters: process.platform === 'win32' ? [{ name: 'Chromium', extensions: ['exe'] }] : undefined
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
-    if (result.canceled || !result.filePaths[0]) return locateBrowser(settings)
+    if (result.canceled || !result.filePaths[0]) return null
     return kernels.importLocal(result.filePaths[0])
   })
   ipcMain.handle('engine:use-system', async () => {

@@ -106,6 +106,9 @@ export class ProfileStore {
   private preservePreviousBackupOnce = false
   private changeListeners = new Set<(profiles: BrowserProfile[]) => void>()
 
+  /** The kernel a new window is pinned to when it names none (the default kernel at creation). */
+  private defaultKernel?: () => Promise<string | undefined>
+
   constructor(vaultPath: string, private readonly secrets: SecretCodec = identitySecretCodec) {
     this.vaultPath = vaultPath
     this.profilesPath = join(vaultPath, 'profiles.json')
@@ -406,6 +409,26 @@ export class ProfileStore {
     }
   }
 
+  setDefaultKernelResolver(resolver: () => Promise<string | undefined>): void {
+    this.defaultKernel = resolver
+  }
+
+  /**
+   * Pins every window that follows the default kernel to `kernelVersion` (the default now), so
+   * a later change of the default only affects windows created after it. Returns how many changed.
+   */
+  async pinUnboundKernels(kernelVersion: string): Promise<number> {
+    if (!isKernelId(kernelVersion)) throw new Error('内核版本号无效')
+    // updatedAt stays: the list is sorted by it and nothing the user did changed.
+    const next = [...this.profiles.values()]
+      .filter((profile) => !profile.kernelVersion)
+      .map((profile) => ({ ...profile, kernelVersion }))
+    if (!next.length) return 0
+    for (const profile of next) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return next.length
+  }
+
   async create(input: ProfileDraft): Promise<BrowserProfile> {
     return (await this.createMany([input]))[0]
   }
@@ -415,6 +438,9 @@ export class ProfileStore {
     if (inputs.length > 1000) throw new Error('单次最多创建 1000 个浏览器环境')
     const drafts = inputs.map(validateProfileDraft)
     if (this.nextSerialNumber + drafts.length - 1 > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
+    const defaultKernel = drafts.some((draft) => !draft.kernelVersion)
+      ? await this.defaultKernel?.().catch(() => undefined)
+      : undefined
     return this.withLibraryRollback(async () => {
       const now = new Date().toISOString()
       const created: StoredProfile[] = drafts.map((draft, index) => {
@@ -422,6 +448,7 @@ export class ProfileStore {
         const { proxy, group, ...fields } = draft
         return {
           ...fields,
+          kernelVersion: fields.kernelVersion || defaultKernel || '',
           id,
           serialNumber: this.nextSerialNumber + index,
           proxyId: this.referenceProxy(inputs[index], proxy, now),
@@ -585,7 +612,7 @@ export class ProfileStore {
     const ids = this.selection(idsInput)
     const kernelVersion = kernelVersionInput.trim()
     if (kernelVersion && !isKernelId(kernelVersion)) {
-      throw new Error('绑定内核版本必须是四段数字，例如 144.0.7559.132')
+      throw new Error('绑定的内核版本号无效')
     }
     const now = new Date().toISOString()
     const next = ids.map((id) => {

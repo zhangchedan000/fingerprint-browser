@@ -264,6 +264,16 @@ export interface EngineStatus {
   version?: string
 }
 
+export interface KernelImportResult {
+  /** Id the build was installed under (with an import-time suffix when the version was already installed). */
+  version: string
+  /** The very same build was already installed; nothing was copied. */
+  alreadyInstalled: boolean
+  /** It became the default kernel because there was no usable default. */
+  madeDefault: boolean
+  engine: EngineStatus
+}
+
 export interface KernelRelease {
   version: string
   publishedAt: string
@@ -599,7 +609,7 @@ export interface BrowserApi {
     bundled: () => Promise<EngineStatus | null>
     activateBundled: () => Promise<EngineStatus>
     select: () => Promise<EngineStatus>
-    importLocal: () => Promise<EngineStatus>
+    importLocal: () => Promise<KernelImportResult | null>
     useSystem: () => Promise<EngineStatus>
     installed: () => Promise<KernelRelease[]>
     activate: (version: string) => Promise<EngineStatus>

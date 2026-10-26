@@ -58,6 +58,21 @@ export function KernelsPage({ navigate }: PageProps) {
     }
   }
 
+  async function importKernel(): Promise<void> {
+    try {
+      const result = await window.browserApi.engine.importLocal()
+      if (!result) return
+      ws.setEngine(result.engine)
+      await ws.reloadKernels()
+      const name = kernelName(result.version)
+      if (result.madeDefault) notify.success(t("{0} 已导入，并设为默认内核", name))
+      else if (result.alreadyInstalled) notify.info(t("{0} 已经导入过，没有重复添加", name))
+      else notify.success(t("{0} 已导入。已有窗口的内核不变，要用它请点“设为默认”或给窗口单独指定", name))
+    } catch (error) {
+      ws.fail(error)
+    }
+  }
+
   async function verify(version: string): Promise<void> {
     setChecking(version)
     try {
@@ -120,7 +135,7 @@ export function KernelsPage({ navigate }: PageProps) {
       dataIndex: 'version',
       render: (version: string) => (
         <span>
-          <span className="fb-mono">{version}</span>
+          <span className="fb-mono">{kernelName(version)}</span>
           {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已停用")}</Tag></Tooltip>}
         </span>
       )
@@ -160,7 +175,7 @@ export function KernelsPage({ navigate }: PageProps) {
               ? <Tag color="blue" className="fb-inline-tag">{t("默认")}</Tag>
               : (
                   <>
-                    <Button size="small" type="link" autoInsertSpace={false} onClick={() => void changeEngine(() => window.browserApi.engine.activate(kernel.version), () => t("已切换到内核 {0}", kernel.version))}>{t("设为默认")}</Button>
+                    <Button size="small" type="link" autoInsertSpace={false} onClick={() => void changeEngine(() => window.browserApi.engine.activate(kernel.version), () => t("已切换到内核 {0}", kernelName(kernel.version)))}>{t("设为默认")}</Button>
                     <Tooltip title={pinned ? t("还有 {0} 个窗口指定了这个内核，先给它们换内核", pinned) : kernel.origin === 'bundled' ? t("随应用内置的内核不能移除") : undefined}>
                       <Button size="small" type="link" danger autoInsertSpace={false} disabled={pinned > 0 || kernel.origin === 'bundled'} onClick={() => confirmRemove(kernel.version)}>{t("移除")}</Button>
                     </Tooltip>
@@ -209,7 +224,7 @@ export function KernelsPage({ navigate }: PageProps) {
         </div>
         <Space wrap className="fb-kernel-actions">
           <Button type="primary" icon={<CloudDownloadOutlined />} onClick={() => setDownloading(true)}>{t("在线下载内核")}</Button>
-          <Button icon={<FolderOpenOutlined />} onClick={() => void changeEngine(() => window.browserApi.engine.importLocal(), (version) => t("本地构建 {0} 已导入并启用", version ?? ''))}>{t("导入本地内核")}</Button>
+          <Button icon={<FolderOpenOutlined />} onClick={() => void importKernel()}>{t("导入本地内核")}</Button>
           <Button icon={<ReloadOutlined />} disabled={!defaultVersion} loading={checking === defaultVersion} onClick={() => defaultVersion && void verify(defaultVersion)}>{t("重新校验")}</Button>
           {rollbackAvailable && (
             <Button
@@ -304,7 +319,7 @@ export function KernelsPage({ navigate }: PageProps) {
         title={assignTo ? t("把窗口切换到 {0}", kernelName(assignTo)) : ''}
         windows={profiles.filter((profile) => profile.kernelVersion !== assignTo)}
         detailTitle={t("当前内核")}
-        detail={(window) => <span className="fb-mono fb-muted">{window.kernelVersion || t("跟随默认内核")}</span>}
+        detail={(window) => <span className="fb-mono fb-muted">{window.kernelVersion ? kernelName(window.kernelVersion) : t("跟随默认内核")}</span>}
         okText={t("切换")}
         busy={busy}
         onSubmit={(ids) => { if (assignTo) return pin(ids, assignTo) }}
@@ -313,10 +328,10 @@ export function KernelsPage({ navigate }: PageProps) {
       <DownloadKernelModal
         open={downloading}
         onClose={() => setDownloading(false)}
-        onInstalled={(status) => {
+        onInstalled={(status, version) => {
           ws.setEngine(status)
           void ws.reloadKernels()
-          notify.success(t("内核 {0} 已安装并设为默认", status.version ?? ''))
+          notify.success(t("内核 {0} 已安装", kernelName(version)))
         }}
       />
     </div>

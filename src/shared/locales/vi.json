@@ -2005,5 +2005,12 @@
   "旧的第三方内核，已不再支持，可以删除": "Nhân bên thứ ba cũ, không còn được hỗ trợ, có thể xóa",
   "我们自己编译的 Prism 内核，下载后会校验文件完整性再安装，并设为默认内核。": "Nhân Prism do chúng tôi tự biên dịch. Bản tải về được kiểm tra toàn vẹn trước khi cài đặt và đặt làm mặc định.",
   "导入本地 Prism 内核": "Nhập nhân Prism cục bộ",
-  "选择 Prism 内核": "Chọn nhân Prism"
+  "选择 Prism 内核": "Chọn nhân Prism",
+  "{0} 已导入，并设为默认内核": "Đã nhập {0} và đặt làm kernel mặc định",
+  "{0} 已经导入过，没有重复添加": "{0} đã được nhập trước đó, không thêm lại",
+  "{0} 已导入。已有窗口的内核不变，要用它请点“设为默认”或给窗口单独指定": "Đã nhập {0}. Kernel của các cửa sổ hiện có không đổi; bấm “Đặt làm mặc định” hoặc gán cho cửa sổ để dùng",
+  "内核 {0} 已安装": "Đã cài kernel {0}",
+  "下载": "Tải xuống",
+  "绑定的内核版本号无效": "Phiên bản kernel được gán không hợp lệ",
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "Thiếu chrome.dll cạnh chrome.exe, thư mục trình duyệt không đầy đủ: giải nén hết windows_x64.zip rồi chọn chrome.exe bên trong"
 }

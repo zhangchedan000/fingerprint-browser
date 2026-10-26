@@ -20,6 +20,7 @@ import { ProfileBackupManager } from './profile-backup'
 import { AppSessionTracker } from './app-session'
 import { migrateMacLegacyKernelSelection } from './browser-locator'
 import { WorkspaceMigrationManager } from './workspace-migration'
+import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
@@ -150,6 +151,14 @@ app.whenReady().then(async () => {
     (version) => profiles.kernelUsers(version),
     (input, init) => net.fetch(input as string, init)
   )
+  // Windows keep the kernel they were created with; changing the default only affects new ones.
+  profiles.setDefaultKernelResolver(() => defaultKernelId(settings, vaultPath))
+  try {
+    const pinning = await pinWindowsToCurrentKernel(profiles, settings, vaultPath)
+    if (pinning) logger.info('已把跟随默认内核的窗口固定到当前内核', pinning)
+  } catch (error) {
+    logger.error('固定窗口内核失败', error)
+  }
   const cookies = new CookieManager(profiles, settings, logger)
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)

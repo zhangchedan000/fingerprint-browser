@@ -1,3 +1,4 @@
+import { kernelName } from '../../../../shared/kernel-id'
 import { t, getLocale, translateMessage as mt } from '../../../../shared/i18n'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Collapse, Empty, Modal, Space, Spin, Tag, Typography, message as antdMessage } from 'antd'
@@ -122,7 +123,7 @@ function CrashDetail({ profileId, record }: { profileId: string; record: Browser
   const shownLog = log ? log.text : tail
   const report = [
     `${t("退出代码")}: ${exit.code} · ${t(exit.title)}`,
-    record.kernelVersion ? `${t("内核")}: ${record.kernelVersion}` : '',
+    record.kernelVersion ? `${t("内核")}: ${kernelName(record.kernelVersion)}` : '',
     record.reason ? `${t("崩溃原因")}: ${record.reason}` : '',
     record.args?.length ? `${t("启动参数")}:\n${record.args.join('\n')}` : '',
     shownLog ? `${t("日志")}:\n${shownLog}` : ''
@@ -138,7 +139,7 @@ function CrashDetail({ profileId, record }: { profileId: string; record: Browser
           {' · '}{t(exit.title)}
           <div><Typography.Text type="secondary">{t(exit.hint)}</Typography.Text></div>
         </dd>
-        {record.kernelVersion && (<><dt>{t("内核")}</dt><dd>{record.kernelVersion}</dd></>)}
+        {record.kernelVersion && (<><dt>{t("内核")}</dt><dd>{kernelName(record.kernelVersion)}</dd></>)}
         <dt>{t("崩溃原因")}</dt>
         <dd>
           {record.reason
