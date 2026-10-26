@@ -43,24 +43,6 @@ const COUNTRY_LOCALES: Record<string, { language: string; acceptLanguages: strin
   VN: { language: 'vi-VN', acceptLanguages: 'vi-VN,vi,en-US,en' }
 }
 
-// Chrome ships one Latin American Spanish UI locale (es-419) and serves Hong Kong and
-// Macau with zh-TW. Passing es-MX or zh-HK makes navigator.language disagree with the
-// locale Intl resolves to, so launch with the locale Chrome itself would pick.
-export function chromeUiLocale(language: string): string {
-  const [primary, ...rest] = language.trim().split(/[-_]/)
-  const lower = primary.toLowerCase()
-  const subtags = rest.map((part) => part.toUpperCase())
-  if (lower === 'es' && subtags.length && !subtags.includes('ES')) return 'es-419'
-  if (lower === 'zh' && (subtags.includes('HK') || subtags.includes('MO') || subtags.includes('HANT'))) return 'zh-TW'
-  return language
-}
-
-export function chromeAcceptLanguages(language: string, acceptLanguages: string): string {
-  const entries = acceptLanguages.split(',').map((entry) => chromeUiLocale(entry.trim())).filter(Boolean)
-  const ordered = [language, ...entries]
-  return ordered.filter((entry, index) => ordered.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) === index).join(',')
-}
-
 export function localeForCountry(countryCode: string | undefined): { language: string; acceptLanguages: string } | undefined {
   return countryCode ? COUNTRY_LOCALES[countryCode.toUpperCase()] : undefined
 }

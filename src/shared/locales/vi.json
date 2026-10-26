@@ -1250,10 +1250,5 @@
   "页面输入参数无效": "Tham số đầu vào trang không hợp lệ",
   "高风险：WebRTC 使用所有接口": "Rủi ro cao: WebRTC dùng tất cả giao diện mạng",
   "默认全部关闭，逐个授权": "Mặc định tắt tất cả, cấp quyền từng hồ sơ",
-  "默认关闭，按需启动": "Mặc định tắt, chỉ bật khi cần",
-  "替换（推荐）— 显示代理出口 IP": "Thay thế (khuyên dùng) — hiển thị IP đầu ra của proxy",
-  "防泄漏 — 禁止非代理 UDP": "Chống rò rỉ — chặn UDP không qua proxy",
-  "WebRTC 替换": "WebRTC thay thế",
-  "WebRTC 替换已开启": "Đã bật thay thế WebRTC",
-  "网页通过 WebRTC 只能看到代理出口 IP，本地地址显示为随机 .local 名称；真实网卡和公网 IP 不会暴露。未检测到代理出口 IPv4 时自动按防泄漏处理。": "Trang web qua WebRTC chỉ thấy IP đầu ra của proxy; địa chỉ cục bộ hiển thị dưới dạng tên .local ngẫu nhiên, card mạng thật và IP công khai không bị lộ. Nếu không phát hiện IPv4 đầu ra của proxy, chế độ chống rò rỉ sẽ được dùng."
+  "默认关闭，按需启动": "Mặc định tắt, chỉ bật khi cần"
 }

@@ -1250,10 +1250,5 @@
   "页面输入参数无效": "Paramètres de saisie sur la page non valides",
   "高风险：WebRTC 使用所有接口": "Risque élevé : WebRTC utilise toutes les interfaces",
   "默认全部关闭，逐个授权": "L’accès est désactivé par défaut. Autorisez chaque profil individuellement.",
-  "默认关闭，按需启动": "Désactivée par défaut, démarrage à la demande",
-  "替换（推荐）— 显示代理出口 IP": "Remplacer (recommandé) — afficher l’IP de sortie du proxy",
-  "防泄漏 — 禁止非代理 UDP": "Protection anti-fuite — bloquer l’UDP hors proxy",
-  "WebRTC 替换": "WebRTC remplacé",
-  "WebRTC 替换已开启": "Remplacement WebRTC activé",
-  "网页通过 WebRTC 只能看到代理出口 IP，本地地址显示为随机 .local 名称；真实网卡和公网 IP 不会暴露。未检测到代理出口 IPv4 时自动按防泄漏处理。": "Via WebRTC, les pages ne voient que l’IP de sortie du proxy ; les adresses locales apparaissent comme des noms .local aléatoires et les vraies cartes réseau et IP publiques ne sont jamais exposées. Si aucune IPv4 de sortie n’est détectée, la protection anti-fuite s’applique."
+  "默认关闭，按需启动": "Désactivée par défaut, démarrage à la demande"
 }

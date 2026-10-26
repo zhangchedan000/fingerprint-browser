@@ -246,7 +246,7 @@ describe('ProfileStore', () => {
     expect(repository.get('legacy-profile').serialNumber).toBe(1)
     expect(repository.get('legacy-profile').tags).toEqual([])
     expect(repository.get('legacy-profile').extensionIds).toEqual([])
-    expect(repository.get('legacy-profile').fingerprint.webrtcPolicy).toBe('replace')
+    expect(repository.get('legacy-profile').fingerprint.webrtcPolicy).toBe('proxy_only')
     expect(repository.get('legacy-profile').window.mode).toBe('auto')
     expect(repository.get('legacy-profile').favorite).toBe(false)
     expect(repository.get('legacy-profile').kernelVersion).toBe('')

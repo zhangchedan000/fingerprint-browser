@@ -680,11 +680,7 @@ export class BrowserLauncher {
           : profile.proxyCheck.geoConflict ?? '自动网络身份缺少国家、时区或坐标，请重新检测代理')
       }
     }
-    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy === 'replace') {
-      add('webrtc', 'WebRTC', 'pass', profile.proxyCheck?.ip
-        ? `WebRTC 显示代理出口 ${profile.proxyCheck.ip}，本地与真实地址不暴露`
-        : '启动时检测代理出口后由 WebRTC 显示；未取得公网 IPv4 时按防泄漏处理')
-    } else if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy !== 'proxy_only') {
+    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy !== 'proxy_only') {
       add('webrtc', 'WebRTC', 'warning', '当前兼容策略可能暴露代理之外的公网或本地地址')
     } else {
       add('webrtc', 'WebRTC', 'pass', '已启用非代理 UDP 防泄漏策略')

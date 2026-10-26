@@ -14,7 +14,7 @@ export type HardwareProfileId =
   | 'windows-11-rtx4060'
   | 'windows-11-rtx4070'
 export type ProxyProtocol = 'direct' | 'http' | 'https' | 'socks5'
-export type WebRtcPolicy = 'replace' | 'proxy_only' | 'public_only' | 'default'
+export type WebRtcPolicy = 'proxy_only' | 'public_only' | 'default'
 export type NetworkIdentityMode = 'manual' | 'proxy'
 export type ProxyExitPolicy = 'warn' | 'block'
 export type ProfileStatus = 'closed' | 'starting' | 'running' | 'stopping' | 'orphaned' | 'error'
