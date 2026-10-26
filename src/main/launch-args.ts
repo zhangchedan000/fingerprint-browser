@@ -3,7 +3,7 @@ import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu } fro
 import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
-import { effectiveNetworkIdentity } from '../shared/network-identity'
+import { chromeAcceptLanguages, chromeUiLocale, effectiveNetworkIdentity } from '../shared/network-identity'
 import { effectiveScreenSource } from '../shared/screen'
 
 export interface LaunchArgumentOptions {
@@ -28,6 +28,23 @@ export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' |
     .trim()
     .slice(0, 60) || '指纹浏览器环境'
   return `[${profile.serialNumber}] ${name}`
+}
+
+// Mirrors the kernel check: only a public IPv4 exit address is shown to pages.
+export function publicIpv4(value: string | undefined): string | undefined {
+  const match = value?.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!match) return undefined
+  const [a, b, c, d] = match.slice(1).map(Number)
+  if ([a, b, c, d].some((part) => part > 255)) return undefined
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return undefined
+  if (a === 100 && b >= 64 && b <= 127) return undefined
+  if (a === 169 && b === 254) return undefined
+  if (a === 172 && b >= 16 && b <= 31) return undefined
+  if (a === 192 && b === 168) return undefined
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return undefined
+  if (a === 198 && (b === 18 || b === 19)) return undefined
+  if ((a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)) return undefined
+  return `${a}.${b}.${c}.${d}`
 }
 
 export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgumentOptions): string[] {
@@ -57,6 +74,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     && Number.isInteger(options.hostScreen.width) && Number.isInteger(options.hostScreen.height)
   const screenWidth = followHost ? options.hostScreen!.width : fp.screenWidth
   const screenHeight = followHost ? options.hostScreen!.height : fp.screenHeight
+  const language = chromeUiLocale(networkIdentity.language)
+  const acceptLanguages = chromeAcceptLanguages(language, networkIdentity.acceptLanguages)
   const args = [
     `--user-data-dir=${options.userDataDir}`,
     `--fingerprint=${seed}`,
@@ -65,9 +84,9 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     `--fingerprint-hardware-concurrency=${hardwareConcurrency}`,
     `--fingerprint-screen-width=${screenWidth}`,
     `--fingerprint-screen-height=${screenHeight}`,
-    `--fingerprint-language=${networkIdentity.language}`,
-    `--lang=${networkIdentity.language}`,
-    `--accept-lang=${networkIdentity.acceptLanguages}`,
+    `--fingerprint-language=${language}`,
+    `--lang=${language}`,
+    `--accept-lang=${acceptLanguages}`,
     `--timezone=${networkIdentity.timezone}`,
     `--window-name=${profileWindowName(profile)}`,
     `--prism-profile-serial=${profile.serialNumber}`,
@@ -116,6 +135,10 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')
     args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+    // 替换: our kernels show the proxy's exit address to pages; without a public IPv4 exit
+    // WebRTC simply stays blocked.
+    const webrtcIp = publicIpv4(options.proxyIdentity?.ip)
+    if (webrtcIp) args.push(`--fingerprint-webrtc-ip=${webrtcIp}`)
   } else if (fp.webrtcPolicy === 'public_only') {
     args.push('--webrtc-ip-handling-policy=default_public_interface_only')
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultProfileDraft } from '../shared/defaults'
-import type { BrowserProfile } from '../shared/types'
-import { buildLaunchArgs } from './launch-args'
+import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
+import { buildLaunchArgs, publicIpv4 } from './launch-args'
 import { defaultHardwareProfileId } from '../shared/hardware-profiles'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
@@ -63,5 +63,36 @@ describe('launch arguments', () => {
     const big = profile({ deviceMemory: 32 })
     expect(buildLaunchArgs(big, { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' })).toContain('--fingerprint-device-memory=32')
     expect(buildLaunchArgs(big, { userDataDir: '/data', fingerprintKernel: true, engineVersion: '144.0.7559.132' })).toContain('--fingerprint-device-memory=8')
+  })
+
+  it('shows the public IPv4 proxy exit through WebRTC when set to 替换', () => {
+    const check = (ip: string): ProxyCheckSummary => ({ ok: true, ip, latencyMs: 10, checkedAt: '' })
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const args = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
+    expect(args).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+    expect(args).toContain('--fingerprint-webrtc-ip=203.45.6.7')
+    for (const ip of ['192.168.1.2', '10.0.0.1', '100.64.1.1', '2001:db8::1', 'bad']) {
+      const blocked = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check(ip) })
+      expect(blocked).toContain('--disable-non-proxied-udp')
+      expect(blocked.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
+    }
+    const other = buildLaunchArgs(profile({ webrtcPolicy: 'public_only' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
+    expect(other.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
+    expect(publicIpv4(' 8.8.4.4 ')).toBe('8.8.4.4')
+    expect(publicIpv4('172.20.0.1')).toBeUndefined()
+    expect(publicIpv4('256.1.1.1')).toBeUndefined()
+  })
+
+  it('launches with the UI locale Chrome resolves to', () => {
+    const mx = buildLaunchArgs(profile({ language: 'es-MX', acceptLanguages: 'es-MX,es,en-US,en' }), { userDataDir: '/data' })
+    expect(mx).toContain('--lang=es-419')
+    expect(mx).toContain('--fingerprint-language=es-419')
+    expect(mx).toContain('--accept-lang=es-419,es,en-US,en')
+    const hk = buildLaunchArgs(profile({ language: 'zh-HK', acceptLanguages: 'zh-HK,zh-TW,zh,en-US,en' }), { userDataDir: '/data' })
+    expect(hk).toContain('--lang=zh-TW')
+    expect(hk).toContain('--accept-lang=zh-TW,zh,en-US,en')
+    const es = buildLaunchArgs(profile({ language: 'es-ES', acceptLanguages: 'es-ES,es,en-US,en' }), { userDataDir: '/data' })
+    expect(es).toContain('--lang=es-ES')
+    expect(es).toContain('--accept-lang=es-ES,es,en-US,en')
   })
 })
