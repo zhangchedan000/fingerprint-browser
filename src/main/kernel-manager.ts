@@ -270,11 +270,9 @@ export class KernelManager {
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
     const { version, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
-    if (process.platform === 'win32' && !version.startsWith('prism-')) {
-      throw new Error('这不是 Prism 内核：只支持导入我们自己编译的 Prism 内核（prism-kernel 发布页的 zip 解压后的 chrome.exe）')
-    }
     const destination = this.kernelPath(version)
     const existing = await this.readManifest(version)
+    let replacing = false
     if (existing) {
       const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
       const sourceExecutableRelative = process.platform === 'darwin'
@@ -294,9 +292,10 @@ export class KernelManager {
         }
         return this.activate(version)
       }
-      throw new Error(`内核 ${version} 已存在且内容不同，请先切换并移除旧版本`)
+      // Same version, new build: the new files replace the installed ones.
+      replacing = true
     }
-    if (await pathExists(destination)) throw new Error(`内核目录 ${version} 已存在但缺少有效清单，请先人工检查`)
+    if (!replacing && await pathExists(destination)) throw new Error(`内核目录 ${version} 已存在但缺少有效清单，请先人工检查`)
 
     const kernelsPath = join(this.vaultPath, 'kernels')
     await mkdir(kernelsPath, { recursive: true })
@@ -330,7 +329,22 @@ export class KernelManager {
         target: `${process.platform}-${process.arch}`
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await rename(stagingPath, destination)
+      if (replacing) {
+        const retired = join(root, 'retired')
+        try {
+          await rename(destination, retired)
+        } catch {
+          throw new Error(`内核 ${version} 正在被打开的浏览器窗口使用，请先关闭所有窗口再导入`)
+        }
+        try {
+          await rename(stagingPath, destination)
+        } catch (error) {
+          await rename(retired, destination)
+          throw error
+        }
+      } else {
+        await rename(stagingPath, destination)
+      }
       await this.rememberPreviousKernel(join(destination, executableRelative))
       await this.settings.update({ browserExecutable: join(destination, executableRelative), fingerprintKernel: true, enginePreference: 'auto' })
       this.logger?.info('本地构建内核已导入并启用', { version, target: manifest.target })
@@ -672,10 +686,12 @@ export class KernelManager {
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
     const match = stdout.match(/\d+(?:\.\d+){3}/)
     if (!match) throw new Error('无法从 chrome.exe 读取四段式 Chromium 版本')
-    // A Prism build is recognised by the switch only our patches add (004-gpu-identity).
-    const prism = await isPrismBuild(dirname(executable), match[0])
+    // Every local Windows build is taken as a Prism-switch kernel. A build without our
+    // switch name still imports; it is only logged, since it may ignore the fingerprint switches.
+    const prism = process.platform !== 'win32' || await isPrismBuild(dirname(executable), match[0])
+    if (!prism) this.logger?.info('导入的内核里没找到 Prism 开关标记，指纹参数可能不生效', { executable })
     return {
-      version: safeVersion(prism ? `prism-${match[0]}` : match[0]),
+      version: safeVersion(process.platform === 'win32' ? `prism-${match[0]}` : match[0]),
       sourceRoot: dirname(executable),
       executableRelative: join('browser', 'chrome.exe')
     }
