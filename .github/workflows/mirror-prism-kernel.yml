@@ -1,0 +1,57 @@
+name: mirror-prism-kernel
+
+# The kernel build repository (zhangchedan000/prism-kernel) is private, so the app cannot download
+# from it. Every build listed in tools/prism-kernel-releases.json is copied here as a public
+# release "kernel-<build tag>" with the Windows zip, SHA256SUMS.txt and manifest.json; the app's
+# kernel manager lists those releases. Needs the secret PRISM_KERNEL_TOKEN: a fine-grained token
+# with read-only Contents access to prism-kernel.
+
+on:
+  push:
+    branches: [refactor-core, main]
+    paths:
+      - tools/prism-kernel-releases.json
+      - .github/workflows/mirror-prism-kernel.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy missing kernel releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TOKEN: ${{ secrets.PRISM_KERNEL_TOKEN }}
+          SOURCE_REPO: zhangchedan000/prism-kernel
+        run: |
+          set -euo pipefail
+          for tag in $(jq -r '.[]' tools/prism-kernel-releases.json); do
+            target="kernel-$tag"
+            if gh release view "$target" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "::notice::$target already published"
+              continue
+            fi
+            if [ -z "$SOURCE_TOKEN" ]; then
+              echo "::error::Secret PRISM_KERNEL_TOKEN is missing (read-only Contents access to $SOURCE_REPO)"
+              exit 1
+            fi
+            chromium="${tag%-prism*}"
+            zip="ungoogled-chromium_${chromium}-1.1_windows_x64.zip"
+            dir="download/$tag"
+            mkdir -p "$dir"
+            for name in "$zip" SHA256SUMS.txt manifest.json; do
+              id=$(GH_TOKEN="$SOURCE_TOKEN" gh api "repos/$SOURCE_REPO/releases/tags/$tag" --jq ".assets[] | select(.name==\"$name\") | .id")
+              if [ -z "$id" ]; then echo "::error::$tag has no asset $name"; exit 1; fi
+              GH_TOKEN="$SOURCE_TOKEN" gh api -H "Accept: application/octet-stream" "repos/$SOURCE_REPO/releases/assets/$id" > "$dir/$name"
+            done
+            (cd "$dir" && grep " ${zip}\$" SHA256SUMS.txt | sha256sum -c -)
+            gh release create "$target" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Prism 内核 $chromium (Windows x64)" \
+              --notes "Prism 指纹内核 Chromium $chromium（Windows x64），转存自私有编译仓库的 $tag 构建。软件“内核管理 → 下载内核”会自动列出；zip 的 SHA-256 见 SHA256SUMS.txt。" \
+              "$dir/$zip" "$dir/SHA256SUMS.txt" "$dir/manifest.json"
+            echo "::notice::published $target"
+          done

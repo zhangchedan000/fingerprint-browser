@@ -1,3 +1,4 @@
+import { isKernelId } from '../shared/kernel-id'
 import { app } from 'electron'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -62,7 +63,7 @@ export interface MacBundledKernelMigration {
 }
 
 function validKernelVersion(version: string): boolean {
-  return /^\d+(?:\.\d+){3}$/.test(version)
+  return isKernelId(version)
 }
 
 /** Resolve a profile-pinned managed kernel without ever falling back to another browser. */
@@ -121,7 +122,7 @@ export async function locateBrowserForProfile(
               fingerprintKernel: true,
               label: integrity.status === 'legacy'
                 ? 'Fingerprint Chromium（环境固定 · 旧版完整性清单）'
-                : 'Fingerprint Chromium（环境固定）',
+                : 'Prism 内核（环境固定）',
               version
             }
           }
@@ -183,7 +184,7 @@ export async function migrateMacLegacyKernelSelection(
 
 export function inferFingerprintKernelVersion(executable: string): string | undefined {
   const normalized = executable.replaceAll('\\', '/')
-  return normalized.match(/\/kernels\/(\d+(?:\.\d+){3})(?:\/|$)/)?.[1]
+  return normalized.match(/\/kernels\/((?:(?:clearcote|prism)-)?\d+(?:\.\d+){3}(?:-\d{12})?)(?:\/|$)/)?.[1]
 }
 
 export async function normalizeBrowserSelection(selection: string): Promise<string> {
@@ -277,7 +278,7 @@ export async function locateBrowserSelection(settings: AppSettings, resourcesPat
       executable: settings.browserExecutable,
       source: 'configured',
       fingerprintKernel: settings.fingerprintKernel,
-      label: settings.fingerprintKernel ? 'Fingerprint Chromium' : '自定义 Chromium（兼容模式）',
+      label: settings.fingerprintKernel ? 'Prism 内核' : '自定义 Chromium（兼容模式）',
       version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined
     }
   }

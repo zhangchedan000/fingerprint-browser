@@ -1,0 +1,52 @@
+name: Kernel smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernels:
+        description: "Kernel major versions, comma separated; 'clearcote' = newest Clearcote"
+        default: '144,148,150'
+      bisect:
+        description: "'' = normal, 1 = drop launch arguments one at a time, surface = seed only and one spoofing surface off at a time, seeds = app arguments with many seeds, args = a window's own arguments (ARGS)"
+        default: ''
+      args:
+        description: "For bisect=args: the window's launch arguments, separated by |"
+        default: ''
+      site_lang:
+        description: "bisect=sites: browser language for the page (e.g. es-MX)"
+        default: ''
+      use_proxy:
+        description: "'yes' = every window goes through the SMOKE_PROXY secret via the app's proxy bridge"
+        default: ''
+      urls:
+        description: Pages to open, comma separated
+        default: 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/'
+  push:
+    branches: [refactor-core]
+    paths: [tools/kernel-smoke/**, .github/workflows/kernel-smoke.yml]
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save playwright-core@1.48.2
+      - name: Open sites in each kernel
+        run: node tools/kernel-smoke/run.mjs
+        env:
+          KERNELS: ${{ inputs.kernels || '144,148,150' }}
+          URLS: ${{ inputs.urls || 'https://www.baidu.com,https://www.google.com,https://browserleaks.com/' }}
+          BISECT: ${{ inputs.bisect }}
+          SITE_LANG: ${{ inputs.site_lang }}
+          SITE_WAIT: '40000'
+          RECTS_FLAGS: ${{ inputs.args == 'flags' && '1' || '' }}
+          RECTS_SCALE: ${{ inputs.args == 'scale' && '1' || '' }}
+          PREFS_EXISTING: ${{ inputs.args == 'existing' && '1' || '' }}
+          ARGS: ${{ inputs.args }}
+          PROXY: ${{ inputs.use_proxy == 'yes' && secrets.SMOKE_PROXY || '' }}
+          GITHUB_TOKEN: ${{ github.token }}

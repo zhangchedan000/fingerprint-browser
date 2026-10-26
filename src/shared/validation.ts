@@ -1,5 +1,12 @@
-import { applyHardwareProfile, HARDWARE_PROFILES } from './hardware-profiles'
-import type { HardwareProfileId, ProfileDraft, ProxyConfig } from './types'
+import { isKernelId } from './kernel-id'
+import { isVoiceLocale } from './windows-voices'
+import { isMediaDevicesChoice, MEDIA_LOCALES } from './media-devices'
+import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
+import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
+import { findCpu } from './cpu-catalog'
+import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
+import { DEVICE_MEMORY_CHOICES } from './types'
+import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -13,7 +20,25 @@ export function normalizeUrl(value: string): string {
   return url.toString()
 }
 
-export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
+export const EMPTY_ACCOUNT: PlatformAccount = { platform: '', username: '', password: '' }
+
+export function validatePlatformAccount(input: PlatformAccount | undefined): PlatformAccount {
+  if (input === undefined || input === null) return { ...EMPTY_ACCOUNT }
+  if (typeof input !== 'object' || typeof input.platform !== 'string' || typeof input.username !== 'string'
+    || typeof input.password !== 'string') {
+    throw new Error('平台账号格式无效')
+  }
+  const platform = input.platform.trim()
+  const username = input.username.trim()
+  if (platform.length > 40) throw new Error('平台名称不能超过 40 个字符')
+  if (username.length > 200) throw new Error('平台账号不能超过 200 个字符')
+  if (input.password.length > 500) throw new Error('平台密码不能超过 500 个字符')
+  const account: PlatformAccount = { platform, username, password: input.password }
+  if (input.passwordStored === true) account.passwordStored = true
+  return account
+}
+
+export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { account: PlatformAccount } {
   if (!draft || !draft.fingerprint || !draft.proxy || !Array.isArray(draft.startUrls)) {
     throw new Error('浏览器环境配置不完整')
   }
@@ -40,13 +65,14 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
     throw new Error('环境扩展配置无效或超过 50 个')
   }
   const kernelVersion = draft.kernelVersion.trim()
-  if (kernelVersion && !/^\d+(?:\.\d+){3}$/.test(kernelVersion)) {
+  if (kernelVersion && !isKernelId(kernelVersion)) {
     throw new Error('绑定内核版本必须是四段数字，例如 144.0.7559.132')
   }
 
   const urls = draft.startUrls.map(normalizeUrl).filter(Boolean)
   if (urls.length > 50) throw new Error('启动页不能超过 50 个')
   const proxy = validateProxyConfig(draft.proxy)
+  const account = validatePlatformAccount(draft.account)
   const rawWindow = draft.window ?? { mode: 'auto', x: 0, y: 0, width: 1200, height: 800 }
   if (rawWindow.mode !== 'auto' && rawWindow.mode !== 'custom') throw new Error('浏览器窗口模式无效')
   const windowValues = [rawWindow.x, rawWindow.y, rawWindow.width, rawWindow.height]
@@ -62,7 +88,49 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   const hardwareProfileId = (rawFp.hardwareProfileId ?? 'legacy-custom') as HardwareProfileId
   const allowedHardwareProfiles = new Set<HardwareProfileId>(['legacy-custom', ...HARDWARE_PROFILES.map((profile) => profile.id)])
   if (!allowedHardwareProfiles.has(hardwareProfileId)) throw new Error('硬件模板无效')
-  const fp = applyHardwareProfile({ ...rawFp, hardwareProfileId }, hardwareProfileId)
+  const allowedOverrides = new Set(['screen', 'cores', 'platformVersion'])
+  if (rawFp.overrides !== undefined && (!Array.isArray(rawFp.overrides) || !rawFp.overrides.every((item) => allowedOverrides.has(item)))) {
+    throw new Error('指纹自定义项无效')
+  }
+  const overrides = [...new Set(rawFp.overrides ?? [])]
+  // Old saves kept a position in the 139–144 GPU list; keep the card it pointed at.
+  const legacyGpu = rawFp.gpu === undefined && Number.isInteger(rawFp.gpuBucket)
+    ? legacyBucketGpuKey(rawFp.gpuBucket!, rawFp.platform)
+    : undefined
+  const templated = applyHardwareProfile({ ...rawFp, gpu: rawFp.gpu ?? legacyGpu, hardwareProfileId }, hardwareProfileId)
+  // Hand-set values win over the template; everything else stays coherent with it.
+  // Seeded windows set every value on its own; only old fixed/host templates still own theirs.
+  const ownValues = (item: FingerprintOverride) => overrides.includes(item)
+    || hardwareProfile(hardwareProfileId)?.renderIdentityMode === 'seeded-curated'
+  const fp = {
+    ...templated,
+    screenWidth: ownValues('screen') ? rawFp.screenWidth ?? templated.screenWidth : templated.screenWidth,
+    screenHeight: ownValues('screen') ? rawFp.screenHeight ?? templated.screenHeight : templated.screenHeight,
+    hardwareConcurrency: ownValues('cores') ? rawFp.hardwareConcurrency ?? templated.hardwareConcurrency : templated.hardwareConcurrency,
+    platformVersion: ownValues('platformVersion') ? rawFp.platformVersion ?? templated.platformVersion : templated.platformVersion
+  }
+  if (rawFp.deviceMemory !== undefined && !DEVICE_MEMORY_CHOICES.includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4、8、16 或 32 GB')
+  const cpu = rawFp.cpu ? findCpu(rawFp.cpu) : undefined
+  if (rawFp.cpu && !cpu) throw new Error('不认识的 CPU 型号')
+  // A CPU and a different core count would describe no real machine; the CPU wins.
+  if (cpu && rawFp.coresSource !== 'host') fp.hardwareConcurrency = cpu.threads
+  if (rawFp.deviceName && (typeof rawFp.deviceName !== 'string' || !DEVICE_NAME_PATTERN.test(rawFp.deviceName.trim()))) {
+    throw new Error('设备名称只能包含字母、数字和连字符，最长 63 个字符')
+  }
+  if (rawFp.macAddress && (typeof rawFp.macAddress !== 'string' || !MAC_ADDRESS_PATTERN.test(rawFp.macAddress.trim()))) {
+    throw new Error('MAC 地址格式应为 7A:C5:6F:F2:C2:84')
+  }
+  const coresSource = rawFp.coresSource ?? 'profile'
+  if (coresSource !== 'profile' && coresSource !== 'host') throw new Error('CPU 核数来源无效')
+  if (rawFp.voicesLocale && !isVoiceLocale(rawFp.voicesLocale)) throw new Error('语音语言无效')
+  if (rawFp.mediaDevices && !isMediaDevicesChoice(rawFp.mediaDevices)) throw new Error('媒体设备设置无效')
+  if (rawFp.mediaLocale && !MEDIA_LOCALES.includes(rawFp.mediaLocale)) throw new Error('设备名称语言无效')
+  const screenSource = rawFp.screenSource ?? 'profile'
+  if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
+  const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
+  if (!['ask', 'allow', 'block'].includes(geolocationPermission)) throw new Error('地理位置权限无效')
+  const doNotTrack = rawFp.doNotTrack ?? 'default'
+  if (!['default', 'on', 'off'].includes(doNotTrack)) throw new Error('Do Not Track 设置无效')
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -72,13 +140,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (!Number.isInteger(fp.seed) || fp.seed < 0 || fp.seed > 0xffffffff) {
     throw new Error('指纹种子必须是 0–4294967295 的整数')
   }
-  if (fp.gpuBucket !== undefined && (
-    !Number.isInteger(fp.gpuBucket)
-    || fp.gpuBucket < 0
-    || fp.gpuBucket >= (HARDWARE_PROFILES.find((profile) => profile.id === fp.hardwareProfileId)?.gpuBucketCount ?? 0)
-  )) {
-    throw new Error('GPU 身份 bucket 无效')
-  }
+  if (fp.gpu !== undefined && typeof fp.gpu !== 'string') throw new Error('显卡型号无效')
+  // Cards of the removed upstream kernels (laptops, Apple, seeded tables) are dropped, not
+  // refused, so old windows still open; they then get a card from the Prism list.
+  if (fp.gpu !== undefined && !findKernelGpu(fp.gpu, fp.platform)) fp.gpu = undefined
   if (fp.renderIdentityVersion !== undefined
     && fp.renderIdentityVersion !== 1
     && fp.renderIdentityVersion !== 2
@@ -89,6 +154,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   if (!Number.isInteger(fp.screenWidth) || !Number.isInteger(fp.screenHeight) || fp.screenWidth < 800 || fp.screenHeight < 600) {
     throw new Error('屏幕分辨率不能小于 800×600')
   }
+  if (fp.screenWidth > 7680 || fp.screenHeight > 4320) throw new Error('屏幕分辨率不能超过 7680×4320')
   const textFields = [fp.language, fp.acceptLanguages, fp.timezone, fp.platformVersion, fp.brandVersion]
   if (!textFields.every((value) => typeof value === 'string')) throw new Error('指纹文本配置格式无效')
   if (!fp.language.trim() || !fp.acceptLanguages.trim() || !fp.timezone.trim()) {
@@ -139,10 +205,14 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       height: rawWindow.height
     },
     proxy,
+    account,
     fingerprint: {
       seed: fp.seed,
       hardwareProfileId: fp.hardwareProfileId,
-      gpuBucket: fp.gpuBucket,
+      ...(fp.gpu ? { gpu: fp.gpu } : {}),
+      ...(cpu && rawFp.coresSource !== 'host' ? { cpu: cpu.model } : {}),
+      ...(rawFp.deviceName ? { deviceName: rawFp.deviceName.trim() } : {}),
+      ...(rawFp.macAddress ? { macAddress: rawFp.macAddress.trim().toUpperCase() } : {}),
       renderIdentityVersion: fp.renderIdentityVersion,
       platform: fp.platform,
       language: fp.language.trim(),
@@ -157,7 +227,16 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
       hardwareConcurrency: fp.hardwareConcurrency,
       screenWidth: fp.screenWidth,
       screenHeight: fp.screenHeight,
-      disabledSpoofing: [...fp.disabledSpoofing]
+      disabledSpoofing: [...fp.disabledSpoofing],
+      ...(overrides.length ? { overrides } : {}),
+      ...(screenSource !== 'profile' ? { screenSource } : {}),
+      ...(coresSource !== 'profile' ? { coresSource } : {}),
+      ...(rawFp.deviceMemory !== undefined && rawFp.deviceMemory !== 8 ? { deviceMemory: rawFp.deviceMemory } : {}),
+      ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
+      ...(doNotTrack !== 'default' ? { doNotTrack } : {}),
+      ...(rawFp.voicesLocale ? { voicesLocale: rawFp.voicesLocale } : {}),
+      ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
+      ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {})
     }
   }
 }
@@ -200,4 +279,40 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   }
   if (proxy.username.length > 1024 || proxy.password.length > 2048) throw new Error('代理凭据长度超出限制')
   return proxy
+}
+
+/** A proxy added to or edited in the proxy library. */
+export function validateProxyDraft(input: ProxyDraft): ProxyDraft & { port: number; note: string } {
+  if (!input || typeof input !== 'object') throw new Error('代理配置不完整')
+  if (input.protocol as string === 'direct') throw new Error('代理库只保存代理，直连不需要添加')
+  const proxy = validateProxyConfig({ ...input, password: typeof input.password === 'string' ? input.password : '' })
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length > 200) throw new Error('代理备注不能超过 200 个字符')
+  return {
+    protocol: proxy.protocol as ProxyDraft['protocol'],
+    host: proxy.host,
+    port: proxy.port!,
+    username: proxy.username,
+    password: proxy.password,
+    ...(proxy.passwordStored ? { passwordStored: true } : {}),
+    note
+  }
+}
+
+export function validateGroupName(input: unknown): string {
+  if (typeof input !== 'string') throw new Error('分组名称格式无效')
+  const name = input.trim()
+  if (!name) throw new Error('分组名称不能为空')
+  if (name.length > 40) throw new Error('环境分组不能超过 40 个字符')
+  return name
+}
+
+export function validateGroupDraft(input: GroupDraft): { name: string; color?: string; note: string } {
+  if (!input || typeof input !== 'object') throw new Error('分组名称格式无效')
+  const name = validateGroupName(input.name)
+  const color = typeof input.color === 'string' && input.color.trim() ? input.color.trim() : undefined
+  if (color && !/^#[\da-f]{6}$/i.test(color)) throw new Error('分组颜色必须是六位十六进制颜色')
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length > 200) throw new Error('分组备注不能超过 200 个字符')
+  return { name, ...(color ? { color } : {}), note }
 }

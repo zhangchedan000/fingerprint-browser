@@ -81,7 +81,63 @@ function normalizeCookie(input: CookieInput, index: number): PortableCookie {
   }
 }
 
+/**
+ * Reads cookies in any of the formats people usually have:
+ * - JSON: an array from Cookie-Editor / EditThisCookie, or this app's own export file;
+ * - Netscape cookies.txt: one cookie per line, 7 tab-separated fields (curl, yt-dlp, many tools);
+ * - a request header "name=value; name2=value2", with the site's address on the first line.
+ */
 export function parseCookieFile(raw: string): PortableCookie[] {
+  const text = raw.replace(/^\uFEFF/, '').trim()
+  if (!text) throw new Error('没有可导入的 Cookie')
+  if (text.startsWith('[') || text.startsWith('{')) return parseCookieJson(text)
+  if (text.split(/\r?\n/).some((line) => line.split('\t').length >= 7)) return parseNetscape(text)
+  return parseCookieHeader(text)
+}
+
+function parseNetscape(text: string): PortableCookie[] {
+  const cookies: CookieInput[] = []
+  for (const rawLine of text.split(/\r?\n/)) {
+    const httpOnly = rawLine.startsWith('#HttpOnly_')
+    const line = httpOnly ? rawLine.slice('#HttpOnly_'.length) : rawLine
+    if (!line.trim() || line.startsWith('#')) continue
+    const fields = line.split('\t')
+    if (fields.length < 7) throw new Error(`Netscape Cookie 第 ${cookies.length + 1} 条字段不足 7 列`)
+    const [domain, , path, secure, expires, name, ...valueParts] = fields
+    cookies.push({
+      domain,
+      path,
+      secure: secure.toUpperCase() === 'TRUE',
+      httpOnly,
+      name,
+      value: valueParts.join('\t'),
+      expires: Number(expires) > 0 ? Number(expires) : undefined,
+      session: !(Number(expires) > 0)
+    })
+  }
+  if (!cookies.length) throw new Error('没有可导入的 Cookie')
+  if (cookies.length > 10_000) throw new Error('单次最多导入 10000 条 Cookie')
+  return cookies.map((cookie, index) => normalizeCookie(cookie, index))
+}
+
+function parseCookieHeader(text: string): PortableCookie[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const first = lines[0] ?? ''
+  const site = /^https?:\/\//i.test(first) ? first : /^[a-z0-9.-]+\.[a-z]{2,}\/?$/i.test(first) ? `https://${first.replace(/\/$/, '')}` : ''
+  const header = (site ? lines.slice(1) : lines).join('; ').replace(/^cookie:\s*/i, '')
+  const pairs = header.split(';').map((part) => part.trim()).filter(Boolean)
+  if (!pairs.length || !pairs.every((pair) => pair.includes('=') && pair.indexOf('=') > 0)) {
+    throw new Error('无法识别 Cookie 格式：请粘贴 JSON、Netscape 文本，或“name=value; …”格式')
+  }
+  if (!site) throw new Error('name=value 格式的 Cookie 需要在第一行写上网站地址，例如 https://www.tiktok.com')
+  const url = new URL(site)
+  return pairs.map((pair, index) => {
+    const at = pair.indexOf('=')
+    return normalizeCookie({ name: pair.slice(0, at).trim(), value: pair.slice(at + 1).trim(), url: url.origin, secure: url.protocol === 'https:' }, index)
+  })
+}
+
+function parseCookieJson(raw: string): PortableCookie[] {
   let value: unknown
   try {
     value = JSON.parse(raw)
@@ -93,7 +149,7 @@ export function parseCookieFile(raw: string): PortableCookie[] {
     : value && typeof value === 'object' && Array.isArray((value as Partial<PrismCookieFile>).cookies)
       ? (value as Partial<PrismCookieFile>).cookies!
       : undefined
-  if (!source) throw new Error('Cookie 文件必须是数组或 Prism Cookie 导出文件')
+  if (!source) throw new Error('Cookie 文件必须是数组或指纹浏览器 Cookie 导出文件')
   if (source.length > 10_000) throw new Error('单次最多导入 10000 条 Cookie')
   return source.map((cookie, index) => {
     if (!cookie || typeof cookie !== 'object') throw new Error(`第 ${index + 1} 条 Cookie 格式无效`)

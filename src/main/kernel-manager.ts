@@ -1,12 +1,13 @@
+import { isKernelId, kernelBuildId, kernelChromiumVersion } from '../shared/kernel-id'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { access, copyFile, cp, link, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Readable, Transform } from 'node:stream'
 import { promisify } from 'node:util'
-import type { EngineStatus, KernelHealth, KernelInstallProgress, KernelRelease } from '../shared/types'
+import type { EngineStatus, KernelHealth, KernelImportResult, KernelInstallProgress, KernelRelease } from '../shared/types'
 import { locateBrowser, locateBrowserSelection, normalizeBrowserSelection } from './browser-locator'
 import {
   collectKernelIntegrity,
@@ -16,27 +17,17 @@ import {
   type KernelIntegrityFields
 } from './kernel-integrity'
 import type { SettingsStore } from './settings-store'
+import { checksumFor, isSourceDownloadUrl, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
-import { kernelRequiresPro } from '../shared/kernel-policy'
 
 const execFileAsync = promisify(execFile)
-const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
-
-interface GithubAsset {
-  name: string
-  size: number
-  browser_download_url: string
-  digest: string | null
-}
-
-interface GithubRelease {
-  tag_name: string
-  published_at: string
-  draft: boolean
-  prerelease: boolean
-  assets: GithubAsset[]
-}
+/**
+ * Windows kernels are listed from the GitHub projects in settings.kernelSources (this app's own
+ * repository by default, where each Prism build is published as "kernel-<chromium>-prismN").
+ */
+const releasesUrl = (source: string) => `https://api.github.com/repos/${source}/releases?per_page=30`
 
 interface InstalledKernelManifest extends KernelIntegrityFields {
   schemaVersion?: 1 | 2
@@ -49,6 +40,10 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   executableSize?: number
   source?: 'release' | 'local-build'
   target?: string
+  /** Downloads: the GitHub project and release the build came from, and when it was published. */
+  sourceRepo?: string
+  releaseTag?: string
+  publishedAt?: string
 }
 
 interface KernelActivationBackup {
@@ -57,15 +52,34 @@ interface KernelActivationBackup {
   settings: AppSettings
 }
 
-function supportedAsset(assets: GithubAsset[]): GithubAsset | undefined {
-  if (process.platform === 'darwin') return assets.find((asset) => asset.name.endsWith('_macos.dmg'))
-  if (process.platform === 'win32') return assets.find((asset) => asset.name.endsWith('_windows_x64.zip'))
-  return undefined
+function safeVersion(version: string): string {
+  if (!isKernelId(version)) throw new Error('内核版本号无效')
+  return version
 }
 
-function safeVersion(version: string): string {
-  if (!/^\d+(?:\.\d+){3}$/.test(version)) throw new Error('内核版本号无效')
-  return version
+const PRISM_MARKER = Buffer.from('fingerprint-gpu-description')
+
+/** Whether a file contains `needle`, read in chunks (chrome.dll is a few hundred MB). */
+async function fileContains(path: string, needle: Buffer): Promise<boolean> {
+  let tail = Buffer.alloc(0)
+  try {
+    for await (const chunk of createReadStream(path, { highWaterMark: 4 * 1024 * 1024 })) {
+      const window = Buffer.concat([tail, chunk as Buffer])
+      if (window.includes(needle)) return true
+      tail = window.subarray(Math.max(0, window.length - needle.length + 1))
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+/** chrome.dll sits next to chrome.exe in packaged builds and in a version folder in installed ones. */
+async function isPrismBuild(browserRoot: string, chromiumVersion: string): Promise<boolean> {
+  for (const dll of [join(browserRoot, 'chrome.dll'), join(browserRoot, chromiumVersion, 'chrome.dll')]) {
+    if (await pathExists(dll)) return fileContains(dll, PRISM_MARKER)
+  }
+  return false
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -93,25 +107,16 @@ async function findEntry(root: string, predicate: (name: string) => boolean, dep
 export class KernelManager {
   private installingVersion: string | null = null
   private installAbort: AbortController | null = null
-  private canUseProKernel: () => boolean = () => true
 
   constructor(
     private readonly vaultPath: string,
     private readonly settings: SettingsStore,
     private readonly onProgress: (progress: KernelInstallProgress) => void,
     private readonly logger?: Logger,
-    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => []
+    private readonly kernelUsers: (version: string) => string[] | Promise<string[]> = () => [],
+    /** Electron passes net.fetch so downloads follow the system proxy. */
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init)
   ) {}
-
-  setProKernelAccessCheck(check: () => boolean): void {
-    this.canUseProKernel = check
-  }
-
-  private assertKernelEntitlement(version: string): void {
-    if (kernelRequiresPro(version) && !this.canUseProKernel()) {
-      throw new Error(`Chromium ${version} 是 Prism Pro 内核，请先激活 Pro`)
-    }
-  }
 
   async installed(): Promise<KernelRelease[]> {
     const manifests = await this.installedManifests()
@@ -137,47 +142,66 @@ export class KernelManager {
   }
 
   async releases(): Promise<KernelRelease[]> {
-    if (process.platform !== 'darwin' && process.platform !== 'win32') {
-      throw new Error('当前只支持自动安装 macOS 和 Windows 内核')
-    }
+    if (process.platform !== 'win32') throw new Error('Prism 内核目前只有 Windows 版')
     const installed = await this.installedManifests()
-    let releases: GithubRelease[]
-    try {
-      const response = await fetch(RELEASES_URL, {
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'Prism-Browser/0.1' },
-        signal: AbortSignal.timeout(15_000)
-      })
-      if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
-      releases = await response.json() as GithubRelease[]
-    } catch (error) {
-      if (installed.size === 0) throw error
-      this.logger?.error('获取远程内核版本失败，展示本地版本', error)
-      releases = []
-    }
+    const sources = this.settings.get().kernelSources
+    const listed = await Promise.all(sources.map(async (source) => {
+      try {
+        return { candidates: releaseCandidates(source, await this.fetchReleases(releasesUrl(source))) }
+      } catch (error) {
+        this.logger?.error('获取内核版本失败', { source, error: error instanceof Error ? error.message : String(error) })
+        return { candidates: [], error: `${source}：${error instanceof Error ? error.message : String(error)}` }
+      }
+    }))
+    const failures = listed.flatMap((item) => item.error ? [item.error] : [])
+    if (sources.length && failures.length === sources.length && installed.size === 0) throw new Error(failures.join('；'))
 
-    const remote = releases
-      .filter((release) => !release.draft && !release.prerelease)
-      .flatMap((release) => {
-        const asset = supportedAsset(release.assets)
-        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
-        if (!asset || !digest) return []
-        const manifest = installed.get(release.tag_name)
-        return [{
-          version: release.tag_name,
-          publishedAt: release.published_at,
-          assetName: asset.name,
-          downloadUrl: asset.browser_download_url,
-          size: asset.size,
-          sha256: digest,
-          installed: Boolean(manifest),
-          remoteAvailable: true,
-          origin: manifest?.source ?? 'release',
-          executable: manifest ? join(this.kernelPath(release.tag_name), manifest.executableRelative) : undefined
-        } satisfies KernelRelease]
+    const withSha: Array<ReleaseCandidate & { sha256: string }> = []
+    for (const candidate of listed.flatMap((item) => item.candidates)) {
+      const sha256 = candidate.sha256 || await this.checksumFromFile(candidate)
+      if (sha256) withSha.push({ ...candidate, sha256 })
+    }
+    const rows = planKernelRows([...installed.values()].map((manifest) => ({
+      version: manifest.version,
+      chromium: kernelChromiumVersion(manifest.version),
+      sha256: manifest.sha256.toLowerCase(),
+      sourceRepo: manifest.sourceRepo,
+      builtAt: manifest.publishedAt ?? manifest.installedAt
+    })), withSha)
+    const used = new Set<string>()
+    const remote: KernelRelease[] = []
+    for (const row of rows) {
+      const { release } = row
+      let version = row.kind === 'new' ? `prism-${release.chromium}` : row.installed.version
+      if (row.kind === 'new') {
+        // Another build of a version that is installed from elsewhere gets its publish time as a suffix.
+        const at = new Date(release.publishedAt)
+        while (used.has(version) || installed.has(version)) {
+          version = kernelBuildId(`prism-${release.chromium}`, at)
+          at.setMinutes(at.getMinutes() + 1)
+        }
+      }
+      if (!isKernelId(version) || used.has(version)) continue
+      used.add(version)
+      const manifest = installed.get(version)
+      remote.push({
+        version,
+        publishedAt: release.publishedAt,
+        assetName: release.asset.name,
+        downloadUrl: release.asset.browser_download_url,
+        size: release.asset.size,
+        sha256: release.sha256,
+        installed: Boolean(manifest),
+        remoteAvailable: true,
+        origin: manifest?.source ?? 'release',
+        executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
+        source: release.source,
+        tag: release.tag,
+        ...(row.kind === 'update' ? { update: true } : {})
       })
-    const remoteVersions = new Set(remote.map((release) => release.version))
+    }
     const localOnly = [...installed.values()]
-      .filter((manifest) => !remoteVersions.has(manifest.version))
+      .filter((manifest) => !used.has(manifest.version))
       .map((manifest) => ({
         version: manifest.version,
         publishedAt: manifest.installedAt,
@@ -193,14 +217,42 @@ export class KernelManager {
     return [...remote, ...localOnly]
   }
 
+  sources(): string[] {
+    return this.settings.get().kernelSources
+  }
+
+  async setSources(input: string[]): Promise<string[]> {
+    return (await this.settings.update({ kernelSources: validKernelSources(input) })).kernelSources
+  }
+
+  private async checksumFromFile(candidate: ReleaseCandidate): Promise<string> {
+    if (!candidate.checksumAsset || candidate.checksumAsset.size > 64 * 1024) return ''
+    try {
+      const response = await this.fetchImpl(candidate.checksumAsset.browser_download_url, { signal: AbortSignal.timeout(15_000) })
+      return response.ok ? checksumFor(await response.text(), candidate.asset.name) ?? '' : ''
+    } catch {
+      return ''
+    }
+  }
+
+  private async fetchReleases(url: string): Promise<GithubRelease[]> {
+    const response = await this.fetchImpl(url, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
+      signal: AbortSignal.timeout(15_000)
+    })
+    if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
+    return await response.json() as GithubRelease[]
+  }
+
   async install(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
-    this.assertKernelEntitlement(version)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const existing = await this.readManifest(version)
-    if (existing) return this.activate(version)
-
     const release = (await this.releases()).find((item) => item.version === version)
+    if (existing && !release?.update) {
+      await this.makeDefaultIfNone(version)
+      return locateBrowser(this.settings)
+    }
     if (!release) throw new Error('没有找到适用于当前系统的内核发行包')
     this.validateRelease(release)
     this.installingVersion = version
@@ -214,19 +266,13 @@ export class KernelManager {
     try {
       await this.assertDownloadSpace(downloadsPath, archivePath, release.size)
       await this.download(release, archivePath)
-      this.emit(release, 'installing', release.size, release.size, '正在安装浏览器内核…')
-      const manifest = process.platform === 'darwin'
-        ? await this.installMac(release, archivePath)
-        : await this.installWindows(release, archivePath)
+      this.emit(release, 'installing', release.size, release.size, release.update ? '正在更新浏览器内核…' : '正在安装浏览器内核…')
+      if (process.platform === 'darwin') await this.installMac(release, archivePath)
+      else await this.installWindows(release, archivePath)
       await rm(archivePath, { force: true })
-      await this.rememberPreviousKernel(join(this.kernelPath(version), manifest.executableRelative))
-      await this.settings.update({
-        browserExecutable: join(this.kernelPath(version), manifest.executableRelative),
-        fingerprintKernel: true,
-        enginePreference: 'auto'
-      })
+      await this.makeDefaultIfNone(version)
       this.logger?.info('浏览器内核安装完成', { version })
-      this.emit(release, 'ready', release.size, release.size, '内核安装完成')
+      this.emit(release, 'ready', release.size, release.size, release.update ? '内核已更新，使用它的窗口下次启动即用新版' : '内核安装完成')
       return locateBrowser(this.settings)
     } catch (error) {
       const cancelled = this.installAbort.signal.aborted
@@ -239,38 +285,53 @@ export class KernelManager {
     }
   }
 
-  async importLocal(selection: string): Promise<EngineStatus> {
+  /**
+   * Adds a local build to the installed kernels. It never takes over the default kernel (windows
+   * that follow the default would silently change kernel); it only becomes the default when there
+   * is no fingerprint kernel to fall back to. A second, different build of an installed version is
+   * kept side by side under an id with the import time.
+   */
+  async importLocal(selection: string): Promise<KernelImportResult> {
     if (process.platform !== 'darwin' && process.platform !== 'win32') {
       throw new Error('当前只支持导入 macOS 和 Windows 本地内核')
     }
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
-    const { version, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
-    this.assertKernelEntitlement(version)
-    const destination = this.kernelPath(version)
-    const existing = await this.readManifest(version)
-    if (existing) {
-      const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
-      const sourceExecutableRelative = process.platform === 'darwin'
-        ? join(basename(sourceRoot), 'Contents', 'MacOS', basename(executable))
-        : basename(executable)
-      const [existingIntegrity, sourceIntegrity] = await Promise.all([
-        collectKernelIntegrity(destination, existing.executableRelative),
-        collectKernelIntegrity(sourceIntegrityRoot, sourceExecutableRelative)
-      ])
-      if (existing.source === 'local-build'
-        && kernelPayloadIdentity(existingIntegrity, existing.executableRelative)
-          === kernelPayloadIdentity(sourceIntegrity, sourceExecutableRelative)) {
-        if (!existing.criticalFiles || !existing.criticalFilesSha256) {
-          const upgraded: InstalledKernelManifest = { ...existing, schemaVersion: 2, ...existingIntegrity }
-          await writeFile(join(destination, 'manifest.json'), JSON.stringify(upgraded, null, 2), { mode: 0o600 })
-          this.logger?.info('本地内核完整性清单已升级', { version, files: existingIntegrity.criticalFiles.length })
-        }
-        return this.activate(version)
+    const { version: baseVersion, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
+    const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
+    const sourceExecutableRelative = process.platform === 'darwin'
+      ? join(basename(sourceRoot), 'Contents', 'MacOS', basename(executable))
+      : basename(executable)
+    const sourceIdentity = kernelPayloadIdentity(
+      await collectKernelIntegrity(sourceIntegrityRoot, sourceExecutableRelative),
+      sourceExecutableRelative
+    )
+
+    // The same build imported again: keep the installed copy.
+    for (const [id, existing] of await this.installedManifests()) {
+      if (id !== baseVersion && !id.startsWith(`${baseVersion}-`)) continue
+      if (existing.source !== 'local-build') continue
+      const existingIntegrity = await collectKernelIntegrity(this.kernelPath(id), existing.executableRelative)
+      if (kernelPayloadIdentity(existingIntegrity, existing.executableRelative) !== sourceIdentity) continue
+      if (!existing.criticalFiles || !existing.criticalFilesSha256) {
+        const upgraded: InstalledKernelManifest = { ...existing, schemaVersion: 2, ...existingIntegrity }
+        await writeFile(join(this.kernelPath(id), 'manifest.json'), JSON.stringify(upgraded, null, 2), { mode: 0o600 })
+        this.logger?.info('本地内核完整性清单已升级', { version: id, files: existingIntegrity.criticalFiles.length })
       }
-      throw new Error(`内核 ${version} 已存在且内容不同，请先切换并移除旧版本`)
+      const madeDefault = await this.makeDefaultIfNone(id)
+      return { version: id, alreadyInstalled: true, madeDefault, engine: await locateBrowser(this.settings) }
     }
-    if (await pathExists(destination)) throw new Error(`内核目录 ${version} 已存在但缺少有效清单，请先人工检查`)
+
+    let version = baseVersion
+    if (await pathExists(this.kernelPath(version))) {
+      const at = new Date()
+      version = safeVersion(kernelBuildId(baseVersion, at))
+      while (await pathExists(this.kernelPath(version))) {
+        at.setMinutes(at.getMinutes() + 1)
+        version = safeVersion(kernelBuildId(baseVersion, at))
+      }
+    }
+    const destination = this.kernelPath(version)
 
     const kernelsPath = join(this.vaultPath, 'kernels')
     await mkdir(kernelsPath, { recursive: true })
@@ -305,13 +366,20 @@ export class KernelManager {
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
       await rename(stagingPath, destination)
-      await this.rememberPreviousKernel(join(destination, executableRelative))
-      await this.settings.update({ browserExecutable: join(destination, executableRelative), fingerprintKernel: true, enginePreference: 'auto' })
-      this.logger?.info('本地构建内核已导入并启用', { version, target: manifest.target })
-      return locateBrowser(this.settings)
+      const madeDefault = await this.makeDefaultIfNone(version)
+      this.logger?.info('本地构建内核已导入', { version, target: manifest.target, madeDefault })
+      return { version, alreadyInstalled: false, madeDefault, engine: await locateBrowser(this.settings) }
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  }
+
+  /** Makes `version` the default only when no fingerprint kernel is usable as the default now. */
+  private async makeDefaultIfNone(version: string): Promise<boolean> {
+    const current = await locateBrowser(this.settings)
+    if (current.executable && current.fingerprintKernel) return false
+    await this.activate(version)
+    return true
   }
 
   cancel(versionInput: string): void {
@@ -322,7 +390,6 @@ export class KernelManager {
 
   async activate(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
-    this.assertKernelEntitlement(version)
     const manifest = await this.readManifest(version)
     if (!manifest) throw new Error('该内核尚未安装')
     const executable = join(this.kernelPath(version), manifest.executableRelative)
@@ -338,7 +405,6 @@ export class KernelManager {
   async configure(patch: Pick<AppSettings, 'browserExecutable' | 'fingerprintKernel' | 'enginePreference'>, resolvedExecutable = patch.browserExecutable): Promise<EngineStatus> {
     if (patch.fingerprintKernel && resolvedExecutable) {
       const { version } = await this.inspectLocalBuild(resolvedExecutable)
-      this.assertKernelEntitlement(version)
     }
     await this.rememberPreviousKernel(resolvedExecutable)
     await this.settings.update(patch)
@@ -380,14 +446,14 @@ export class KernelManager {
     const checkedAt = new Date().toISOString()
     try {
       const manifest = await this.readManifest(version)
-      if (!manifest) return { version, status: 'corrupt', message: '内核文件不完整，请重新导入或安装新版 Prism Browser', checkedAt }
+      if (!manifest) return { version, status: 'corrupt', message: '内核文件不完整，请重新导入或安装新版指纹浏览器', checkedAt }
       const executable = join(this.kernelPath(version), manifest.executableRelative)
       const info = await stat(executable)
-      if (!info.isFile() || info.size <= 0) return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+      if (!info.isFile() || info.size <= 0) return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       const integrity = await verifyKernelIntegrity(this.kernelPath(version), manifest.executableRelative, manifest)
       if (integrity.status === 'corrupt') {
         this.logger?.error('浏览器内核完整性检查失败', { version, reason: integrity.reason })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
       if (integrity.status === 'healthy') {
         return {
@@ -399,18 +465,18 @@ export class KernelManager {
       }
       if (!manifest.executableSha256 || !manifest.executableSize) {
         this.logger?.info('浏览器内核无法完成完整性检查', { version, reason: integrity.reason })
-        return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版指纹浏览器', checkedAt }
       }
       if (info.size !== manifest.executableSize) {
         this.logger?.error('浏览器内核入口大小异常', { version, expected: manifest.executableSize, actual: info.size })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
       const actual = await this.hashFile(executable)
       if (actual !== manifest.executableSha256) {
         this.logger?.error('浏览器内核入口摘要与安装记录不一致', { version })
-        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版 Prism Browser', checkedAt }
+        return { version, status: 'corrupt', message: '内核文件已损坏，请重新导入或安装新版指纹浏览器', checkedAt }
       }
-      return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版 Prism Browser', checkedAt }
+      return { version, status: 'unverified', message: '当前内核无法完成完整检查，建议重新导入或安装新版指纹浏览器', checkedAt }
     } catch (error) {
       return { version, status: 'corrupt', message: error instanceof Error ? error.message : String(error), checkedAt }
     }
@@ -486,10 +552,10 @@ export class KernelManager {
     }
     const headers: Record<string, string> = {
       accept: 'application/octet-stream',
-      'user-agent': 'Prism-Browser/0.1'
+      'user-agent': 'Fingerprint-Browser/0.1'
     }
     if (existingBytes > 0 && existingBytes < release.size) headers.range = `bytes=${existingBytes}-`
-    const response = await fetch(release.downloadUrl, {
+    const response = await this.fetchImpl(release.downloadUrl, {
       headers,
       redirect: 'follow',
       signal: AbortSignal.any([AbortSignal.timeout(15 * 60_000), this.installAbort?.signal ?? new AbortController().signal])
@@ -567,7 +633,7 @@ export class KernelManager {
       if (!await pathExists(executable)) throw new Error('Chromium.app 内缺少可执行文件')
       const manifest = await this.createManifest(release, stagingPath, relative(stagingPath, executable))
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await rename(stagingPath, this.kernelPath(release.version))
+      await this.replaceKernelFolder(stagingPath, release.version)
       return manifest
     } finally {
       if (mounted) await execFileAsync('hdiutil', ['detach', mountPath, '-force']).catch(() => undefined)
@@ -581,8 +647,21 @@ export class KernelManager {
     const stagingPath = join(root, 'staging')
     await Promise.all([mkdir(extracted), mkdir(stagingPath)])
     try {
-      const command = `Expand-Archive -LiteralPath '${archivePath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force`
-      await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
+      // Expand-Archive refuses any file not named *.zip, and the download keeps its .download suffix
+      // so an interrupted install can still resume it: extract from a .zip-named link or copy instead.
+      const zipPath = join(root, 'kernel.zip')
+      await link(archivePath, zipPath).catch(() => copyFile(archivePath, zipPath))
+      const command = [
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+        "$ProgressPreference = 'SilentlyContinue'",
+        `Expand-Archive -LiteralPath '${zipPath.replaceAll("'", "''")}' -DestinationPath '${extracted.replaceAll("'", "''")}' -Force -ErrorAction Stop`
+      ].join('; ')
+      try {
+        await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { maxBuffer: 16 * 1024 * 1024 })
+      } catch (error) {
+        const detail = (error as { stderr?: string }).stderr?.trim().split(/\r?\n/)[0]
+        throw new Error(`解压内核失败${detail ? `：${detail}` : ''}`)
+      }
       const chrome = await findEntry(extracted, (name) => name.toLowerCase() === 'chrome.exe')
       if (!chrome) throw new Error('ZIP 中没有找到 chrome.exe')
       const browserPath = join(stagingPath, 'browser')
@@ -590,11 +669,29 @@ export class KernelManager {
       const executable = join(browserPath, 'chrome.exe')
       const manifest = await this.createManifest(release, stagingPath, relative(stagingPath, executable))
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await rename(stagingPath, this.kernelPath(release.version))
+      await this.replaceKernelFolder(stagingPath, release.version)
       return manifest
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  }
+
+  /** Moves a staged kernel into place; an installed one is kept aside until the new one is in. */
+  private async replaceKernelFolder(staging: string, version: string): Promise<void> {
+    const target = this.kernelPath(version)
+    if (!await pathExists(target)) {
+      await rename(staging, target)
+      return
+    }
+    const previous = `${target}.old-${Date.now()}`
+    await rename(target, previous)
+    try {
+      await rename(staging, target)
+    } catch (error) {
+      await rename(previous, target).catch(() => undefined)
+      throw error
+    }
+    await rm(previous, { recursive: true, force: true })
   }
 
   private async createManifest(release: KernelRelease, root: string, executableRelative: string): Promise<InstalledKernelManifest> {
@@ -612,7 +709,10 @@ export class KernelManager {
       executableSize: executableInfo.size,
       ...integrity,
       source: 'release',
-      target: `${process.platform}-${process.arch}`
+      target: `${process.platform}-${process.arch}`,
+      ...(release.source ? { sourceRepo: release.source } : {}),
+      ...(release.tag ? { releaseTag: release.tag } : {}),
+      publishedAt: release.publishedAt
     }
   }
 
@@ -630,12 +730,27 @@ export class KernelManager {
       return { version, sourceRoot, executableRelative: join('Chromium.app', 'Contents', 'MacOS', basename(executable)) }
     }
 
+    if (basename(executable).toLowerCase() !== 'chrome.exe') {
+      throw new Error(`请选择 chrome.exe（你选的是 ${basename(executable)}）。chromedriver.exe 和安装程序都不能导入：先把 windows_x64.zip 解压，再选里面的 chrome.exe`)
+    }
+    if (!await pathExists(join(dirname(executable), 'chrome.dll'))
+      && !(await readdir(dirname(executable))).some((name) => /^\d+(?:\.\d+){3}$/.test(name))) {
+      throw new Error('chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe')
+    }
     const escaped = executable.replaceAll("'", "''")
     const command = `(Get-Item -LiteralPath '${escaped}').VersionInfo.ProductVersion`
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
     const match = stdout.match(/\d+(?:\.\d+){3}/)
     if (!match) throw new Error('无法从 chrome.exe 读取四段式 Chromium 版本')
-    return { version: safeVersion(match[0]), sourceRoot: dirname(executable), executableRelative: join('browser', 'chrome.exe') }
+    // Every local Windows build is taken as a Prism-switch kernel. A build without our
+    // switch name still imports; it is only logged, since it may ignore the fingerprint switches.
+    const prism = process.platform !== 'win32' || await isPrismBuild(dirname(executable), match[0])
+    if (!prism) this.logger?.info('导入的内核里没找到 Prism 开关标记，指纹参数可能不生效', { executable })
+    return {
+      version: safeVersion(process.platform === 'win32' ? `prism-${match[0]}` : match[0]),
+      sourceRoot: dirname(executable),
+      executableRelative: join('browser', 'chrome.exe')
+    }
   }
 
   private async hashFile(path: string): Promise<string> {
@@ -693,10 +808,8 @@ export class KernelManager {
   }
 
   private validateRelease(release: KernelRelease): void {
-    const url = new URL(release.downloadUrl)
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('内核下载地址不可信')
-    if (!url.pathname.startsWith('/adryfish/fingerprint-chromium/releases/download/')) {
-      throw new Error('内核下载地址不属于受信任仓库')
+    if (!isSourceDownloadUrl(release.downloadUrl, this.settings.get().kernelSources)) {
+      throw new Error('内核下载地址不属于已添加的内核来源')
     }
     if (!/^[a-f\d]{64}$/i.test(release.sha256)) throw new Error('发行包缺少有效的 SHA-256')
     if (release.size < 10_000_000 || release.size > 800_000_000) throw new Error('发行包大小异常')

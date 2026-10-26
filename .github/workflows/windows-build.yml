@@ -1,0 +1,60 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main, refactor-core]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tunnel core (mihomo, pinned and checksummed)
+        run: node tools/tunnel-core/fetch.mjs win32-x64
+      - name: Unit tests
+        env:
+          TUNNEL_CORE_BIN: build/tunnel-core/current/mihomo.exe
+        run: npx vitest run --fileParallelism=false --reporter=default --reporter=json --outputFile=vitest.json
+      - name: Report tunnel core tests
+        if: always()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            const rows = r.testResults.flatMap((f) => f.assertionResults).filter((a) => a.fullName.includes("tunnel core"))
+            console.log(`::notice title=Tunnel core tests::${rows.map((a) => a.status + " " + a.title).join(" | ") || "none ran"}`)'
+      - name: Report test failures
+        if: failure()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            for (const f of r.testResults) {
+              const file = f.name.replace(process.cwd() + "\\", "").replace(/\\/g, "/")
+              if (f.status === "failed" && !f.assertionResults.some((a) => a.status === "failed")) console.log(`::error file=${file}::${(f.message || "suite failed").split("\n").slice(0, 6).join(" | ")}`)
+              for (const a of f.assertionResults) if (a.status === "failed") console.log(`::error file=${file}::${a.fullName} :: ${(a.failureMessages[0] || "").split("\n").slice(0, 4).join(" | ")}`)
+            }'
+      - name: Build portable exe (unsigned)
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run dist:win 2>&1 | tee build.log || { grep -v "duplicate dependency" build.log | tail -n 40 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check there is exactly one exe
+        shell: bash
+        run: |
+          ls -la release/*.exe
+          [ "$(ls release/*.exe | wc -l)" -eq 1 ] || { echo "::error::expected exactly one exe in release/"; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          path: release/*.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14

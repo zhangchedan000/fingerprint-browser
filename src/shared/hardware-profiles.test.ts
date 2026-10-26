@@ -2,15 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { defaultFingerprint } from './defaults'
 import {
   applyHardwareProfile,
-  CURATED_WINDOWS_DESKTOP_GPUS,
   effectiveDisabledSpoofing,
   effectiveFingerprintSeed,
-  effectiveGpuIdentity,
+  effectiveGpu,
   HARDWARE_PROFILES,
   hardwareProfile,
   defaultHardwareProfileId,
   refreshSeededGpuIdentity
 } from './hardware-profiles'
+import { gpuKey, kernelGpuList, MEASURED_KERNELS } from './gpu-catalog'
+import { validateProfileDraft } from './validation'
+import { defaultProfileDraft } from './defaults'
 
 describe('coherent hardware profiles', () => {
   it('defines complete CPU, memory, GPU, OS and screen contracts', () => {
@@ -40,12 +42,10 @@ describe('coherent hardware profiles', () => {
     })
   })
 
-  it('keeps every preset seed in the GPU bucket declared by the kernel catalogue', () => {
-    for (const profile of HARDWARE_PROFILES.filter((item) => item.gpuBucket !== undefined)) {
-      for (const seed of [0, 1, 42, 0xfffffffe, 0xffffffff]) {
-        const config = applyHardwareProfile(defaultFingerprint(seed), profile.id)
-        expect(effectiveFingerprintSeed(config) % profile.gpuBucketCount!).toBe(profile.gpuBucket)
-      }
+  it('names every fixed Windows preset GPU from the Prism list', () => {
+    for (const profile of HARDWARE_PROFILES.filter((item) => item.renderIdentityMode === 'fixed-template' && item.platform === 'windows')) {
+      const list = kernelGpuList('prism-156.0.8078.47', 'windows')!
+      expect(list.some((gpu) => gpuKey(gpu) === profile.gpu)).toBe(true)
     }
   })
 
@@ -54,68 +54,86 @@ describe('coherent hardware profiles', () => {
     expect(effectiveDisabledSpoofing(config)).toEqual(['font', 'audio', 'canvas', 'clientrects', 'gpu'])
   })
 
-  it('enables coherent seed-bound rendering surfaces for simulated profiles', () => {
+  it('enables coherent rendering surfaces for simulated profiles', () => {
     const config = applyHardwareProfile(defaultFingerprint(1), 'macos-m3-pro')
     expect(effectiveDisabledSpoofing(config)).toEqual([])
-    expect(effectiveFingerprintSeed(config) % hardwareProfile('macos-m3-pro')!.gpuBucketCount!)
-      .toBe(hardwareProfile('macos-m3-pro')!.gpuBucket)
     expect(config.renderIdentityVersion).toBe(4)
   })
 
-  it('uses a seed-selected GPU template by default for independent environments', () => {
+  it('picks a card from the Prism list by seed unless a GPU was chosen', () => {
     expect(defaultHardwareProfileId('windows')).toBe('windows-seeded-nvidia')
-    expect(defaultHardwareProfileId('macos')).toBe('macos-seeded-apple')
-    const first = applyHardwareProfile(defaultFingerprint(1), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-    const second = applyHardwareProfile(defaultFingerprint(2), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-    expect(effectiveFingerprintSeed(first) % 57).not.toBe(effectiveFingerprintSeed(second) % 57)
-    expect(effectiveGpuIdentity(first)).not.toEqual(effectiveGpuIdentity(second))
-    expect(effectiveDisabledSpoofing(first)).toEqual([])
-    expect(first.renderIdentityVersion).toBe(4)
-    expect(second.renderIdentityVersion).toBe(4)
+    const seeded = applyHardwareProfile(defaultFingerprint(42), 'windows-seeded-nvidia', { refreshSeededGpu: true })
+    expect(seeded.gpu).toBeUndefined()
+    const list = kernelGpuList('prism-156.0.8078.47', 'windows')!
+    expect(effectiveGpu(seeded, 'prism-156.0.8078.47')).toEqual(list[42 % list.length])
   })
 
-  it('maps seeded Windows identities only to curated desktop GPUs', () => {
-    expect(CURATED_WINDOWS_DESKTOP_GPUS.length).toBeGreaterThanOrEqual(20)
-    expect(new Set(CURATED_WINDOWS_DESKTOP_GPUS.map((item) => item.bucket)).size)
-      .toBe(CURATED_WINDOWS_DESKTOP_GPUS.length)
-    expect(CURATED_WINDOWS_DESKTOP_GPUS.every((item) => (
-      item.deviceClass === 'desktop'
-      && !/Laptop/i.test(item.model)
-      && item.bucket >= 0
-      && item.bucket < 57
-    ))).toBe(true)
-
-    for (const seed of [0, 1, 42, 100001, 200003, 0xfffffffe, 0xffffffff]) {
-      const config = applyHardwareProfile(defaultFingerprint(seed), 'windows-seeded-nvidia', { refreshSeededGpu: true })
-      const identity = effectiveGpuIdentity(config)!
-      expect(effectiveFingerprintSeed(config) % 57).toBe(identity.bucket)
+  it('makes every kernel report a chosen GPU, or refuses when the kernel lacks it', () => {
+    for (const major of MEASURED_KERNELS) {
+      const version = major === 'prism' ? 'prism-156.0.8078.47' : `${major}.0.0.0`
+      for (const platform of ['windows', 'macos'] as const) {
+        const list = kernelGpuList(version, platform)!
+        for (const gpu of list) {
+          const config = { ...defaultFingerprint(123456789), platform, hardwareProfileId: defaultHardwareProfileId(platform), gpu: gpuKey(gpu) }
+          for (const seed of [0, 1, 0xfffffffe, 0xffffffff]) {
+            const aligned = effectiveFingerprintSeed({ ...config, seed }, version)!
+            expect(aligned).toBeLessThanOrEqual(0xffffffff)
+            expect(gpuKey(list[aligned % list.length])).toBe(gpuKey(gpu))
+          }
+        }
+      }
     }
+    const rtx4070 = applyHardwareProfile(defaultFingerprint(1), 'windows-11-rtx4070')
+    expect(effectiveFingerprintSeed(rtx4070, '150.0.7871.186')).toBeUndefined()
+    expect(effectiveFingerprintSeed(rtx4070, '120.0.0.0')).toBeUndefined()
   })
 
-  it('does not silently remap an existing seeded profile without a pinned bucket', () => {
-    const legacySeeded = {
-      ...defaultFingerprint(42),
-      hardwareProfileId: 'windows-seeded-nvidia' as const,
-      platform: 'windows' as const,
-      gpuBucket: undefined,
-      renderIdentityVersion: undefined
-    }
-
-    expect(effectiveFingerprintSeed(legacySeeded)).toBe(42)
-    expect(effectiveGpuIdentity(legacySeeded)).toBeUndefined()
-  })
-
-  it('migrates stored render identity contracts to v4 without changing the pinned GPU bucket', () => {
-    const legacy = {
-      ...applyHardwareProfile(defaultFingerprint(42), 'windows-seeded-nvidia', { refreshSeededGpu: true }),
-      renderIdentityVersion: 1 as const
-    }
-    const pinnedBucket = legacy.gpuBucket
-
-    expect(applyHardwareProfile(legacy, legacy.hardwareProfileId)).toMatchObject({
-      renderIdentityVersion: 4,
-      gpuBucket: pinnedBucket
+  it('drops cards of the removed upstream kernels instead of refusing old windows', () => {
+    const draft = defaultProfileDraft()
+    const saved = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-seeded-nvidia', gpu: 'NVIDIA GeForce RTX 4060 Laptop GPU|0x000028A0' }
     })
-    expect(refreshSeededGpuIdentity(legacy).renderIdentityVersion).toBe(4)
+    expect(saved.fingerprint.gpu).toBeUndefined()
+    const bucket = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-seeded-nvidia', gpuBucket: 29, gpu: undefined }
+    })
+    expect(bucket.fingerprint.gpuBucket).toBeUndefined()
+  })
+})
+
+describe('editing old templates', () => {
+  it('shows a fixed template as the seeded one with the same GPU', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const fixed = applyHardwareProfile(defaultFingerprint(5), 'windows-11-rtx4060')
+    const editable = editableFingerprint(fixed)
+    expect(editable).toMatchObject({ hardwareProfileId: 'windows-seeded-nvidia', gpu: 'NVIDIA GeForce RTX 4060|0x00002882', hardwareConcurrency: 12 })
+  })
+
+  it('shows a host template as real GPU, cores and rendering', async () => {
+    const { editableFingerprint } = await import('./hardware-profiles')
+    const host = applyHardwareProfile({ ...defaultFingerprint(5), platform: 'windows' }, 'windows-host')
+    const editable = editableFingerprint(host)
+    expect(editable.hardwareProfileId).toBe('windows-seeded-nvidia')
+    expect(editable.coresSource).toBe('host')
+    expect([...editable.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
+  })
+
+})
+
+describe('Prism kernels', () => {
+  it('are named, versioned and given the desktop GPU list by the prism prefix', async () => {
+    const { kernelName, kernelChromiumVersion, isKernelId } = await import('./kernel-id')
+    const { kernelTakesExplicitGpu, maxDeviceMemoryGb } = await import('./kernel-capabilities')
+    expect(isKernelId('prism-155.0.8059.84')).toBe(true)
+    expect(kernelName('prism-156.0.8078.47')).toBe('Prism 156.0.8078.47')
+    expect(kernelChromiumVersion('prism-156.0.8078.47')).toBe('156.0.8078.47')
+    expect(kernelTakesExplicitGpu('prism-155.0.8059.84')).toBe(true)
+    expect(kernelTakesExplicitGpu('150.0.7871.186')).toBe(false)
+    expect(maxDeviceMemoryGb('prism-155.0.8059.84')).toBe(32)
+    const list = kernelGpuList('prism-155.0.8059.84', 'windows')!
+    expect(list.length).toBeGreaterThan(40)
+    expect(list.every((gpu) => gpu.vendor === 'NVIDIA' && !/Laptop/.test(gpu.model))).toBe(true)
   })
 })

@@ -7,6 +7,7 @@ import type { BrowserProfile, ProfileBackupResult, ProfileDraft } from '../share
 import { validateProfileDraft } from '../shared/validation'
 import type { Logger } from './app-logger'
 import type { ProfileStore } from './profile-store'
+import { portableDraft } from './profile-portable'
 
 interface ProfileBackupManifest {
   schemaVersion: 1
@@ -64,22 +65,6 @@ async function copySafeTree(source: string, target: string, stats: CopyStats, re
   for await (const chunk of createReadStream(target)) stats.hash.update(chunk as Buffer)
 }
 
-function portableDraft(profile: BrowserProfile): ProfileDraft {
-  return {
-    name: profile.name,
-    note: profile.note,
-    group: profile.group,
-    tags: [...profile.tags],
-    extensionIds: [],
-    color: profile.color,
-    startUrls: [...profile.startUrls],
-    kernelVersion: profile.kernelVersion,
-    window: { ...profile.window },
-    proxy: { ...profile.proxy, password: '', passwordStored: false },
-    fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
-  }
-}
-
 export class ProfileBackupManager {
   constructor(
     private readonly profiles: ProfileStore,
@@ -93,7 +78,7 @@ export class ProfileBackupManager {
     await this.profiles.assertProfileDataIdentity(profileId)
     const source = this.profiles.profileDataPath(profileId)
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const target = join(resolve(destinationParent), `Prism Backup - ${safeDirectoryName(profile.name)} - ${stamp}`)
+    const target = join(resolve(destinationParent), `指纹浏览器备份 - ${safeDirectoryName(profile.name)} - ${stamp}`)
     const staging = `${target}.partial`
     ensureOutside(source, target)
     try {
@@ -115,7 +100,7 @@ export class ProfileBackupManager {
         totalBytes: stats.bytes,
         fileCount: stats.files,
         contentSha256,
-        profile: portableDraft(profile)
+        profile: portableDraft(profile, { passwords: 'strip', extensions: false })
       }
       await writeFile(join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2), { encoding: 'utf8', mode: 0o600 })
       await rename(staging, target)
@@ -138,7 +123,7 @@ export class ProfileBackupManager {
       throw new Error('备份清单不是有效 JSON')
     }
     if (manifest.schemaVersion !== 1 || !manifest.profile || typeof manifest.totalBytes !== 'number' || typeof manifest.fileCount !== 'number') {
-      throw new Error('不支持或不完整的 Prism 环境数据备份')
+      throw new Error('不支持或不完整的指纹浏览器环境数据备份')
     }
     if (!Number.isSafeInteger(manifest.totalBytes) || manifest.totalBytes < 0 || manifest.totalBytes > MAX_BACKUP_BYTES
       || !Number.isSafeInteger(manifest.fileCount) || manifest.fileCount < 0 || manifest.fileCount > MAX_BACKUP_FILES) {
@@ -154,7 +139,8 @@ export class ProfileBackupManager {
       kernelVersion: typeof manifest.profile.kernelVersion === 'string' ? manifest.profile.kernelVersion : '',
       name: suffixedProfileName('{0}（迁移）', manifest.profile.name),
       extensionIds: [],
-      proxy: { ...manifest.profile.proxy, password: '', passwordStored: false }
+      proxy: { ...manifest.profile.proxy, password: '', passwordStored: false },
+      account: manifest.profile.account ? { ...manifest.profile.account, password: '', passwordStored: false } : undefined
     })
     const stagingRoot = await mkdtemp(join(this.profiles.vaultPath, '.profile-backup-import-'))
     const staging = join(stagingRoot, 'user-data')

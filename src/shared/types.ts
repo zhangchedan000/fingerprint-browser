@@ -22,104 +22,6 @@ export interface ProfileLaunchOptions {
   allowGeoConflict?: boolean
 }
 export type EnginePreference = 'auto' | 'bundled' | 'system'
-export type ProEntitlement =
-  | 'automation-api'
-  | 'scheduler'
-  | 'mcp'
-
-export interface LicenseStatus {
-  plan: 'community' | 'pro'
-  state: 'community' | 'active' | 'maintenance-expired' | 'invalid' | 'unavailable'
-  activationAvailable: boolean
-  message: string
-  deviceId?: string
-  licenseId?: string
-  issuedAt?: string
-  leaseExpiresAt?: string
-  maintenanceUntil?: string
-  entitlements: ProEntitlement[]
-}
-
-export interface ProductAnnouncement {
-  id: string
-  title: string
-  body: string
-  severity: 'info' | 'warning' | 'critical'
-  publishedAt: string
-  expiresAt?: string
-  minimumVersion?: string
-  latestVersion?: string
-  platforms: Array<'all' | 'darwin' | 'win32'>
-  action?: { label: string; url: string }
-}
-
-export interface AnnouncementStatus {
-  state: 'disabled' | 'none' | 'current' | 'available' | 'error'
-  message: string
-  announcement?: ProductAnnouncement
-}
-
-export interface AutomationStatus {
-  state: 'unavailable' | 'stopped' | 'starting' | 'running' | 'error'
-  message: string
-  endpoint?: string
-  agentVersion?: string
-  startedAt?: string
-  controlledProfileIds: string[]
-}
-
-export interface AutomationStartResult extends AutomationStatus {
-  accessToken: string
-}
-
-export type ScheduledTaskAction = 'launch' | 'close'
-export type ScheduledTaskSchedule =
-  | { kind: 'once'; runAt: string }
-  | { kind: 'daily'; time: string }
-  | { kind: 'weekly'; time: string; weekdays: number[] }
-
-export interface ScheduledTaskDraft {
-  name: string
-  profileId: string
-  action: ScheduledTaskAction
-  schedule: ScheduledTaskSchedule
-  enabled: boolean
-  missedPolicy: 'run_once' | 'skip'
-  maxRetries: number
-  retryDelayMinutes: number
-}
-
-export interface ScheduledTask extends ScheduledTaskDraft {
-  id: string
-  timezone: string
-  createdAt: string
-  updatedAt: string
-  nextRunAt?: string
-  lastRunAt?: string
-  lastOutcome?: 'success' | 'failure' | 'skipped'
-  lastMessage?: string
-  lastAttempts?: number
-}
-
-export interface McpProfilePermission {
-  profileId: string
-  enabled: boolean
-  updatedAt: string
-}
-
-export interface McpStatus {
-  state: 'stopped' | 'ready' | 'running' | 'error'
-  message: string
-  enabledProfileIds: string[]
-  controlledProfileIds: string[]
-}
-
-export interface McpConnection extends McpStatus {
-  command: string
-  args: string[]
-  env: Record<string, string>
-}
-
 export interface ProfileWindowConfig {
   mode: 'auto' | 'custom'
   x: number
@@ -137,11 +39,35 @@ export interface ProxyConfig {
   passwordStored?: boolean
 }
 
+/** Login the window is used for. The password is encrypted at rest and never sent to the UI. */
+export interface PlatformAccount {
+  platform: string
+  username: string
+  password: string
+  passwordStored?: boolean
+}
+
 export interface FingerprintConfig {
   seed: number
   hardwareProfileId: HardwareProfileId
-  /** Kernel GPU catalogue bucket pinned for profile-lifetime stability. */
+  /** Picked GPU (key from gpu-catalog: model|deviceId). Unset = the kernel picks one by seed. */
+  gpu?: string
+  /**
+   * Desktop CPU model (key from cpu-catalog). Pages cannot read it; when set, hardwareConcurrency
+   * is its thread count.
+   */
+  cpu?: string
+  /** Shown in the editor only (web pages cannot read it); unset = derived from the seed. */
+  deviceName?: string
+  /** Shown in the editor only (web pages cannot read it), e.g. 7A:C5:6F:F2:C2:84; unset = derived from the seed. */
+  macAddress?: string
+  /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
   gpuBucket?: number
+  /**
+   * navigator.deviceMemory in GB. Unset = 8. 16 and 32 only exist from Chromium 147; older
+   * kernels are given at most 8 (see maxDeviceMemoryGb).
+   */
+  deviceMemory?: DeviceMemoryGb
   /** Version of the render identity allocation contract. */
   renderIdentityVersion?: 1 | 2 | 3 | 4
   platform: BrowserPlatform
@@ -158,7 +84,83 @@ export interface FingerprintConfig {
   screenWidth: number
   screenHeight: number
   disabledSpoofing: Array<'font' | 'audio' | 'canvas' | 'clientrects' | 'gpu'>
+  /**
+   * Values the user set by hand that the hardware template must not overwrite.
+   * Missing on older profiles, which keep following their template exactly.
+   */
+  overrides?: FingerprintOverride[]
+  /** 'host' reports this computer's real CPU core count at launch. Default: the stored count. */
+  coresSource?: 'profile' | 'host'
+  /** 'host' reports the real primary display size at launch. Default: the stored size. */
+  screenSource?: 'profile' | 'host'
+  /** Default geolocation permission for sites. Default: ask. */
+  geolocationPermission?: 'ask' | 'allow' | 'block'
+  /** Do Not Track request header. Default: leave Chromium's own setting. */
+  doNotTrack?: 'default' | 'on' | 'off'
+  /** Windows voices of another locale (e.g. "zh-hk"). Unset = the window's language. */
+  voicesLocale?: string
+  /** "auto" (unset, from the seed), "real", or "microphones,speakers,cameras". */
+  mediaDevices?: string
+  /** Language of the media device names (e.g. "de-de"). Unset = the window's language. */
+  mediaLocale?: string
 }
+
+export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'
+
+/**
+ * A proxy in the proxy library. It is stored once; windows refer to it by id,
+ * so editing it here changes every window that uses it.
+ */
+export interface ProxyRecord {
+  id: string
+  protocol: Exclude<ProxyProtocol, 'direct'>
+  host: string
+  port: number
+  username: string
+  /** Encrypted at rest and never sent to the UI. */
+  password: string
+  note: string
+  createdAt: string
+  updatedAt: string
+  /** Latest check of this proxy, shared by every window that uses it. */
+  check?: ProxyCheckSummary
+}
+
+export type ProxyRecordView = Omit<ProxyRecord, 'password'> & {
+  password: ''
+  passwordStored: boolean
+  /** Windows that use this proxy, derived from the windows' proxyId. */
+  profileIds: string[]
+}
+
+export interface ProxyDraft {
+  protocol: Exclude<ProxyProtocol, 'direct'>
+  host: string
+  port?: number
+  username: string
+  password: string
+  /** Keep the saved password when password is empty. */
+  passwordStored?: boolean
+  note?: string
+}
+
+/** A window group. Windows refer to it by id, so renaming it renames it everywhere. */
+export interface GroupRecord {
+  id: string
+  name: string
+  /** Marker colour of the group (user data). */
+  color: string
+  note: string
+  createdAt: string
+}
+
+export interface GroupDraft {
+  name: string
+  color?: string
+  note?: string
+}
+
+export type GroupRecordView = GroupRecord & { profileCount: number }
 
 export interface BrowserProfile {
   id: string
@@ -166,6 +168,9 @@ export interface BrowserProfile {
   serialNumber: number
   name: string
   note: string
+  /** Reference into the group library; '' means ungrouped. */
+  groupId: string
+  /** Name of the referenced group, filled in when the window is read; never stored on the window. */
   group: string
   tags: string[]
   extensionIds: string[]
@@ -175,11 +180,18 @@ export interface BrowserProfile {
   kernelVersion: string
   window: ProfileWindowConfig
   favorite: boolean
+  /** Reference into the proxy library; '' means direct connection. */
+  proxyId: string
+  /** The referenced proxy, filled in when the window is read; never stored on the window. */
   proxy: ProxyConfig
+  /** True when proxyId points at a proxy that no longer exists. Such a window must not launch. */
+  proxyMissing?: boolean
+  account: PlatformAccount
   fingerprint: FingerprintConfig
   createdAt: string
   updatedAt: string
   lastOpenedAt?: string
+  /** Latest check of the window's network: the library proxy's check, or the direct connection's own. */
   proxyCheck?: ProxyCheckSummary
   status: ProfileStatus
   lastError?: string
@@ -190,12 +202,27 @@ export interface PublicProxyConfig extends Omit<ProxyConfig, 'password' | 'passw
   passwordStored: boolean
 }
 
-export type BrowserProfileView = Omit<BrowserProfile, 'proxy'> & { proxy: PublicProxyConfig }
+export interface PublicPlatformAccount extends Omit<PlatformAccount, 'password' | 'passwordStored'> {
+  password: ''
+  passwordStored: boolean
+}
 
+export type BrowserProfileView = Omit<BrowserProfile, 'proxy' | 'account'> & { proxy: PublicProxyConfig; account: PublicPlatformAccount }
+
+/**
+ * What a window is created or edited from.
+ * group: a group name; it is looked up in (or added to) the group library.
+ * proxyId: pick a proxy from the library. Without it, proxy is looked up in (or added to)
+ * the library, so a proxy is never stored on the window itself.
+ */
 export type ProfileDraft = Pick<
   BrowserProfile,
   'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
->
+> & {
+  /** Optional on input for older callers and files; validation fills an empty account. */
+  account?: PlatformAccount
+  proxyId?: string
+}
 
 export interface ProfileBatchClassification {
   group?: string
@@ -214,11 +241,27 @@ export interface BrowserExtension {
   globalEnabled: boolean
 }
 
-export interface AppSettings {
+export interface AppSettings extends AppPreferences {
   browserExecutable: string
   fingerprintKernel: boolean
   enginePreference: EnginePreference
   recycleRetentionDays: 0 | 7 | 30 | 90
+  /** GitHub projects ("owner/repo") that "在线下载内核" lists kernels from. */
+  kernelSources: string[]
+}
+
+/** Interface choices from the settings page. */
+export interface AppPreferences {
+  /** 'system' follows the operating system's light / dark setting. */
+  theme: 'light' | 'dark' | 'system'
+  /** Pause between windows opened in one batch. */
+  batchLaunchGapSeconds: number
+}
+
+export interface AppInfo {
+  version: string
+  vaultPath: string
+  logsPath: string
 }
 
 export interface EngineStatus {
@@ -227,6 +270,16 @@ export interface EngineStatus {
   fingerprintKernel: boolean
   label: string
   version?: string
+}
+
+export interface KernelImportResult {
+  /** Id the build was installed under (with an import-time suffix when the version was already installed). */
+  version: string
+  /** The very same build was already installed; nothing was copied. */
+  alreadyInstalled: boolean
+  /** It became the default kernel because there was no usable default. */
+  madeDefault: boolean
+  engine: EngineStatus
 }
 
 export interface KernelRelease {
@@ -240,6 +293,11 @@ export interface KernelRelease {
   remoteAvailable: boolean
   origin?: 'release' | 'local-build' | 'bundled'
   executable?: string
+  /** GitHub project ("owner/repo") a downloadable release comes from. */
+  source?: string
+  tag?: string
+  /** A newer build of this installed kernel; installing it replaces the kernel in place. */
+  update?: boolean
 }
 
 export type KernelInstallStage = 'downloading' | 'verifying' | 'installing' | 'ready' | 'cancelled' | 'error'
@@ -258,40 +316,6 @@ export interface KernelHealth {
   status: 'healthy' | 'unverified' | 'corrupt'
   message: string
   checkedAt: string
-}
-
-export type UpdateChannel = 'stable' | 'beta'
-export type UpdateDistributionMode = 'signed' | 'internal-unsigned'
-export type AppUpdateStage = 'disabled' | 'current' | 'available' | 'downloading' | 'ready' | 'error'
-
-export interface AppUpdateArtifact {
-  url: string
-  size: number
-  sha256: string
-  kind: 'dmg' | 'exe'
-}
-
-export interface AppUpdateManifest {
-  schemaVersion: 1
-  channel: UpdateChannel
-  distributionMode: UpdateDistributionMode
-  version: string
-  publishedAt: string
-  notes: string
-  artifacts: Record<string, AppUpdateArtifact>
-  signature: string
-}
-
-export interface AppUpdateStatus {
-  stage: AppUpdateStage
-  currentVersion: string
-  channel: UpdateChannel | null
-  distributionMode: UpdateDistributionMode | null
-  latestVersion?: string
-  message: string
-  notes?: string
-  progress?: number
-  downloadedPath?: string
 }
 
 export interface ProxyTestResult {
@@ -325,6 +349,56 @@ export interface ProxyTestResult {
 
 export interface ProxyCheckSummary extends ProxyTestResult {
   checkedAt: string
+}
+
+/** Which editor row a fingerprint check result belongs to. */
+export type FingerprintCheckRow =
+  | 'system' | 'platformVersion' | 'timezone' | 'language' | 'webrtc' | 'screen' | 'font'
+  | 'gpu' | 'cores' | 'memory' | 'canvas' | 'audio' | 'clientrects' | 'general'
+
+/** One-click fixes the editor can apply for a result. */
+export type FingerprintCheckFix = 'follow-ip' | 'webrtc-replace' | 'reseed' | 'shuffle-gpu' | 'use-real'
+
+export interface FingerprintCheckItem {
+  row: FingerprintCheckRow
+  status: 'ok' | 'warn' | 'bad'
+  /** Chinese source text, translated in the renderer. */
+  message: string
+  fix?: FingerprintCheckFix
+}
+
+/** What the page inside the checked browser actually saw. */
+export interface FingerprintObserved {
+  userAgent: string
+  uaPlatform?: string
+  uaPlatformVersion?: string
+  cores: number
+  memory?: number
+  screen: [number, number]
+  timezone: string
+  language: string
+  webdriver: boolean
+  webglVendor?: string
+  webglRenderer?: string
+  webgpuVendor?: string
+  /** Each surface is read twice: real hardware gives the same result both times. */
+  canvas: [string, string]
+  /** The audio sample sum detection sites show, e.g. 124.04347527516074. */
+  audio: [string, string]
+  clientrects: [string, string]
+  font: [string, string]
+  worker?: { userAgent: string; cores: number; language: string; timezone: string }
+  webrtcIps: string[]
+}
+
+export interface FingerprintCheckReport {
+  checkedAt: string
+  kernelVersion?: string
+  /** The fingerprint settings that were checked, to tell when the editor has changed since. */
+  checkedSettings: string
+  exitIp?: string
+  observed: FingerprintObserved
+  items: FingerprintCheckItem[]
 }
 
 export interface ProfileStorageInfo {
@@ -365,6 +439,8 @@ export interface DeletedProfileSummary {
   profileId: string
   serialNumber?: number
   name: string
+  /** Group the window was in when it was deleted. */
+  group?: string
   deletedAt: string
   sizeBytes: number
 }
@@ -411,12 +487,75 @@ export interface BrowserCrashRecord {
   code: number | null
   signal: NodeJS.Signals | null
   phase: 'starting' | 'running'
+  /** Kernel version the window ran on. */
+  kernelVersion?: string
+  /** Launch log of this run (Chromium's --log-file). */
+  logFile?: string
+  /** The log line that names why the kernel stopped (Check failed, FATAL, ...). */
+  reason?: string
+  /** Last lines of the log before the exit. */
+  logTail?: string[]
+  /** Crashpad dumps written during this run. */
+  dumps?: string[]
+  /** The kernel's command line for this run. */
+  args?: string[]
+}
+
+export interface BrowserLaunchLog {
+  text: string
+  truncated: boolean
+  files: string[]
+}
+
+export interface BatchImportRowView {
+  line: number
+  name: string
+  group: string
+  /** Proxy with the password masked; '' means direct. */
+  proxy: string
+  account: string
+  cookie: boolean
+  /** Source-language messages; empty when the row will be imported. */
+  errors: string[]
+}
+
+export interface BatchImportPreview {
+  token: string
+  fileName: string
+  valid: number
+  invalid: number
+  rows: BatchImportRowView[]
+}
+
+export interface BatchImportOptions {
+  /** Group for rows that leave the group column empty; '' keeps them ungrouped. */
+  defaultGroup: string
+}
+
+export interface BatchImportResult {
+  created: BrowserProfileView[]
+  skipped: number
+  cookiesImported: number
+  cookieErrors: Array<{ name: string; message: string }>
 }
 
 export interface BrowserApi {
   uiLanguage: {
     get(): Promise<UiLocale>
     set(locale: UiLocale): Promise<UiLocale>
+  }
+  app: {
+    preferences: () => Promise<AppPreferences>
+    setPreferences: (patch: Partial<AppPreferences>) => Promise<AppPreferences>
+    info: () => Promise<AppInfo>
+    openFolder: (folder: 'vault' | 'logs') => Promise<void>
+    openProjectPage: () => Promise<void>
+    vaultLocation: () => Promise<VaultLocationInfo>
+    /** Opens a folder picker, copies the data there and restarts; null when cancelled. */
+    relocateVault: () => Promise<string | null>
+    deletePreviousVault: () => Promise<VaultLocationInfo>
+    revertVault: () => Promise<void>
+    onRelocateProgress: (listener: (progress: RelocateProgress) => void) => () => void
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
@@ -425,13 +564,25 @@ export interface BrowserApi {
     duplicate: (id: string) => Promise<BrowserProfileView>
     exportConfig: (id: string) => Promise<string | null>
     importConfig: () => Promise<BrowserProfileView | null>
-    importBatchCsv: () => Promise<BrowserProfileView[] | null>
-    exportBatchTemplate: () => Promise<string | null>
+    /** Reads a spreadsheet (picked in a dialog when no path is given) and checks each row. */
+    previewBatchImport: (path?: string) => Promise<BatchImportPreview | null>
+    commitBatchImport: (token: string, options: BatchImportOptions) => Promise<BatchImportResult>
+    saveBatchImportErrors: (token: string) => Promise<string | null>
+    exportBatchTemplate: (format: 'xlsx' | 'csv') => Promise<string | null>
+    /** Local path of a file dropped onto the window. */
+    pathForFile: (file: File) => string
     storageHealth: () => Promise<ProfileStoreHealth>
     storageInfo: (id: string) => Promise<ProfileStorageInfo>
     storageOverview: () => Promise<StorageOverview>
     openDataFolder: (id: string) => Promise<void>
     clearCache: (id: string) => Promise<ProfileStorageInfo>
+    /** Starts the draft's exact browser setup in a throwaway profile and reports what a site sees. */
+    checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<FingerprintCheckReport>
+    /** Opens public detection sites in a throwaway browser with these settings; results stream in by site. */
+    deepCheck: (draft: ProfileDraft, profileId?: string) => Promise<import('./deep-check').DeepSiteResult[]>
+    onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult) => void) => () => void
+    /** Last saved check of a window, or null. */
+    lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>
     exportBackup: (id: string) => Promise<ProfileBackupResult | null>
     importBackup: () => Promise<{ profile: BrowserProfileView; result: ProfileBackupResult } | null>
     exportWorkspace: (password: string) => Promise<WorkspaceMigrationResult | null>
@@ -451,8 +602,18 @@ export interface BrowserApi {
     testProxy: (id: string) => Promise<BrowserProfileView>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
+    /** Text of a launch log listed in the crash history. */
+    readLaunchLog: (id: string, logFile: string) => Promise<BrowserLaunchLog>
+    /** Shows the window's launch log folder (or one file in it) in the file manager. */
+    openLaunchLogFolder: (id: string, logFile?: string) => Promise<void>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
+    /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */
+    assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean; extensionId?: string; removeExtension?: boolean }) => Promise<BrowserProfileView[]>
+    /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
+    setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
+    /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
+    importCookiesText: (id: string, text: string) => Promise<{ count: number }>
     removeMany: (ids: string[]) => Promise<void>
     onChanged: (listener: (profile: BrowserProfileView) => void) => () => void
   }
@@ -461,7 +622,7 @@ export interface BrowserApi {
     bundled: () => Promise<EngineStatus | null>
     activateBundled: () => Promise<EngineStatus>
     select: () => Promise<EngineStatus>
-    importLocal: () => Promise<EngineStatus>
+    importLocal: () => Promise<KernelImportResult | null>
     useSystem: () => Promise<EngineStatus>
     installed: () => Promise<KernelRelease[]>
     activate: (version: string) => Promise<EngineStatus>
@@ -469,58 +630,51 @@ export interface BrowserApi {
     rollback: () => Promise<EngineStatus>
     remove: (version: string) => Promise<void>
     verify: (version: string) => Promise<KernelHealth>
+    /** Kernels published by fingerprint-chromium for this system (plus installed ones). */
+    releases: () => Promise<KernelRelease[]>
+    sources: () => Promise<string[]>
+    setSources: (sources: string[]) => Promise<string[]>
+    /** Downloads, checks and installs a published kernel, then makes it the default. */
+    install: (version: string) => Promise<EngineStatus>
+    cancelInstall: (version: string) => Promise<void>
+    onProgress: (listener: (progress: KernelInstallProgress) => void) => () => void
   }
-  updates: {
-    status: () => Promise<AppUpdateStatus>
-    check: () => Promise<AppUpdateStatus>
-    download: () => Promise<AppUpdateStatus>
-    openInstaller: () => Promise<void>
-    onChanged: (listener: (status: AppUpdateStatus) => void) => () => void
+  tunnel: {
+    status: () => Promise<TunnelStatus>
+    setEnabled: (enabled: boolean) => Promise<TunnelStatus>
+    addSource: (input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
+    removeSource: (id: string) => Promise<TunnelStatus>
+    select: (name: string) => Promise<TunnelStatus>
+    test: () => Promise<TunnelStatus>
+    refresh: () => Promise<TunnelStatus>
+    onChanged: (listener: (status: TunnelStatus) => void) => () => void
   }
-  announcements: {
-    status: () => Promise<AnnouncementStatus>
-    check: () => Promise<AnnouncementStatus>
-    openAction: () => Promise<void>
-  }
+  /** The proxy library. Windows refer to these proxies by id. */
   proxy: {
-    test: (config: ProxyConfig, profileId?: string) => Promise<ProxyTestResult>
+    /** Tests typed-in settings; an empty password with passwordStored uses the saved one of the window or library proxy. */
+    test: (config: ProxyConfig, profileId?: string, proxyId?: string) => Promise<ProxyTestResult>
+    list: () => Promise<ProxyRecordView[]>
+    create: (draft: ProxyDraft) => Promise<ProxyRecordView>
+    /** Adds many at once; proxies already in the library are counted as duplicates. */
+    createMany: (drafts: ProxyDraft[]) => Promise<{ created: ProxyRecordView[]; duplicates: number; errors: Array<{ index: number; message: string }> }>
+    update: (id: string, draft: ProxyDraft) => Promise<ProxyRecordView>
+    /** replaceWith: what the windows using it switch to (another proxy id, or '' for direct). */
+    remove: (id: string, replaceWith?: string) => Promise<void>
+    /** Tests a library proxy and saves the result on it. */
+    check: (id: string) => Promise<ProxyRecordView>
+  }
+  /** The group library. Windows refer to these groups by id. */
+  groups: {
+    list: () => Promise<GroupRecordView[]>
+    create: (draft: GroupDraft) => Promise<GroupRecordView>
+    /** Rename, recolour or change the note; every window in it shows the change. */
+    update: (id: string, draft: GroupDraft) => Promise<GroupRecordView>
+    /** Its windows become ungrouped. */
+    remove: (id: string) => Promise<void>
   }
   diagnostics: {
     sessionHealth: () => Promise<AppRecoveryStatus>
     e2eQuit: () => Promise<void>
-  }
-  licensing: {
-    status: () => Promise<LicenseStatus>
-    sync: () => Promise<LicenseStatus>
-    activate: (activationCode: string) => Promise<LicenseStatus>
-    deactivate: () => Promise<LicenseStatus>
-    openPurchase: () => Promise<void>
-    onChanged: (listener: (status: LicenseStatus) => void) => () => void
-  }
-  automation: {
-    status: () => Promise<AutomationStatus>
-    start: () => Promise<AutomationStartResult>
-    stop: () => Promise<AutomationStatus>
-    emergencyStop: () => Promise<AutomationStatus>
-    onChanged: (listener: (status: AutomationStatus) => void) => () => void
-  }
-  scheduler: {
-    list: () => Promise<ScheduledTask[]>
-    create: (draft: ScheduledTaskDraft) => Promise<ScheduledTask>
-    update: (id: string, draft: ScheduledTaskDraft) => Promise<ScheduledTask>
-    remove: (id: string) => Promise<void>
-    setEnabled: (id: string, enabled: boolean) => Promise<ScheduledTask>
-    runNow: (id: string) => Promise<ScheduledTask>
-    onChanged: (listener: (tasks: ScheduledTask[]) => void) => () => void
-  }
-  mcp: {
-    status: () => Promise<McpStatus>
-    permissions: () => Promise<McpProfilePermission[]>
-    setPermission: (profileId: string, enabled: boolean) => Promise<McpProfilePermission[]>
-    start: () => Promise<McpConnection>
-    stop: () => Promise<McpStatus>
-    emergencyStop: () => Promise<McpStatus>
-    onChanged: (listener: (status: McpStatus) => void) => () => void
   }
   extensions: {
     list: () => Promise<BrowserExtension[]>
@@ -530,3 +684,47 @@ export interface BrowserApi {
     remove: (id: string) => Promise<void>
   }
 }
+
+/** Built-in tunnel (main/tunnel-manager.ts): how foreign window proxies are reached from China. */
+export interface TunnelNodeInfo {
+  name: string
+  type: string
+  /** Last measured delay in ms; 0 = timed out; undefined = not measured. */
+  delay?: number
+}
+
+export interface TunnelSourceSummary {
+  id: string
+  name: string
+  kind: 'links' | 'subscription'
+  updatedAt: string
+}
+
+export interface TunnelStatus {
+  /** The tunnel core ships with the app; false in builds without it. */
+  available: boolean
+  enabled: boolean
+  state: 'off' | 'starting' | 'running' | 'error'
+  error?: string
+  sources: TunnelSourceSummary[]
+  nodes: TunnelNodeInfo[]
+  selected?: string
+}
+
+export interface VaultLocationInfo {
+  path: string
+  defaultPath: string
+  /** The folder the data was moved from, kept until deleted. */
+  previous?: string
+}
+
+export interface RelocateProgress {
+  copiedBytes: number
+  totalBytes: number
+  copiedFiles: number
+  totalFiles: number
+}
+
+/** Values desktop Chrome itself reports for navigator.deviceMemory (147+: 2/4/8/16/32). */
+export type DeviceMemoryGb = 2 | 4 | 8 | 16 | 32
+export const DEVICE_MEMORY_CHOICES: readonly DeviceMemoryGb[] = [2, 4, 8, 16, 32]

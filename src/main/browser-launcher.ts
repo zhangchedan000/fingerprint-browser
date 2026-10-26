@@ -14,13 +14,16 @@ import { findManagedProcess, SystemProcessInspector, type ProcessInspector } fro
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
 import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-profiles'
+import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, testProxy } from './proxy-tester'
 import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
-import { kernelRequiresPro } from '../shared/kernel-policy'
+import { assertKernelCanOpenProfileData } from './profile-data-version'
+import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
+import type { WriteStream } from 'node:fs'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -67,6 +70,17 @@ function validCrashHistory(value: unknown): BrowserCrashRecord[] {
   )).slice(-MAX_PROFILE_CRASH_RECORDS)
 }
 
+/** Waits (briefly) until captured stderr is on disk. */
+function closeCapture(file: WriteStream | undefined): Promise<void> {
+  if (!file || file.closed) return Promise.resolve()
+  return new Promise((resolve) => {
+    // The child's stderr ends with the process and the pipe then closes the file; only end it
+    // ourselves when that does not happen in time.
+    const timer = setTimeout(() => { file.end(); resolve() }, 1000)
+    file.once('close', () => { clearTimeout(timer); resolve() })
+  })
+}
+
 export class BrowserLauncher {
   private readonly processes = new Map<string, RunningBrowser>()
   private readonly orphanProcesses = new Map<string, number>()
@@ -75,7 +89,6 @@ export class BrowserLauncher {
   private activeLaunches = 0
   private readonly launchWaiters: Array<() => void> = []
   private closeAllOperation?: Promise<void>
-  private canUseProKernel: () => boolean = () => true
 
   constructor(
     private readonly profiles: ProfileStore,
@@ -97,8 +110,11 @@ export class BrowserLauncher {
     }
   }
 
-  setProKernelAccessCheck(check: () => boolean): void {
-    this.canUseProKernel = check
+  private hostScreen: () => { width: number; height: number } | undefined = () => undefined
+
+  /** Provides the primary display size for windows whose resolution follows the computer. */
+  setHostScreenProvider(provider: () => { width: number; height: number } | undefined): void {
+    this.hostScreen = provider
   }
 
   async initialize(): Promise<void> {
@@ -165,15 +181,14 @@ export class BrowserLauncher {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
     let profile = this.profiles.get(id)
+    // Never fall back to the real network when the chosen proxy is gone.
+    if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
     await this.guardProfileAvailable(id)
     const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
     if (!engine.executable) {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
-        : '没有找到浏览器内核，请先选择 Fingerprint Chromium 可执行文件')
-    }
-    if (kernelRequiresPro(engine.version) && !this.canUseProKernel()) {
-      throw new Error(`Chromium ${engine.version} 是 Prism Pro 内核，请先激活 Pro 或将环境切换回 144 稳定内核`)
+        : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()
@@ -182,6 +197,7 @@ export class BrowserLauncher {
       throw new Error(`${selectedHardware.label} 只能在对应系统上使用；请改用本机模板或成套模拟模板`)
     }
     assertFingerprintKernelCompatibility(profile, engine)
+    await assertKernelCanOpenProfileData(this.profiles.profileDataPath(id), engine.version)
     this.logger?.info('准备启动浏览器环境', { profileId: id, engine: engine.label })
 
     this.onChanged(await this.profiles.setRuntime(id, { status: 'starting', lastError: undefined }))
@@ -207,6 +223,14 @@ export class BrowserLauncher {
       })
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
+      try {
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint)
+      } catch (error) {
+        this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
       const args = buildLaunchArgs(profile, {
         userDataDir: this.profiles.profileDataPath(id),
         proxyUrl: localProxyUrl,
@@ -216,14 +240,23 @@ export class BrowserLauncher {
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostPlatformVersion: hostHardware.platformVersion,
         proxyIdentity: profile.proxyCheck,
-        allowGeoConflict: options.allowGeoConflict === true
+        allowGeoConflict: options.allowGeoConflict === true,
+        hostScreen: this.hostScreen()
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
         if (process.platform === 'darwin') args.push('--use-mock-keychain')
+        // Test containers run as root, where Chromium refuses its sandbox.
+        if (process.platform === 'linux' && process.getuid?.() === 0) args.push('--no-sandbox')
       }
       const pipeControlEnabled = process.platform !== 'win32'
       if (pipeControlEnabled) args.push('--remote-debugging-pipe')
+      // Every run writes a log so a crash can be explained in the window list.
+      const launchedAt = new Date()
+      const logFiles = launchLogFiles(runtimePath, launchedAt)
+      await mkdir(logFiles.folder, { recursive: true })
+      await pruneLaunchLogs(logFiles.folder, 9)
+      args.push(...launchLogArgs(logFiles))
       await writeFile(
         join(runtimePath, 'last-launch.json'),
         JSON.stringify({ executable: engine.executable, args, launchedAt: new Date().toISOString() }, null, 2),
@@ -231,10 +264,11 @@ export class BrowserLauncher {
       )
 
       const child = this.browserSpawner(engine.executable, args, {
-        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : 'ignore',
+        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
         windowsHide: false,
         env: { ...process.env }
       })
+      const stderrFile: WriteStream | undefined = captureStream(child.stderr, logFiles.stderrLog)
       let automation: BrowserControlSession | undefined
       if (pipeControlEnabled && Array.isArray(child.stdio)) {
         const writable = child.stdio[3] as Writable | null
@@ -351,13 +385,21 @@ export class BrowserLauncher {
         }
         this.logger?.info('浏览器环境已退出', { profileId: id, code, signal, expected: !unexpected })
         void (async () => {
+          await closeCapture(stderrFile)
           if (unexpected) {
+            const analysis = await analyzeCrash(logFiles, this.profiles.profileDataPath(id), launchedAt)
+              .catch((): CrashAnalysis => ({ logTail: [], dumps: [] }))
+            this.logger?.error('浏览器异常退出', { profileId: id, code, signal, reason: analysis.reason, logFile: logFiles.chromeLog })
             await this.recordCrash(id, {
               occurredAt: new Date().toISOString(),
               pid: child.pid,
               code,
               signal,
-              phase
+              phase,
+              kernelVersion: engine.version,
+              logFile: logFiles.chromeLog,
+              ...analysis,
+              args
             }).catch((error) => {
               this.logger?.error('浏览器崩溃历史写入失败', {
                 profileId: id,
@@ -571,6 +613,18 @@ export class BrowserLauncher {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return []
       throw error
     }
+  }
+
+  /** Text of one of the window's launch logs. Only files in its own log folder are readable. */
+  async readLaunchLog(id: string, logFile: string): Promise<{ text: string; truncated: boolean; files: string[] }> {
+    const folder = this.launchLogFolder(id)
+    if (typeof logFile !== 'string' || !isLaunchLogOf(folder, logFile)) throw new Error('日志文件不属于这个环境')
+    return readLaunchLog(logFile)
+  }
+
+  launchLogFolder(id: string): string {
+    this.profiles.get(id)
+    return launchLogFiles(this.profiles.profileRuntimePath(id)).folder
   }
 
   async crashHistorySnapshot(): Promise<Record<string, BrowserCrashRecord[]>> {

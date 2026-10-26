@@ -42,4 +42,26 @@ describe('Cookie file format', () => {
     const oversized = Array.from({ length: 10_001 }, () => ({ name: 'a', value: 'b', domain: 'example.com' }))
     expect(() => parseCookieFile(JSON.stringify(oversized))).toThrow('10000')
   })
+
+  it('reads Netscape cookies.txt, including HttpOnly lines', () => {
+    const text = [
+      '# Netscape HTTP Cookie File',
+      '.tiktok.com\tTRUE\t/\tTRUE\t1893456000\tsessionid\tabc123',
+      '#HttpOnly_.tiktok.com\tTRUE\t/\tTRUE\t0\tsid_tt\txyz'
+    ].join('\n')
+    const cookies = parseCookieFile(text)
+    expect(cookies).toHaveLength(2)
+    expect(cookies[0]).toMatchObject({ domain: '.tiktok.com', name: 'sessionid', value: 'abc123', secure: true, httpOnly: false, expires: 1893456000 })
+    expect(cookies[1]).toMatchObject({ name: 'sid_tt', httpOnly: true })
+    expect(cookies[1].expires).toBeUndefined()
+  })
+
+  it('reads a "name=value; …" header when the site is on the first line', () => {
+    const cookies = parseCookieFile('https://www.tiktok.com\nCookie: a=1; b=two=2; c=')
+    expect(cookies.map((cookie) => [cookie.name, cookie.value])).toEqual([['a', '1'], ['b', 'two=2'], ['c', '']])
+    expect(cookies[0]).toMatchObject({ url: 'https://www.tiktok.com', secure: true })
+    expect(parseCookieFile('tiktok.com\na=1')[0].url).toBe('https://tiktok.com')
+    expect(() => parseCookieFile('a=1; b=2')).toThrow('第一行写上网站地址')
+    expect(() => parseCookieFile('hello world')).toThrow('无法识别 Cookie 格式')
+  })
 })

@@ -1,0 +1,35 @@
+﻿指纹内核编译步骤（Chromium 156.0.8078.47 / i9-12900K / 32GB / E 盘）
+================================================
+
+一、先装好软件（只需一次）
+  1. Visual Studio Community 2026（必须是 2026，内核 156 不支持 2022）
+     工作负荷勾选：使用 C++ 的桌面开发
+     单个组件勾选：C++ ATL、C++ MFC（最新版）、Windows 11 SDK (10.0.28000.2270)
+  2. 设置 → 应用 → 已安装的应用 → Windows Software Development Kit → 修改
+     勾选 Debugging Tools for Windows（10.0.26100.3323 或更高）
+  3. Python 3.12（64 位），安装时勾选 Add python.exe to PATH
+  4. Git for Windows、7-Zip（默认安装）
+  5. 设置 → 应用 → 高级应用设置 → 应用执行别名：关闭 python.exe 和 python3.exe
+
+二、管理员 PowerShell 里运行（只需一次），然后重启电脑
+  Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Type DWord -Value 1
+
+三、建 Python 虚拟环境（只需一次，普通 PowerShell 即可）
+  py -3.12 -m venv C:\prism-venv
+
+四、开始编译（管理员 PowerShell）
+  把这个 windows-kernel 文件夹解压到 E:\windows-kernel-build-kit，然后：
+
+  Set-ExecutionPolicy -Scope Process Bypass
+  C:\prism-venv\Scripts\Activate.ps1
+  cd E:\windows-kernel-build-kit
+  .\Start.ps1 -BuildRoot E:\prism-chromium -Jobs 8
+
+  · 白天要用电脑就把 -Jobs 8 改成 -Jobs 4
+  · 需要从谷歌和 GitHub 下载大量源码，保持软路由（OpenClash）正常翻墙
+  · 中途断了、重启了：重新运行第四步同一组命令，会接着编
+  · 出错：不要删除 E:\prism-chromium，把 E:\prism-chromium\logs 里最新的日志发回来
+
+五、编好以后
+  成品在 E:\prism-chromium\artifacts\156.0.8078.47-windows-x64
+  在指纹浏览器“内核管理 → 导入本地内核”里选中解压后的 chrome.exe

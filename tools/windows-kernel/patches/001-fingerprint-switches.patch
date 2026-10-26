@@ -1,0 +1,207 @@
+diff --git components/ungoogled/BUILD.gn components/ungoogled/BUILD.gn
+index d8d23eb..9b48412 100644
+--- a/components/ungoogled/BUILD.gn
++++ b/components/ungoogled/BUILD.gn
+@@ -4,6 +4,7 @@
+ 
+ component("ungoogled_switches") {
+   sources = [
++    "fingerprint_data.h",
+     "ungoogled_switches.h",
+     "ungoogled_switches.cc",
+   ]
+diff --git components/ungoogled/fingerprint_data.h components/ungoogled/fingerprint_data.h
+new file mode 100644
+index 0000000..826099c
+--- /dev/null
++++ b/components/ungoogled/fingerprint_data.h
+@@ -0,0 +1,73 @@
++// Copyright (c) 2020 The ungoogled-chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++// Fingerprint data constants for browser/platform spoofing.
++
++#ifndef COMPONENTS_UNGOOGLED_FINGERPRINT_DATA_H_
++#define COMPONENTS_UNGOOGLED_FINGERPRINT_DATA_H_
++
++namespace ungoogled {
++namespace fingerprint {
++
++// =============================================================================
++// Browser Display Names
++// =============================================================================
++
++constexpr const char* kChromeDisplayName = "Google Chrome";
++constexpr const char* kEdgeDisplayName = "Microsoft Edge";
++constexpr const char* kOperaDisplayName = "Opera";
++constexpr const char* kVivaldiDisplayName = "Vivaldi";
++
++// =============================================================================
++// Browser Default Versions
++// =============================================================================
++
++// Chromium version list (for seed-based selection)
++// Only used for non-Chrome brands; the Chrome brand always reports the
++// kernel's own version (see UpdateUserAgentMetadataFingerprint).
++constexpr const char* kChromiumVersions[] = {
++    "156.0.8078.47"
++};
++
++// Default versions for Client Hints (Sec-CH-UA)
++constexpr const char* kChromeDefaultVersion = "156.0.8078.47";
++constexpr const char* kEdgeDefaultVersion = "144.0.3719.141";
++constexpr const char* kOperaDefaultVersion = "129.0.5818.0";
++constexpr const char* kVivaldiDefaultVersion = "7.8.3952.73";
++
++// Default versions for User-Agent string suffix
++constexpr const char* kEdgeUAVersion = "144.0.0.0";
++constexpr const char* kOperaUAVersion = "129.0.0.0";
++constexpr const char* kVivaldiUAVersion = "7.8.3952.73";
++
++// User-Agent string suffixes
++constexpr const char* kEdgeUASuffix = " Edg/";
++constexpr const char* kOperaUASuffix = " OPR/";
++constexpr const char* kVivaldiUASuffix = " Vivaldi/";
++
++// =============================================================================
++// Platform Constants
++// =============================================================================
++
++// Platform names
++constexpr const char* kWindowsPlatform = "Windows";
++constexpr const char* kLinuxPlatform = "Linux";
++constexpr const char* kMacOSPlatform = "macOS";
++
++// Platform version arrays (most common first, for seed-based selection)
++constexpr const char* kWindowsVersions[] = {"19.0.0", "15.0.0"};
++constexpr const char* kLinuxVersions[] = {"6.14.0", "6.8.0"};
++constexpr const char* kMacOSVersions[] = {
++    "15.5.0", "15.4.1", "15.4.0", "15.3.2", "15.3.1",
++    "15.3.0", "15.2.0", "15.1.1", "15.1.0", "15.0.1"
++};
++
++// Default architectures
++constexpr const char* kX86Architecture = "x86";
++constexpr const char* kArmArchitecture = "arm";
++
++}  // namespace fingerprint
++}  // namespace ungoogled
++
++#endif  // COMPONENTS_UNGOOGLED_FINGERPRINT_DATA_H_
+diff --git components/ungoogled/ungoogled_switches.cc components/ungoogled/ungoogled_switches.cc
+index c2f9515..aacd975 100644
+--- a/components/ungoogled/ungoogled_switches.cc
++++ b/components/ungoogled/ungoogled_switches.cc
+@@ -15,4 +15,55 @@ const char kFingerprintingCanvasMeasureTextNoise[] = "fingerprinting-canvas-meas
+ // Enable fingerprinting deception for Canvas image data
+ const char kFingerprintingCanvasImageDataNoise[] = "fingerprinting-canvas-image-data-noise";
+ 
++// Specify the fingerprint seed
++const char kFingerprint[] = "fingerprint";
++
++// Specify the browser brand
++const char kFingerprintBrand[] = "fingerprint-brand";
++
++// Specify the browser version
++const char kFingerprintBrandVersion[] = "fingerprint-brand-version";
++
++// Disable fingerprint spoofing
++const char kDisableSpoofing[] = "disable-spoofing";
++
++// Specify the screen width
++const char kFingerprintScreenWidth[] = "fingerprint-screen-width";
++
++// Specify the screen height
++const char kFingerprintScreenHeight[] = "fingerprint-screen-height";
++
++// Specify the device scale factor
++const char kFingerprintDeviceScaleFactor[] = "fingerprint-device-scale-factor";
++
++// Specify the number of CPU cores
++const char kFingerprintHardwareConcurrency[] = "fingerprint-hardware-concurrency";
++
++// Specify the operating system type
++const char kFingerprintPlatform[] = "fingerprint-platform";
++
++// Specify the operating system version
++const char kFingerprintPlatformVersion[] = "fingerprint-platform-version";
++
++// Specify the location
++const char kFingerprintLocation[] = "fingerprint-location";
++
++// Specify the timezone
++const char kFingerprintTimezone[] = "timezone";
++
++// PCI vendor id of the GPU the profile describes, e.g. 0x10DE
++const char kFingerprintGpuVendorId[] = "fingerprint-gpu-vendor-id";
++
++// PCI device id of that GPU, e.g. 0x2208
++const char kFingerprintGpuDeviceId[] = "fingerprint-gpu-device-id";
++
++// Adapter name exactly as the Windows driver reports it
++const char kFingerprintGpuDescription[] = "fingerprint-gpu-description";
++
++// navigator.deviceMemory and the Device-Memory hint, in GB
++const char kFingerprintDeviceMemory[] = "fingerprint-device-memory";
++
++// screen.availHeight (screen height minus the taskbar)
++const char kFingerprintScreenAvailHeight[] = "fingerprint-screen-avail-height";
++
+ }  // namespace switches
+diff --git components/ungoogled/ungoogled_switches.h components/ungoogled/ungoogled_switches.h
+index 7dace11..b50d16d 100644
+--- a/components/ungoogled/ungoogled_switches.h
++++ b/components/ungoogled/ungoogled_switches.h
+@@ -15,6 +15,23 @@ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingClientRectsNoise[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingCanvasMeasureTextNoise[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingCanvasImageDataNoise[];
+ 
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprint[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintBrand[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintBrandVersion[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kDisableSpoofing[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintScreenWidth[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintScreenHeight[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintDeviceScaleFactor[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintHardwareConcurrency[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintPlatform[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintPlatformVersion[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintLocation[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintTimezone[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintGpuVendorId[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintGpuDeviceId[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintGpuDescription[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintDeviceMemory[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintScreenAvailHeight[];
+ }
+ 
+ #endif  // THIRD_PARTY_UNGOOGLED_FINGERPRINTING_SWITCHES_H_
+diff --git content/browser/renderer_host/render_process_host_impl.cc content/browser/renderer_host/render_process_host_impl.cc
+index 61153b5..2a913bb 100644
+--- a/content/browser/renderer_host/render_process_host_impl.cc
++++ b/content/browser/renderer_host/render_process_host_impl.cc
+@@ -3938,6 +3938,23 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
+       switches::kFingerprintingClientRectsNoise,
+       switches::kFingerprintingCanvasMeasureTextNoise,
+       switches::kFingerprintingCanvasImageDataNoise,
++      switches::kFingerprint,
++      switches::kFingerprintBrand,
++      switches::kFingerprintBrandVersion,
++      switches::kDisableSpoofing,
++      switches::kFingerprintScreenWidth,
++      switches::kFingerprintScreenHeight,
++      switches::kFingerprintDeviceScaleFactor,
++      switches::kFingerprintHardwareConcurrency,
++      switches::kFingerprintPlatform,
++      switches::kFingerprintPlatformVersion,
++      switches::kFingerprintLocation,
++      switches::kFingerprintTimezone,
++      switches::kFingerprintGpuVendorId,
++      switches::kFingerprintGpuDeviceId,
++      switches::kFingerprintGpuDescription,
++      switches::kFingerprintDeviceMemory,
++      switches::kFingerprintScreenAvailHeight,
+       switches::kForceDeviceScaleFactor,
+       switches::kForceDisplayColorProfile,
+       switches::kForceHighContrast,
