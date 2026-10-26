@@ -159,3 +159,17 @@ describe('profile validation', () => {
     expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 9000, overrides: ['screen'] } })).toThrow('7680')
   })
 })
+
+describe('CPU model', () => {
+  it('keeps a known desktop CPU and makes the core count its thread count', async () => {
+    const { validateProfileDraft } = await import('./validation')
+    const { defaultProfileDraft } = await import('./defaults')
+    const draft = defaultProfileDraft()
+    draft.fingerprint = { ...draft.fingerprint, cpu: 'Intel Core i5-12400F', hardwareConcurrency: 8 }
+    const result = validateProfileDraft(draft)
+    expect(result.fingerprint.cpu).toBe('Intel Core i5-12400F')
+    expect(result.fingerprint.hardwareConcurrency).toBe(12)
+    draft.fingerprint = { ...draft.fingerprint, cpu: 'Intel Core i9-99999K' }
+    expect(() => validateProfileDraft(draft)).toThrow('CPU')
+  })
+})

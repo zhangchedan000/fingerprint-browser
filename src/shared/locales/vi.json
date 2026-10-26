@@ -1988,5 +1988,10 @@
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Hỗ trợ host:port:user:pass, user:pass@host:port, liên kết socks5:// và văn bản dạng “Địa chỉ: … Cổng: … Tên người dùng: … Mật khẩu: …”; dán xong sẽ tự điền",
   "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Mỗi dòng một proxy: host:port:user:pass, user:pass:host:port, user:pass@host:port, liên kết socks5:// hoặc khối nhiều dòng “Địa chỉ: … Cổng: … Tên người dùng: … Mật khẩu: …”; proxy đã có trong thư viện sẽ được bỏ qua.",
   "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "Trang web đọc dung lượng bộ nhớ do nhân báo cáo: nhân 147 trở lên có thể báo 16 hoặc 32 GB, nhân cũ tối đa 8 GB",
-  "设备内存只能是 2、4、8、16 或 32 GB": "Bộ nhớ thiết bị chỉ có thể là 2, 4, 8, 16 hoặc 32 GB"
+  "设备内存只能是 2、4、8、16 或 32 GB": "Bộ nhớ thiết bị chỉ có thể là 2, 4, 8, 16 hoặc 32 GB",
+  "CPU 型号": "Mẫu CPU",
+  "不指定": "Không chọn",
+  "{0} 核 {1} 线程": "{0} nhân {1} luồng",
+  "不认识的 CPU 型号": "Mẫu CPU không xác định",
+  "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Trang web không đọc được mẫu CPU; khi chọn, số luồng sẽ theo CPU đó để hồ sơ là một máy có thật"
 }

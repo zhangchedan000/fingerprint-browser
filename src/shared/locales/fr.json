@@ -1988,5 +1988,10 @@
   "支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入": "Accepte host:port:user:pass, user:pass@host:port, les liens socks5:// et un texte du type « Adresse : … Port : … Utilisateur : … Mot de passe : … » ; le collage remplit les champs",
   "每行一个代理，支持 host:port:user:pass、user:pass:host:port、user:pass@host:port、socks5:// 链接，以及多行的“地址：… 端口：… 用户名：… 密码：…”；代理库里已有的会自动跳过。": "Un proxy par ligne : host:port:user:pass, user:pass:host:port, user:pass@host:port, liens socks5:// ou blocs sur plusieurs lignes « Adresse : … Port : … Utilisateur : … Mot de passe : … » ; les proxys déjà présents sont ignorés.",
   "网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB": "Les sites lisent la mémoire indiquée par le noyau : le noyau 147 et plus récent peut indiquer 16 ou 32 GB, les anciens au maximum 8 GB",
-  "设备内存只能是 2、4、8、16 或 32 GB": "La mémoire de l'appareil doit être de 2, 4, 8, 16 ou 32 GB"
+  "设备内存只能是 2、4、8、16 或 32 GB": "La mémoire de l'appareil doit être de 2, 4, 8, 16 ou 32 GB",
+  "CPU 型号": "Modèle de CPU",
+  "不指定": "Non défini",
+  "{0} 核 {1} 线程": "{0} cœurs {1} threads",
+  "不认识的 CPU 型号": "Modèle de CPU inconnu",
+  "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Les sites ne lisent pas le modèle de CPU ; une fois choisi, la concurrence matérielle suit son nombre de threads pour décrire une machine réelle"
 }

@@ -52,6 +52,11 @@ export interface FingerprintConfig {
   hardwareProfileId: HardwareProfileId
   /** Picked GPU (key from gpu-catalog: model|deviceId). Unset = the kernel picks one by seed. */
   gpu?: string
+  /**
+   * Desktop CPU model (key from cpu-catalog). Pages cannot read it; when set, hardwareConcurrency
+   * is its thread count.
+   */
+  cpu?: string
   /** Shown in the editor only (web pages cannot read it); unset = derived from the seed. */
   deviceName?: string
   /** Shown in the editor only (web pages cannot read it), e.g. 7A:C5:6F:F2:C2:84; unset = derived from the seed. */

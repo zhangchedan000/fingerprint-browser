@@ -1,0 +1,1477 @@
+{
+ "about": "Desktop CPUs for profiles: Intel 9th-14th gen and Core Ultra 200S, AMD Ryzen 3000-9000. Cores/threads copied from the source of each row; models whose counts no source stated are left out. Web pages cannot read the model; the threads are what navigator.hardwareConcurrency reports.",
+ "cpus": [
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-9900KS",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-9900K",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-9900KF",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-9900",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-9700K",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-9700KF",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-9700",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-9700F",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 8,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9600K",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9600KF",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9600",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9500",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9500F",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9400",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-9400F",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9350KF",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9350K",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9320",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9300",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9100",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-9100F",
+   "family": "Coffee Lake Refresh (9th)",
+   "cores": 4,
+   "threads": 4,
+   "source": "https://en.wikipedia.org/wiki/Coffee_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10900K",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10900KF",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10910",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10900",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10900F",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-10850K",
+   "family": "Comet Lake (10th)",
+   "cores": 10,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-10700K",
+   "family": "Comet Lake (10th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-10700KF",
+   "family": "Comet Lake (10th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-10700",
+   "family": "Comet Lake (10th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-10700F",
+   "family": "Comet Lake (10th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10600K",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10600KF",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10600",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10500",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10505",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10400",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-10400F",
+   "family": "Comet Lake (10th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10325",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10320",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10305",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10300",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10105",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10105F",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10100",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-10100F",
+   "family": "Comet Lake (10th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Comet_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-11900K",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-11900KF",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-11900F",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-11900",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11600K",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11600KF",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11600",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11500",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11400F",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-11400",
+   "family": "Rocket Lake (11th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Rocket_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-11700K",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://techpowerup.com/cpu-specs/core-i7-11700k.c2367"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-11700F",
+   "family": "Rocket Lake (11th)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://www.intel.com/content/www/us/en/products/sku/212280/x/specifications.html"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-12900KS",
+   "family": "Alder Lake (12th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-12900K",
+   "family": "Alder Lake (12th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-12900KF",
+   "family": "Alder Lake (12th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-12900",
+   "family": "Alder Lake (12th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-12900F",
+   "family": "Alder Lake (12th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-12700K",
+   "family": "Alder Lake (12th)",
+   "cores": 12,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-12700KF",
+   "family": "Alder Lake (12th)",
+   "cores": 12,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-12700",
+   "family": "Alder Lake (12th)",
+   "cores": 12,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-12700F",
+   "family": "Alder Lake (12th)",
+   "cores": 12,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12600K",
+   "family": "Alder Lake (12th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12600KF",
+   "family": "Alder Lake (12th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12600",
+   "family": "Alder Lake (12th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12500",
+   "family": "Alder Lake (12th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12490F",
+   "family": "Alder Lake (12th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12400",
+   "family": "Alder Lake (12th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-12400F",
+   "family": "Alder Lake (12th)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-12300",
+   "family": "Alder Lake (12th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-12100",
+   "family": "Alder Lake (12th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-12100F",
+   "family": "Alder Lake (12th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Alder_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-13900KS",
+   "family": "Raptor Lake (13th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-13900K",
+   "family": "Raptor Lake (13th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-13900KF",
+   "family": "Raptor Lake (13th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-13900",
+   "family": "Raptor Lake (13th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-13900F",
+   "family": "Raptor Lake (13th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-13790F",
+   "family": "Raptor Lake (13th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-13700K",
+   "family": "Raptor Lake (13th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-13700KF",
+   "family": "Raptor Lake (13th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-13700",
+   "family": "Raptor Lake (13th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-13700F",
+   "family": "Raptor Lake (13th)",
+   "cores": 16,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13600K",
+   "family": "Raptor Lake (13th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13600KF",
+   "family": "Raptor Lake (13th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13600",
+   "family": "Raptor Lake (13th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13500",
+   "family": "Raptor Lake (13th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13490F",
+   "family": "Raptor Lake (13th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13400",
+   "family": "Raptor Lake (13th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-13400F",
+   "family": "Raptor Lake (13th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-13100",
+   "family": "Raptor Lake (13th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-13100F",
+   "family": "Raptor Lake (13th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-14900KS",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-14900K",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-14900KF",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-14900",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i9-14900F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 24,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-14790F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 20,
+   "threads": 28,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-14700K",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 20,
+   "threads": 28,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-14700KF",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 20,
+   "threads": 28,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-14700",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 20,
+   "threads": 28,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i7-14700F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 20,
+   "threads": 28,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14600K",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14600KF",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14600",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14500",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 14,
+   "threads": 20,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14490F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14400",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i5-14400F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 10,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-14100",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core i3-14100F",
+   "family": "Raptor Lake Refresh (14th)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/Raptor_Lake"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 9 285K",
+   "family": "Arrow Lake (Core Ultra 200S)",
+   "cores": 24,
+   "threads": 24,
+   "source": "https://www.corsair.com/au/en/explorer/gamer/gaming-pcs/new-intel-core-ultra-200-series-cpus-everything-you-need-to-know/"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 7 265K",
+   "family": "Arrow Lake (Core Ultra 200S)",
+   "cores": 20,
+   "threads": 20,
+   "source": "https://www.corsair.com/au/en/explorer/gamer/gaming-pcs/new-intel-core-ultra-200-series-cpus-everything-you-need-to-know/"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 5 245K",
+   "family": "Arrow Lake (Core Ultra 200S)",
+   "cores": 14,
+   "threads": 14,
+   "source": "https://www.corsair.com/au/en/explorer/gamer/gaming-pcs/new-intel-core-ultra-200-series-cpus-everything-you-need-to-know/"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 9 285",
+   "family": "Arrow Lake (Core Ultra 200S)",
+   "cores": 24,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/Arrow_Lake_(microprocessor)"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 7 270K Plus",
+   "family": "Arrow Lake Refresh (Core Ultra 200S Plus)",
+   "cores": 24,
+   "threads": 24,
+   "source": "https://www.hwcooling.net/en/arrow-lake-refresh-intel-desktop-cpus-launched-models-and-pricing/"
+  },
+  {
+   "vendor": "Intel",
+   "model": "Intel Core Ultra 5 250K Plus",
+   "family": "Arrow Lake Refresh (Core Ultra 200S Plus)",
+   "cores": 18,
+   "threads": 18,
+   "source": "https://www.hwcooling.net/en/arrow-lake-refresh-intel-desktop-cpus-launched-models-and-pricing/"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 3950X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 3900XT",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 3900X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 3800XT",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 3800X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 3700X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 3600XT",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 3600X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 3600",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 3500X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 6,
+   "threads": 6,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 3 3300X",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 3 3100",
+   "family": "Matisse (Ryzen 3000)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 5950X",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 5900XT",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 5900X",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5800X3D",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5800XT",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5800X",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5700X3D",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5700X",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600X3D",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600XT",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600X",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600T",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5500X3D",
+   "family": "Vermeer (Ryzen 5000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5700G",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 5700",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600GT",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5600G",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5500GT",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 5500",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 3 5300G",
+   "family": "Cezanne (Ryzen 5000G)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 7950X3D",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 7950X",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 7900X3D",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 7900X",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 7900",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 7800X3D",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 7700X",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 7700",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 7600X3D",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 7600X",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 7600",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 7500F",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 7400F",
+   "family": "Raphael (Ryzen 7000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 8700G",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 8700F",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 8600G",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 8500G",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 8400F",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 3 8300G",
+   "family": "Phoenix (Ryzen 8000G)",
+   "cores": 4,
+   "threads": 8,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 9950X3D",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 9950X",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 16,
+   "threads": 32,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 9900X3D",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 9 9900X",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 12,
+   "threads": 24,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 9850X3D",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 9800X3D",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 9700X",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 7 9700F",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 8,
+   "threads": 16,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 9600X",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 9600",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  },
+  {
+   "vendor": "AMD",
+   "model": "AMD Ryzen 5 9500F",
+   "family": "Granite Ridge (Ryzen 9000)",
+   "cores": 6,
+   "threads": 12,
+   "source": "https://en.wikipedia.org/wiki/List_of_AMD_Ryzen_processors"
+  }
+ ]
+}

@@ -33,6 +33,8 @@ import {
 } from '../../../../shared/hardware-profiles'
 import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
+import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
+import { kernelTakesExplicitGpu } from '../../../../shared/kernel-capabilities'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -470,7 +472,22 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   function chooseCores(value: number | 'host'): void {
-    patchFingerprint(value === 'host' ? { coresSource: 'host' } : { coresSource: 'profile', hardwareConcurrency: value })
+    // A core count the chosen CPU does not have would describe no real machine: drop the CPU.
+    const keepCpu = value !== 'host' && findCpu(fp.cpu)?.threads === value
+    patchFingerprint(value === 'host'
+      ? { coresSource: 'host', cpu: undefined }
+      : { coresSource: 'profile', hardwareConcurrency: value, ...(keepCpu ? {} : { cpu: undefined }) })
+  }
+
+  function chooseCpu(model: string): void {
+    const cpu = findCpu(model)
+    patchFingerprint(cpu
+      ? { cpu: cpu.model, coresSource: 'profile', hardwareConcurrency: cpu.threads }
+      : { cpu: undefined })
+  }
+
+  function randomCpu(): typeof CPU_MODELS[number] {
+    return CPU_MODELS[Math.floor(Math.random() * CPU_MODELS.length)]
   }
 
   function choosePlatformVersion(value: string): void {
@@ -502,7 +519,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
       renderIdentityVersion: 4,
       coresSource: 'profile',
-      hardwareConcurrency: COMMON_CORES[Math.floor(Math.random() * COMMON_CORES.length)],
+      ...(() => { const cpu = randomCpu(); return { cpu: cpu.model, hardwareConcurrency: cpu.threads } })(),
       screenSource: 'profile',
       screenWidth: width,
       screenHeight: height,
@@ -930,9 +947,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ...(gpuOptions.some((option) => !option.disabled)
       ? [{ label: t("当前内核可用"), options: gpuOptions.filter((option) => !option.disabled) }]
       : []),
-    ...(gpuOptions.some((option) => option.disabled)
+    // Prism kernels take any card from their own desktop list; other kernels' cards (laptops,
+    // seeded tables) are not offered there.
+    ...(gpuOptions.some((option) => option.disabled) && !kernelTakesExplicitGpu(windowKernelVersion)
       ? [{ label: t("需要其他内核版本（换内核后可选）"), options: gpuOptions.filter((option) => option.disabled) }]
       : [])
+  ]
+  const cpuSelectOptions = [
+    { value: 'none', label: t("不指定") },
+    ...cpuFamilies().map(({ family, cpus }) => ({
+      label: family,
+      options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}` }))
+    }))
   ]
   const languageOptions = [
     ...LANGUAGES.map(([value, label]) => ({ value, label: `${label} · ${value}` })),
@@ -1119,6 +1145,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {gpuMissing && (
         <Alert type="warning" showIcon className="fb-editor-alert" title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')} />
       )}
+      <Row label={t("CPU 型号")} hint={t("网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑")}>
+        <ValueChoice
+          wide
+          label={t("CPU 型号")}
+          value={fp.coresSource === 'host' ? 'none' : fp.cpu ?? 'none'}
+          onChange={(value: string) => chooseCpu(value)}
+          onShuffle={() => chooseCpu(randomCpu().model)}
+          options={cpuSelectOptions}
+        />
+      </Row>
       <Row label={t("硬件并发数")} check={checkFor('cores')}>
         <ValueChoice
           label={t("硬件并发数")}

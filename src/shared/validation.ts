@@ -1,6 +1,7 @@
 import { isKernelId } from './kernel-id'
 import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
+import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
 import { DEVICE_MEMORY_CHOICES } from './types'
 import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
@@ -107,6 +108,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     platformVersion: ownValues('platformVersion') ? rawFp.platformVersion ?? templated.platformVersion : templated.platformVersion
   }
   if (rawFp.deviceMemory !== undefined && !DEVICE_MEMORY_CHOICES.includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4、8、16 或 32 GB')
+  const cpu = rawFp.cpu ? findCpu(rawFp.cpu) : undefined
+  if (rawFp.cpu && !cpu) throw new Error('不认识的 CPU 型号')
+  // A CPU and a different core count would describe no real machine; the CPU wins.
+  if (cpu && rawFp.coresSource !== 'host') fp.hardwareConcurrency = cpu.threads
   if (rawFp.deviceName && (typeof rawFp.deviceName !== 'string' || !DEVICE_NAME_PATTERN.test(rawFp.deviceName.trim()))) {
     throw new Error('设备名称只能包含字母、数字和连字符，最长 63 个字符')
   }
@@ -199,6 +204,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       seed: fp.seed,
       hardwareProfileId: fp.hardwareProfileId,
       ...(fp.gpu ? { gpu: fp.gpu } : {}),
+      ...(cpu && rawFp.coresSource !== 'host' ? { cpu: cpu.model } : {}),
       ...(rawFp.deviceName ? { deviceName: rawFp.deviceName.trim() } : {}),
       ...(rawFp.macAddress ? { macAddress: rawFp.macAddress.trim().toUpperCase() } : {}),
       renderIdentityVersion: fp.renderIdentityVersion,
