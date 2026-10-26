@@ -97,6 +97,12 @@ export interface FingerprintConfig {
   geolocationPermission?: 'ask' | 'allow' | 'block'
   /** Do Not Track request header. Default: leave Chromium's own setting. */
   doNotTrack?: 'default' | 'on' | 'off'
+  /** Windows voices of another locale (e.g. "zh-hk"). Unset = the window's language. */
+  voicesLocale?: string
+  /** "auto" (unset, from the seed), "real", or "microphones,speakers,cameras". */
+  mediaDevices?: string
+  /** Language of the media device names (e.g. "de-de"). Unset = the window's language. */
+  mediaLocale?: string
 }
 
 export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'

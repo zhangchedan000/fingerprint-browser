@@ -1,5 +1,6 @@
 import { CPU_MODELS, type CpuModel } from './cpu-catalog'
 import type { DeviceMemoryGb } from './types'
+import { screenChoices, type ScreenSize } from './screen'
 
 /**
  * A GPU picked for a window brings a CPU and memory size a real desktop with that card would have:
@@ -75,4 +76,31 @@ export function matchedHardware(
     cpu: cpus[Math.floor(random() * cpus.length)],
     deviceMemory: (Math.min(deviceMemory, maxMemoryGb) as DeviceMemoryGb)
   }
+}
+
+/** How often each resolution goes with a card of this tier (keys "width x height"). */
+const SCREENS: Record<GpuTier, Record<string, number>> = {
+  entry: { '1920x1080': 70, '2560x1440': 25, '1920x1200': 5 },
+  mid: { '1920x1080': 45, '2560x1440': 40, '2560x1080': 5, '1920x1200': 5, '3440x1440': 5 },
+  high: { '1920x1080': 20, '2560x1440': 50, '3440x1440': 12, '3840x2160': 13, '2560x1600': 5 },
+  top: { '2560x1440': 40, '3840x2160': 35, '3440x1440': 20, '2560x1600': 5 }
+}
+
+/**
+ * A resolution a desktop with this card usually has, among those this computer can claim (no
+ * smaller than its real screen); the real size when none of the tier's sizes fits.
+ */
+export function matchedScreen(gpuModel: string, host: ScreenSize | undefined, random: () => number = Math.random): ScreenSize | undefined {
+  const weights = SCREENS[gpuTier(gpuModel)]
+  const choices = screenChoices(host)
+    .map((choice) => ({ ...choice, weight: weights[`${choice.width}x${choice.height}`] ?? 0 }))
+    .filter((choice) => choice.weight > 0)
+  if (!choices.length) return host
+  let roll = random() * choices.reduce((sum, choice) => sum + choice.weight, 0)
+  for (const choice of choices) {
+    roll -= choice.weight
+    if (roll < 0) return { width: choice.width, height: choice.height }
+  }
+  const last = choices[choices.length - 1]
+  return { width: last.width, height: last.height }
 }

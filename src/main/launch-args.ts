@@ -5,6 +5,8 @@ import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, chromeUiLocale, effectiveNetworkIdentity } from '../shared/network-identity'
 import { effectiveScreen } from '../shared/screen'
+import { effectiveMediaDevices } from '../shared/media-devices'
+import { kernelVendor } from '../shared/kernel-id'
 
 export interface LaunchArgumentOptions {
   userDataDir: string
@@ -133,6 +135,13 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     args.push(`--fingerprint-device-memory=${memory}`)
   }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
+  if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {
+    // Prism 4+: media devices (patch 014) and a chosen voice locale (patch 012).
+    const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0)
+    if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
+    if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
+    if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
+  }
   if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')
     args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')

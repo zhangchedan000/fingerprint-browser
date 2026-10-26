@@ -2021,5 +2021,12 @@
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Collez l’adresse d’un projet GitHub, par exemple https://github.com/owner/repo",
   "添加来源": "Ajouter une source",
   "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Seules les résolutions au moins aussi grandes que l’écran de cet ordinateur ({0} × {1}) sont proposées, pour que la fenêtre tienne",
-  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Ce noyau ne peut pas changer la résolution ; les sites voient la taille d’écran de cet ordinateur"
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Ce noyau ne peut pas changer la résolution ; les sites voient la taille d’écran de cet ordinateur",
+  "默认跟随窗口语言，也可以换成其他语言的 Windows 语音": "Suit la langue de la fenêtre par défaut ; vous pouvez choisir les voix Windows d’une autre langue",
+  "跟随语言 · {0}": "Suivre la langue · {0}",
+  "网站未授权时只能看到有哪几种设备；授权后看到的设备名也按这里生成": "Sans autorisation, les sites ne voient que les types d’appareils ; avec autorisation, les noms sont générés d’après ce réglage",
+  "自动 · {0}": "Auto · {0}",
+  "设备名称跟随语言": "Noms des appareils selon la langue",
+  "与 Chrome 一致：网页访问本机和局域网需要用户授权": "Comme Chrome : les pages doivent obtenir l’autorisation de l’utilisateur pour accéder à cet ordinateur ou au réseau local",
+  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} haut-parleur · {2} caméra"
 }

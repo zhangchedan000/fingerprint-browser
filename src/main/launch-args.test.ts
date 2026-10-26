@@ -105,4 +105,17 @@ describe('launch arguments', () => {
     expect(small).toContain('--fingerprint-screen-width=2560')
     expect(small).toContain('--fingerprint-screen-height=1440')
   })
+
+  it('passes media devices and a chosen voice locale to Prism kernels only', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const chosen = buildLaunchArgs(profile({ mediaDevices: '2,1,1', mediaLocale: 'de-de', voicesLocale: 'zh-hk' }), prism)
+    expect(chosen).toContain('--fingerprint-media-devices=2,1,1')
+    expect(chosen).toContain('--fingerprint-media-locale=de-de')
+    expect(chosen).toContain('--fingerprint-voices-locale=zh-hk')
+    const auto = buildLaunchArgs(profile(), prism)
+    expect(auto.some((arg) => /^--fingerprint-media-devices=[0-3],[0-3],[0-3]$/.test(arg))).toBe(true)
+    expect(auto.some((arg) => arg.startsWith('--fingerprint-voices-locale'))).toBe(false)
+    expect(buildLaunchArgs(profile({ mediaDevices: 'real' }), prism).some((arg) => arg.startsWith('--fingerprint-media-devices'))).toBe(false)
+    expect(buildLaunchArgs(profile({ mediaDevices: '2,1,1' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-media'))).toBe(false)
+  })
 })

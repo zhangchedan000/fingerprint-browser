@@ -2021,5 +2021,12 @@
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Dán địa chỉ dự án GitHub, ví dụ https://github.com/owner/repo",
   "添加来源": "Thêm nguồn",
   "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Chỉ chọn được độ phân giải không nhỏ hơn màn hình máy này ({0} × {1}) để cửa sổ vừa",
-  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Nhân này không đổi được độ phân giải; trang web thấy kích thước màn hình của máy này"
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Nhân này không đổi được độ phân giải; trang web thấy kích thước màn hình của máy này",
+  "默认跟随窗口语言，也可以换成其他语言的 Windows 语音": "Mặc định theo ngôn ngữ của cửa sổ; có thể chọn giọng Windows của ngôn ngữ khác",
+  "跟随语言 · {0}": "Theo ngôn ngữ · {0}",
+  "网站未授权时只能看到有哪几种设备；授权后看到的设备名也按这里生成": "Khi chưa cấp quyền, trang web chỉ thấy có những loại thiết bị nào; sau khi cấp quyền, tên thiết bị được tạo theo thiết lập này",
+  "自动 · {0}": "Tự động · {0}",
+  "设备名称跟随语言": "Tên thiết bị theo ngôn ngữ",
+  "与 Chrome 一致：网页访问本机和局域网需要用户授权": "Giống Chrome: trang web cần người dùng cho phép mới truy cập được máy này hoặc mạng cục bộ",
+  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} micro · {1} loa · {2} camera"
 }

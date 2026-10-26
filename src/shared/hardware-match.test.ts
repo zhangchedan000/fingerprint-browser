@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gpuTier, matchedHardware, matchingCpus } from './hardware-match'
+import { gpuTier, matchedHardware, matchedScreen, matchingCpus } from './hardware-match'
 
 describe('hardware matched to the GPU', () => {
   it('ranks cards by tier', () => {
@@ -26,5 +26,14 @@ describe('hardware matched to the GPU', () => {
     expect(matchedHardware('NVIDIA GeForce RTX 4090', 8).deviceMemory).toBe(8)
     const { cpu } = matchedHardware('NVIDIA GeForce RTX 3080', 32, () => 0)
     expect(cpu.threads).toBeGreaterThan(0)
+  })
+
+  it('gives top cards large screens and never one smaller than the real one', () => {
+    const sizes = Array.from({ length: 200 }, (_, i) => matchedScreen('NVIDIA GeForce RTX 4090', { width: 1920, height: 1080 }, () => i / 200))
+    expect(sizes.some((size) => size?.width === 3840)).toBe(true)
+    expect(sizes.some((size) => size?.width === 1920)).toBe(false)
+    const entry = matchedScreen('NVIDIA GeForce RTX 3050', { width: 2560, height: 1440 }, () => 0)
+    expect(entry).toEqual({ width: 2560, height: 1440 })
+    expect(matchedScreen('NVIDIA GeForce RTX 3050', { width: 1920, height: 1080 }, () => 0)).toEqual({ width: 1920, height: 1080 })
   })
 })

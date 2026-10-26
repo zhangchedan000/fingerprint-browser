@@ -2021,5 +2021,12 @@
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Bir GitHub proje adresi yapıştırın, örneğin https://github.com/owner/repo",
   "添加来源": "Kaynak ekle",
   "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Pencerenin sığması için yalnızca bu bilgisayarın ekranından ({0} × {1}) küçük olmayan çözünürlükler seçilebilir",
-  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Bu çekirdek çözünürlüğü değiştiremez; siteler bu bilgisayarın ekran boyutunu görür"
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Bu çekirdek çözünürlüğü değiştiremez; siteler bu bilgisayarın ekran boyutunu görür",
+  "默认跟随窗口语言，也可以换成其他语言的 Windows 语音": "Varsayılan olarak pencerenin dilini izler; başka bir dilin Windows seslerini seçebilirsiniz",
+  "跟随语言 · {0}": "Dili izle · {0}",
+  "网站未授权时只能看到有哪几种设备；授权后看到的设备名也按这里生成": "İzin yokken siteler yalnızca hangi aygıt türlerinin olduğunu görür; izinle aygıt adları bu ayardan üretilir",
+  "自动 · {0}": "Otomatik · {0}",
+  "设备名称跟随语言": "Aygıt adları dili izler",
+  "与 Chrome 一致：网页访问本机和局域网需要用户授权": "Chrome ile aynı: sayfaların bu bilgisayara veya yerel ağa erişmesi için kullanıcı izni gerekir",
+  "{0} 麦克风 · {1} 扬声器 · {2} 摄像头": "{0} mikrofon · {1} hoparlör · {2} kamera"
 }

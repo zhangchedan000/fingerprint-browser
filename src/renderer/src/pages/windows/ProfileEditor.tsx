@@ -36,7 +36,9 @@ import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../sh
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
-import { matchedHardware } from '../../../../shared/hardware-match'
+import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
+import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
+import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -405,12 +407,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // A new window starts as one coherent machine: the CPU and memory follow its GPU.
   useEffect(() => {
     if (!open || profile || fp.cpu || gpuReal || !shownGpuKey) return
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? randomScreen(hostScreen()) : undefined
-    patchFingerprint({
-      gpu: shownGpuKey,
-      ...matchedToGpu(shownGpuKey),
-      ...(screen ? { screenSource: 'profile', screenWidth: screen.width, screenHeight: screen.height } : {})
-    })
+    patchFingerprint({ gpu: shownGpuKey, ...matchedToGpu(shownGpuKey) })
   }, [open, profile, fp.cpu, gpuReal, shownGpuKey])
 
   /** New noise for every surface. The GPU is pinned first so only the noise changes. */
@@ -467,8 +464,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** A CPU, core count and memory a real desktop with this card would have; all stay editable. */
   function matchedToGpu(key: string): Partial<FingerprintConfig> {
     if (fp.platform !== 'windows') return {}
-    const { cpu, deviceMemory } = matchedHardware(key.split('|')[0], maxDeviceMemoryGb(windowKernelVersion))
-    return { cpu: cpu.model, coresSource: 'profile', hardwareConcurrency: cpu.threads, deviceMemory }
+    const model = key.split('|')[0]
+    const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, hostScreen()) : undefined
+    return {
+      cpu: cpu.model,
+      coresSource: 'profile',
+      hardwareConcurrency: cpu.threads,
+      deviceMemory,
+      ...(screen ? { screenSource: 'profile' as const, screenWidth: screen.width, screenHeight: screen.height } : {})
+    }
   }
 
   function shuffleGpu(): void {
@@ -547,10 +552,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       renderIdentityVersion: 4,
       coresSource: 'profile',
       ...(() => { const cpu = randomCpu(); return { cpu: cpu.model, hardwareConcurrency: cpu.threads } })(),
-      ...(gpu ? matchedToGpu(gpu) : {}),
       screenSource: 'profile',
       screenWidth: width,
       screenHeight: height,
+      // A picked card brings its own CPU, memory and resolution.
+      ...(gpu ? matchedToGpu(gpu) : {}),
       disabledSpoofing: [],
       deviceName: deviceName(randomSeed(), fp.platform),
       macAddress: macAddress(randomSeed())
@@ -962,6 +968,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     </div>
   )
 
+  /** The language the window launches with, for "follow the language" labels. */
+  const shownLanguage = effectiveNetworkIdentity(fp, profile?.proxyCheck, { allowGeoConflict: true }).language
+  const voicesLabel = (locale: string) =>
+    `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
+  const mediaLabel = (set: string) => {
+    const [microphones, speakers, cameras] = set.split(',').map(Number)
+    return t("{0} 麦克风 · {1} 扬声器 · {2} 摄像头", microphones, speakers, cameras)
+  }
   const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen())
   const screenValue = fp.screenSource === 'host' || (shownScreen.width !== fp.screenWidth || shownScreen.height !== fp.screenHeight)
     ? 'host'
@@ -1207,11 +1221,40 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label="ClientRects" check={checkFor('clientrects')} hint={t("字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
         {noiseControl('clientrects', 'ClientRects')}
       </Row>
-      <Row label="SpeechVoices">
-        <Fixed>{t("由内核自动与系统和语言保持一致")}</Fixed>
+      <Row label="SpeechVoices" hint={t("默认跟随窗口语言，也可以换成其他语言的 Windows 语音")}>
+        <Select
+          className="fb-fp-select"
+          showSearch
+          value={fp.voicesLocale ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
+          options={[
+            { value: 'auto', label: t("跟随语言 · {0}", voicesLabel(voiceLocaleForLanguage(shownLanguage))) },
+            ...WINDOWS_VOICE_LOCALES.map(({ locale }) => ({ value: locale, label: voicesLabel(locale) }))
+          ]}
+        />
       </Row>
-      <Row label={t("媒体设备")}>
-        <Fixed>{t("使用本机真实设备；网站未经授权只能看到数量，看不到名称")}</Fixed>
+      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名也按这里生成")}>
+        <Space wrap size={8}>
+          <Select
+            className="fb-fp-select"
+            value={fp.mediaDevices ?? 'auto'}
+            onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
+            options={[
+              { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0))) },
+              ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
+              { value: 'real', label: t("本机真实") }
+            ]}
+          />
+          {fp.mediaDevices !== 'real' && (
+            <Select
+              className="fb-fp-select"
+              showSearch
+              value={fp.mediaLocale ?? 'auto'}
+              onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
+              options={[{ value: 'auto', label: t("设备名称跟随语言") }, ...MEDIA_LOCALES.map((value) => ({ value, label: value }))]}
+            />
+          )}
+        </Space>
       </Row>
       <Row label={t("设备名称")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
         <TextWithShuffle
@@ -1240,7 +1283,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       <Row label={t("端口扫描保护")}>
-        <Fixed>{t("内核暂不支持")}</Fixed>
+        <Fixed>{t("与 Chrome 一致：网页访问本机和局域网需要用户授权")}</Fixed>
       </Row>
 
       <h3 className="fb-fp-group">{t("指纹检测")}</h3>

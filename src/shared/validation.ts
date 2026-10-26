@@ -1,4 +1,6 @@
 import { isKernelId } from './kernel-id'
+import { isVoiceLocale } from './windows-voices'
+import { isMediaDevicesChoice, MEDIA_LOCALES } from './media-devices'
 import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
@@ -120,6 +122,9 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   }
   const coresSource = rawFp.coresSource ?? 'profile'
   if (coresSource !== 'profile' && coresSource !== 'host') throw new Error('CPU 核数来源无效')
+  if (rawFp.voicesLocale && !isVoiceLocale(rawFp.voicesLocale)) throw new Error('语音语言无效')
+  if (rawFp.mediaDevices && !isMediaDevicesChoice(rawFp.mediaDevices)) throw new Error('媒体设备设置无效')
+  if (rawFp.mediaLocale && !MEDIA_LOCALES.includes(rawFp.mediaLocale)) throw new Error('设备名称语言无效')
   const screenSource = rawFp.screenSource ?? 'profile'
   if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
   const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
@@ -228,7 +233,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(coresSource !== 'profile' ? { coresSource } : {}),
       ...(rawFp.deviceMemory !== undefined && rawFp.deviceMemory !== 8 ? { deviceMemory: rawFp.deviceMemory } : {}),
       ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
-      ...(doNotTrack !== 'default' ? { doNotTrack } : {})
+      ...(doNotTrack !== 'default' ? { doNotTrack } : {}),
+      ...(rawFp.voicesLocale ? { voicesLocale: rawFp.voicesLocale } : {}),
+      ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
+      ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {})
     }
   }
 }
