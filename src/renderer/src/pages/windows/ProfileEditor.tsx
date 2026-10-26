@@ -35,7 +35,8 @@ import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../
 import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
-import { kernelTakesExplicitGpu } from '../../../../shared/kernel-capabilities'
+import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
+import { matchedHardware } from '../../../../shared/hardware-match'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -400,6 +401,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const gpuReal = fp.disabledSpoofing.includes('gpu')
   const shownGpuKey = fp.gpu ?? (gpu ? gpuKey(gpu) : undefined)
 
+  // A new window starts as one coherent machine: the CPU and memory follow its GPU.
+  useEffect(() => {
+    if (!open || profile || fp.cpu || gpuReal || !shownGpuKey) return
+    patchFingerprint({ gpu: shownGpuKey, ...matchedToGpu(shownGpuKey) })
+  }, [open, profile, fp.cpu, gpuReal, shownGpuKey])
+
   /** New noise for every surface. The GPU is pinned first so only the noise changes. */
   // Device name and MAC: stored once shuffled or typed, otherwise derived from the seed.
   const shownDeviceName = fp.deviceName || deviceName(fp.seed, fp.platform)
@@ -443,7 +450,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       patchFingerprint({ gpu: undefined, disabledSpoofing: [...new Set([...disabled, 'gpu' as const])] })
       return
     }
-    patchFingerprint({ gpu: value, renderIdentityVersion: 4, disabledSpoofing: disabled.filter((item) => item !== 'gpu') })
+    patchFingerprint({
+      gpu: value,
+      renderIdentityVersion: 4,
+      disabledSpoofing: disabled.filter((item) => item !== 'gpu'),
+      ...matchedToGpu(value)
+    })
+  }
+
+  /** A CPU, core count and memory a real desktop with this card would have; all stay editable. */
+  function matchedToGpu(key: string): Partial<FingerprintConfig> {
+    if (fp.platform !== 'windows') return {}
+    const { cpu, deviceMemory } = matchedHardware(key.split('|')[0], maxDeviceMemoryGb(windowKernelVersion))
+    return { cpu: cpu.model, coresSource: 'profile', hardwareConcurrency: cpu.threads, deviceMemory }
   }
 
   function shuffleGpu(): void {
@@ -515,12 +534,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function randomizeAll(): void {
     const list = kernelGpuList(windowKernelVersion, fp.platform)
     const [width, height] = COMMON_SCREENS[Math.floor(Math.random() * COMMON_SCREENS.length)]
+    const gpu = list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined
     patchFingerprint({
       seed: randomSeed(),
-      gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
+      gpu,
       renderIdentityVersion: 4,
       coresSource: 'profile',
       ...(() => { const cpu = randomCpu(); return { cpu: cpu.model, hardwareConcurrency: cpu.threads } })(),
+      ...(gpu ? matchedToGpu(gpu) : {}),
       screenSource: 'profile',
       screenWidth: width,
       screenHeight: height,

@@ -95,6 +95,8 @@ const api: BrowserApi = {
     remove: (version: string) => ipcRenderer.invoke('engine:remove', version),
     verify: (version: string) => ipcRenderer.invoke('engine:verify', version),
     releases: () => ipcRenderer.invoke('engine:releases'),
+    sources: () => ipcRenderer.invoke('engine:sources'),
+    setSources: (sources: string[]) => ipcRenderer.invoke('engine:set-sources', sources),
     install: (version: string) => ipcRenderer.invoke('engine:install', version),
     cancelInstall: (version: string) => ipcRenderer.invoke('engine:cancel-install', version),
     onProgress: (listener: (progress: KernelInstallProgress) => void) => {

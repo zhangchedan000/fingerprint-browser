@@ -2012,5 +2012,12 @@
   "内核 {0} 已安装": "Đã cài kernel {0}",
   "下载": "Tải xuống",
   "绑定的内核版本号无效": "Phiên bản kernel được gán không hợp lệ",
-  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "Thiếu chrome.dll cạnh chrome.exe, thư mục trình duyệt không đầy đủ: giải nén hết windows_x64.zip rồi chọn chrome.exe bên trong"
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "Thiếu chrome.dll cạnh chrome.exe, thư mục trình duyệt không đầy đủ: giải nén hết windows_x64.zip rồi chọn chrome.exe bên trong",
+  "请粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Dán địa chỉ dự án GitHub, ví dụ https://github.com/owner/repo",
+  "从第三方项目下载内核？": "Tải nhân từ dự án bên thứ ba?",
+  "内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。": "Nhân đến từ {0} và sẽ chạy trên máy tính này sau khi tải. Hãy chắc chắn bạn tin tưởng dự án này; nhân bên thứ ba có thể không hỗ trợ mọi thiết lập vân tay.",
+  "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Nhân Windows được liệt kê từ các dự án GitHub bên dưới và được kiểm tra SHA-256 trước khi cài đặt.",
+  "还没有内核来源，先添加一个 GitHub 项目": "Chưa có nguồn nhân. Hãy thêm một dự án GitHub trước",
+  "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Dán địa chỉ dự án GitHub, ví dụ https://github.com/owner/repo",
+  "添加来源": "Thêm nguồn"
 }

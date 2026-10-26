@@ -2012,5 +2012,12 @@
   "内核 {0} 已安装": "內核 {0} 已安裝",
   "下载": "下載",
   "绑定的内核版本号无效": "綁定的內核版本號無效",
-  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.exe 旁邊缺少 chrome.dll，這不是完整的瀏覽器資料夾：請先把 windows_x64.zip 完整解壓，再選裡面的 chrome.exe"
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.exe 旁邊缺少 chrome.dll，這不是完整的瀏覽器資料夾：請先把 windows_x64.zip 完整解壓，再選裡面的 chrome.exe",
+  "请粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "請貼上 GitHub 專案網址，例如 https://github.com/owner/repo",
+  "从第三方项目下载内核？": "從第三方專案下載核心？",
+  "内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。": "核心來自 {0}，下載後會在這台電腦上執行。請確認這個專案可信；第三方核心可能不支援全部指紋參數。",
+  "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "從下面的 GitHub 專案列出 Windows 核心，下載後會校驗 SHA-256 再安裝。",
+  "还没有内核来源，先添加一个 GitHub 项目": "還沒有核心來源，請先新增一個 GitHub 專案",
+  "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "貼上 GitHub 專案網址，例如 https://github.com/owner/repo",
+  "添加来源": "新增來源"
 }

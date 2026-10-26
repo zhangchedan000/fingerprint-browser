@@ -240,6 +240,8 @@ export interface AppSettings extends AppPreferences {
   fingerprintKernel: boolean
   enginePreference: EnginePreference
   recycleRetentionDays: 0 | 7 | 30 | 90
+  /** GitHub projects ("owner/repo") that "在线下载内核" lists kernels from. */
+  kernelSources: string[]
 }
 
 /** Interface choices from the settings page. */
@@ -285,6 +287,8 @@ export interface KernelRelease {
   remoteAvailable: boolean
   origin?: 'release' | 'local-build' | 'bundled'
   executable?: string
+  /** GitHub project ("owner/repo") a downloadable release comes from. */
+  source?: string
 }
 
 export type KernelInstallStage = 'downloading' | 'verifying' | 'installing' | 'ready' | 'cancelled' | 'error'
@@ -619,6 +623,8 @@ export interface BrowserApi {
     verify: (version: string) => Promise<KernelHealth>
     /** Kernels published by fingerprint-chromium for this system (plus installed ones). */
     releases: () => Promise<KernelRelease[]>
+    sources: () => Promise<string[]>
+    setSources: (sources: string[]) => Promise<string[]>
     /** Downloads, checks and installs a published kernel, then makes it the default. */
     install: (version: string) => Promise<EngineStatus>
     cancelInstall: (version: string) => Promise<void>

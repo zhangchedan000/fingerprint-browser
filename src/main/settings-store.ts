@@ -2,6 +2,7 @@ import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { AppPreferences, AppSettings } from '../shared/types'
+import { DEFAULT_KERNEL_SOURCES, validKernelSources } from '../shared/kernel-sources'
 
 export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5 }
 
@@ -14,7 +15,7 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
 }
 
 export class SettingsStore {
-  private settings: AppSettings = { browserExecutable: '', fingerprintKernel: false, enginePreference: 'auto', recycleRetentionDays: 0, ...DEFAULT_PREFERENCES }
+  private settings: AppSettings = { browserExecutable: '', fingerprintKernel: false, enginePreference: 'auto', recycleRetentionDays: 0, kernelSources: [...DEFAULT_KERNEL_SOURCES], ...DEFAULT_PREFERENCES }
   private readonly path: string
 
   constructor(vaultPath: string) {
@@ -31,6 +32,7 @@ export class SettingsStore {
         recycleRetentionDays: stored.recycleRetentionDays === 7 || stored.recycleRetentionDays === 30 || stored.recycleRetentionDays === 90
           ? stored.recycleRetentionDays
           : 0,
+        kernelSources: validKernelSources(stored.kernelSources),
         ...validPreferences(stored)
       }
     } catch (error) {

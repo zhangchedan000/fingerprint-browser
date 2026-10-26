@@ -2012,5 +2012,12 @@
   "内核 {0} 已安装": "Kernel {0} installé",
   "下载": "Télécharger",
   "绑定的内核版本号无效": "La version du kernel attribuée est invalide",
-  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.dll manque à côté de chrome.exe, le dossier du navigateur est incomplet : décompressez entièrement windows_x64.zip puis choisissez le chrome.exe qu’il contient"
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.dll manque à côté de chrome.exe, le dossier du navigateur est incomplet : décompressez entièrement windows_x64.zip puis choisissez le chrome.exe qu’il contient",
+  "请粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Collez l’adresse d’un projet GitHub, par exemple https://github.com/owner/repo",
+  "从第三方项目下载内核？": "Télécharger un noyau depuis un projet tiers ?",
+  "内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。": "Le noyau provient de {0} et s’exécutera sur cet ordinateur une fois téléchargé. Assurez-vous de faire confiance à ce projet ; les noyaux tiers peuvent ne pas prendre en charge tous les réglages d’empreinte.",
+  "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Les noyaux Windows sont listés depuis les projets GitHub ci-dessous et vérifiés par SHA-256 avant l’installation.",
+  "还没有内核来源，先添加一个 GitHub 项目": "Aucune source de noyau pour l’instant. Ajoutez d’abord un projet GitHub",
+  "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Collez l’adresse d’un projet GitHub, par exemple https://github.com/owner/repo",
+  "添加来源": "Ajouter une source"
 }

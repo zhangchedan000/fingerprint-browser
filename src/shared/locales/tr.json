@@ -2012,5 +2012,12 @@
   "内核 {0} 已安装": "Kernel {0} kuruldu",
   "下载": "İndir",
   "绑定的内核版本号无效": "Atanan kernel sürümü geçersiz",
-  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.exe yanında chrome.dll yok, tarayıcı klasörü eksik: windows_x64.zip'i tamamen açın ve içindeki chrome.exe'yi seçin"
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.exe yanında chrome.dll yok, tarayıcı klasörü eksik: windows_x64.zip'i tamamen açın ve içindeki chrome.exe'yi seçin",
+  "请粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Bir GitHub proje adresi yapıştırın, örneğin https://github.com/owner/repo",
+  "从第三方项目下载内核？": "Üçüncü taraf bir projeden çekirdek indirilsin mi?",
+  "内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。": "Çekirdek {0} kaynağından geliyor ve indirildikten sonra bu bilgisayarda çalışacak. Bu projeye güvendiğinizden emin olun; üçüncü taraf çekirdekler tüm parmak izi ayarlarını desteklemeyebilir.",
+  "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Windows çekirdekleri aşağıdaki GitHub projelerinden listelenir ve kurulumdan önce SHA-256 ile doğrulanır.",
+  "还没有内核来源，先添加一个 GitHub 项目": "Henüz çekirdek kaynağı yok. Önce bir GitHub projesi ekleyin",
+  "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Bir GitHub proje adresi yapıştırın, örneğin https://github.com/owner/repo",
+  "添加来源": "Kaynak ekle"
 }

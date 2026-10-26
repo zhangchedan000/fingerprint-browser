@@ -29,15 +29,15 @@ jobs:
           SOURCE_REPO: zhangchedan000/prism-kernel
         run: |
           set -euo pipefail
-          if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::Secret PRISM_KERNEL_TOKEN is missing (read-only Contents access to $SOURCE_REPO)"
-            exit 1
-          fi
           for tag in $(jq -r '.[]' tools/prism-kernel-releases.json); do
             target="kernel-$tag"
             if gh release view "$target" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               echo "::notice::$target already published"
               continue
+            fi
+            if [ -z "$SOURCE_TOKEN" ]; then
+              echo "::error::Secret PRISM_KERNEL_TOKEN is missing (read-only Contents access to $SOURCE_REPO)"
+              exit 1
             fi
             chromium="${tag%-prism*}"
             zip="ungoogled-chromium_${chromium}-1.1_windows_x64.zip"

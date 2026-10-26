@@ -17,32 +17,17 @@ import {
   type KernelIntegrityFields
 } from './kernel-integrity'
 import type { SettingsStore } from './settings-store'
+import { checksumFor, isSourceDownloadUrl, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
 /**
- * Only our own Prism kernels (Windows). The build repository is private, so each finished kernel
- * is also published on this app's public repository as a release tagged "kernel-<chromium>-prismN".
+ * Windows kernels are listed from the GitHub projects in settings.kernelSources (this app's own
+ * repository by default, where each Prism build is published as "kernel-<chromium>-prismN").
  */
-const PRISM_RELEASES_URL = 'https://api.github.com/repos/zhangchedan000/fingerprint-browser/releases?per_page=30'
-const PRISM_TAG_PATTERN = /^kernel-(\d+(?:\.\d+){3})-prism\d+$/
-const TRUSTED_DOWNLOAD_PATHS = ['/zhangchedan000/fingerprint-browser/releases/download/']
-
-interface GithubAsset {
-  name: string
-  size: number
-  browser_download_url: string
-  digest: string | null
-}
-
-interface GithubRelease {
-  tag_name: string
-  published_at: string
-  draft: boolean
-  prerelease: boolean
-  assets: GithubAsset[]
-}
+const releasesUrl = (source: string) => `https://api.github.com/repos/${source}/releases?per_page=30`
 
 interface InstalledKernelManifest extends KernelIntegrityFields {
   schemaVersion?: 1 | 2
@@ -61,11 +46,6 @@ interface KernelActivationBackup {
   schemaVersion: 1
   recordedAt: string
   settings: AppSettings
-}
-
-function prismAsset(assets: GithubAsset[], chromium: string): GithubAsset | undefined {
-  if (process.platform !== 'win32') return undefined
-  return assets.find((asset) => asset.name === `ungoogled-chromium_${chromium}-1.1_windows_x64.zip`)
 }
 
 function safeVersion(version: string): string {
@@ -160,40 +140,52 @@ export class KernelManager {
   async releases(): Promise<KernelRelease[]> {
     if (process.platform !== 'win32') throw new Error('Prism 内核目前只有 Windows 版')
     const installed = await this.installedManifests()
-    let releases: GithubRelease[]
-    try {
-      releases = await this.fetchReleases(PRISM_RELEASES_URL)
-    } catch (error) {
-      if (installed.size === 0) throw error
-      this.logger?.error('获取 Prism 内核版本失败，展示本地版本', error)
-      releases = []
-    }
-    const remote = releases
-      .filter((release) => !release.draft && !release.prerelease)
-      .flatMap((release) => {
-        const chromium = release.tag_name.match(PRISM_TAG_PATTERN)?.[1]
-        const asset = chromium ? prismAsset(release.assets, chromium) : undefined
-        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
-        if (!chromium || !asset || !digest) return []
-        const version = `prism-${chromium}`
-        const manifest = installed.get(version)
-        return [{
-          version,
-          publishedAt: release.published_at,
-          assetName: asset.name,
-          downloadUrl: asset.browser_download_url,
-          size: asset.size,
-          sha256: digest,
-          installed: Boolean(manifest),
-          remoteAvailable: true,
-          origin: manifest?.source ?? 'release',
-          executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined
-        } satisfies KernelRelease]
+    const sources = this.settings.get().kernelSources
+    const listed = await Promise.all(sources.map(async (source) => {
+      try {
+        return { candidates: releaseCandidates(source, await this.fetchReleases(releasesUrl(source))) }
+      } catch (error) {
+        this.logger?.error('获取内核版本失败', { source, error: error instanceof Error ? error.message : String(error) })
+        return { candidates: [], error: `${source}：${error instanceof Error ? error.message : String(error)}` }
+      }
+    }))
+    const failures = listed.flatMap((item) => item.error ? [item.error] : [])
+    if (sources.length && failures.length === sources.length && installed.size === 0) throw new Error(failures.join('；'))
+
+    const installedBySha = new Map([...installed.values()].map((manifest) => [manifest.sha256.toLowerCase(), manifest]))
+    const used = new Set<string>()
+    const remote: KernelRelease[] = []
+    for (const candidate of listed.flatMap((item) => item.candidates)) {
+      const sha256 = candidate.sha256 || await this.checksumFromFile(candidate)
+      if (!sha256) continue
+      const manifest = installedBySha.get(sha256)
+      // The same Chromium version from another release or project gets its publish time as a suffix.
+      let version = manifest?.version ?? `prism-${candidate.chromium}`
+      if (!manifest) {
+        const at = new Date(candidate.publishedAt)
+        while (used.has(version) || installed.has(version)) {
+          version = kernelBuildId(`prism-${candidate.chromium}`, at)
+          at.setMinutes(at.getMinutes() + 1)
+        }
+      }
+      if (!isKernelId(version) || used.has(version)) continue
+      used.add(version)
+      remote.push({
+        version,
+        publishedAt: candidate.publishedAt,
+        assetName: candidate.asset.name,
+        downloadUrl: candidate.asset.browser_download_url,
+        size: candidate.asset.size,
+        sha256,
+        installed: Boolean(manifest),
+        remoteAvailable: true,
+        origin: manifest?.source ?? 'release',
+        executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
+        source: candidate.source
       })
-      .sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
-    const remoteVersions = new Set(remote.map((release) => release.version))
+    }
     const localOnly = [...installed.values()]
-      .filter((manifest) => !remoteVersions.has(manifest.version))
+      .filter((manifest) => !used.has(manifest.version))
       .map((manifest) => ({
         version: manifest.version,
         publishedAt: manifest.installedAt,
@@ -207,6 +199,24 @@ export class KernelManager {
         executable: join(this.kernelPath(manifest.version), manifest.executableRelative)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
+  }
+
+  sources(): string[] {
+    return this.settings.get().kernelSources
+  }
+
+  async setSources(input: string[]): Promise<string[]> {
+    return (await this.settings.update({ kernelSources: validKernelSources(input) })).kernelSources
+  }
+
+  private async checksumFromFile(candidate: ReleaseCandidate): Promise<string> {
+    if (!candidate.checksumAsset || candidate.checksumAsset.size > 64 * 1024) return ''
+    try {
+      const response = await this.fetchImpl(candidate.checksumAsset.browser_download_url, { signal: AbortSignal.timeout(15_000) })
+      return response.ok ? checksumFor(await response.text(), candidate.asset.name) ?? '' : ''
+    } catch {
+      return ''
+    }
   }
 
   private async fetchReleases(url: string): Promise<GithubRelease[]> {
@@ -762,10 +772,8 @@ export class KernelManager {
   }
 
   private validateRelease(release: KernelRelease): void {
-    const url = new URL(release.downloadUrl)
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('内核下载地址不可信')
-    if (!TRUSTED_DOWNLOAD_PATHS.some((path) => url.pathname.startsWith(path))) {
-      throw new Error('内核下载地址不属于受信任仓库')
+    if (!isSourceDownloadUrl(release.downloadUrl, this.settings.get().kernelSources)) {
+      throw new Error('内核下载地址不属于已添加的内核来源')
     }
     if (!/^[a-f\d]{64}$/i.test(release.sha256)) throw new Error('发行包缺少有效的 SHA-256')
     if (release.size < 10_000_000 || release.size > 800_000_000) throw new Error('发行包大小异常')

@@ -508,6 +508,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     )
   })
   ipcMain.handle('engine:releases', () => kernels.releases())
+  ipcMain.handle('engine:sources', () => kernels.sources())
+  ipcMain.handle('engine:set-sources', (_event, sources: unknown) => {
+    if (!Array.isArray(sources)) throw new Error('内核来源格式无效')
+    return kernels.setSources(sources.filter((item): item is string => typeof item === 'string'))
+  })
   ipcMain.handle('engine:install', (_event, version: string) => {
     if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再导入并切换内核')
     return kernels.install(version)

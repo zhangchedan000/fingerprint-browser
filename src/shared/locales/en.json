@@ -2012,5 +2012,12 @@
   "内核 {0} 已安装": "Kernel {0} installed",
   "下载": "Download",
   "绑定的内核版本号无效": "The assigned kernel version is invalid",
-  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.dll is missing next to chrome.exe, so this is not a complete browser folder: unzip windows_x64.zip fully, then pick the chrome.exe inside"
+  "chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe": "chrome.dll is missing next to chrome.exe, so this is not a complete browser folder: unzip windows_x64.zip fully, then pick the chrome.exe inside",
+  "请粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Paste a GitHub project address, e.g. https://github.com/owner/repo",
+  "从第三方项目下载内核？": "Download a kernel from a third-party project?",
+  "内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。": "The kernel comes from {0} and will run on this computer once downloaded. Make sure you trust this project; third-party kernels may not support every fingerprint setting.",
+  "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Windows kernels are listed from the GitHub projects below and checked against their SHA-256 before installing.",
+  "还没有内核来源，先添加一个 GitHub 项目": "No kernel sources yet. Add a GitHub project first",
+  "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Paste a GitHub project address, e.g. https://github.com/owner/repo",
+  "添加来源": "Add source"
 }
