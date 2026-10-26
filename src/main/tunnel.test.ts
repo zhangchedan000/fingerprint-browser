@@ -3,7 +3,7 @@ import { createConnection, createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mihomoConfig, validateTunnelSource } from './tunnel-config'
+import { AUTO_TUNNEL_GROUP, mihomoConfig, validateTunnelSource } from './tunnel-config'
 import { TunnelManager } from './tunnel-manager'
 import { connectThrough } from './proxy-bridge'
 import { identitySecretCodec } from './secret-codec'
@@ -28,6 +28,8 @@ describe('tunnel sources', () => {
     expect(config['external-controller']).toBe('127.0.0.1:1001')
     expect(config.rules).toEqual(['MATCH,TUNNEL'])
     expect(config['proxy-groups'][0].use).toEqual(['source-a', 'source-b'])
+    expect(config['proxy-groups'][0]).toMatchObject({ name: AUTO_TUNNEL_GROUP, type: 'url-test', interval: 300, tolerance: 50, lazy: false })
+    expect(config['proxy-groups'][1]).toMatchObject({ name: 'TUNNEL', type: 'select', proxies: [AUTO_TUNNEL_GROUP] })
     expect(config['proxy-providers']['source-b']).toMatchObject({ type: 'http', url: 'https://s.example' })
     expect(config['proxy-providers']['source-a'].override['additional-prefix']).toBe('Mine · ')
   })
@@ -103,5 +105,55 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
     await tunnel.addSource({ kind: 'links', content: 'proxies:\n  - {name: bad, type: nonsense, server: x, port: 1}\n' })
     await expect(tunnel.setEnabled(true)).rejects.toThrow()
     expect((await tunnel.status()).state).toBe('error')
+  }, 60_000)
+
+  it('selects the fastest healthy node, preserves manual choice, edits and rolls back invalid edits', async () => {
+    vault = await mkdtemp(join(tmpdir(), 'tunnel-auto-'))
+    // Local HTTP proxies answer the health-check URL with controlled delays; no Internet needed.
+    const proxy = (latency: number) => createServer((socket) => {
+      socket.on('error', () => undefined)
+      socket.once('data', () => {
+        setTimeout(() => {
+          socket.write('HTTP/1.1 200 Connection established\r\n\r\n')
+          socket.once('data', () => socket.end('HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n'))
+        }, latency)
+      })
+    })
+    const fast = await listen(proxy(10))
+    const slow = await listen(proxy(200))
+    const content = `proxies:\n  - {name: fast, type: http, server: 127.0.0.1, port: ${fast}}\n  - {name: slow, type: http, server: 127.0.0.1, port: ${slow}}\n  - {name: dead, type: http, server: 127.0.0.1, port: 1}\n`
+    const healthUrl = 'http://health.example.test/generate_204'
+    const make = () => new TunnelManager(vault, identitySecretCodec, core, undefined, undefined, healthUrl)
+    tunnel = make()
+    const added = await tunnel.addSource({ name: 'Local', kind: 'links', content })
+    const id = added.sources[0].id
+    expect(added.selectionMode).toBe('auto')
+    expect(JSON.stringify(added)).not.toContain(content)
+    await tunnel.setEnabled(true)
+    const automatic = await tunnel.testDelays()
+    expect(automatic.selectionMode).toBe('auto')
+    expect(automatic.selected).toBe('Local · fast')
+    expect(automatic.nodes.find((node) => node.name === 'Local · dead')?.delay).toBe(0)
+    expect(automatic.nodes.every((node) => node.sourceId === id)).toBe(true)
+    await tunnel.select('Local · slow')
+    expect((await tunnel.testDelays()).selected).toBe('Local · slow')
+    await tunnel.stop()
+    tunnel = make()
+    await tunnel.initialize()
+    expect(await tunnel.status()).toMatchObject({ selectionMode: 'manual', selected: 'Local · slow' })
+    await expect(tunnel.select('does not exist')).rejects.toThrow('节点不存在')
+    expect((await tunnel.status()).selected).toBe('Local · slow')
+    await tunnel.updateSource(id, { name: 'Edited', kind: 'links', content })
+    expect(tunnel.source(id)).toMatchObject({ name: 'Edited', content: content.trim() })
+    expect(await tunnel.status()).toMatchObject({ selectionMode: 'manual', selected: 'Edited · slow' })
+    await expect(tunnel.updateSource(id, { name: 'Broken', kind: 'links', content: 'proxies:\n  - {name: invalid, type: nonsense, server: x, port: 1}' })).rejects.toThrow()
+    expect(tunnel.source(id).name).toBe('Edited')
+    expect(await tunnel.status()).toMatchObject({ state: 'running', selected: 'Edited · slow' })
+    expect(await tunnel.autoSelect()).toMatchObject({ selectionMode: 'auto', selected: 'Edited · fast' })
+    await tunnel.stop()
+    tunnel = make()
+    await tunnel.initialize()
+    expect((await tunnel.testDelays()).selectionMode).toBe('auto')
+    expect((await tunnel.status()).selected).toBe('Edited · fast')
   }, 60_000)
 })

@@ -224,7 +224,7 @@ export class BrowserLauncher {
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
       try {
-        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint)
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls')
       } catch (error) {
         this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
           profileId: id,
@@ -458,7 +458,16 @@ export class BrowserLauncher {
     running.expectedExit = true
     this.logger?.info('正在关闭浏览器环境', { profileId: id, pid: running.process.pid })
     this.onChanged(await this.profiles.setRuntime(id, { status: 'stopping', lastError: undefined }))
-    running.process.kill('SIGTERM')
+    if (this.profiles.get(id).startupMode === 'restore' && (running.automation || this.processInspector.requestClose)) {
+      try {
+        if (running.automation) {
+          await Promise.race([running.automation.requestClose(), new Promise((resolve) => setTimeout(resolve, 3000))])
+        } else if (running.process.pid) await this.processInspector.requestClose!(running.process.pid)
+      } catch {
+        // A close request can lose its reply as Chromium exits. Allow the normal shutdown
+        // to finish; the timeout below still terminates an unresponsive process.
+      }
+    } else running.process.kill('SIGTERM')
     const exited = await new Promise<boolean>((resolve) => {
       const forceTimer = setTimeout(() => {
         running.process.kill('SIGKILL')

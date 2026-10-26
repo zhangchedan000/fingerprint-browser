@@ -335,7 +335,7 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     proxyUrl = await openProxyBridge(profile.proxy)
     // Same window size as a real launch, just placed off-screen.
     const size = expectedIdentity(profile, options).screen
-    const args = buildLaunchArgs({ ...profile, startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height: size[1] } }, {
+    const args = buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height: size[1] } }, {
       userDataDir,
       proxyUrl,
       engineVersion: engine.version,

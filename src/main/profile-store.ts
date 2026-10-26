@@ -236,6 +236,7 @@ export class ProfileStore {
         extensionIds: Array.isArray(stored.extensionIds) ? stored.extensionIds.filter((id) => typeof id === 'string') : [],
         color: stored.color as string,
         startUrls: stored.startUrls,
+        startupMode: stored.startupMode,
         kernelVersion: typeof stored.kernelVersion === 'string' ? stored.kernelVersion : '',
         window: stored.window ?? defaultProfileWindow(),
         // A reference to a missing proxy is kept (and blocks launching); validate it as direct.

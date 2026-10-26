@@ -2032,5 +2032,14 @@
   "更新": "Cập nhật",
   "有更新": "Có bản cập nhật",
   "正在更新浏览器内核…": "Đang cập nhật nhân trình duyệt…",
-  "内核已更新，使用它的窗口下次启动即用新版": "Đã cập nhật nhân; các cửa sổ dùng nhân này sẽ dùng bản mới ở lần khởi động tới"
+  "内核已更新，使用它的窗口下次启动即用新版": "Đã cập nhật nhân; các cửa sổ dùng nhân này sẽ dùng bản mới ở lần khởi động tới",
+  "固定使用": "Cố định nút",
+  "节点选择": "Chọn nút",
+  "自动选择最低延迟": "Tự chọn độ trễ thấp nhất",
+  "编辑节点来源": "Sửa nguồn nút",
+  "打开指定页面": "Mở các trang chỉ định",
+  "打开上次关闭的页面": "Khôi phục phiên trước",
+  "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "Chế độ tự động kiểm tra mỗi 5 phút và chuyển khi cải thiện hơn 50 ms. Nút cố định được giữ sau khi khởi động lại.",
+  "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Sửa tên nguồn, liên kết nút hoặc địa chỉ đăng ký. Lưu sẽ kết nối lại đường hầm. Các nút đăng ký do nội dung đăng ký quản lý.",
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Khôi phục các thẻ của phiên trước trong môi trường này; lần đầu sẽ mở thẻ mới. Mỗi dòng một địa chỉ; dùng HTTPS nếu thiếu giao thức."
 }

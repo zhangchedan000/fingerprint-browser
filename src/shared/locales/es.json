@@ -2032,5 +2032,14 @@
   "更新": "Actualizar",
   "有更新": "Actualización disponible",
   "正在更新浏览器内核…": "Actualizando el núcleo del navegador…",
-  "内核已更新，使用它的窗口下次启动即用新版": "Núcleo actualizado; las ventanas que lo usan tendrán la nueva versión en el próximo inicio"
+  "内核已更新，使用它的窗口下次启动即用新版": "Núcleo actualizado; las ventanas que lo usan tendrán la nueva versión en el próximo inicio",
+  "固定使用": "Fijar nodo",
+  "节点选择": "Selección de nodo",
+  "自动选择最低延迟": "Elegir menor latencia",
+  "编辑节点来源": "Editar origen de nodos",
+  "打开指定页面": "Abrir páginas indicadas",
+  "打开上次关闭的页面": "Restaurar sesión anterior",
+  "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "El modo automático prueba cada 5 minutos y cambia si mejora más de 50 ms. El nodo fijado se conserva tras reiniciar.",
+  "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Edite el nombre, los enlaces o la URL de suscripción. Guardar reconecta el túnel. La suscripción administra sus nodos.",
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaure las pestañas de la última sesión de este entorno, o abra una pestaña nueva en el primer uso. Una URL por línea; se usa HTTPS si no se indica el protocolo."
 }

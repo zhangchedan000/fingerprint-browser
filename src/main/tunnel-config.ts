@@ -19,6 +19,7 @@ export interface TunnelSource {
 }
 
 export const TUNNEL_GROUP = 'TUNNEL'
+export const AUTO_TUNNEL_GROUP = 'TUNNEL-AUTO'
 export const DELAY_TEST_URL = 'https://www.gstatic.com/generate_204'
 
 export function providerName(source: Pick<TunnelSource, 'id'>): string {
@@ -52,6 +53,7 @@ export interface MihomoConfigInput {
   mixedPort: number
   controllerPort: number
   secret: string
+  delayTestUrl?: string
   sources: Array<Pick<TunnelSource, 'id' | 'name' | 'kind' | 'content'>>
 }
 
@@ -59,7 +61,7 @@ export interface MihomoConfigInput {
 export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> {
   const providers: Record<string, unknown> = {}
   for (const source of input.sources) {
-    const healthCheck = { enable: true, url: DELAY_TEST_URL, interval: 600, lazy: true }
+    const healthCheck = { enable: true, url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, lazy: false }
     // Names of different sources may repeat; the prefix keeps every node addressable.
     const override = { 'additional-prefix': `${source.name} · ` }
     providers[providerName(source)] = source.kind === 'subscription'
@@ -78,7 +80,10 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     secret: input.secret,
     profile: { 'store-selected': false, 'store-fake-ip': false },
     'proxy-providers': providers,
-    'proxy-groups': [{ name: TUNNEL_GROUP, type: 'select', use: Object.keys(providers) }],
+    'proxy-groups': [
+      { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: Object.keys(providers), url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },
+      { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: Object.keys(providers) }
+    ],
     rules: [`MATCH,${TUNNEL_GROUP}`]
   }
 }

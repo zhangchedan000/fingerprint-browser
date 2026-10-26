@@ -176,6 +176,8 @@ export interface BrowserProfile {
   extensionIds: string[]
   color: string
   startUrls: string[]
+  /** Older profiles default to opening their configured URLs. */
+  startupMode?: 'urls' | 'restore'
   /** Empty means follow the globally selected/default engine. */
   kernelVersion: string
   window: ProfileWindowConfig
@@ -217,7 +219,7 @@ export type BrowserProfileView = Omit<BrowserProfile, 'proxy' | 'account'> & { p
  */
 export type ProfileDraft = Pick<
   BrowserProfile,
-  'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
+  'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'startupMode' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
 > & {
   /** Optional on input for older callers and files; validation fills an empty account. */
   account?: PlatformAccount
@@ -643,8 +645,11 @@ export interface BrowserApi {
     status: () => Promise<TunnelStatus>
     setEnabled: (enabled: boolean) => Promise<TunnelStatus>
     addSource: (input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
+    source: (id: string) => Promise<TunnelSourceSummary & { content: string }>
+    updateSource: (id: string, input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
     removeSource: (id: string) => Promise<TunnelStatus>
     select: (name: string) => Promise<TunnelStatus>
+    autoSelect: () => Promise<TunnelStatus>
     test: () => Promise<TunnelStatus>
     refresh: () => Promise<TunnelStatus>
     onChanged: (listener: (status: TunnelStatus) => void) => () => void
@@ -689,6 +694,7 @@ export interface BrowserApi {
 export interface TunnelNodeInfo {
   name: string
   type: string
+  sourceId?: string
   /** Last measured delay in ms; 0 = timed out; undefined = not measured. */
   delay?: number
 }
@@ -709,6 +715,7 @@ export interface TunnelStatus {
   sources: TunnelSourceSummary[]
   nodes: TunnelNodeInfo[]
   selected?: string
+  selectionMode: 'auto' | 'manual'
 }
 
 export interface VaultLocationInfo {

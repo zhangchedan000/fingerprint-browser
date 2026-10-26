@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { TunnelNodeInfo, TunnelStatus } from '../shared/types'
 import type { LocalProxy } from './proxy-bridge'
 import type { SecretCodec } from './secret-codec'
-import { DELAY_TEST_URL, TUNNEL_GROUP, mihomoConfig, providerName, validateTunnelSource, type TunnelSource } from './tunnel-config'
+import { AUTO_TUNNEL_GROUP, DELAY_TEST_URL, TUNNEL_GROUP, mihomoConfig, providerName, validateTunnelSource, type TunnelSource } from './tunnel-config'
 
 interface Logger {
   info(message: string, detail?: unknown): void
@@ -37,7 +37,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Runs the tunnel core (mihomo) with the user's nodes and answers which local port carries traffic. */
 export class TunnelManager {
-  private stored: StoredTunnel = EMPTY
+  private stored: StoredTunnel = { ...EMPTY, sources: [] }
   private child: ChildProcess | null = null
   private state: TunnelStatus['state'] = 'off'
   private error?: string
@@ -53,7 +53,8 @@ export class TunnelManager {
     private readonly codec: SecretCodec,
     private readonly binary: string,
     private readonly logger?: Logger,
-    private readonly onChanged: (status: TunnelStatus) => void = () => undefined
+    private readonly onChanged: (status: TunnelStatus) => void = () => undefined,
+    private readonly delayTestUrl = DELAY_TEST_URL
   ) {}
 
   private get file(): string {
@@ -84,14 +85,17 @@ export class TunnelManager {
   }
 
   async status(): Promise<TunnelStatus> {
+    const proxies = this.state === 'running' ? await this.proxyState().catch(() => ({} as ProxyState)) : {}
+    const choice = proxies[TUNNEL_GROUP]?.now
     return {
       available: await this.available(),
       enabled: this.stored.enabled,
       state: this.state,
       error: this.error,
       sources: this.stored.sources.map(({ id, name, kind, updatedAt }) => ({ id, name, kind, updatedAt })),
-      nodes: this.state === 'running' ? await this.nodes().catch(() => []) : [],
-      selected: this.stored.selected
+      nodes: this.state === 'running' ? await this.nodes(proxies).catch(() => []) : [],
+      selected: this.stored.selected ?? (choice === AUTO_TUNNEL_GROUP ? proxies[AUTO_TUNNEL_GROUP]?.now : choice),
+      selectionMode: this.stored.selected ? 'manual' : 'auto'
     }
   }
 
@@ -107,14 +111,46 @@ export class TunnelManager {
   async addSource(input: { name?: unknown; kind?: unknown; content?: unknown }): Promise<TunnelStatus> {
     const source = validateTunnelSource(input)
     const record: TunnelSource = { id: randomUUID().slice(0, 8), ...source, content: this.codec.encode(source.content), updatedAt: new Date().toISOString() }
-    await this.save({ ...this.stored, sources: [...this.stored.sources, record] })
-    if (this.stored.enabled) await this.restart()
+    await this.replaceSources({ ...this.stored, sources: [...this.stored.sources, record] })
     return this.notify()
   }
 
+  /** Secrets are only sent to the editor on an explicit edit request, never in status events. */
+  source(id: string): TunnelSource {
+    const source = this.stored.sources.find((item) => item.id === id)
+    if (!source) throw new Error('节点来源不存在')
+    return { ...source, content: this.codec.decode(source.content) }
+  }
+
+  async updateSource(id: string, input: { name?: unknown; kind?: unknown; content?: unknown }): Promise<TunnelStatus> {
+    const previous = this.source(id)
+    const value = validateTunnelSource(input)
+    const record: TunnelSource = { id, ...value, content: this.codec.encode(value.content), updatedAt: new Date().toISOString() }
+    const prefix = `${previous.name} · `
+    const selected = this.stored.selected?.startsWith(prefix)
+      ? `${record.name} · ${this.stored.selected.slice(prefix.length)}` : this.stored.selected
+    await this.replaceSources({ ...this.stored, selected, sources: this.stored.sources.map((item) => item.id === id ? record : item) })
+    return this.notify()
+  }
+
+  /** A bad edit must not replace a working saved configuration. */
+  private async replaceSources(next: StoredTunnel): Promise<void> {
+    const previous = this.stored
+    await this.save(next)
+    if (!next.enabled) return
+    try { await this.restart() }
+    catch (error) {
+      await this.save(previous)
+      await this.restart().catch(() => undefined)
+      throw error
+    }
+  }
+
   async removeSource(id: string): Promise<TunnelStatus> {
+    const source = this.source(id)
     const sources = this.stored.sources.filter((source) => source.id !== id)
-    await this.save({ ...this.stored, sources, enabled: this.stored.enabled && sources.length > 0 })
+    const selected = this.stored.selected?.startsWith(`${source.name} · `) ? undefined : this.stored.selected
+    await this.save({ ...this.stored, selected, sources, enabled: this.stored.enabled && sources.length > 0 })
     if (this.stored.enabled) await this.restart()
     else await this.stop()
     return this.notify()
@@ -122,16 +158,25 @@ export class TunnelManager {
 
   async select(name: string): Promise<TunnelStatus> {
     if (typeof name !== 'string' || !name) throw new Error('请选择节点')
-    if (this.state === 'running') await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name })
+    if (this.state !== 'running') throw new Error('加速通道未运行')
+    if (!(await this.groupNames()).includes(name)) throw new Error('节点不存在，请刷新列表')
+    await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name })
     await this.save({ ...this.stored, selected: name })
+    return this.notify()
+  }
+
+  async autoSelect(): Promise<TunnelStatus> {
+    if (this.state === 'running') await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name: AUTO_TUNNEL_GROUP })
+    await this.save({ ...this.stored, selected: undefined })
+    if (this.stored.enabled && this.state !== 'running') await this.restart()
+    if (this.state === 'running') return this.testDelays()
     return this.notify()
   }
 
   /** Measures every node through itself to Google; the result is shown next to each node. */
   async testDelays(): Promise<TunnelStatus> {
     if (this.state !== 'running') throw new Error('加速通道未运行')
-    const result = await this.api('GET', `/group/${encodeURIComponent(TUNNEL_GROUP)}/delay?url=${encodeURIComponent(DELAY_TEST_URL)}&timeout=5000`)
-      .catch(() => ({})) as Record<string, number>
+    const result = await this.api('GET', `/group/${encodeURIComponent(AUTO_TUNNEL_GROUP)}/delay?url=${encodeURIComponent(this.delayTestUrl)}&timeout=5000`) as Record<string, number>
     for (const node of await this.nodes()) this.delays.set(node.name, result[node.name] ?? 0)
     return this.notify()
   }
@@ -180,7 +225,7 @@ export class TunnelManager {
       const controllerPort = await freePort()
       this.secret = randomBytes(16).toString('hex')
       this.controller = `http://127.0.0.1:${controllerPort}`
-      const config = mihomoConfig({ mixedPort: this.mixedPort, controllerPort, secret: this.secret, sources })
+      const config = mihomoConfig({ mixedPort: this.mixedPort, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
       await writeFile(join(this.runtimeDir, 'config.yaml'), JSON.stringify(config, null, 2), { mode: 0o600 })
 
       let output = ''
@@ -207,9 +252,10 @@ export class TunnelManager {
       }
       const names = (await this.groupNames())
       if (!names.length) throw new Error('没有可用节点：请检查节点链接或订阅是否正确')
-      const selected = this.stored.selected && names.includes(this.stored.selected) ? this.stored.selected : names[0]
+      if (this.stored.selected && !names.includes(this.stored.selected)) throw new Error('固定节点已不存在，请切换自动选择或编辑节点来源')
+      const selected = this.stored.selected ?? AUTO_TUNNEL_GROUP
       await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name: selected })
-      if (selected !== this.stored.selected) await this.save({ ...this.stored, selected })
+      this.delays.clear()
       this.state = 'running'
       this.restarts = 0
       this.logger?.info('加速通道已启动', { nodes: names.length, selected })
@@ -226,12 +272,28 @@ export class TunnelManager {
 
   private async groupNames(): Promise<string[]> {
     const group = await this.api('GET', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`) as { all?: string[] }
-    return (group.all ?? []).filter((name) => name !== 'COMPATIBLE')
+    return (group.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP)
   }
 
-  private async nodes(): Promise<TunnelNodeInfo[]> {
-    const proxies = (await this.api('GET', '/proxies') as { proxies?: Record<string, { type?: string }> }).proxies ?? {}
-    return (await this.groupNames()).map((name) => ({ name, type: proxies[name]?.type ?? '', delay: this.delays.get(name) }))
+  private async proxyState(): Promise<ProxyState> {
+    return (await this.api('GET', '/proxies') as { proxies?: ProxyState }).proxies ?? {}
+  }
+
+  private async nodes(snapshot?: ProxyState): Promise<TunnelNodeInfo[]> {
+    const proxies = snapshot ?? await this.proxyState()
+    const providers = (await this.api('GET', '/providers/proxies') as { providers?: Record<string, { proxies?: Array<{ name: string; type?: string; history?: Array<{ delay: number }> }> }> }).providers ?? {}
+    const owners = new Map<string, string>()
+    const descriptions: ProxyState = { ...proxies }
+    for (const source of this.stored.sources) {
+      for (const proxy of providers[providerName(source)]?.proxies ?? []) {
+        owners.set(proxy.name, source.id)
+        descriptions[proxy.name] = proxy
+      }
+    }
+    return (proxies[TUNNEL_GROUP]?.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP).map((name) => ({
+      name, type: descriptions[name]?.type ?? '', sourceId: owners.get(name),
+      delay: descriptions[name]?.history?.at(-1)?.delay ?? this.delays.get(name)
+    }))
   }
 
   private async api(method: string, path: string, body?: unknown): Promise<unknown> {
@@ -261,6 +323,8 @@ export class TunnelManager {
   }
 
 }
+
+type ProxyState = Record<string, { type?: string; now?: string; all?: string[]; history?: Array<{ delay: number }> }>
 
 function lastLine(output: string): string {
   return output.trim().split(/\r?\n/).filter(Boolean).pop()?.slice(0, 300) ?? ''

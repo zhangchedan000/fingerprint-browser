@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { FingerprintConfig } from '../shared/types'
+import type { BrowserProfile, FingerprintConfig } from '../shared/types'
 
 type Json = Record<string, unknown>
 
@@ -35,9 +35,13 @@ function child(parent: Json, key: string): Json {
 /** Pure part: returns the updated preferences object, or undefined when nothing changes. */
 export function patchChromePreferences(
   current: Json,
-  fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>
+  fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
+  startupMode?: BrowserProfile['startupMode']
 ): Json | undefined {
   const next = structuredClone(current)
+  // Chromium owns session files and restores all windows/tabs, including navigation history.
+  // Explicit URL mode must also undo a previously enabled restore preference.
+  if (startupMode !== undefined) child(next, 'session').restore_on_startup = startupMode === 'restore' ? 1 : 5
   const geolocation = fingerprint.geolocationPermission ?? 'ask'
   if (geolocation === 'ask') {
     // Only remove an existing value; never create empty containers just to delete from them.
@@ -69,7 +73,8 @@ export function patchChromePreferences(
  */
 export async function applyChromePreferences(
   userDataDir: string,
-  fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>
+  fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
+  startupMode?: BrowserProfile['startupMode']
 ): Promise<boolean> {
   const directory = join(userDataDir, 'Default')
   const path = join(directory, 'Preferences')
@@ -81,7 +86,7 @@ export async function applyChromePreferences(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
   }
-  const next = patchChromePreferences(current, fingerprint)
+  const next = patchChromePreferences(current, fingerprint, startupMode)
   if (!next) return false
   await mkdir(directory, { recursive: true })
   const temporary = `${path}.fb-tmp`

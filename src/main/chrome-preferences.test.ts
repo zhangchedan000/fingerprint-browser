@@ -16,6 +16,14 @@ async function userData(): Promise<string> {
 }
 
 describe('chrome preferences', () => {
+  it('enables native session restore and clears it when switching back to URLs', () => {
+    const base = { session: { startup_urls: ['https://saved.example'], other: true } }
+    const restore = patchChromePreferences(base, {}, 'restore')!
+    expect(restore.session).toEqual({ ...base.session, restore_on_startup: 1 })
+    const urls = patchChromePreferences(restore, {}, 'urls')!
+    expect(urls.session).toEqual({ ...base.session, restore_on_startup: 5 })
+    expect(base.session).not.toHaveProperty('restore_on_startup')
+  })
   it('sets and clears geolocation and Do Not Track while keeping other settings', () => {
     const base = { profile: { name: 'x', default_content_setting_values: { notifications: 2 } }, other: true }
     const patched = patchChromePreferences(base, { geolocationPermission: 'block', doNotTrack: 'on' })!

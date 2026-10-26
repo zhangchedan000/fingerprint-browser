@@ -164,6 +164,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
   if (options.remoteDebuggingPort) args.push(`--remote-debugging-port=${options.remoteDebuggingPort}`)
   if (options.extensionPaths?.length) args.push(`--load-extension=${options.extensionPaths.join(',')}`)
-  args.push(...profile.startUrls)
+  if (profile.startupMode === 'restore') args.push('--restore-last-session')
+  else args.push(...profile.startUrls)
   return args
 }

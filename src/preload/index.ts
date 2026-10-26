@@ -109,8 +109,11 @@ const api: BrowserApi = {
     status: () => ipcRenderer.invoke('tunnel:status'),
     setEnabled: (enabled) => ipcRenderer.invoke('tunnel:set-enabled', enabled),
     addSource: (input) => ipcRenderer.invoke('tunnel:add-source', input),
+    source: (id) => ipcRenderer.invoke('tunnel:source', id),
+    updateSource: (id, input) => ipcRenderer.invoke('tunnel:update-source', id, input),
     removeSource: (id) => ipcRenderer.invoke('tunnel:remove-source', id),
     select: (name) => ipcRenderer.invoke('tunnel:select', name),
+    autoSelect: () => ipcRenderer.invoke('tunnel:auto-select'),
     test: () => ipcRenderer.invoke('tunnel:test'),
     refresh: () => ipcRenderer.invoke('tunnel:refresh'),
     onChanged: (listener: (status: TunnelStatus) => void) => {

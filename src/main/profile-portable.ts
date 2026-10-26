@@ -25,6 +25,7 @@ export function portableDraft(profile: BrowserProfile, options: PortableDraftOpt
     extensionIds: options.extensions ? [...profile.extensionIds] : [],
     color: profile.color,
     startUrls: [...profile.startUrls],
+    startupMode: profile.startupMode ?? 'urls',
     kernelVersion: profile.kernelVersion,
     window: { ...profile.window },
     proxy: strip

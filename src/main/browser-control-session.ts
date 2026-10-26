@@ -235,6 +235,10 @@ export class BrowserControlSession {
     return this.pageState()
   }
 
+  async requestClose(): Promise<void> {
+    await this.cdp.send('Browser.close')
+  }
+
   close(): void {
     this.references.clear()
     this.cdp.close()

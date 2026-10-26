@@ -51,6 +51,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     throw new Error('环境扩展配置格式无效')
   }
   if (!draft.startUrls.every((url) => typeof url === 'string')) throw new Error('启动页格式无效')
+  if (draft.startupMode !== undefined && draft.startupMode !== 'urls' && draft.startupMode !== 'restore') throw new Error('启动页面模式无效')
   const name = draft.name.trim()
   if (!name) throw new Error('环境名称不能为空')
   if (name.length > 60) throw new Error('环境名称不能超过 60 个字符')
@@ -196,6 +197,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     extensionIds,
     color: draft.color.trim(),
     startUrls: urls,
+    startupMode: draft.startupMode ?? 'urls',
     kernelVersion,
     window: {
       mode: rawWindow.mode,

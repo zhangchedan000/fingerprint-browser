@@ -128,6 +128,7 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     extensionIds: [...draft.extensionIds],
     color: draft.color,
     startUrlsText: draft.startUrls.join('\n'),
+    startupMode: draft.startupMode ?? 'urls',
     kernelVersion: draft.kernelVersion,
     window: { ...draft.window },
     proxy: { ...draft.proxy },
@@ -655,6 +656,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       tags: values.tags,
       color,
       startUrls: String(values.startUrlsText ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+      startupMode: values.startupMode ?? 'urls',
       kernelVersion: values.kernelVersion,
       window: values.window,
       // A picked library proxy goes by id; a typed one is saved into the library by the store.
@@ -732,10 +734,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </div>
       </Row>
-      <Row label={t("启动页面")} hint={t("每行一个网址；不填写协议时自动使用 HTTPS")}>
-        <Form.Item name="startUrlsText" noStyle>
-          <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
-        </Form.Item>
+      <Row label={t("启动页面")} hint={t("恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。")}>
+        <div className="fb-stack">
+          <Form.Item name="startupMode" noStyle>
+            <Radio.Group options={[{ value: 'urls', label: t("打开指定页面") }, { value: 'restore', label: t("打开上次关闭的页面") }]} />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(before, after) => before.startupMode !== after.startupMode}>
+            {() => <Form.Item name="startUrlsText" noStyle>
+              <Input.TextArea disabled={form.getFieldValue('startupMode') === 'restore'} autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
+            </Form.Item>}
+          </Form.Item>
+        </div>
       </Row>
       <Row
         label={t("Cookie")}

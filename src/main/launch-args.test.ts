@@ -16,6 +16,15 @@ function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): Brow
 }
 
 describe('launch arguments', () => {
+  it('restores the native session without opening configured startup URLs again', () => {
+    const saved = { ...profile(), startupMode: 'restore' as const, startUrls: ['https://configured.example/'] }
+    const restored = buildLaunchArgs(saved, { userDataDir: '/data' })
+    expect(restored).toContain('--restore-last-session')
+    expect(restored).not.toContain(saved.startUrls[0])
+    const urls = buildLaunchArgs({ ...saved, startupMode: 'urls' }, { userDataDir: '/data' })
+    expect(urls).not.toContain('--restore-last-session')
+    expect(urls).toContain(saved.startUrls[0])
+  })
   it('passes device memory only when the window sets it', () => {
     expect(buildLaunchArgs(profile(), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-device-memory'))).toBe(false)
     expect(buildLaunchArgs(profile({ deviceMemory: 4 }), { userDataDir: '/data' })).toContain('--fingerprint-device-memory=4')

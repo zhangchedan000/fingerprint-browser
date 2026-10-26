@@ -2032,5 +2032,14 @@
   "更新": "Atualizar",
   "有更新": "Atualização disponível",
   "正在更新浏览器内核…": "Atualizando o kernel do navegador…",
-  "内核已更新，使用它的窗口下次启动即用新版": "Kernel atualizado; as janelas que o usam terão a nova versão na próxima abertura"
+  "内核已更新，使用它的窗口下次启动即用新版": "Kernel atualizado; as janelas que o usam terão a nova versão na próxima abertura",
+  "固定使用": "Fixar nó",
+  "节点选择": "Seleção de nó",
+  "自动选择最低延迟": "Selecionar menor latência",
+  "编辑节点来源": "Editar origem dos nós",
+  "打开指定页面": "Abrir páginas indicadas",
+  "打开上次关闭的页面": "Restaurar última sessão",
+  "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "O modo automático testa a cada 5 minutos e troca quando a melhora supera 50 ms. O nó fixado permanece após reiniciar.",
+  "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Edite o nome, os links ou a URL da assinatura. Salvar reconecta o túnel. Os nós da assinatura são gerenciados por ela.",
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaure as abas da última sessão deste ambiente ou abra uma nova aba no primeiro uso. Uma URL por linha; HTTPS é usado sem protocolo explícito."
 }

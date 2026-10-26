@@ -26,6 +26,17 @@ function typedDraft<T extends { proxyId?: string }>(view: T): T {
 }
 
 describe('ProfileStore', () => {
+  it('keeps startup modes per profile across reload and duplicate', async () => {
+    const repository = await store()
+    const restored = await repository.create({ ...defaultProfileDraft(), startupMode: 'restore' })
+    const urls = await repository.create({ ...defaultProfileDraft(), startupMode: undefined })
+    const reloaded = new ProfileStore(repository.vaultPath)
+    await reloaded.initialize()
+    expect(reloaded.get(restored.id).startupMode).toBe('restore')
+    expect(reloaded.get(urls.id).startupMode).toBe('urls')
+    expect((await reloaded.duplicate(restored.id)).startupMode).toBe('restore')
+    await expect(reloaded.create({ ...defaultProfileDraft(), startupMode: 'bad' as 'urls' })).rejects.toThrow('启动页面模式无效')
+  })
   it('persists profiles and creates an independent data directory', async () => {
     const repository = await store()
     const profile = await repository.create(defaultProfileDraft())
