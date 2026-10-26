@@ -2019,5 +2019,7 @@
   "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Los núcleos para Windows se obtienen de los proyectos de GitHub de abajo y se verifican con SHA-256 antes de instalarlos.",
   "还没有内核来源，先添加一个 GitHub 项目": "Aún no hay fuentes de núcleos. Añade primero un proyecto de GitHub",
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Pega la dirección de un proyecto de GitHub, por ejemplo https://github.com/owner/repo",
-  "添加来源": "Añadir fuente"
+  "添加来源": "Añadir fuente",
+  "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Solo se pueden elegir resoluciones al menos tan grandes como la pantalla de este equipo ({0} × {1}), para que la ventana quepa",
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Este núcleo no puede cambiar la resolución; los sitios ven el tamaño de pantalla de este equipo"
 }

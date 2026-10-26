@@ -95,4 +95,14 @@ describe('launch arguments', () => {
     expect(es).toContain('--lang=es-ES')
     expect(es).toContain('--accept-lang=es-ES,es,en-US,en')
   })
+
+  it('lets a Prism window claim a screen larger than the real one, never a smaller one', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', hostScreen: { width: 2560, height: 1440 } }
+    const large = buildLaunchArgs(profile({ screenWidth: 3840, screenHeight: 2160 }), prism)
+    expect(large).toContain('--fingerprint-screen-width=3840')
+    expect(large).toContain('--fingerprint-screen-height=2160')
+    const small = buildLaunchArgs(profile({ screenWidth: 1920, screenHeight: 1080 }), prism)
+    expect(small).toContain('--fingerprint-screen-width=2560')
+    expect(small).toContain('--fingerprint-screen-height=1440')
+  })
 })

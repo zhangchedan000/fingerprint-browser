@@ -2019,5 +2019,7 @@
   "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Nhân Windows được liệt kê từ các dự án GitHub bên dưới và được kiểm tra SHA-256 trước khi cài đặt.",
   "还没有内核来源，先添加一个 GitHub 项目": "Chưa có nguồn nhân. Hãy thêm một dự án GitHub trước",
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Dán địa chỉ dự án GitHub, ví dụ https://github.com/owner/repo",
-  "添加来源": "Thêm nguồn"
+  "添加来源": "Thêm nguồn",
+  "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Chỉ chọn được độ phân giải không nhỏ hơn màn hình máy này ({0} × {1}) để cửa sổ vừa",
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Nhân này không đổi được độ phân giải; trang web thấy kích thước màn hình của máy này"
 }

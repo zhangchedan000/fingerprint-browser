@@ -2019,5 +2019,7 @@
   "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Windows kernels are listed from the GitHub projects below and checked against their SHA-256 before installing.",
   "还没有内核来源，先添加一个 GitHub 项目": "No kernel sources yet. Add a GitHub project first",
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Paste a GitHub project address, e.g. https://github.com/owner/repo",
-  "添加来源": "Add source"
+  "添加来源": "Add source",
+  "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Only resolutions at least as large as this computer's screen ({0} × {1}) can be chosen, so the window fits",
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "This kernel cannot change the resolution; sites see this computer's screen size"
 }

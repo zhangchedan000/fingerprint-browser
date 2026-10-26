@@ -4,7 +4,7 @@ import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../sh
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, chromeUiLocale, effectiveNetworkIdentity } from '../shared/network-identity'
-import { effectiveScreenSource } from '../shared/screen'
+import { effectiveScreen } from '../shared/screen'
 
 export interface LaunchArgumentOptions {
   userDataDir: string
@@ -70,10 +70,11 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
     allowGeoConflict: options.allowGeoConflict
   })
-  const followHost = effectiveScreenSource(fp) === 'host' && options.hostScreen
-    && Number.isInteger(options.hostScreen.width) && Number.isInteger(options.hostScreen.height)
-  const screenWidth = followHost ? options.hostScreen!.width : fp.screenWidth
-  const screenHeight = followHost ? options.hostScreen!.height : fp.screenHeight
+  const { width: screenWidth, height: screenHeight } = effectiveScreen(
+    fp,
+    options.fingerprintKernel ? options.engineVersion : undefined,
+    options.hostScreen
+  )
   const language = chromeUiLocale(networkIdentity.language)
   const acceptLanguages = chromeAcceptLanguages(language, networkIdentity.acceptLanguages)
   const args = [

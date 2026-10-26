@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { effectiveGpu } from '../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../shared/network-identity'
-import { effectiveScreenSource } from '../shared/screen'
+import { effectiveScreen } from '../shared/screen'
 import type {
   BrowserProfile,
   EngineStatus,
@@ -435,12 +435,11 @@ export async function deepCheck(options: FingerprintRunOptions, onSite: (result:
 }
 
 /** Everything the page should report for this window, computed the same way the launcher does. */
-export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostScreen'>): ExpectedIdentity {
+export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostScreen'> & { engine?: EngineStatus }): ExpectedIdentity {
   const fp = profile.fingerprint
   const identity = effectiveNetworkIdentity(fp, options.proxy?.ok ? options.proxy : undefined, { allowGeoConflict: true })
-  const screen: [number, number] = effectiveScreenSource(fp) === 'host' && options.hostScreen
-    ? [options.hostScreen.width, options.hostScreen.height]
-    : [fp.screenWidth, fp.screenHeight]
+  const size = effectiveScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen)
+  const screen: [number, number] = [size.width, size.height]
   return {
     cores: fp.coresSource === 'host' ? options.hostHardwareConcurrency : fp.hardwareConcurrency,
     screen,

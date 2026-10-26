@@ -2019,5 +2019,7 @@
   "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Windows çekirdekleri aşağıdaki GitHub projelerinden listelenir ve kurulumdan önce SHA-256 ile doğrulanır.",
   "还没有内核来源，先添加一个 GitHub 项目": "Henüz çekirdek kaynağı yok. Önce bir GitHub projesi ekleyin",
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Bir GitHub proje adresi yapıştırın, örneğin https://github.com/owner/repo",
-  "添加来源": "Kaynak ekle"
+  "添加来源": "Kaynak ekle",
+  "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Pencerenin sığması için yalnızca bu bilgisayarın ekranından ({0} × {1}) küçük olmayan çözünürlükler seçilebilir",
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Bu çekirdek çözünürlüğü değiştiremez; siteler bu bilgisayarın ekran boyutunu görür"
 }

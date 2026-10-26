@@ -2019,5 +2019,7 @@
   "从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。": "Les noyaux Windows sont listés depuis les projets GitHub ci-dessous et vérifiés par SHA-256 avant l’installation.",
   "还没有内核来源，先添加一个 GitHub 项目": "Aucune source de noyau pour l’instant. Ajoutez d’abord un projet GitHub",
   "粘贴 GitHub 项目地址，例如 https://github.com/owner/repo": "Collez l’adresse d’un projet GitHub, par exemple https://github.com/owner/repo",
-  "添加来源": "Ajouter une source"
+  "添加来源": "Ajouter une source",
+  "只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下": "Seules les résolutions au moins aussi grandes que l’écran de cet ordinateur ({0} × {1}) sont proposées, pour que la fenêtre tienne",
+  "这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸": "Ce noyau ne peut pas changer la résolution ; les sites voient la taille d’écran de cet ordinateur"
 }
