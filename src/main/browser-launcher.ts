@@ -188,7 +188,7 @@ export class BrowserLauncher {
     if (!engine.executable) {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
-        : '没有找到浏览器内核，请先选择 Fingerprint Chromium 可执行文件')
+        : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()

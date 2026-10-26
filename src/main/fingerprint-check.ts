@@ -1,3 +1,4 @@
+import { kernelChromiumVersion } from '../shared/kernel-id'
 import { DEEP_SITES, parseDeepSite, type DeepSiteResult } from '../shared/deep-check'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -163,7 +164,7 @@ export function evaluateFingerprint(input: {
   const os = OS_NAME[fp.platform]
   const uaOs = /Windows NT/.test(observed.userAgent) ? 'windows' : /Macintosh/.test(observed.userAgent) ? 'macos' : 'other'
   const uaMajor = observed.userAgent.match(/Chrome\/(\d+)/)?.[1]
-  const kernelMajor = engine.version?.split('.')[0]
+  const kernelMajor = kernelChromiumVersion(engine.version)?.split('.')[0]
   const edge = /Edg\//.test(observed.userAgent)
   if (uaOs !== fp.platform || (observed.uaPlatform && observed.uaPlatform !== os)) {
     add({ row: 'system', status: 'bad', message: `页面报告的系统是 ${observed.uaPlatform ?? uaOs}，与设置的 ${os} 不一致` })

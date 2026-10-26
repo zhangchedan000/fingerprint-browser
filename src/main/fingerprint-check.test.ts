@@ -4,12 +4,12 @@ import { gpuKey, kernelGpuList } from '../shared/gpu-catalog'
 import type { FingerprintConfig, FingerprintObserved } from '../shared/types'
 import { evaluateFingerprint, type ExpectedIdentity } from './fingerprint-check'
 
-const engine = { version: '150.0.7871.186', fingerprintKernel: true }
-const RTX4060_LAPTOP = kernelGpuList(engine.version, 'windows')!.find((gpu) => gpu.deviceId === '0x000028A0')!
+const engine = { version: 'prism-156.0.8078.47', fingerprintKernel: true }
+const RTX4060 = kernelGpuList(engine.version, 'windows')!.find((gpu) => gpu.deviceId === '0x00002882')!
 
-// What the real 150 kernel reported for a Windows window (recorded from an actual run).
+// What a Windows window reports (values in the shape a real run records).
 const seen: FingerprintObserved = {
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
   uaPlatform: 'Windows',
   uaPlatformVersion: '15.0.0',
   cores: 8,
@@ -19,7 +19,7 @@ const seen: FingerprintObserved = {
   language: 'en-US',
   webdriver: false,
   webglVendor: 'Google Inc. (NVIDIA)',
-  webglRenderer: RTX4060_LAPTOP.renderer,
+  webglRenderer: RTX4060.renderer,
   canvas: ['f428e791afe1c303', 'f428e791afe1c303'],
   audio: ['1c7ac25dfccc08ad', '1c7ac25dfccc08ad'],
   clientrects: ['605b308cf3ea4254', '605b308cf3ea4254'],
@@ -35,7 +35,7 @@ const fp: FingerprintConfig = {
   platformVersion: '15.0.0',
   brand: 'Chrome',
   hardwareProfileId: 'windows-seeded-nvidia',
-  gpu: gpuKey(RTX4060_LAPTOP),
+  gpu: gpuKey(RTX4060),
   hardwareConcurrency: 8,
   disabledSpoofing: []
 }
@@ -59,7 +59,7 @@ describe('fingerprint check verdicts', () => {
   it('is all green when the page matches the settings and the proxy', () => {
     const items = check()
     expect(items.filter((item) => item.status !== 'ok')).toEqual([])
-    expect(row(items, 'gpu')[0].message).toContain('RTX 4060 Laptop GPU')
+    expect(row(items, 'gpu')[0].message).toContain('RTX 4060')
   })
 
   it('flags a time zone that does not match the proxy and offers to follow the IP', () => {

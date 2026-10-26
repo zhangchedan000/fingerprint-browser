@@ -122,7 +122,7 @@ export async function locateBrowserForProfile(
               fingerprintKernel: true,
               label: integrity.status === 'legacy'
                 ? 'Fingerprint Chromium（环境固定 · 旧版完整性清单）'
-                : 'Fingerprint Chromium（环境固定）',
+                : 'Prism 内核（环境固定）',
               version
             }
           }
@@ -278,7 +278,7 @@ export async function locateBrowserSelection(settings: AppSettings, resourcesPat
       executable: settings.browserExecutable,
       source: 'configured',
       fingerprintKernel: settings.fingerprintKernel,
-      label: settings.fingerprintKernel ? 'Fingerprint Chromium' : '自定义 Chromium（兼容模式）',
+      label: settings.fingerprintKernel ? 'Prism 内核' : '自定义 Chromium（兼容模式）',
       version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined
     }
   }

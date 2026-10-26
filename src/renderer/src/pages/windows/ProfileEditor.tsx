@@ -34,6 +34,7 @@ import {
 import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
+import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu } from '../../../../shared/kernel-capabilities'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
@@ -147,7 +148,7 @@ const COMMON_CORES = [4, 6, 8, 12, 16]
 
 /** The UA Chrome reports with the reduced user-agent policy for the chosen system and kernel. */
 function userAgentPreview(platform: BrowserPlatform, brand: string, version: string | undefined): string {
-  const major = version?.split('.')[0] || '144'
+  const major = kernelChromiumVersion(version)?.split('.')[0] || '156'
   const system = platform === 'windows' ? 'Windows NT 10.0; Win64; x64' : 'Macintosh; Intel Mac OS X 10_15_7'
   const edge = brand === 'Edge' ? ` Edg/${major}.0.0.0` : ''
   return `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36${edge}`
@@ -348,7 +349,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         executable: pinnedKernel?.executable ?? null,
         source: pinnedKernel ? 'profile' : 'missing',
         fingerprintKernel: true,
-        label: pinnedKernel ? t("Fingerprint Chromium（环境固定）") : t("固定内核未安装"),
+        label: pinnedKernel ? t("Prism 内核（环境固定）") : t("固定内核未安装"),
         version: kernelVersion
       }
     : engine

@@ -1,6 +1,6 @@
-import { kernelChromiumVersion } from './kernel-id'
+import { kernelChromiumVersion, kernelVendor } from './kernel-id'
 import type { BrowserProfile, EngineStatus } from './types'
-import { effectiveDisabledSpoofing, effectiveFingerprintSeed } from './hardware-profiles'
+import { effectiveFingerprintSeed } from './hardware-profiles'
 import { findKernelGpu, kernelGpuList } from './gpu-catalog'
 
 function majorVersion(version: string | undefined): number | undefined {
@@ -30,7 +30,12 @@ export function assertFingerprintKernelCompatibility(profile: BrowserProfile, en
       && engineMajor !== undefined && requestedMajor !== engineMajor) {
     throw new Error(`品牌版本 ${profile.fingerprint.brandVersion} 与指纹内核 ${engine.version} 的主版本不一致，请留空自动匹配`)
   }
+  // Compatibility mode (an ordinary Chromium the user chose on purpose) fakes nothing; every
+  // fingerprint kernel must be one of our Prism builds.
   if (!engine.fingerprintKernel) return
+  if (kernelVendor(engine.version) !== 'prism') {
+    throw new Error('现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它')
+  }
   const gpu = profile.fingerprint.gpu
   if (gpu && !engine.version) {
     throw new Error('无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机')
@@ -41,8 +46,5 @@ export function assertFingerprintKernelCompatibility(profile: BrowserProfile, en
     throw new Error(kernelGpuList(engine.version, profile.fingerprint.platform)
       ? `内核 ${engine.version} 里没有显卡 ${name}，请在窗口设置里重新选择显卡`
       : `内核 ${engine.version} 还没有显卡清单，无法使用指定的显卡 ${name}，请改为按种子随机，或换用已支持的内核`)
-  }
-  if (effectiveDisabledSpoofing(profile.fingerprint).length && engineMajor !== undefined && engineMajor < 144) {
-    throw new Error(`选择性关闭指纹伪装需要 Fingerprint Chromium 144 或更高版本，当前为 ${engine.version}`)
   }
 }

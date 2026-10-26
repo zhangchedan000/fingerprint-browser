@@ -21,20 +21,13 @@ import type { Logger } from './app-logger'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
-const RELEASES_URL = 'https://api.github.com/repos/adryfish/fingerprint-chromium/releases?per_page=10'
-/** Clearcote (trial): same --fingerprint switches, open source; only its newest build is offered. */
-const CLEARCOTE_RELEASES_URL = 'https://api.github.com/repos/clearcotelabs/clearcote-browser/releases?per_page=10'
 /**
- * Prism (our own builds, Windows): the build repository is private, so each finished kernel is
- * also published on this app's public repository as a release tagged "kernel-<chromium>-prismN".
+ * Only our own Prism kernels (Windows). The build repository is private, so each finished kernel
+ * is also published on this app's public repository as a release tagged "kernel-<chromium>-prismN".
  */
 const PRISM_RELEASES_URL = 'https://api.github.com/repos/zhangchedan000/fingerprint-browser/releases?per_page=30'
 const PRISM_TAG_PATTERN = /^kernel-(\d+(?:\.\d+){3})-prism\d+$/
-const TRUSTED_DOWNLOAD_PATHS = [
-  '/adryfish/fingerprint-chromium/releases/download/',
-  '/clearcotelabs/clearcote-browser/releases/download/',
-  '/zhangchedan000/fingerprint-browser/releases/download/'
-]
+const TRUSTED_DOWNLOAD_PATHS = ['/zhangchedan000/fingerprint-browser/releases/download/']
 
 interface GithubAsset {
   name: string
@@ -68,17 +61,6 @@ interface KernelActivationBackup {
   schemaVersion: 1
   recordedAt: string
   settings: AppSettings
-}
-
-function supportedAsset(assets: GithubAsset[]): GithubAsset | undefined {
-  if (process.platform === 'darwin') return assets.find((asset) => asset.name.endsWith('_macos.dmg'))
-  if (process.platform === 'win32') return assets.find((asset) => asset.name.endsWith('_windows_x64.zip'))
-  return undefined
-}
-
-function clearcoteAsset(assets: GithubAsset[]): GithubAsset | undefined {
-  if (process.platform === 'win32') return assets.find((asset) => /^clearcote-\d+(?:\.\d+){3}-windows-x64\.zip$/.test(asset.name))
-  return undefined
 }
 
 function prismAsset(assets: GithubAsset[], chromium: string): GithubAsset | undefined {
@@ -176,73 +158,17 @@ export class KernelManager {
   }
 
   async releases(): Promise<KernelRelease[]> {
-    if (process.platform !== 'darwin' && process.platform !== 'win32') {
-      throw new Error('当前只支持自动安装 macOS 和 Windows 内核')
-    }
+    if (process.platform !== 'win32') throw new Error('Prism 内核目前只有 Windows 版')
     const installed = await this.installedManifests()
     let releases: GithubRelease[]
-    const clearcoteReleases = this.fetchReleases(CLEARCOTE_RELEASES_URL).catch((error: unknown) => {
-      this.logger?.error('获取 Clearcote 内核版本失败', error)
-      return [] as GithubRelease[]
-    })
-    const prismReleases = this.fetchReleases(PRISM_RELEASES_URL).catch((error: unknown) => {
-      this.logger?.error('获取 Prism 内核版本失败', error)
-      return [] as GithubRelease[]
-    })
     try {
-      releases = await this.fetchReleases(RELEASES_URL)
+      releases = await this.fetchReleases(PRISM_RELEASES_URL)
     } catch (error) {
       if (installed.size === 0) throw error
-      this.logger?.error('获取远程内核版本失败，展示本地版本', error)
+      this.logger?.error('获取 Prism 内核版本失败，展示本地版本', error)
       releases = []
     }
-
     const remote = releases
-      .filter((release) => !release.draft && !release.prerelease)
-      .flatMap((release) => {
-        const asset = supportedAsset(release.assets)
-        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
-        if (!asset || !digest) return []
-        const manifest = installed.get(release.tag_name)
-        return [{
-          version: release.tag_name,
-          publishedAt: release.published_at,
-          assetName: asset.name,
-          downloadUrl: asset.browser_download_url,
-          size: asset.size,
-          sha256: digest,
-          installed: Boolean(manifest),
-          remoteAvailable: true,
-          origin: manifest?.source ?? 'release',
-          executable: manifest ? join(this.kernelPath(release.tag_name), manifest.executableRelative) : undefined
-        } satisfies KernelRelease]
-      })
-    // Clearcote only publishes pre-releases; its newest Windows build is offered as a trial.
-    const clearcote = (await clearcoteReleases)
-      .filter((release) => !release.draft)
-      .flatMap((release) => {
-        const asset = clearcoteAsset(release.assets)
-        const digest = asset?.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length) : ''
-        const chromium = asset?.name.match(/\d+(?:\.\d+){3}/)?.[0]
-        if (!asset || !digest || !chromium) return []
-        const version = `clearcote-${chromium}`
-        const manifest = installed.get(version)
-        return [{
-          version,
-          publishedAt: release.published_at,
-          assetName: asset.name,
-          downloadUrl: asset.browser_download_url,
-          size: asset.size,
-          sha256: digest,
-          installed: Boolean(manifest),
-          remoteAvailable: true,
-          origin: 'release',
-          executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined
-        } satisfies KernelRelease]
-      })
-      .slice(0, 1)
-    // Prism: our own builds, newest first. They come before fingerprint-chromium in the list.
-    const prism = (await prismReleases)
       .filter((release) => !release.draft && !release.prerelease)
       .flatMap((release) => {
         const chromium = release.tag_name.match(PRISM_TAG_PATTERN)?.[1]
@@ -265,8 +191,6 @@ export class KernelManager {
         } satisfies KernelRelease]
       })
       .sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
-    remote.unshift(...prism)
-    remote.push(...clearcote)
     const remoteVersions = new Set(remote.map((release) => release.version))
     const localOnly = [...installed.values()]
       .filter((manifest) => !remoteVersions.has(manifest.version))
@@ -346,6 +270,9 @@ export class KernelManager {
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
     const { version, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
+    if (process.platform === 'win32' && !version.startsWith('prism-')) {
+      throw new Error('这不是 Prism 内核：只支持导入我们自己编译的 Prism 内核（prism-kernel 发布页的 zip 解压后的 chrome.exe）')
+    }
     const destination = this.kernelPath(version)
     const existing = await this.readManifest(version)
     if (existing) {

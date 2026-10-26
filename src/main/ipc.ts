@@ -469,7 +469,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('engine:select', async () => {
     const owner = BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: t('选择 Fingerprint Chromium 内核'),
+      title: t('选择 Prism 内核'),
       properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
       filters: process.platform === 'win32' ? [{ name: '浏览器', extensions: ['exe'] }] : undefined
     }
@@ -482,7 +482,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (launcher.hasRunning()) throw new Error('请先关闭全部浏览器环境再导入并切换内核')
     const owner = BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: t('导入本地 Fingerprint Chromium 构建'),
+      title: t('导入本地 Prism 内核'),
       properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
       filters: process.platform === 'win32' ? [{ name: 'Chromium', extensions: ['exe'] }] : undefined
     }

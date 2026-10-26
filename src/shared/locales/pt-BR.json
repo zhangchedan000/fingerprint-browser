@@ -1993,5 +1993,17 @@
   "不指定": "Não definido",
   "{0} 核 {1} 线程": "{0} núcleos {1} threads",
   "不认识的 CPU 型号": "Modelo de CPU desconhecido",
-  "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Os sites não leem o modelo da CPU; ao escolher, a concorrência de hardware segue o número de threads dela, para o perfil ser uma máquina real"
+  "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Os sites não leem o modelo da CPU; ao escolher, a concorrência de hardware segue o número de threads dela, para o perfil ser uma máquina real",
+  "Prism 内核": "Kernel Prism",
+  "Prism 内核（环境固定）": "Kernel Prism (fixado nesta janela)",
+  "Prism 内核 + {0} 个指纹补丁": "Kernel Prism + {0} patches de impressão digital",
+  "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "Nenhum kernel encontrado. Importe ou baixe um kernel Prism em Kernels primeiro",
+  "Prism 内核目前只有 Windows 版": "Por enquanto o kernel Prism existe só para Windows",
+  "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Agora só há suporte ao kernel Prism: importe ou baixe um em Kernels e escolha-o nas configurações da janela",
+  "这不是 Prism 内核：只支持导入我们自己编译的 Prism 内核（prism-kernel 发布页的 zip 解压后的 chrome.exe）": "Este não é um kernel Prism: só é possível importar nossas próprias builds Prism (o chrome.exe do zip de release do prism-kernel descompactado)",
+  "已停用": "Desativado",
+  "旧的第三方内核，已不再支持，可以删除": "Kernel antigo de terceiros, sem suporte; pode excluí-lo",
+  "我们自己编译的 Prism 内核，下载后会校验文件完整性再安装，并设为默认内核。": "Nossas próprias builds do kernel Prism. Cada download tem a integridade verificada antes de ser instalado e definido como padrão.",
+  "导入本地 Prism 内核": "Importar kernel Prism local",
+  "选择 Prism 内核": "Escolher kernel Prism"
 }

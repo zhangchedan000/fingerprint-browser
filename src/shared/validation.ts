@@ -135,9 +135,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   if (!Number.isInteger(fp.seed) || fp.seed < 0 || fp.seed > 0xffffffff) {
     throw new Error('指纹种子必须是 0–4294967295 的整数')
   }
-  if (fp.gpu !== undefined && (typeof fp.gpu !== 'string' || !findKernelGpu(fp.gpu, fp.platform))) {
-    throw new Error('显卡型号无效')
-  }
+  if (fp.gpu !== undefined && typeof fp.gpu !== 'string') throw new Error('显卡型号无效')
+  // Cards of the removed upstream kernels (laptops, Apple, seeded tables) are dropped, not
+  // refused, so old windows still open; they then get a card from the Prism list.
+  if (fp.gpu !== undefined && !findKernelGpu(fp.gpu, fp.platform)) fp.gpu = undefined
   if (fp.renderIdentityVersion !== undefined
     && fp.renderIdentityVersion !== 1
     && fp.renderIdentityVersion !== 2

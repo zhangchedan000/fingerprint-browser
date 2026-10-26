@@ -10,7 +10,6 @@ import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
-import { kernelKnownIssue } from '../../../../shared/kernel-known-issues'
 import { kernelName, kernelVendor } from '../../../../shared/kernel-id'
 
 const FOLLOW_DEFAULT = ''
@@ -122,8 +121,7 @@ export function KernelsPage({ navigate }: PageProps) {
       render: (version: string) => (
         <span>
           <span className="fb-mono">{version}</span>
-          {kernelVendor(version) === 'clearcote' && <Tooltip title={t("Clearcote 试用内核：开源、不崩溃，但只有一种显卡，不能选显卡")}><Tag color="purple" className="fb-inline-tag">{t("试用")}</Tag></Tooltip>}
-          {kernelKnownIssue(version) && <Tooltip title={t(kernelKnownIssue(version)!)}><Tag color="orange" className="fb-inline-tag">{t("有已知问题")}</Tag></Tooltip>}
+          {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已停用")}</Tag></Tooltip>}
         </span>
       )
     },
@@ -201,7 +199,7 @@ export function KernelsPage({ navigate }: PageProps) {
           </div>
           <span className="fb-muted">
             {[
-              engine?.fingerprintKernel ? t("fingerprint-chromium + {0} 个指纹补丁", kernelLock.patches.length) : t("兼容模式"),
+              engine?.fingerprintKernel ? t("Prism 内核 + {0} 个指纹补丁", kernelLock.patches.length) : t("兼容模式"),
               defaultVersion && health[defaultVersion]?.status === 'healthy' ? t("文件校验正常") : '',
               t("新建窗口默认使用"),
               t("{0} 个窗口在用", users)

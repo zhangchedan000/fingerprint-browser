@@ -3,10 +3,8 @@ import type { BrowserPlatform } from './types'
 import { kernelVendor } from './kernel-id'
 
 /**
- * The GPUs built into each fingerprint-chromium kernel, measured with tools/gpu-catalog/probe.mjs.
- * A kernel reports list[seed % list.length], so choosing a GPU means choosing a matching seed.
- * Windows store a GPU by its key (model + device id), never by its position, because the lists
- * differ between kernel versions.
+ * The desktop GPUs a Prism kernel can be told to report (real driver names and PCI ids, see
+ * tools/hardware-db). Windows store a GPU by its key (model + device id).
  */
 export interface KernelGpu {
   vendor: string
@@ -100,10 +98,9 @@ export function gpuForSeed(seed: number, version: string | null | undefined, pla
 }
 
 /**
- * Windows saved before per-version lists stored a position in the 139–144 list (the only one the
- * app knew). Turns that position into the GPU it meant.
+ * Windows saved before per-version lists stored a position in the old 139–144 list. Those
+ * kernels are gone (only Prism kernels remain), so the position no longer names a card.
  */
-export function legacyBucketGpuKey(bucket: number, platform: BrowserPlatform): string | undefined {
-  const gpu = CATALOGS['144']?.[platform]?.[bucket]
-  return gpu ? gpuKey(gpu) : undefined
+export function legacyBucketGpuKey(_bucket: number, _platform: BrowserPlatform): string | undefined {
+  return undefined
 }
