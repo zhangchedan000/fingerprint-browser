@@ -5,6 +5,7 @@ import { constants } from 'node:fs'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import type { AppSettings, EngineStatus } from '../shared/types'
 import type { SettingsStore } from './settings-store'
+import { kernelFitsWindowToScreen } from './kernel-features'
 import {
   validateKernelIntegrityFields,
   verifyKernelIntegrity,
@@ -49,6 +50,8 @@ interface ManagedKernelManifest {
   target?: string
   criticalFiles?: KernelCriticalFile[]
   criticalFilesSha256?: string
+  releaseTag?: string
+  windowScreen?: boolean
 }
 
 interface ProfileBrowserRuntime {
@@ -123,7 +126,8 @@ export async function locateBrowserForProfile(
               label: integrity.status === 'legacy'
                 ? 'Fingerprint Chromium（环境固定 · 旧版完整性清单）'
                 : 'Prism 内核（环境固定）',
-              version
+              version,
+              windowScreen: kernelFitsWindowToScreen(manifest)
             }
           }
         }

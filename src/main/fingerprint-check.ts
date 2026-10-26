@@ -438,7 +438,7 @@ export async function deepCheck(options: FingerprintRunOptions, onSite: (result:
 export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostScreen'> & { engine?: EngineStatus }): ExpectedIdentity {
   const fp = profile.fingerprint
   const identity = effectiveNetworkIdentity(fp, options.proxy?.ok ? options.proxy : undefined, { allowGeoConflict: true })
-  const size = effectiveScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen)
+  const size = effectiveScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen, options.engine?.windowScreen)
   const screen: [number, number] = [size.width, size.height]
   return {
     cores: fp.coresSource === 'host' ? options.hostHardwareConcurrency : fp.hardwareConcurrency,

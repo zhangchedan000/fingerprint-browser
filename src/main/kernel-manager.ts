@@ -20,6 +20,7 @@ import type { SettingsStore } from './settings-store'
 import { checksumFor, isSourceDownloadUrl, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
+import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen } from './kernel-features'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -44,6 +45,8 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   sourceRepo?: string
   releaseTag?: string
   publishedAt?: string
+  /** Local builds: built with patch 015 (window-screen); downloads tell by their release tag. */
+  windowScreen?: boolean
 }
 
 interface KernelActivationBackup {
@@ -135,7 +138,8 @@ export class KernelManager {
         installed: true,
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
-        executable
+        executable,
+        windowScreen: kernelFitsWindowToScreen(manifest)
       })
     }
     return releases.sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
@@ -197,6 +201,7 @@ export class KernelManager {
         executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
         source: release.source,
         tag: release.tag,
+        windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag }),
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
@@ -212,7 +217,8 @@ export class KernelManager {
         installed: true,
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
-        executable: join(this.kernelPath(manifest.version), manifest.executableRelative)
+        executable: join(this.kernelPath(manifest.version), manifest.executableRelative),
+        windowScreen: kernelFitsWindowToScreen(manifest)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
   }
@@ -362,7 +368,8 @@ export class KernelManager {
         executableSize: executableRecord.size,
         ...integrity,
         source: 'local-build',
-        target: `${process.platform}-${process.arch}`
+        target: `${process.platform}-${process.arch}`,
+        windowScreen: await localBuildFitsWindowToScreen(executable)
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
       await rename(stagingPath, destination)

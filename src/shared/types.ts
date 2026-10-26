@@ -296,6 +296,8 @@ export interface EngineStatus {
   fingerprintKernel: boolean
   label: string
   version?: string
+  /** The kernel keeps its window inside a claimed screen, so the claim may be smaller than the real one. */
+  windowScreen?: boolean
 }
 
 export interface KernelImportResult {
@@ -324,6 +326,8 @@ export interface KernelRelease {
   tag?: string
   /** A newer build of this installed kernel; installing it replaces the kernel in place. */
   update?: boolean
+  /** See EngineStatus.windowScreen. */
+  windowScreen?: boolean
 }
 
 export type KernelInstallStage = 'downloading' | 'verifying' | 'installing' | 'ready' | 'cancelled' | 'error'

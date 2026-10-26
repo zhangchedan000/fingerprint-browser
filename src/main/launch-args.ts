@@ -21,6 +21,8 @@ export interface LaunchArgumentOptions {
   allowGeoConflict?: boolean
   /** Real primary display size, used when the window follows the computer's screen. */
   hostScreen?: { width: number; height: number }
+  /** EngineStatus.windowScreen of the kernel this window runs. */
+  windowScreen?: boolean
 }
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
@@ -75,7 +77,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const { width: screenWidth, height: screenHeight } = effectiveScreen(
     fp,
     options.fingerprintKernel ? options.engineVersion : undefined,
-    options.hostScreen
+    options.hostScreen,
+    options.windowScreen
   )
   const language = chromeUiLocale(networkIdentity.language)
   const acceptLanguages = chromeAcceptLanguages(language, networkIdentity.acceptLanguages)

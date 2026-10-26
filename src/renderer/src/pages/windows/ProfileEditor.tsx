@@ -1,5 +1,5 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
-import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices } from '../../../../shared/screen'
+import { effectiveScreen, kernelSpoofsScreen, randomScreen, SCREEN_CHOICES, screenChoices, screenFloor } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
   Alert,
@@ -111,11 +111,11 @@ const MACOS_VERSIONS = [
   { value: '15.0.0', label: 'macOS 15' }
 ]
 
-/** This computer's screen: a window can only claim one at least this large. */
+/** This computer's screen; kernels before prism5 can only claim one at least this large (screenFloor). */
 function hostScreen(): { width: number; height: number } {
   return { width: window.screen.width, height: window.screen.height }
 }
-const isChoice = (width: number, height: number) => screenChoices(hostScreen()).some((choice) => choice.width === width && choice.height === height)
+const isChoice = (width: number, height: number) => SCREEN_CHOICES.some((choice) => choice.width === width && choice.height === height)
 const CORE_OPTIONS = [2, 4, 6, 8, 10, 12, 16, 20, 24, 32]
 
 function editorValues(profile: BrowserProfileView | undefined, index: number): EditorValues {
@@ -355,12 +355,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         source: pinnedKernel ? 'profile' : 'missing',
         fingerprintKernel: true,
         label: pinnedKernel ? t("Prism 内核（环境固定）") : t("固定内核未安装"),
-        version: kernelVersion
+        version: kernelVersion,
+        windowScreen: pinnedKernel?.windowScreen
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
   // The GPU list depends on the kernel this window will actually run.
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
+  // prism5+ kernels keep the window inside the claimed screen, so it may be smaller than this one.
+  const windowScreen = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.windowScreen)
+  const floor = screenFloor(hostScreen(), windowScreen)
   // A check describes the settings it ran with; any change since makes it out of date.
   const typedProxy = Form.useWatch('proxy', { form, preserve: true }) as ProxyConfig | undefined
   const currentSettingsKey = checkedSettingsKey(
@@ -467,7 +471,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (fp.platform !== 'windows') return {}
     const model = key.split('|')[0]
     const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, hostScreen()) : undefined
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, floor) : undefined
     return {
       cpu: cpu.model,
       coresSource: 'profile',
@@ -500,7 +504,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function shuffleScreen(): void {
     const current = `${fp.screenWidth}x${fp.screenHeight}`
-    chooseScreen(pickOther(screenChoices(hostScreen()).map(({ width, height }) => `${width}x${height}`), current))
+    chooseScreen(pickOther(screenChoices(floor).map(({ width, height }) => `${width}x${height}`), current))
   }
 
   function chooseCores(value: number | 'host'): void {
@@ -545,7 +549,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** "一键随机指纹": a new computer — new noise, GPU, cores and screen. */
   function randomizeAll(): void {
     const list = kernelGpuList(windowKernelVersion, fp.platform)
-    const { width, height } = randomScreen(hostScreen()) ?? hostScreen()
+    const { width, height } = randomScreen(floor) ?? hostScreen()
     const gpu = list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined
     patchFingerprint({
       seed: randomSeed(),
@@ -985,7 +989,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const [microphones, speakers, cameras] = set.split(',').map(Number)
     return t("{0} 麦克风 · {1} 扬声器 · {2} 摄像头", microphones, speakers, cameras)
   }
-  const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen())
+  const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen(), windowScreen)
   const screenValue = fp.screenSource === 'host' || (shownScreen.width !== fp.screenWidth || shownScreen.height !== fp.screenHeight)
     ? 'host'
     : screenCustom || !isChoice(fp.screenWidth, fp.screenHeight)
@@ -1148,7 +1152,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
       <h3 className="fb-fp-group">{t("显示")}</h3>
       {kernelSpoofsScreen(windowKernelVersion) ? (
-        <Row label={t("分辨率")} check={checkFor('screen')} hint={t("只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下", hostScreen().width, hostScreen().height)}>
+        <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
+          ? t("浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以", hostScreen().width, hostScreen().height)
+          : t("只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下", hostScreen().width, hostScreen().height)}>
           <Space wrap size={8}>
             <ValueChoice
               label={t("分辨率")}
@@ -1157,14 +1163,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               onShuffle={shuffleScreen}
               options={[
                 { value: 'host', label: t("本机真实") },
-                ...screenChoices(hostScreen()).map(({ width, height }) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
+                ...screenChoices(floor).map(({ width, height }) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
                 { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
               ]}
             />
             {screenValue === 'custom' && screenCustom && (
               <>
-                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={hostScreen().width} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
-                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={hostScreen().height} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={floor?.width ?? 800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={floor?.height ?? 600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
               </>
             )}
           </Space>

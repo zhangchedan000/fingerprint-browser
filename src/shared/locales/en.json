@@ -2058,5 +2058,6 @@
   "更新文件校验失败（SHA-256 不一致），已放弃": "Update file failed verification (SHA-256 mismatch); discarded",
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "One-click update works only for the Windows portable app; download it from the release page",
   "请先下载更新": "Download the update first",
-  "更新文件不完整，请重新下载": "The update file is incomplete; download it again"
+  "更新文件不完整，请重新下载": "The update file is incomplete; download it again",
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "The browser window is kept within the chosen resolution, so it may be smaller than this computer's screen ({0} × {1})"
 }

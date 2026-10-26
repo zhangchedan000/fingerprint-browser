@@ -2058,5 +2058,6 @@
   "更新文件校验失败（SHA-256 不一致），已放弃": "Tệp cập nhật xác minh thất bại (SHA-256 không khớp); đã hủy",
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "Cập nhật một chạm chỉ hỗ trợ bản Windows di động; hãy tải từ trang phát hành",
   "请先下载更新": "Hãy tải bản cập nhật trước",
-  "更新文件不完整，请重新下载": "Tệp cập nhật không đầy đủ, hãy tải lại"
+  "更新文件不完整，请重新下载": "Tệp cập nhật không đầy đủ, hãy tải lại",
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "Cửa sổ trình duyệt được giữ trong độ phân giải đã chọn, nên có thể nhỏ hơn màn hình máy này ({0} × {1})"
 }

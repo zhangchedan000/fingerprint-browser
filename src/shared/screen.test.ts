@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectiveScreen, randomScreen, screenChoices } from './screen'
+import { effectiveScreen, randomScreen, screenChoices, screenFloor } from './screen'
 
 const host = { width: 2560, height: 1440 }
 const fp = (width: number, height: number, screenSource?: 'host' | 'profile') => ({ screenWidth: width, screenHeight: height, screenSource })
@@ -16,7 +16,14 @@ describe('window screen size', () => {
     expect(effectiveScreen(fp(3840, 2160, 'host'), 'prism-156.0.8078.47', host)).toEqual(host)
   })
 
-  it('never claims a screen smaller than the real one', () => {
+  it('claims a smaller screen only on kernels that keep the window inside it', () => {
+    expect(effectiveScreen(fp(1920, 1080), 'prism-156.0.8078.47', host, true)).toEqual({ width: 1920, height: 1080 })
+    expect(effectiveScreen(fp(1920, 1080), '144.0.7559.132', host, true)).toEqual(host)
+    expect(screenChoices(screenFloor(host, true))).toHaveLength(7)
+    expect(screenFloor(host, false)).toEqual(host)
+  })
+
+  it('never claims a screen smaller than the real one on older kernels', () => {
     expect(effectiveScreen(fp(1440, 900), 'prism-156.0.8078.47', host)).toEqual(host)
     expect(effectiveScreen(fp(3840, 1080), 'prism-156.0.8078.47', host)).toEqual(host)
   })

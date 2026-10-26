@@ -2058,5 +2058,6 @@
   "更新文件校验失败（SHA-256 不一致），已放弃": "Falha na verificação do arquivo (SHA-256 diferente); descartado",
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "A atualização com um clique só funciona na versão portátil do Windows; baixe na página de versões",
   "请先下载更新": "Baixe a atualização primeiro",
-  "更新文件不完整，请重新下载": "O arquivo está incompleto; baixe novamente"
+  "更新文件不完整，请重新下载": "O arquivo está incompleto; baixe novamente",
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "A janela do navegador fica dentro da resolução escolhida, então ela pode ser menor que a tela deste computador ({0} × {1})"
 }
