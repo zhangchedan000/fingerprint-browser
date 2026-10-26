@@ -8,14 +8,18 @@ import { dirname, join } from 'node:path'
 const WINDOW_SCREEN_REVISION = 5
 const WINDOW_SCREEN_PATCH = '015-window-screen'
 
-/** "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5. */
-export function prismRevision(tag: string | undefined): number | undefined {
-  const match = tag?.match(/-prism(\d+)$/)
+/**
+ * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5; app releases (v0.2.0) carry it in the
+ * zip name instead ("ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip").
+ */
+export function prismRevision(name: string | undefined): number | undefined {
+  const match = name?.match(/-prism(\d+)(?:_|$)/)
   return match ? Number(match[1]) : undefined
 }
 
-export function kernelFitsWindowToScreen(manifest: { windowScreen?: boolean; releaseTag?: string }): boolean {
-  return manifest.windowScreen ?? (prismRevision(manifest.releaseTag) ?? 0) >= WINDOW_SCREEN_REVISION
+export function kernelFitsWindowToScreen(manifest: { windowScreen?: boolean; releaseTag?: string; assetName?: string }): boolean {
+  const revision = prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
+  return manifest.windowScreen ?? revision >= WINDOW_SCREEN_REVISION
 }
 
 /**

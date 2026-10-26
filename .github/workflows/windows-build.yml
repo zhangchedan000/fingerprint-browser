@@ -3,11 +3,16 @@ name: Windows build
 on:
   push:
     branches: [main, refactor-core, desktop-updates]
+    # A version tag (v0.2.0) also publishes the release: the exe, notes from release-notes/<tag>.md,
+    # marked Latest so releases/latest always points at it. Kernel zips are added to it afterwards.
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -15,6 +20,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME but package.json says $version"; exit 1; }
+          [ -f "release-notes/$GITHUB_REF_NAME.md" ] || { echo "::error::release-notes/$GITHUB_REF_NAME.md is missing"; exit 1; }
       - name: Tunnel core (mihomo, pinned and checksummed)
         run: node tools/tunnel-core/fetch.mjs win32-x64
       - name: Unit tests
@@ -58,3 +70,15 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 14
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release/*.exe --clobber
+          else
+            gh release create "$tag" release/*.exe --title "$tag" --notes-file "release-notes/$tag.md" --latest
+          fi

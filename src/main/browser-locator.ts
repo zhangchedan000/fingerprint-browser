@@ -51,6 +51,7 @@ interface ManagedKernelManifest {
   criticalFiles?: KernelCriticalFile[]
   criticalFilesSha256?: string
   releaseTag?: string
+  assetName?: string
   windowScreen?: boolean
 }
 

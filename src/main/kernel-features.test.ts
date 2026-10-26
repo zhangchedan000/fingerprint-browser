@@ -8,6 +8,7 @@ it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
   expect(prismRevision('155.0.8059.84-prism12')).toBe(12)
   expect(prismRevision('v0.2.0')).toBeUndefined()
+  expect(prismRevision('ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip')).toBe(5)
 })
 
 it('lets prism5 and later kernels claim a smaller screen', () => {
@@ -15,6 +16,7 @@ it('lets prism5 and later kernels claim a smaller screen', () => {
   expect(kernelFitsWindowToScreen({ releaseTag: '156.0.8078.47-prism5' })).toBe(true)
   expect(kernelFitsWindowToScreen({})).toBe(false)
   expect(kernelFitsWindowToScreen({ windowScreen: true })).toBe(true)
+  expect(kernelFitsWindowToScreen({ releaseTag: 'v0.2.0', assetName: 'ungoogled-chromium_155.0.8059.84-prism5_windows_x64.zip' })).toBe(true)
 })
 
 it('finds the window-screen patch in a local build lock', async () => {

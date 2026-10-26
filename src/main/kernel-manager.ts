@@ -201,7 +201,7 @@ export class KernelManager {
         executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
         source: release.source,
         tag: release.tag,
-        windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag }),
+        windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
@@ -225,7 +225,7 @@ export class KernelManager {
         executable: owner ? join(this.kernelPath(version), owner.executableRelative) : undefined,
         source: release.source,
         tag: release.tag,
-        windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag }),
+        windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
         history: true
       })
     }
