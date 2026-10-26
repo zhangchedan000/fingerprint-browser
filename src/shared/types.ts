@@ -330,6 +330,8 @@ export interface KernelRelease {
   update?: boolean
   /** See EngineStatus.windowScreen. */
   windowScreen?: boolean
+  /** An older build of its version, offered for rolling back; installing it replaces the kernel in place. */
+  history?: boolean
 }
 
 export type KernelInstallStage = 'downloading' | 'verifying' | 'installing' | 'ready' | 'cancelled' | 'error'
@@ -673,7 +675,7 @@ export interface BrowserApi {
     sources: () => Promise<string[]>
     setSources: (sources: string[]) => Promise<string[]>
     /** Downloads, checks and installs a published kernel, then makes it the default. */
-    install: (version: string) => Promise<EngineStatus>
+    install: (version: string, tag?: string) => Promise<EngineStatus>
     cancelInstall: (version: string) => Promise<void>
     onProgress: (listener: (progress: KernelInstallProgress) => void) => () => void
   }

@@ -17,7 +17,7 @@ import {
   type KernelIntegrityFields
 } from './kernel-integrity'
 import type { SettingsStore } from './settings-store'
-import { checksumFor, isSourceDownloadUrl, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen } from './kernel-features'
@@ -205,6 +205,30 @@ export class KernelManager {
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
+    // Older builds, for rolling an installed kernel back (or installing one) — replaced in place.
+    for (const release of olderBuilds(withSha, rows)) {
+      const owner = [...installed.values()].find((manifest) => manifest.source !== 'local-build'
+        && kernelChromiumVersion(manifest.version) === release.chromium
+        && (!manifest.sourceRepo || manifest.sourceRepo.toLowerCase() === release.source.toLowerCase()))
+      const version = owner?.version ?? `prism-${release.chromium}`
+      if (!owner && installed.has(version)) continue
+      remote.push({
+        version,
+        publishedAt: release.publishedAt,
+        assetName: release.asset.name,
+        downloadUrl: release.asset.browser_download_url,
+        size: release.asset.size,
+        sha256: release.sha256,
+        installed: owner?.sha256.toLowerCase() === release.sha256,
+        remoteAvailable: true,
+        origin: 'release',
+        executable: owner ? join(this.kernelPath(version), owner.executableRelative) : undefined,
+        source: release.source,
+        tag: release.tag,
+        windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag }),
+        history: true
+      })
+    }
     const localOnly = [...installed.values()]
       .filter((manifest) => !used.has(manifest.version))
       .map((manifest) => ({
@@ -250,12 +274,13 @@ export class KernelManager {
     return await response.json() as GithubRelease[]
   }
 
-  async install(versionInput: string): Promise<EngineStatus> {
+  /** Installs a kernel; `tag` picks an older build (history), which replaces an installed one in place. */
+  async install(versionInput: string, tag?: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const existing = await this.readManifest(version)
-    const release = (await this.releases()).find((item) => item.version === version)
-    if (existing && !release?.update) {
+    const release = (await this.releases()).find((item) => item.version === version && (tag ? item.tag === tag : !item.history))
+    if (existing && (!release || !(release.update || (release.history && !release.installed)))) {
       await this.makeDefaultIfNone(version)
       return locateBrowser(this.settings)
     }
@@ -267,18 +292,20 @@ export class KernelManager {
     const downloadsPath = join(this.vaultPath, 'downloads')
     const kernelsPath = join(this.vaultPath, 'kernels')
     await Promise.all([mkdir(downloadsPath, { recursive: true }), mkdir(kernelsPath, { recursive: true })])
-    const archivePath = join(downloadsPath, `${version}-${basename(release.assetName)}.download`)
+    // Builds of one version share a zip name; the tag keeps a partial download of one from resuming another.
+    const archivePath = join(downloadsPath, `${version}-${(release.tag ?? '').replace(/[^\w.-]/g, '_')}-${basename(release.assetName)}.download`)
 
     try {
       await this.assertDownloadSpace(downloadsPath, archivePath, release.size)
       await this.download(release, archivePath)
-      this.emit(release, 'installing', release.size, release.size, release.update ? '正在更新浏览器内核…' : '正在安装浏览器内核…')
+      const replacing = Boolean(existing)
+      this.emit(release, 'installing', release.size, release.size, replacing ? '正在更新浏览器内核…' : '正在安装浏览器内核…')
       if (process.platform === 'darwin') await this.installMac(release, archivePath)
       else await this.installWindows(release, archivePath)
       await rm(archivePath, { force: true })
       await this.makeDefaultIfNone(version)
       this.logger?.info('浏览器内核安装完成', { version })
-      this.emit(release, 'ready', release.size, release.size, release.update ? '内核已更新，使用它的窗口下次启动即用新版' : '内核安装完成')
+      this.emit(release, 'ready', release.size, release.size, replacing ? '内核已更新，使用它的窗口下次启动即用新版' : '内核安装完成')
       return locateBrowser(this.settings)
     } catch (error) {
       const cancelled = this.installAbort.signal.aborted
@@ -492,7 +519,10 @@ export class KernelManager {
   async repair(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
-    const release = (await this.releases()).find((item) => item.version === version && item.remoteAvailable)
+    // Reinstall the very build that is installed; older/newer builds of the version are other rows.
+    const installedSha = (await this.readManifest(version))?.sha256.toLowerCase()
+    const rows = (await this.releases()).filter((item) => item.version === version && item.remoteAvailable)
+    const release = rows.find((item) => item.sha256 === installedSha) ?? rows.find((item) => !item.history)
     if (!release) throw new Error('远程发行源中已找不到该版本，无法重新安装')
     this.validateRelease(release)
     const currentPath = this.kernelPath(version)

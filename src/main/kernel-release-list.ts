@@ -1,7 +1,8 @@
 /**
- * Picks the Windows x64 kernel zip out of a GitHub project's releases. Prism releases name it
- * "ungoogled-chromium_<version>-1.1_windows_x64.zip"; other projects use their own names, so any
- * zip naming Windows and x64 counts, and the Chromium version comes from the asset or the tag.
+ * Picks the Windows x64 kernel zips out of a GitHub project's releases. Prism releases name them
+ * "ungoogled-chromium_<version>-1.1_windows_x64.zip", and one app release ("v0.2.0") carries a
+ * zip for each Chromium version it ships; other projects use their own names, so any zip naming
+ * Windows and x64 counts, and the Chromium version comes from the asset or the tag.
  */
 export interface GithubAsset {
   name: string
@@ -38,21 +39,27 @@ function isWindowsX64Zip(name: string): boolean {
   return /win/.test(lower) && /x64|amd64|x86_64|win64/.test(lower)
 }
 
-export function windowsKernelAsset(assets: readonly GithubAsset[]): GithubAsset | undefined {
-  return assets.find((asset) => /^ungoogled-chromium_.+_windows_x64\.zip$/.test(asset.name))
-    ?? assets.find((asset) => isWindowsX64Zip(asset.name))
+/** One zip per Chromium version: Prism's own names first, then any Windows x64 zip. */
+export function windowsKernelAssets(assets: readonly GithubAsset[], tag: string): Array<{ asset: GithubAsset; chromium: string }> {
+  const prism = assets.filter((asset) => /^ungoogled-chromium_.+_windows_x64\.zip$/.test(asset.name))
+  const zips = prism.length ? prism : assets.filter((asset) => isWindowsX64Zip(asset.name))
+  const byVersion = new Map<string, GithubAsset>()
+  for (const asset of zips) {
+    const chromium = asset.name.match(VERSION)?.[0] ?? (zips.length === 1 ? tag.match(VERSION)?.[0] : undefined)
+    if (chromium && !byVersion.has(chromium)) byVersion.set(chromium, asset)
+  }
+  return [...byVersion].map(([chromium, asset]) => ({ asset, chromium }))
 }
 
 export function releaseCandidates(source: string, releases: readonly GithubRelease[]): ReleaseCandidate[] {
   return releases
     .filter((release) => !release.draft && !release.prerelease)
     .flatMap((release) => {
-      const asset = windowsKernelAsset(release.assets)
-      const chromium = asset?.name.match(VERSION)?.[0] ?? release.tag_name.match(VERSION)?.[0]
-      if (!asset || !chromium) return []
-      const sha256 = asset.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length).toLowerCase() : ''
-      const checksumAsset = sha256 ? undefined : release.assets.find((item) => /sha256sums?\.txt$|\.sha256$/i.test(item.name))
-      return [{ source, tag: release.tag_name, chromium, publishedAt: release.published_at, asset, sha256, checksumAsset }]
+      const checksums = release.assets.find((item) => /sha256sums?(\.txt)?$|\.sha256$/i.test(item.name))
+      return windowsKernelAssets(release.assets, release.tag_name).map(({ asset, chromium }) => {
+        const sha256 = asset.digest?.startsWith('sha256:') ? asset.digest.slice('sha256:'.length).toLowerCase() : ''
+        return { source, tag: release.tag_name, chromium, publishedAt: release.published_at, asset, sha256, ...(sha256 ? {} : { checksumAsset: checksums }) }
+      })
     })
     .sort((first, second) => second.publishedAt.localeCompare(first.publishedAt))
 }
@@ -127,4 +134,10 @@ export function planKernelRows<R extends ReleaseCandidate>(installed: readonly I
     rows.push({ kind: 'new', release })
   }
   return rows
+}
+
+/** The builds planKernelRows leaves out (older builds of each version), newest first, for rolling back. */
+export function olderBuilds<R extends ReleaseCandidate>(releases: readonly R[], rows: readonly PlannedRow<R>[]): R[] {
+  const shown = new Set(rows.map((row) => row.release))
+  return releases.filter((release) => !shown.has(release)).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 }

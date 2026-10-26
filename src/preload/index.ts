@@ -106,7 +106,7 @@ const api: BrowserApi = {
     releases: () => ipcRenderer.invoke('engine:releases'),
     sources: () => ipcRenderer.invoke('engine:sources'),
     setSources: (sources: string[]) => ipcRenderer.invoke('engine:set-sources', sources),
-    install: (version: string) => ipcRenderer.invoke('engine:install', version),
+    install: (version: string, tag?: string) => ipcRenderer.invoke('engine:install', version, tag),
     cancelInstall: (version: string) => ipcRenderer.invoke('engine:cancel-install', version),
     onProgress: (listener: (progress: KernelInstallProgress) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, progress: KernelInstallProgress): void => listener(progress)

@@ -2061,5 +2061,9 @@
   "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "The browser window is kept within the chosen resolution, so it may be smaller than this computer's screen ({0} × {1})",
   "微软语音": "Microsoft voices",
   "设备名": "Device names",
-  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Language of Chrome's menus and settings; it also sets the default date and number format on web pages"
+  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Language of Chrome's menus and settings; it also sets the default date and number format on web pages",
+  "当前版本": "Current",
+  "回退到此版本": "Roll back to this",
+  "历史版本": "Older builds",
+  "较早的构建，可以把已安装的内核回退过去；只增不删，随时能换回来": "Earlier builds you can roll an installed kernel back to; nothing is deleted, so you can switch back any time"
 }

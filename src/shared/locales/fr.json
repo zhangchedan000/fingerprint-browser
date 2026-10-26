@@ -2061,5 +2061,9 @@
   "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "La fenêtre du navigateur reste dans la résolution choisie ; elle peut donc être plus petite que l'écran de cet ordinateur ({0} × {1})",
   "微软语音": "Voix Microsoft",
   "设备名": "Noms d'appareils",
-  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Langue des menus et des paramètres de Chrome ; elle fixe aussi le format par défaut des dates et des nombres sur les pages"
+  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Langue des menus et des paramètres de Chrome ; elle fixe aussi le format par défaut des dates et des nombres sur les pages",
+  "当前版本": "Actuelle",
+  "回退到此版本": "Revenir à cette version",
+  "历史版本": "Versions précédentes",
+  "较早的构建，可以把已安装的内核回退过去；只增不删，随时能换回来": "Builds antérieurs vers lesquels revenir ; rien n'est supprimé, vous pouvez rebasculer à tout moment"
 }

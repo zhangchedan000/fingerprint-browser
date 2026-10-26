@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Modal, Progress, Space, Table, Tag, type TableColumnsType } from 'antd'
+import { Alert, Button, Input, Modal, Progress, Space, Switch, Table, Tag, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { EngineStatus, KernelInstallProgress, KernelRelease } from '../../../../shared/types'
@@ -13,6 +13,9 @@ interface Props {
   onInstalled: (status: EngineStatus, version: string) => void
 }
 
+/** Builds of one version share its id; the release tag tells them apart. */
+const rowKey = (release: KernelRelease) => `${release.version}|${release.tag ?? ''}|${release.history ? 'h' : ''}`
+
 function compareVersions(a: string, b: string): number {
   const left = a.split('.').map(Number)
   const right = b.split('.').map(Number)
@@ -25,7 +28,8 @@ function compareVersions(a: string, b: string): number {
 
 /**
  * Lists kernel releases from the added GitHub projects; one click downloads, checks and installs.
- * An installed kernel with a newer build of its version shows "update", which replaces it in place.
+ * An installed kernel with a newer build of its version shows "update", which replaces it in place;
+ * "历史版本" also lists the older builds, to roll a kernel back the same way.
  */
 export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   const [releases, setReleases] = useState<KernelRelease[]>()
@@ -36,6 +40,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   const [sourceInput, setSourceInput] = useState('')
   const [sourceError, setSourceError] = useState<string>()
   const [reload, setReload] = useState(0)
+  const [showHistory, setShowHistory] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -75,7 +80,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
 
   function confirmInstall(release: KernelRelease): void {
     if (!release.source || release.source === OFFICIAL_KERNEL_SOURCE) {
-      void install(release.version)
+      void install(release)
       return
     }
     Modal.confirm({
@@ -83,18 +88,19 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
       content: t("内核来自 {0}，下载后会在这台电脑上运行。请确认这个项目可信；第三方内核可能不支持全部指纹参数。", release.source),
       okText: t("下载"),
       cancelText: t("取消"),
-      onOk: () => void install(release.version)
+      onOk: () => void install(release)
     })
   }
 
   useEffect(() => window.browserApi.engine.onProgress(setProgress), [])
 
-  async function install(version: string): Promise<void> {
-    setInstalling(version)
+  async function install(release: KernelRelease): Promise<void> {
+    const { version } = release
+    setInstalling(rowKey(release))
     setProgress(undefined)
     setError(undefined)
     try {
-      const status = await window.browserApi.engine.install(version)
+      const status = await window.browserApi.engine.install(version, release.history ? release.tag : undefined)
       onInstalled(status, version)
       onClose()
     } catch (reason) {
@@ -104,7 +110,9 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     }
   }
 
-  const main = releases?.filter((release) => kernelVendor(release.version) === 'prism')
+  const main = releases?.filter((release) => kernelVendor(release.version) === 'prism' && !release.history)
+  const historyCount = releases?.filter((release) => release.history).length ?? 0
+  const shown = releases?.filter((release) => showHistory || !release.history)
   // The highest Chromium version; rows are already sorted by it.
   const latest = main?.[0]?.version
   /** Newest release without a known kernel bug: the one the dialog highlights. */
@@ -113,12 +121,13 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     {
       title: t("版本"),
       dataIndex: 'version',
-      render: (version: string) => (
+      render: (version: string, release) => (
         <span>
           {kernelName(version)}
-          {version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}
-          {releases?.find((item) => item.version === version)?.update && <Tag color="orange" className="fb-inline-tag">{t("有更新")}</Tag>}
-          {version === recommended && version !== latest && <Tag color="green" className="fb-inline-tag">{t("推荐")}</Tag>}
+          {release.history && release.tag && <span className="fb-muted"> · {release.tag}</span>}
+          {!release.history && version === latest && <Tag color="blue" className="fb-inline-tag">{t("最新")}</Tag>}
+          {release.update && <Tag color="orange" className="fb-inline-tag">{t("有更新")}</Tag>}
+          {!release.history && version === recommended && version !== latest && <Tag color="green" className="fb-inline-tag">{t("推荐")}</Tag>}
         </span>
       )
     },
@@ -128,23 +137,32 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
     {
       title: t("操作"),
       align: 'right',
-      render: (_, release) => release.installed && release.update
+      render: (_, release) => release.history
+        ? release.installed
+          ? <span className="fb-muted">{t("当前版本")}</span>
+          : (
+            <Button size="small" disabled={Boolean(installing)} loading={installing === rowKey(release)} onClick={() => confirmInstall(release)}>
+              {release.executable ? t("回退到此版本") : t("下载")}
+            </Button>
+          )
+        : release.installed && release.update
         ? (
-          <Button size="small" type="primary" disabled={Boolean(installing)} loading={installing === release.version} onClick={() => confirmInstall(release)}>
+          <Button size="small" type="primary" disabled={Boolean(installing)} loading={installing === rowKey(release)} onClick={() => confirmInstall(release)}>
             {t("更新")}
           </Button>
         )
         : release.installed
         ? <span className="fb-muted">{t("已安装")}</span>
         : (
-          <Button size="small" type={release.version === recommended ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === release.version} onClick={() => confirmInstall(release)}>
+          <Button size="small" type={release.version === recommended ? 'primary' : 'default'} disabled={Boolean(installing)} loading={installing === rowKey(release)} onClick={() => confirmInstall(release)}>
             {t("下载")}
           </Button>
         )
     }
   ]
 
-  const active = installing && progress?.version === installing ? progress : undefined
+  const installingVersion = installing?.split('|')[0]
+  const active = installingVersion && progress?.version === installingVersion ? progress : undefined
   return (
     <Modal
       open={open}
@@ -154,7 +172,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
       closable={!installing}
       onCancel={onClose}
       footer={installing
-        ? <Button onClick={() => void window.browserApi.engine.cancelInstall(installing)}>{t("取消下载")}</Button>
+        ? <Button onClick={() => void window.browserApi.engine.cancelInstall(installingVersion ?? installing)}>{t("取消下载")}</Button>
         : <Button onClick={onClose}>{t("关闭")}</Button>}
     >
       <p className="fb-muted">{t("从下面的 GitHub 项目列出 Windows 内核，下载后会校验 SHA-256 再安装。")}</p>
@@ -189,11 +207,18 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
           </span>
         </div>
       )}
+      {historyCount > 0 && (
+        <Space size={8} className="fb-block-gap">
+          <Switch size="small" checked={showHistory} onChange={setShowHistory} />
+          <span>{t("历史版本")}</span>
+          <span className="fb-muted">{t("较早的构建，可以把已安装的内核回退过去；只增不删，随时能换回来")}</span>
+        </Space>
+      )}
       <Table<KernelRelease>
-        rowKey="version"
+        rowKey={rowKey}
         size="small"
         columns={columns}
-        dataSource={releases ?? []}
+        dataSource={shown ?? []}
         loading={!releases && !error}
         pagination={false}
         locale={{ emptyText: t("没有适用于当前系统的内核版本") }}
