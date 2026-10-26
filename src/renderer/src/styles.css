@@ -385,3 +385,7 @@ button, input, textarea { font: inherit; }
 .fb-deep-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; }
 .fb-deep-title { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .fb-deep-finding { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+
+.fb-update-badge { margin-left: 6px; padding: 0 6px; border: 0; border-radius: 8px; background: var(--fb-danger); color: var(--fb-on-accent); font-size: 11px; line-height: 16px; cursor: pointer; }
+.fb-update-panel { display: flex; flex-direction: column; gap: 8px; }
+.fb-update-notes pre { max-height: 220px; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 6px; background: var(--fb-surface-muted); white-space: pre-wrap; font: inherit; }

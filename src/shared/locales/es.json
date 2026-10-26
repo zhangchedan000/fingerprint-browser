@@ -2041,5 +2041,22 @@
   "打开上次关闭的页面": "Restaurar sesión anterior",
   "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "El modo automático prueba cada 5 minutos y cambia si mejora más de 50 ms. El nodo fijado se conserva tras reiniciar.",
   "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Edite el nombre, los enlaces o la URL de suscripción. Guardar reconecta el túnel. La suscripción administra sus nodos.",
-  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaure las pestañas de la última sesión de este entorno, o abra una pestaña nueva en el primer uso. Una URL por línea; se usa HTTPS si no se indica el protocolo."
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaure las pestañas de la última sesión de este entorno, o abra una pestaña nueva en el primer uso. Una URL por línea; se usa HTTPS si no se indica el protocolo.",
+  "下载更新": "Descargar actualización",
+  "发现新版本 v{0}": "Nueva versión v{0} disponible",
+  "已是最新版本": "Ya tienes la última versión",
+  "打开下载页": "Abrir página de descarga",
+  "新版本 v{0}": "Nueva v{0}",
+  "更新内容": "Novedades",
+  "检查更新": "Buscar actualizaciones",
+  "正在检查更新…": "Buscando actualizaciones…",
+  "立即重启并更新": "Reiniciar y actualizar ahora",
+  "检查更新失败（GitHub HTTP {0}）": "Error al buscar actualizaciones (GitHub HTTP {0})",
+  "下载更新失败（HTTP {0}）": "Error al descargar la actualización (HTTP {0})",
+  "正在下载更新，请稍候": "Ya se está descargando una actualización, espera",
+  "新版本缺少可校验的安装文件": "La nueva versión no tiene un archivo verificable",
+  "更新文件校验失败（SHA-256 不一致），已放弃": "El archivo no superó la verificación (SHA-256 distinto); descartado",
+  "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "La actualización con un clic solo funciona en la versión portátil de Windows; descárgala desde la página de versiones",
+  "请先下载更新": "Descarga primero la actualización",
+  "更新文件不完整，请重新下载": "El archivo está incompleto; descárgalo de nuevo"
 }

@@ -21,6 +21,8 @@ import { AppSessionTracker } from './app-session'
 import { migrateMacLegacyKernelSelection } from './browser-locator'
 import { WorkspaceMigrationManager } from './workspace-migration'
 import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
+import { AppUpdater } from './app-updater'
+import { registerAppUpdateIpc } from './app-update-ipc'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
@@ -163,6 +165,13 @@ app.whenReady().then(async () => {
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession })
+  registerAppUpdateIpc(new AppUpdater(
+    app.getVersion(),
+    app.getPath('userData'),
+    (progress) => mainWindow?.webContents.send('app:update-progress', progress),
+    logger,
+    (input, init) => net.fetch(input as string, init)
+  ), profiles)
   mainWindow = createWindow()
 
   app.on('activate', () => {

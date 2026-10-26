@@ -2041,5 +2041,22 @@
   "打开上次关闭的页面": "Restaurer la dernière session",
   "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "Le mode automatique teste toutes les 5 minutes et change pour un gain supérieur à 50 ms. Le nœud fixé reste sélectionné après redémarrage.",
   "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Modifiez le nom, les liens ou l’adresse d’abonnement. L’enregistrement reconnecte le tunnel. L’abonnement gère ses propres nœuds.",
-  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaurez les onglets de la dernière session de cet environnement, ou ouvrez un nouvel onglet au premier lancement. Une URL par ligne ; HTTPS est utilisé sans protocole explicite."
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Restaurez les onglets de la dernière session de cet environnement, ou ouvrez un nouvel onglet au premier lancement. Une URL par ligne ; HTTPS est utilisé sans protocole explicite.",
+  "下载更新": "Télécharger la mise à jour",
+  "发现新版本 v{0}": "Nouvelle version v{0} disponible",
+  "已是最新版本": "Vous avez la dernière version",
+  "打开下载页": "Ouvrir la page de téléchargement",
+  "新版本 v{0}": "Nouvelle v{0}",
+  "更新内容": "Nouveautés",
+  "检查更新": "Rechercher des mises à jour",
+  "正在检查更新…": "Recherche de mises à jour…",
+  "立即重启并更新": "Redémarrer et mettre à jour",
+  "检查更新失败（GitHub HTTP {0}）": "Échec de la recherche de mises à jour (GitHub HTTP {0})",
+  "下载更新失败（HTTP {0}）": "Échec du téléchargement de la mise à jour (HTTP {0})",
+  "正在下载更新，请稍候": "Une mise à jour est déjà en cours de téléchargement, patientez",
+  "新版本缺少可校验的安装文件": "La nouvelle version n'a pas de fichier vérifiable",
+  "更新文件校验失败（SHA-256 不一致），已放弃": "Le fichier n'a pas passé la vérification (SHA-256 différent) ; abandonné",
+  "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "La mise à jour en un clic ne fonctionne qu'avec la version portable Windows ; téléchargez-la depuis la page des versions",
+  "请先下载更新": "Téléchargez d'abord la mise à jour",
+  "更新文件不完整，请重新下载": "Le fichier est incomplet ; téléchargez-le à nouveau"
 }

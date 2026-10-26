@@ -2041,5 +2041,22 @@
   "打开上次关闭的页面": "Khôi phục phiên trước",
   "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "Chế độ tự động kiểm tra mỗi 5 phút và chuyển khi cải thiện hơn 50 ms. Nút cố định được giữ sau khi khởi động lại.",
   "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Sửa tên nguồn, liên kết nút hoặc địa chỉ đăng ký. Lưu sẽ kết nối lại đường hầm. Các nút đăng ký do nội dung đăng ký quản lý.",
-  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Khôi phục các thẻ của phiên trước trong môi trường này; lần đầu sẽ mở thẻ mới. Mỗi dòng một địa chỉ; dùng HTTPS nếu thiếu giao thức."
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Khôi phục các thẻ của phiên trước trong môi trường này; lần đầu sẽ mở thẻ mới. Mỗi dòng một địa chỉ; dùng HTTPS nếu thiếu giao thức.",
+  "下载更新": "Tải bản cập nhật",
+  "发现新版本 v{0}": "Đã có phiên bản mới v{0}",
+  "已是最新版本": "Bạn đang dùng phiên bản mới nhất",
+  "打开下载页": "Mở trang tải xuống",
+  "新版本 v{0}": "Mới v{0}",
+  "更新内容": "Có gì mới",
+  "检查更新": "Kiểm tra cập nhật",
+  "正在检查更新…": "Đang kiểm tra cập nhật…",
+  "立即重启并更新": "Khởi động lại và cập nhật",
+  "检查更新失败（GitHub HTTP {0}）": "Kiểm tra cập nhật thất bại (GitHub HTTP {0})",
+  "下载更新失败（HTTP {0}）": "Tải bản cập nhật thất bại (HTTP {0})",
+  "正在下载更新，请稍候": "Đang tải bản cập nhật, vui lòng chờ",
+  "新版本缺少可校验的安装文件": "Bản mới không có tệp có thể xác minh",
+  "更新文件校验失败（SHA-256 不一致），已放弃": "Tệp cập nhật xác minh thất bại (SHA-256 không khớp); đã hủy",
+  "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "Cập nhật một chạm chỉ hỗ trợ bản Windows di động; hãy tải từ trang phát hành",
+  "请先下载更新": "Hãy tải bản cập nhật trước",
+  "更新文件不完整，请重新下载": "Tệp cập nhật không đầy đủ, hãy tải lại"
 }

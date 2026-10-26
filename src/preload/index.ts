@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { DeepSiteResult } from '../shared/deep-check'
-import type { BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import type { AppUpdateProgress, BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
@@ -21,6 +21,15 @@ const api: BrowserApi = {
       const handler = (_event: Electron.IpcRendererEvent, progress: RelocateProgress): void => listener(progress)
       ipcRenderer.on('app:relocate-progress', handler)
       return () => ipcRenderer.removeListener('app:relocate-progress', handler)
+    },
+    checkUpdate: () => ipcRenderer.invoke('app:update-check'),
+    downloadUpdate: () => ipcRenderer.invoke('app:update-download'),
+    installUpdate: () => ipcRenderer.invoke('app:update-install'),
+    openUpdatePage: () => ipcRenderer.invoke('app:update-page'),
+    onUpdateProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: AppUpdateProgress): void => listener(progress)
+      ipcRenderer.on('app:update-progress', handler)
+      return () => ipcRenderer.removeListener('app:update-progress', handler)
     }
   },
   profiles: {

@@ -24,6 +24,8 @@ export type SectionKey = 'workspace' | 'tools' | 'system'
 /** Context one page can hand to another, e.g. "show this group's windows". */
 export interface PageParams {
   groupId?: string
+  /** Settings tab to open, e.g. "about" from the sidebar's update badge. */
+  settingsTab?: 'about'
   /** Windows running on this kernel version. */
   kernelVersion?: string
 }

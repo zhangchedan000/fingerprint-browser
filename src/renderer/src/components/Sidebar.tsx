@@ -2,12 +2,18 @@ import { kernelName } from '../../../shared/kernel-id'
 import { Tooltip } from 'antd'
 import { t, translateMessage as mt } from '../../../shared/i18n'
 import { useWorkspace } from '../data/workspace'
-import { PAGES, SECTIONS, type PageKey } from '../pages/registry'
+import { useEffect, useState } from 'react'
+import { PAGES, SECTIONS, type PageKey, type PageParams } from '../pages/registry'
 
 /** The side menu, built from the page registry. */
-export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (key: PageKey) => void }) {
+export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (key: PageKey, params?: PageParams) => void }) {
   const ws = useWorkspace()
   const { engine } = ws
+  // A newer release shows a badge next to the version; it opens Settings → About.
+  const [newVersion, setNewVersion] = useState<string>()
+  useEffect(() => {
+    void window.browserApi.app.checkUpdate().then((info) => setNewVersion(info.available ? info.latest : undefined)).catch(() => undefined)
+  }, [])
   return (
     <nav className="fb-sidebar" aria-label={t("主导航")}>
       <div className="fb-brand">
@@ -18,7 +24,14 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
         </span>
         <span>
           <strong>{t("指纹浏览器")}</strong>
-          <small>v{__APP_VERSION__}</small>
+          <small>
+            v{__APP_VERSION__}
+            {newVersion && (
+              <button type="button" className="fb-update-badge" onClick={() => onNavigate('settings', { settingsTab: 'about' })}>
+                {t("新版本 v{0}", newVersion)}
+              </button>
+            )}
+          </small>
         </span>
       </div>
       {SECTIONS.map((section) => (

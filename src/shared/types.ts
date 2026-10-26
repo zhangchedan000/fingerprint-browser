@@ -266,6 +266,30 @@ export interface AppInfo {
   logsPath: string
 }
 
+/** The newest release of this app on GitHub, compared with the running version. */
+export interface AppUpdateInfo {
+  current: string
+  latest?: string
+  /** A newer version with a verifiable Windows exe exists. */
+  available: boolean
+  /** Release notes as written on the release page (Markdown). */
+  notes?: string
+  publishedAt?: string
+  pageUrl?: string
+  size?: number
+  /** The newer exe is already downloaded and checked. */
+  downloaded?: boolean
+  /** One-click install works (the Windows portable build); otherwise download from the page. */
+  canInstall: boolean
+}
+
+export interface AppUpdateProgress {
+  version: string
+  receivedBytes: number
+  totalBytes: number
+  done?: boolean
+}
+
 export interface EngineStatus {
   executable: string | null
   source: 'configured' | 'profile' | 'bundled' | 'system' | 'missing'
@@ -558,6 +582,12 @@ export interface BrowserApi {
     deletePreviousVault: () => Promise<VaultLocationInfo>
     revertVault: () => Promise<void>
     onRelocateProgress: (listener: (progress: RelocateProgress) => void) => () => void
+    checkUpdate: () => Promise<AppUpdateInfo>
+    downloadUpdate: () => Promise<AppUpdateInfo>
+    /** Quits, replaces the exe with the downloaded one and starts it again. */
+    installUpdate: () => Promise<void>
+    openUpdatePage: () => Promise<void>
+    onUpdateProgress: (listener: (progress: AppUpdateProgress) => void) => () => void
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>

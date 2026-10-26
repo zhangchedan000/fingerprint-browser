@@ -9,6 +9,8 @@ import { useWorkspaceMigration } from '../../data/migration'
 import { useWorkspace } from '../../data/workspace'
 import { kernelName } from '../../../../shared/kernel-id'
 import { TunnelSettings } from './TunnelSettings'
+import { AppUpdatePanel } from './AppUpdatePanel'
+import type { PageProps } from '../registry'
 
 type SettingsTab = 'general' | 'launch' | 'network' | 'data' | 'about'
 
@@ -28,11 +30,12 @@ function NotYet({ children }: { children: ReactNode }) {
 }
 
 /** Settings (design: Settings.dc.html). */
-export function SettingsPage() {
+export function SettingsPage({ params }: Partial<PageProps> = {}) {
   const ws = useWorkspace()
   const { preferences, notify, engine, profiles } = ws
   const migration = useWorkspaceMigration()
-  const [tab, setTab] = useState<SettingsTab>('general')
+  const [tab, setTab] = useState<SettingsTab>(params?.settingsTab ?? 'general')
+  useEffect(() => { if (params?.settingsTab) setTab(params.settingsTab) }, [params?.settingsTab])
   const [info, setInfo] = useState<AppInfo>()
   const [storage, setStorage] = useState<StorageOverview>()
   const [clearing, setClearing] = useState(false)
@@ -221,6 +224,7 @@ export function SettingsPage() {
             <h2>{t("关于")}</h2>
             <div className="fb-settings-grid">
               <Item label={t("版本")}>{t("指纹浏览器 v{0}（本地版）", info?.version ?? __APP_VERSION__)}</Item>
+              <Item label={t("更新")}><AppUpdatePanel /></Item>
               <Item label={t("内核")}>{engine?.version ? kernelName(engine.version) : '—'}</Item>
               <Item label={t("项目主页")}>
                 <Button size="small" type="link" className="fb-link-cell" onClick={() => void window.browserApi.app.openProjectPage().catch(ws.fail)}>github.com/zhangchedan000/fingerprint-browser</Button>

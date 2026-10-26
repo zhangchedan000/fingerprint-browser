@@ -2041,5 +2041,22 @@
   "打开上次关闭的页面": "Son oturumu geri yükle",
   "自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。": "Otomatik mod her 5 dakikada test eder; iyileşme 50 ms üzerindeyse geçiş yapar. Sabit düğüm yeniden başlatınca korunur.",
   "编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。": "Kaynak adını, düğüm bağlantılarını veya abonelik adresini düzenleyin. Kaydetmek tüneli yeniden bağlar. Abonelik kendi düğümlerini yönetir.",
-  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Bu ortamın son oturumundaki sekmeleri geri yükleyin; ilk kullanımda yeni sekme açın. Her satıra bir adres girin; protokol yoksa HTTPS kullanılır."
+  "恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。": "Bu ortamın son oturumundaki sekmeleri geri yükleyin; ilk kullanımda yeni sekme açın. Her satıra bir adres girin; protokol yoksa HTTPS kullanılır.",
+  "下载更新": "Güncellemeyi indir",
+  "发现新版本 v{0}": "Yeni sürüm v{0} mevcut",
+  "已是最新版本": "En son sürümü kullanıyorsunuz",
+  "打开下载页": "İndirme sayfasını aç",
+  "新版本 v{0}": "Yeni v{0}",
+  "更新内容": "Yenilikler",
+  "检查更新": "Güncellemeleri denetle",
+  "正在检查更新…": "Güncellemeler denetleniyor…",
+  "立即重启并更新": "Şimdi yeniden başlat ve güncelle",
+  "检查更新失败（GitHub HTTP {0}）": "Güncelleme denetimi başarısız (GitHub HTTP {0})",
+  "下载更新失败（HTTP {0}）": "Güncelleme indirilemedi (HTTP {0})",
+  "正在下载更新，请稍候": "Bir güncelleme zaten indiriliyor, lütfen bekleyin",
+  "新版本缺少可校验的安装文件": "Yeni sürümde doğrulanabilir dosya yok",
+  "更新文件校验失败（SHA-256 不一致），已放弃": "Güncelleme dosyası doğrulanamadı (SHA-256 uyuşmuyor); atıldı",
+  "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "Tek tıkla güncelleme yalnızca Windows taşınabilir sürümde çalışır; sürüm sayfasından indirin",
+  "请先下载更新": "Önce güncellemeyi indirin",
+  "更新文件不完整，请重新下载": "Güncelleme dosyası eksik; yeniden indirin"
 }
