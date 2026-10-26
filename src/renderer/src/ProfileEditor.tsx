@@ -87,7 +87,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const proxyProtocol = Form.useWatch(['proxy', 'protocol'], form)
   const proxyPassword = Form.useWatch(['proxy', 'password'], form) ?? ''
   const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], form) === true
-  const webrtcPolicy = Form.useWatch(['fingerprint', 'webrtcPolicy'], form) ?? 'proxy_only'
+  const webrtcPolicy = Form.useWatch(['fingerprint', 'webrtcPolicy'], form) ?? 'replace'
   const fingerprintTimezone = Form.useWatch(['fingerprint', 'timezone'], form)
   const fingerprintLanguage = Form.useWatch(['fingerprint', 'language'], form) ?? 'zh-CN'
   const fingerprintAcceptLanguages = Form.useWatch(['fingerprint', 'acceptLanguages'], form) ?? 'zh-CN,zh,en-US,en'
@@ -378,12 +378,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Select
           options={[
-            { value: 'proxy_only', label: t("防泄漏（推荐）— 禁止非代理 UDP") },
+            { value: 'replace', label: t("替换（推荐）— 显示代理出口 IP") },
+            { value: 'proxy_only', label: t("防泄漏 — 禁止非代理 UDP") },
             { value: 'public_only', label: t("仅公网接口 — 不暴露本地地址") },
             { value: 'default', label: t("系统默认 — 使用所有网络接口") }
           ]}
         />
       </Form.Item>
+      {webrtcPolicy === 'replace' && (
+        <Alert
+          type="success"
+          showIcon
+          message={t("WebRTC 替换已开启")}
+          description={t("网页通过 WebRTC 只能看到代理出口 IP，本地地址显示为随机 .local 名称；真实网卡和公网 IP 不会暴露。未检测到代理出口 IPv4 时自动按防泄漏处理。")}
+        />
+      )}
       {webrtcPolicy === 'proxy_only' && (
         <Alert
           type="success"

@@ -105,8 +105,8 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft {
   } catch {
     throw new Error('界面语言必须是有效的语言代码，例如 zh-CN')
   }
-  const webrtcPolicy = fp.webrtcPolicy ?? 'proxy_only'
-  if (!['proxy_only', 'public_only', 'default'].includes(webrtcPolicy)) throw new Error('WebRTC 防泄漏策略无效')
+  const webrtcPolicy = fp.webrtcPolicy ?? 'replace'
+  if (!['replace', 'proxy_only', 'public_only', 'default'].includes(webrtcPolicy)) throw new Error('WebRTC 防泄漏策略无效')
   const networkIdentityMode = fp.networkIdentityMode ?? 'manual'
   if (!['manual', 'proxy'].includes(networkIdentityMode)) throw new Error('网络身份同步策略无效')
   const proxyExitPolicy = fp.proxyExitPolicy ?? 'warn'

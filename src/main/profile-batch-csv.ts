@@ -122,7 +122,7 @@ function rowDraft(values: Record<string, string>, index: number, rowNumber: numb
   const platform = (values.platform.trim().toLowerCase() || draft.fingerprint.platform) as BrowserPlatform
   const rawBrand = values.brand.trim()
   const brand = (rawBrand ? `${rawBrand[0].toUpperCase()}${rawBrand.slice(1).toLowerCase()}` : draft.fingerprint.brand) as BrowserBrand
-  const webrtcPolicy = (values.webrtc_policy.trim().toLowerCase() || 'proxy_only') as WebRtcPolicy
+  const webrtcPolicy = (values.webrtc_policy.trim().toLowerCase() || 'replace') as WebRtcPolicy
   const port = optionalInteger(values.proxy_port, 'proxy_port', rowNumber)
   const seed = optionalInteger(values.fingerprint_seed, 'fingerprint_seed', rowNumber)
   const concurrency = optionalInteger(values.hardware_concurrency, 'hardware_concurrency', rowNumber)
@@ -235,7 +235,7 @@ export function serializeBatchProfileTemplate(): string {
     window_y: '0',
     window_width: '1200',
     window_height: '800',
-    webrtc_policy: 'proxy_only',
+    webrtc_policy: 'replace',
     disabled_spoofing: ''
   }
   const escape = (value: string): string => /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value

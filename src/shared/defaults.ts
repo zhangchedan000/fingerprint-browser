@@ -37,7 +37,7 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     language: 'zh-CN',
     acceptLanguages: 'zh-CN,zh,en-US,en',
     timezone: 'Asia/Shanghai',
-    webrtcPolicy: 'proxy_only',
+    webrtcPolicy: 'replace',
     networkIdentityMode: 'proxy',
     proxyExitPolicy: 'block',
     screenWidth: 1440,

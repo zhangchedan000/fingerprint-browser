@@ -837,7 +837,7 @@ export default function App() {
             ? <>{t("浏览器内核")}{profile.kernelVersion}{kernelRequiresPro(profile.kernelVersion) && <Tag color="gold">Pro</Tag>}</>
             : t("内核自动")}</span>
           <span className={`webrtc-badge ${profile.fingerprint.webrtcPolicy}`}>
-            {profile.fingerprint.webrtcPolicy === 'proxy_only' ? t("WebRTC 防泄漏") : profile.fingerprint.webrtcPolicy === 'public_only' ? t("WebRTC 公网") : t("WebRTC 默认")}
+            {profile.fingerprint.webrtcPolicy === 'replace' ? t("WebRTC 替换") : profile.fingerprint.webrtcPolicy === 'proxy_only' ? t("WebRTC 防泄漏") : profile.fingerprint.webrtcPolicy === 'public_only' ? t("WebRTC 公网") : t("WebRTC 默认")}
           </span>
         </div>
       )

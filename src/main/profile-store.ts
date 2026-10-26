@@ -40,7 +40,7 @@ function validProfileSerial(value: unknown): value is number {
 }
 
 function safeWebRtcPolicy(value: unknown): WebRtcPolicy {
-  return value === 'proxy_only' || value === 'public_only' || value === 'default' ? value : 'proxy_only'
+  return value === 'replace' || value === 'proxy_only' || value === 'public_only' || value === 'default' ? value : 'proxy_only'
 }
 
 function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {

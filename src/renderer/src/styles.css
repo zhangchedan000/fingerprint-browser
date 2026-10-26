@@ -108,6 +108,7 @@ button, input, textarea { font: inherit; }
 .profile-tags .ant-tag { max-width: 110px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fingerprint-cell { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .fingerprint-cell span { padding: 2px 7px; border-radius: 6px; color: #646d7d; background: #f2f4f8; font-size: 11px; }
+.fingerprint-cell .webrtc-badge.replace,
 .fingerprint-cell .webrtc-badge.proxy_only { color: #247854; background: #eaf8f1; }
 .fingerprint-cell .webrtc-badge.public_only { color: #9a6800; background: #fff7db; }
 .fingerprint-cell .webrtc-badge.default { color: #b83b4b; background: #fff0f1; }

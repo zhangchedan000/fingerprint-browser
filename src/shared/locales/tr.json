@@ -1250,5 +1250,10 @@
   "页面输入参数无效": "Sayfa giriş parametreleri geçersiz",
   "高风险：WebRTC 使用所有接口": "Yüksek risk: WebRTC tüm arabirimleri kullanır",
   "默认全部关闭，逐个授权": "Varsayılan olarak hepsi kapalı; profillere tek tek izin verin",
-  "默认关闭，按需启动": "Varsayılan olarak kapalı; gerektiğinde başlatın"
+  "默认关闭，按需启动": "Varsayılan olarak kapalı; gerektiğinde başlatın",
+  "替换（推荐）— 显示代理出口 IP": "Değiştir (önerilen) — proxy çıkış IP’sini göster",
+  "防泄漏 — 禁止非代理 UDP": "Sızıntı koruması — proxy dışı UDP’yi engelle",
+  "WebRTC 替换": "WebRTC değiştirildi",
+  "WebRTC 替换已开启": "WebRTC değiştirme açık",
+  "网页通过 WebRTC 只能看到代理出口 IP，本地地址显示为随机 .local 名称；真实网卡和公网 IP 不会暴露。未检测到代理出口 IPv4 时自动按防泄漏处理。": "Sayfalar WebRTC üzerinden yalnızca proxy çıkış IP’sini görür; yerel adresler rastgele .local adları olarak görünür, gerçek ağ bağdaştırıcıları ve genel IP asla açığa çıkmaz. Proxy çıkış IPv4’ü algılanmazsa sızıntı koruması kullanılır."
 }
