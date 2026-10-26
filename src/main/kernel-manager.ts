@@ -681,6 +681,13 @@ export class KernelManager {
       return { version, sourceRoot, executableRelative: join('Chromium.app', 'Contents', 'MacOS', basename(executable)) }
     }
 
+    if (basename(executable).toLowerCase() !== 'chrome.exe') {
+      throw new Error(`请选择 chrome.exe（你选的是 ${basename(executable)}）。chromedriver.exe 和安装程序都不能导入：先把 windows_x64.zip 解压，再选里面的 chrome.exe`)
+    }
+    if (!await pathExists(join(dirname(executable), 'chrome.dll'))
+      && !(await readdir(dirname(executable))).some((name) => /^\d+(?:\.\d+){3}$/.test(name))) {
+      throw new Error('chrome.exe 旁边缺少 chrome.dll，这不是完整的浏览器文件夹：请先把 windows_x64.zip 完整解压，再选里面的 chrome.exe')
+    }
     const escaped = executable.replaceAll("'", "''")
     const command = `(Get-Item -LiteralPath '${escaped}').VersionInfo.ProductVersion`
     const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
