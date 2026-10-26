@@ -2,7 +2,7 @@ name: Windows build
 
 on:
   push:
-    branches: [main, refactor-core]
+    branches: [main, refactor-core, desktop-updates]
   workflow_dispatch:
 
 jobs:
