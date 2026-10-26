@@ -1002,6 +1002,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
   const mediaLabel = (set: string) => {
     const [microphones, speakers, cameras] = set.split(',').map(Number)
+    // Patch 014 names a second audio output "Headphones", so two outputs read as speakers + headphones.
+    if (speakers === 1) return t("{0} 麦克风 · 扬声器 · {1} 摄像头", microphones, cameras)
+    if (speakers === 2) return t("{0} 麦克风 · 扬声器 + 耳机 · {1} 摄像头", microphones, cameras)
     return t("{0} 麦克风 · {1} 扬声器 · {2} 摄像头", microphones, speakers, cameras)
   }
   const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen(), windowScreen)
@@ -1191,7 +1194,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {kernelSpoofsScreen(windowKernelVersion) ? (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
           ? t("浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以", hostScreen().width, hostScreen().height)
-          : t("只能选不小于这台电脑屏幕（{0} × {1}）的分辨率，窗口才放得下", hostScreen().width, hostScreen().height)}>
+          : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
           <Space wrap size={8}>
             <ValueChoice
               label={t("分辨率")}
@@ -1292,7 +1295,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             value={fp.mediaDevices ?? 'auto'}
             onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
             options={[
-              { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0))) },
+              { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
               ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
               { value: 'real', label: t("本机真实") }
             ]}

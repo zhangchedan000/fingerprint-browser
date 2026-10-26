@@ -4,7 +4,8 @@ on:
   push:
     branches: [main, refactor-core, desktop-updates]
     # A version tag (v0.2.0) also publishes the release: the exe, notes from release-notes/<tag>.md,
-    # marked Latest so releases/latest always points at it. Kernel zips are added to it afterwards.
+    # marked Latest so releases/latest always points at it, plus SHA256SUMS for the exe. Kernel zips
+    # are added afterwards only when the kernels changed; otherwise they stay on the earlier release.
     tags: ['v*']
   workflow_dispatch:
 
@@ -82,3 +83,8 @@ jobs:
           else
             gh release create "$tag" release/*.exe --title "$tag" --notes-file "release-notes/$tag.md" --latest
           fi
+          # SHA256SUMS lists the exe under its release asset name (GitHub turns spaces into dots).
+          # Kernels that did not change stay on the earlier release and are not uploaded again.
+          for f in release/*.exe; do echo "$(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f" | tr ' ' '.')"; done > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$tag" SHA256SUMS --clobber

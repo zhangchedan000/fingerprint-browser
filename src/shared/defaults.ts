@@ -66,7 +66,8 @@ export function defaultProfileDraft(index = 1): ProfileDraft & { account: Platfo
     extensionIds: [],
     color: PROFILE_COLORS[(index - 1) % PROFILE_COLORS.length],
     startUrls: ['https://browserleaks.com/'],
-    startupMode: 'urls',
+    // New windows reopen the tabs they were closed with; the start page is still kept for "urls".
+    startupMode: 'restore',
     kernelVersion: '',
     window: defaultProfileWindow(),
     proxy: {

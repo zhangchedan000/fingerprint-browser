@@ -140,7 +140,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {
     // Prism 4+: media devices (patch 014) and a chosen voice locale (patch 012).
-    const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0)
+    const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0, effectiveGpu(fp, options.engineVersion)?.model)
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
     if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
     if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
