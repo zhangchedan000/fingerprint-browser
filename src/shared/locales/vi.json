@@ -1749,7 +1749,6 @@
   "由内核按种子决定": "Do kernel chọn theo seed",
   "当前内核可用": "Có trong kernel này",
   "需要其他内核版本（换内核后可选）": "Cần phiên bản kernel khác (đổi kernel để chọn)",
-  "与上面的语言保持一致": "Giống ngôn ngữ ở trên",
   "显卡": "GPU",
   "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Dùng GPU thật của máy này (WebGL và WebGPU cùng lúc)",
   "内核 {0} 的显卡清单": "Danh sách GPU của kernel {0}",
@@ -2059,5 +2058,8 @@
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "Cập nhật một chạm chỉ hỗ trợ bản Windows di động; hãy tải từ trang phát hành",
   "请先下载更新": "Hãy tải bản cập nhật trước",
   "更新文件不完整，请重新下载": "Tệp cập nhật không đầy đủ, hãy tải lại",
-  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "Cửa sổ trình duyệt được giữ trong độ phân giải đã chọn, nên có thể nhỏ hơn màn hình máy này ({0} × {1})"
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "Cửa sổ trình duyệt được giữ trong độ phân giải đã chọn, nên có thể nhỏ hơn màn hình máy này ({0} × {1})",
+  "微软语音": "Giọng Microsoft",
+  "设备名": "Tên thiết bị",
+  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Ngôn ngữ của menu và cài đặt Chrome; cũng quyết định định dạng ngày và số mặc định trên trang web"
 }

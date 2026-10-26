@@ -514,7 +514,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     controller.startPending()
     await expect(approvedLaunch).resolves.toMatchObject({ status: 'running' })
     expect(controller.children).toHaveLength(1)
-    expect(controller.arguments[0]).toContain('--fingerprint-language=ja-JP')
+    expect(controller.arguments[0]).toContain('--fingerprint-language=ja')
     expect(controller.arguments[0]).toContain('--timezone=Asia/Tokyo')
     expect(controller.arguments[0]).toContain('--fingerprint-location=35.68,139.76,25000')
     await launcher.close(profile.id)

@@ -103,6 +103,8 @@ export interface FingerprintConfig {
   mediaDevices?: string
   /** Language of the media device names (e.g. "de-de"). Unset = the window's language. */
   mediaLocale?: string
+  /** Chrome interface language (a CHROME_UI_LOCALES entry). Unset = the one Chrome picks for the language. */
+  uiLocale?: string
 }
 
 export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'

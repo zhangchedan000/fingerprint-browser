@@ -4,8 +4,15 @@ import { effectiveNetworkIdentity, hasCompleteProxyIdentity, localeForCountry, p
 
 describe('proxy-derived network identity', () => {
   it('maps common exit countries to realistic locale headers', () => {
-    expect(localeForCountry('JP')).toEqual({ language: 'ja-JP', acceptLanguages: 'ja-JP,ja,en-US,en' })
-    expect(localeForCountry('US')).toEqual({ language: 'en-US', acceptLanguages: 'en-US,en' })
+    // A Japanese Chrome really sends "ja,en-US;q=0.9,en;q=0.8" (IDS_ACCEPT_LANGUAGES for ja).
+    expect(localeForCountry('JP')).toEqual({ language: 'ja', acceptLanguages: 'ja,en-US,en', uiLocale: 'ja' })
+    expect(localeForCountry('US')).toEqual({ language: 'en-US', acceptLanguages: 'en-US,en', uiLocale: 'en-US' })
+    expect(localeForCountry('MX')).toEqual({ language: 'es-419', acceptLanguages: 'es-419,es', uiLocale: 'es-419' })
+    expect(localeForCountry('AU')).toEqual({ language: 'en-GB', acceptLanguages: 'en-GB,en-US,en', uiLocale: 'en-GB' })
+    expect(localeForCountry('DE')).toEqual({ language: 'de-DE', acceptLanguages: 'de-DE,de,en-US,en', uiLocale: 'de' })
+    expect(localeForCountry('HK')).toEqual({ language: 'zh-TW', acceptLanguages: 'zh-TW,zh,en-US,en', uiLocale: 'zh-TW' })
+    expect(localeForCountry('BR')?.uiLocale).toBe('pt-BR')
+    expect(localeForCountry('AO')?.uiLocale).toBe('pt-PT')
   })
 
   it('uses verified proxy geography as one atomic identity', () => {
@@ -21,8 +28,9 @@ describe('proxy-derived network identity', () => {
     })
     expect(identity).toMatchObject({
       source: 'proxy',
-      language: 'ja-JP',
-      acceptLanguages: 'ja-JP,ja,en-US,en',
+      language: 'ja',
+      acceptLanguages: 'ja,en-US,en',
+      uiLocale: 'ja',
       timezone: 'Asia/Tokyo',
       latitude: 35.6762,
       longitude: 139.6503
@@ -65,7 +73,7 @@ describe('proxy-derived network identity', () => {
     expect(hasCompleteProxyIdentity(conflict, { allowGeoConflict: true })).toBe(true)
     expect(effectiveNetworkIdentity(fingerprint, conflict, { allowGeoConflict: true })).toMatchObject({
       source: 'proxy',
-      language: 'ja-JP',
+      language: 'ja',
       timezone: 'Asia/Tokyo',
       latitude: 35.68,
       longitude: 139.76

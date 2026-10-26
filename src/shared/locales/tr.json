@@ -1749,7 +1749,6 @@
   "由内核按种子决定": "Kernel seed'e göre seçer",
   "当前内核可用": "Bu kernel'de var",
   "需要其他内核版本（换内核后可选）": "Başka kernel sürümü gerekir (kernel'i değiştirin)",
-  "与上面的语言保持一致": "Yukarıdaki dille aynı",
   "显卡": "GPU",
   "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Bu bilgisayarın gerçek GPU'su (WebGL ve WebGPU birlikte)",
   "内核 {0} 的显卡清单": "Kernel {0} GPU listesi",
@@ -2059,5 +2058,8 @@
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "Tek tıkla güncelleme yalnızca Windows taşınabilir sürümde çalışır; sürüm sayfasından indirin",
   "请先下载更新": "Önce güncellemeyi indirin",
   "更新文件不完整，请重新下载": "Güncelleme dosyası eksik; yeniden indirin",
-  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "Tarayıcı penceresi seçilen çözünürlük içinde tutulur, bu yüzden bu bilgisayarın ekranından ({0} × {1}) küçük olabilir"
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "Tarayıcı penceresi seçilen çözünürlük içinde tutulur, bu yüzden bu bilgisayarın ekranından ({0} × {1}) küçük olabilir",
+  "微软语音": "Microsoft sesleri",
+  "设备名": "Cihaz adları",
+  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Chrome menülerinin ve ayarlarının dili; web sayfalarındaki varsayılan tarih ve sayı biçimini de belirler"
 }

@@ -92,17 +92,18 @@ describe('launch arguments', () => {
     expect(publicIpv4('256.1.1.1')).toBeUndefined()
   })
 
-  it('launches with the UI locale Chrome resolves to', () => {
+  it('launches with the UI locale Chrome resolves to and keeps the stored languages', () => {
     const mx = buildLaunchArgs(profile({ language: 'es-MX', acceptLanguages: 'es-MX,es,en-US,en' }), { userDataDir: '/data' })
     expect(mx).toContain('--lang=es-419')
-    expect(mx).toContain('--fingerprint-language=es-419')
-    expect(mx).toContain('--accept-lang=es-419,es,en-US,en')
+    expect(mx).toContain('--accept-lang=es-MX,es,en-US,en')
     const hk = buildLaunchArgs(profile({ language: 'zh-HK', acceptLanguages: 'zh-HK,zh-TW,zh,en-US,en' }), { userDataDir: '/data' })
     expect(hk).toContain('--lang=zh-TW')
-    expect(hk).toContain('--accept-lang=zh-TW,zh,en-US,en')
-    const es = buildLaunchArgs(profile({ language: 'es-ES', acceptLanguages: 'es-ES,es,en-US,en' }), { userDataDir: '/data' })
-    expect(es).toContain('--lang=es-ES')
-    expect(es).toContain('--accept-lang=es-ES,es,en-US,en')
+    const es = buildLaunchArgs(profile({ language: 'es-ES', acceptLanguages: 'es-ES,es' }), { userDataDir: '/data' })
+    expect(es).toContain('--lang=es')
+    expect(es).toContain('--accept-lang=es-ES,es')
+    const chosen = buildLaunchArgs(profile({ language: 'de-DE', acceptLanguages: 'de-DE,de,en-US,en', uiLocale: 'en-US' }), { userDataDir: '/data' })
+    expect(chosen).toContain('--lang=en-US')
+    expect(chosen).toContain('--accept-lang=de-DE,de,en-US,en')
   })
 
   it('lets a Prism window claim a screen larger than the real one, never a smaller one', () => {

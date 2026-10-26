@@ -5,6 +5,8 @@ import { platformStartUrl } from '../shared/platforms'
 import { parsePastedProxy } from '../shared/proxy-paste'
 import type { BatchImportRowView, BrowserBrand, BrowserPlatform, ProfileDraft, ProxyConfig, ProxyProtocol, WebRtcPolicy } from '../shared/types'
 import { validateProfileDraft } from '../shared/validation'
+import { chromeAcceptLanguagesFor } from '../shared/chrome-languages'
+import { chromeAcceptLanguages } from '../shared/network-identity'
 import { parseCookieFile } from './cookie-file'
 
 /** Every column the importer understands. The simple template uses only a few of them. */
@@ -290,7 +292,9 @@ function analyzeRow(values: Record<BatchImportColumn, string>, index: number): P
       brandVersion: values.brand_version.trim(),
       hardwareConcurrency: (cores ?? base.fingerprint.hardwareConcurrency) as typeof base.fingerprint.hardwareConcurrency,
       language: values.language.trim() || base.fingerprint.language,
-      acceptLanguages: values.accept_languages.trim() || base.fingerprint.acceptLanguages,
+      // A language without its Accept-Language gets the one Chrome uses for that language.
+      acceptLanguages: values.accept_languages.trim()
+        || (values.language.trim() ? chromeAcceptLanguages(values.language.trim(), chromeAcceptLanguagesFor(values.language.trim())) : base.fingerprint.acceptLanguages),
       timezone: values.timezone.trim() || base.fingerprint.timezone,
       screenWidth: screenWidth ?? base.fingerprint.screenWidth,
       screenHeight: screenHeight ?? base.fingerprint.screenHeight,

@@ -1749,7 +1749,6 @@
   "由内核按种子决定": "La elige el kernel según la semilla",
   "当前内核可用": "Disponible en este kernel",
   "需要其他内核版本（换内核后可选）": "Requiere otra versión del kernel (cambia de kernel)",
-  "与上面的语言保持一致": "Igual que el idioma de arriba",
   "显卡": "GPU",
   "使用这台电脑的真实显卡（WebGL、WebGPU 一起）": "Usa la GPU real de este equipo (WebGL y WebGPU juntos)",
   "内核 {0} 的显卡清单": "Lista de GPU del kernel {0}",
@@ -2059,5 +2058,8 @@
   "只有 Windows 免安装版支持一键更新，请到发布页手动下载": "La actualización con un clic solo funciona en la versión portátil de Windows; descárgala desde la página de versiones",
   "请先下载更新": "Descarga primero la actualización",
   "更新文件不完整，请重新下载": "El archivo está incompleto; descárgalo de nuevo",
-  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "La ventana del navegador se mantiene dentro de la resolución elegida, por lo que puede ser menor que la pantalla de este equipo ({0} × {1})"
+  "浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以": "La ventana del navegador se mantiene dentro de la resolución elegida, por lo que puede ser menor que la pantalla de este equipo ({0} × {1})",
+  "微软语音": "Voces de Microsoft",
+  "设备名": "Nombres de dispositivos",
+  "Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式": "Idioma de los menús y la configuración de Chrome; también fija el formato predeterminado de fechas y números en las páginas"
 }

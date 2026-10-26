@@ -3,7 +3,7 @@ import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu } fro
 import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
-import { chromeAcceptLanguages, chromeUiLocale, effectiveNetworkIdentity } from '../shared/network-identity'
+import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
 import { effectiveScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
 import { kernelVendor } from '../shared/kernel-id'
@@ -80,7 +80,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     options.hostScreen,
     options.windowScreen
   )
-  const language = chromeUiLocale(networkIdentity.language)
+  const language = networkIdentity.language
   const acceptLanguages = chromeAcceptLanguages(language, networkIdentity.acceptLanguages)
   const args = [
     `--user-data-dir=${options.userDataDir}`,
@@ -91,7 +91,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     `--fingerprint-screen-width=${screenWidth}`,
     `--fingerprint-screen-height=${screenHeight}`,
     `--fingerprint-language=${language}`,
-    `--lang=${language}`,
+    `--lang=${networkIdentity.uiLocale}`,
     `--accept-lang=${acceptLanguages}`,
     `--timezone=${networkIdentity.timezone}`,
     `--window-name=${profileWindowName(profile)}`,

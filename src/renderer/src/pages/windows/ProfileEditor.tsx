@@ -39,6 +39,7 @@ import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/ke
 import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
+import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -270,20 +271,34 @@ const TIME_ZONES: string[] = (() => {
   try { return Intl.supportedValuesOf('timeZone') } catch { return ['Asia/Shanghai', 'America/New_York', 'Europe/London'] }
 })()
 
-/** Languages offered when the language is set by hand; any other tag can still be typed. */
-const LANGUAGES: Array<[string, string]> = [
-  ['zh-CN', '中文（简体）'], ['zh-TW', '中文（繁體）'], ['zh-HK', '中文（香港）'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'],
-  ['ja-JP', '日本語'], ['ko-KR', '한국어'], ['de-DE', 'Deutsch'], ['fr-FR', 'Français'], ['es-ES', 'Español'], ['es-MX', 'Español (México)'],
-  ['pt-BR', 'Português (Brasil)'], ['pt-PT', 'Português'], ['it-IT', 'Italiano'], ['ru-RU', 'Русский'], ['uk-UA', 'Українська'],
-  ['tr-TR', 'Türkçe'], ['vi-VN', 'Tiếng Việt'], ['th-TH', 'ไทย'], ['id-ID', 'Bahasa Indonesia'], ['ms-MY', 'Bahasa Melayu'],
-  ['hi-IN', 'हिन्दी'], ['ar-SA', 'العربية'], ['nl-NL', 'Nederlands'], ['pl-PL', 'Polski'], ['sv-SE', 'Svenska']
-]
-
-/** Accept-Language a browser set to `language` sends: the tag, its base language, then English. */
-function acceptLanguagesFor(language: string): string {
-  const base = language.split('-')[0]
-  return [...new Set([language, base, 'en-US', 'en'])].join(',')
+/** A Chrome interface language named in itself, the way Chrome's language list shows it (zh-TW as zh-Hant). */
+function ownLanguageName(locale: string): string {
+  const named = locale === 'zh-TW' ? 'zh-Hant' : locale === 'zh-CN' ? 'zh-Hans' : locale
+  try {
+    return new Intl.DisplayNames([locale], { type: 'language' }).of(named) ?? locale
+  } catch {
+    return locale
+  }
 }
+
+const samePrimary = (first: string, second: string) => first.split('-')[0].toLowerCase() === second.split('-')[0].toLowerCase()
+
+/**
+ * The languages a window can have: Chrome's own interface languages (locales.gni), each with the
+ * navigator.language / Accept-Language such a Chrome reports, and whether the Windows language
+ * packs give it Microsoft voices and device names.
+ */
+const LANGUAGES = CHROME_UI_LOCALES.map((uiLocale) => {
+  const { language, acceptLanguages } = chromeLanguageProfile(uiLocale)
+  return {
+    uiLocale,
+    language,
+    acceptLanguages,
+    name: ownLanguageName(uiLocale),
+    voices: WINDOWS_VOICE_LOCALES.some(({ locale }) => samePrimary(locale, language)),
+    devices: MEDIA_LOCALES.some((locale) => samePrimary(locale, language))
+  }
+})
 
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave }: ProfileEditorProps) {
   const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
@@ -1017,9 +1032,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }))
   ]
   const languageOptions = [
-    ...LANGUAGES.map(([value, label]) => ({ value, label: `${label} · ${value}` })),
-    ...(fp.language && !LANGUAGES.some(([value]) => value === fp.language) ? [{ value: fp.language, label: fp.language }] : [])
+    ...LANGUAGES.map((item) => ({ value: item.language, label: `${item.name} · ${item.language}`, voices: item.voices, devices: item.devices })),
+    ...(fp.language && !LANGUAGES.some((item) => item.language === fp.language) ? [{ value: fp.language, label: fp.language, voices: false, devices: false }] : [])
   ]
+  const autoUiLocale = chromeUiLocaleFor(shownLanguage)
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -1115,15 +1131,36 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               optionFilterProp="label"
               className="fb-fp-select"
               value={fp.language}
-              onChange={(language) => patchFingerprint({ language, acceptLanguages: acceptLanguagesFor(language) })}
+              onChange={(language: string) => {
+                const item = LANGUAGES.find((entry) => entry.language === language)
+                if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages })
+              }}
               options={languageOptions}
+              optionRender={(option) => (
+                <span className="fb-language-option">
+                  <span>{option.label}</span>
+                  {option.data.voices && <Tag bordered={false} color="blue">{t("微软语音")}</Tag>}
+                  {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
+                </span>
+              )}
               aria-label={t("语言")}
             />
           )}
         </Space>
       </Row>
-      <Row label={t("界面语言")}>
-        <Fixed>{t("与上面的语言保持一致")}</Fixed>
+      <Row label={t("界面语言")} hint={t("Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select"
+          value={fp.uiLocale ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value })}
+          options={[
+            { value: 'auto', label: t("跟随语言 · {0}", `${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
+            ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
+          ]}
+          aria-label={t("界面语言")}
+        />
       </Row>
       <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
         <Select

@@ -1,4 +1,5 @@
 import type { FingerprintConfig, ProxyTestResult } from './types'
+import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -9,6 +10,8 @@ export interface NetworkIdentityOptions {
 export interface NetworkIdentity {
   language: string
   acceptLanguages: string
+  /** Chrome's interface language (--lang): chosen in the window, otherwise the one for `language`. */
+  uiLocale: string
   timezone: string
   latitude?: number
   longitude?: number
@@ -16,53 +19,22 @@ export interface NetworkIdentity {
   source: 'manual' | 'proxy'
 }
 
-const COUNTRY_LOCALES: Record<string, { language: string; acceptLanguages: string }> = {
-  AU: { language: 'en-AU', acceptLanguages: 'en-AU,en' },
-  BR: { language: 'pt-BR', acceptLanguages: 'pt-BR,pt,en-US,en' },
-  CA: { language: 'en-CA', acceptLanguages: 'en-CA,en-US,en' },
-  CN: { language: 'zh-CN', acceptLanguages: 'zh-CN,zh,en-US,en' },
-  DE: { language: 'de-DE', acceptLanguages: 'de-DE,de,en-US,en' },
-  ES: { language: 'es-ES', acceptLanguages: 'es-ES,es,en-US,en' },
-  FR: { language: 'fr-FR', acceptLanguages: 'fr-FR,fr,en-US,en' },
-  GB: { language: 'en-GB', acceptLanguages: 'en-GB,en-US,en' },
-  HK: { language: 'zh-HK', acceptLanguages: 'zh-HK,zh-TW,zh,en-US,en' },
-  ID: { language: 'id-ID', acceptLanguages: 'id-ID,id,en-US,en' },
-  IN: { language: 'en-IN', acceptLanguages: 'en-IN,en' },
-  IT: { language: 'it-IT', acceptLanguages: 'it-IT,it,en-US,en' },
-  JP: { language: 'ja-JP', acceptLanguages: 'ja-JP,ja,en-US,en' },
-  KR: { language: 'ko-KR', acceptLanguages: 'ko-KR,ko,en-US,en' },
-  MX: { language: 'es-MX', acceptLanguages: 'es-MX,es,en-US,en' },
-  MY: { language: 'ms-MY', acceptLanguages: 'ms-MY,ms,en-US,en' },
-  NL: { language: 'nl-NL', acceptLanguages: 'nl-NL,nl,en-US,en' },
-  PH: { language: 'en-PH', acceptLanguages: 'en-PH,en-US,en' },
-  RU: { language: 'ru-RU', acceptLanguages: 'ru-RU,ru,en-US,en' },
-  SG: { language: 'en-SG', acceptLanguages: 'en-SG,en-US,en' },
-  TH: { language: 'th-TH', acceptLanguages: 'th-TH,th,en-US,en' },
-  TW: { language: 'zh-TW', acceptLanguages: 'zh-TW,zh,en-US,en' },
-  US: { language: 'en-US', acceptLanguages: 'en-US,en' },
-  VN: { language: 'vi-VN', acceptLanguages: 'vi-VN,vi,en-US,en' }
-}
-
-// Chrome ships one Latin American Spanish UI locale (es-419) and serves Hong Kong and
-// Macau with zh-TW. Passing es-MX or zh-HK makes navigator.language disagree with the
-// locale Intl resolves to, so launch with the locale Chrome itself would pick.
-export function chromeUiLocale(language: string): string {
-  const [primary, ...rest] = language.trim().split(/[-_]/)
-  const lower = primary.toLowerCase()
-  const subtags = rest.map((part) => part.toUpperCase())
-  if (lower === 'es' && subtags.length && !subtags.includes('ES')) return 'es-419'
-  if (lower === 'zh' && (subtags.includes('HK') || subtags.includes('MO') || subtags.includes('HANT'))) return 'zh-TW'
-  return language
-}
-
+/**
+ * navigator.languages lists the window's language first, then the rest of Accept-Language without
+ * repeats (Blink reports the accept list, and navigator.language is its first entry).
+ */
 export function chromeAcceptLanguages(language: string, acceptLanguages: string): string {
-  const entries = acceptLanguages.split(',').map((entry) => chromeUiLocale(entry.trim())).filter(Boolean)
-  const ordered = [language, ...entries]
+  const ordered = [language, ...acceptLanguages.split(',').map((entry) => entry.trim()).filter(Boolean)]
   return ordered.filter((entry, index) => ordered.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) === index).join(',')
 }
 
-export function localeForCountry(countryCode: string | undefined): { language: string; acceptLanguages: string } | undefined {
-  return countryCode ? COUNTRY_LOCALES[countryCode.toUpperCase()] : undefined
+/**
+ * What a Chrome installed in this country shows: the country's language (CLDR), the interface
+ * language Chrome picks for it and that interface's default Accept-Language (chrome-languages.ts).
+ */
+export function localeForCountry(countryCode: string | undefined): { language: string; acceptLanguages: string; uiLocale: string } | undefined {
+  const language = countryCode ? countryLanguage(countryCode) : undefined
+  return language ? chromeLanguageProfile(language) : undefined
 }
 
 type CompleteProxyIdentity = ProxyTestResult & {
@@ -95,6 +67,7 @@ export function effectiveNetworkIdentity(
   const fallback: NetworkIdentity = {
     language: fingerprint.language,
     acceptLanguages: fingerprint.acceptLanguages,
+    uiLocale: fingerprint.uiLocale ?? chromeUiLocaleFor(fingerprint.language),
     timezone: fingerprint.timezone,
     source: 'manual'
   }
@@ -103,6 +76,7 @@ export function effectiveNetworkIdentity(
   return {
     language: locale?.language ?? fallback.language,
     acceptLanguages: locale?.acceptLanguages ?? fallback.acceptLanguages,
+    uiLocale: fingerprint.uiLocale ?? locale?.uiLocale ?? fallback.uiLocale,
     timezone: check.timezone ?? fallback.timezone,
     latitude: check.latitude,
     longitude: check.longitude,
