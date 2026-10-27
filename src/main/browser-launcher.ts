@@ -196,6 +196,22 @@ export class BrowserLauncher {
     }
   }
 
+  /** Settings → 下载位置 for this window (created if missing), or undefined for Chrome's own. */
+  private async downloadFolder(profile: BrowserProfile): Promise<string | undefined> {
+    const { downloadFolder, downloadPerWindow } = this.settings.get()
+    if (!downloadFolder) return undefined
+    // "18 环境 1": the serial keeps windows of the same name apart; no characters Windows refuses.
+    const name = `${profile.serialNumber} ${profile.name}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80)
+    const folder = downloadPerWindow ? join(downloadFolder, name) : downloadFolder
+    try {
+      await mkdir(folder, { recursive: true })
+      return folder
+    } catch (error) {
+      this.logger?.error('无法创建下载文件夹，窗口用 Chrome 默认下载位置', { profileId: profile.id, folder, error: error instanceof Error ? error.message : String(error) })
+      return undefined
+    }
+  }
+
   /**
    * Opens a page in the window: a new tab when it is running (Chrome hands a second start on the
    * same user data folder to the running browser), otherwise the window starts as usual (its proxy
@@ -290,7 +306,7 @@ export class BrowserLauncher {
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
       try {
-        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls')
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile))
       } catch (error) {
         this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
           profileId: id,

@@ -33,6 +33,9 @@ const api: BrowserApi = {
       ipcRenderer.on('app:update-progress', handler)
       return () => ipcRenderer.removeListener('app:update-progress', handler)
     },
+    chooseDownloadFolder: () => ipcRenderer.invoke('app:choose-download-folder'),
+    openDownloadFolder: () => ipcRenderer.invoke('app:open-download-folder'),
+    defaultDownloadFolder: () => ipcRenderer.invoke('app:default-download-folder'),
     fontPacks: () => ipcRenderer.invoke('fonts:packs'),
     installFontPacks: (scripts?: string[]) => ipcRenderer.invoke('fonts:install-packs', scripts),
     onFontPackProgress: (listener) => {

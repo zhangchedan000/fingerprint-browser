@@ -1,4 +1,5 @@
 import { access, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /**
@@ -6,6 +7,23 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
  * small pointer file in userData names the new folder (and the old one, kept until the user
  * deletes it or moves back).
  */
+/** Inside the data folder: the launcher's own Chromium data (its cache), see vaultPathSync. */
+export const APP_CACHE_FOLDER = 'app-cache'
+
+/**
+ * The data folder, read before the app is ready (where Electron must be told to keep its own
+ * cache): the pointer's folder when it exists, otherwise the default one.
+ */
+export function vaultPathSync(userData: string): string {
+  try {
+    const pointer = JSON.parse(readFileSync(pointerFile(userData), 'utf8')) as Partial<Pointer>
+    if (typeof pointer.path === 'string' && isAbsolute(pointer.path) && existsSync(pointer.path)) return pointer.path
+  } catch {
+    // No pointer (or an unreadable one): the default folder, as resolveVaultLocation decides.
+  }
+  return join(userData, 'vault')
+}
+
 export interface VaultLocation {
   path: string
   defaultPath: string
@@ -18,8 +36,8 @@ interface Pointer {
   previous?: string
 }
 
-/** Folders that are rebuilt on start and never copied. */
-const SKIP = new Set(['tunnel-runtime'])
+/** Folders that are rebuilt on start and never copied (app-cache: the launcher's own Chromium cache). */
+const SKIP = new Set(['tunnel-runtime', APP_CACHE_FOLDER])
 
 export function pointerFile(userData: string): string {
   return join(userData, 'vault-location.json')

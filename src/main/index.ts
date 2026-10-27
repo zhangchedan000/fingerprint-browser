@@ -3,9 +3,10 @@ import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electro
 import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
-import { resolveVaultLocation } from './vault-location'
+import { APP_CACHE_FOLDER, resolveVaultLocation, vaultPathSync } from './vault-location'
 import { registerVaultIpc } from './vault-ipc'
 import { isAbsolute, join } from 'node:path'
+import { rm } from 'node:fs/promises'
 import { BrowserLauncher } from './browser-launcher'
 import { registerIpc } from './ipc'
 import { ProfileStore } from './profile-store'
@@ -95,12 +96,22 @@ function createWindow(): BrowserWindow {
   return window
 }
 
+// The launcher's own Chromium data (page cache, GPU cache, local storage) lives in the data folder,
+// so moving that folder off C: takes it along; only userData's small pointer file stays.
+app.setPath('sessionData', join(vaultPathSync(app.getPath('userData')), APP_CACHE_FOLDER))
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
 app.whenReady().then(async () => {
   await initializeUiLanguage()
   const vaultLocation = await resolveVaultLocation(app.getPath('userData'))
+  // Caches earlier versions kept in userData (on C:) before they moved into the data folder.
+  if (app.getPath('sessionData') !== app.getPath('userData')) {
+    for (const folder of ['Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache']) {
+      void rm(join(app.getPath('userData'), folder), { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
   const vaultPath = vaultLocation.path
   logger = new AppLogger(vaultPath)
   appSession = new AppSessionTracker(vaultPath)

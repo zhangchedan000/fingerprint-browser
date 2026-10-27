@@ -288,6 +288,10 @@ export interface AppPreferences {
   batchLaunchGapSeconds: number
   /** Sites the deep check opens, in order. Unset = the four built-in ones. */
   deepCheckSites?: import('./deep-check').DeepCheckSite[]
+  /** Where windows save downloaded files (absolute). Unset = Chrome's own (the user's Downloads). */
+  downloadFolder?: string
+  /** Each window downloads into its own subfolder of downloadFolder ("18 环境 1"). */
+  downloadPerWindow?: boolean
 }
 
 export interface AppInfo {
@@ -630,6 +634,11 @@ export interface BrowserApi {
     installUpdate: () => Promise<void>
     openUpdatePage: () => Promise<void>
     onUpdateProgress: (listener: (progress: AppUpdateProgress) => void) => () => void
+    /** Folder picker for Settings → 下载位置; null when cancelled. */
+    chooseDownloadFolder: () => Promise<string | null>
+    openDownloadFolder: () => Promise<void>
+    /** The user's Downloads folder (Chrome's own default). */
+    defaultDownloadFolder: () => Promise<string>
     /** Windows language font packages on this computer. */
     fontPacks: () => Promise<FontPackStatus>
     /** Downloads packages from Microsoft and installs them for this user (all missing ones by default). */

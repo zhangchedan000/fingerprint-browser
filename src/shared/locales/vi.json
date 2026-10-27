@@ -2307,5 +2307,11 @@
   "代理 API 链接无效": "Liên kết API proxy không hợp lệ",
   "代理 API 链接要以 http:// 或 https:// 开头": "Liên kết API proxy phải bắt đầu bằng http:// hoặc https://",
   "连接代理超时": "Hết thời gian kết nối proxy",
-  "这不是 API 代理": "Đây không phải proxy API"
+  "这不是 API 代理": "Đây không phải proxy API",
+  "下载位置": "Vị trí tải xuống",
+  "系统默认 · {0}": "Mặc định của hệ thống · {0}",
+  "按窗口分开": "Tách theo cửa sổ",
+  "每个窗口下载到自己的子文件夹，比如「18 环境 1」": "Mỗi cửa sổ tải vào thư mục con riêng, ví dụ “18 Cửa sổ 1”",
+  "窗口里下载的文件存到这里，下次打开窗口生效；窗口里在 Chrome 设置中单独改过的会被这里覆盖。": "Tệp tải trong các cửa sổ được lưu ở đây, từ lần mở cửa sổ tiếp theo; thư mục chọn riêng trong cài đặt Chrome của cửa sổ sẽ bị thay thế.",
+  "选择窗口下载文件的保存位置": "Chọn nơi các cửa sổ lưu tệp đã tải"
 }

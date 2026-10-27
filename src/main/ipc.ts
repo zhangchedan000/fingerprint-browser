@@ -385,7 +385,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
     const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
     // deepCheckSites always goes in, so going back to the default list clears the stored one.
-    await settings.update({ ...next, deepCheckSites: next.deepCheckSites })
+    await settings.update({ ...next, deepCheckSites: next.deepCheckSites, downloadFolder: next.downloadFolder, downloadPerWindow: next.downloadPerWindow })
     return next
   })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
@@ -394,6 +394,19 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const error = await shell.openPath(folder === 'vault' ? profiles.vaultPath : logger.directory)
     if (error) throw new Error(error)
   })
+  ipcMain.handle('app:choose-download-folder', async () => {
+    const owner = BrowserWindow.getFocusedWindow()
+    const options: Electron.OpenDialogOptions = { title: t('选择窗口下载文件的保存位置'), properties: ['openDirectory', 'createDirectory'] }
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0]
+  })
+  ipcMain.handle('app:open-download-folder', async () => {
+    const folder = settings.get().downloadFolder ?? app.getPath('downloads')
+    await mkdir(folder, { recursive: true })
+    const error = await shell.openPath(folder)
+    if (error) throw new Error(error)
+  })
+  ipcMain.handle('app:default-download-folder', () => app.getPath('downloads'))
   ipcMain.handle('app:open-project-page', () => shell.openExternal('https://github.com/zhangchedan000/fingerprint-browser'))
   ipcMain.handle('profiles:recycle-retention', () => settings.get().recycleRetentionDays)
   ipcMain.handle('profiles:set-recycle-retention', async (_event, days: number) => {

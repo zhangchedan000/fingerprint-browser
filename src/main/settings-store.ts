@@ -1,6 +1,6 @@
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import type { AppPreferences, AppSettings } from '../shared/types'
 import { DEFAULT_KERNEL_SOURCES, validKernelSources } from '../shared/kernel-sources'
 import { validDeepCheckSites } from '../shared/deep-check'
@@ -13,7 +13,16 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const gap = Number(input.batchLaunchGapSeconds)
   const batchLaunchGapSeconds = Number.isFinite(gap) && gap >= 0.5 && gap <= 30 ? Math.round(gap * 10) / 10 : base.batchLaunchGapSeconds
   const deepCheckSites = 'deepCheckSites' in input ? validDeepCheckSites(input.deepCheckSites) : base.deepCheckSites
-  return { theme, batchLaunchGapSeconds, ...(deepCheckSites ? { deepCheckSites } : {}) }
+  const folder = 'downloadFolder' in input ? input.downloadFolder : base.downloadFolder
+  const downloadFolder = typeof folder === 'string' && isAbsolute(folder.trim()) && folder.trim().length <= 260 ? folder.trim() : undefined
+  const downloadPerWindow = 'downloadPerWindow' in input ? input.downloadPerWindow === true : base.downloadPerWindow === true
+  return {
+    theme,
+    batchLaunchGapSeconds,
+    ...(deepCheckSites ? { deepCheckSites } : {}),
+    ...(downloadFolder ? { downloadFolder } : {}),
+    ...(downloadFolder && downloadPerWindow ? { downloadPerWindow: true } : {})
+  }
 }
 
 export class SettingsStore {

@@ -39,6 +39,14 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
   useEffect(() => { if (params?.settingsTab) setTab(params.settingsTab) }, [params?.settingsTab])
   const [info, setInfo] = useState<AppInfo>()
   const [storage, setStorage] = useState<StorageOverview>()
+  // Chrome's own download folder, shown while Settings → 下载位置 is unset.
+  const [systemDownloads, setSystemDownloads] = useState<string>()
+  useEffect(() => { void window.browserApi.app.defaultDownloadFolder().then(setSystemDownloads).catch(() => undefined) }, [])
+
+  async function chooseDownloadFolder(): Promise<void> {
+    const folder = await window.browserApi.app.chooseDownloadFolder()
+    if (folder) await ws.setPreferences({ downloadFolder: folder })
+  }
   const [clearing, setClearing] = useState(false)
   const [gap, setGap] = useState(preferences.batchLaunchGapSeconds)
 
@@ -201,6 +209,28 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
                 <Button size="small" type="link" autoInsertSpace={false} onClick={() => void window.browserApi.app.openFolder('vault').catch(ws.fail)}>{t("打开")}</Button>
                 <Button size="small" type="link" autoInsertSpace={false} loading={Boolean(moving)} onClick={relocate}>{t("更改位置")}</Button>
               </Item>
+              <Item label={t("下载位置")}>
+                <span className="fb-mono fb-ellipsis" title={ws.preferences.downloadFolder ?? systemDownloads}>
+                  {ws.preferences.downloadFolder ?? t("系统默认 · {0}", systemDownloads ?? '—')}
+                </span>
+                <Button size="small" type="link" autoInsertSpace={false} onClick={() => void window.browserApi.app.openDownloadFolder().catch(ws.fail)}>{t("打开")}</Button>
+                <Button size="small" type="link" autoInsertSpace={false} onClick={() => void chooseDownloadFolder().catch(ws.fail)}>{t("更改位置")}</Button>
+                {ws.preferences.downloadFolder && (
+                  <Button size="small" type="link" autoInsertSpace={false} onClick={() => void ws.setPreferences({ downloadFolder: undefined }).catch(ws.fail)}>{t("恢复默认")}</Button>
+                )}
+              </Item>
+              {ws.preferences.downloadFolder && (
+                <Item label={t("按窗口分开")}>
+                  <Switch
+                    size="small"
+                    checked={ws.preferences.downloadPerWindow === true}
+                    onChange={(downloadPerWindow) => void ws.setPreferences({ downloadPerWindow }).catch(ws.fail)}
+                  />
+                  <span className="fb-muted">{t("每个窗口下载到自己的子文件夹，比如「18 环境 1」")}</span>
+                </Item>
+              )}
+              <span />
+              <span className="fb-muted">{t("窗口里下载的文件存到这里，下次打开窗口生效；窗口里在 Chrome 设置中单独改过的会被这里覆盖。")}</span>
               {location?.previous && (
                 <Item label={t("旧位置")}>
                   <span className="fb-mono fb-ellipsis" title={location.previous}>{location.previous}</span>

@@ -61,4 +61,11 @@ describe('chrome preferences', () => {
     const noSearch = { https_only_mode_enabled: true, default_search_provider_data: { template_url_data: { short_name: 'No Search', url: 'http://{searchTerms}' } } }
     expect(patchChromePreferences(noSearch, {})).toEqual(ALWAYS)
   })
+
+  it('points downloads at the folder Settings names, and leaves them alone otherwise', () => {
+    const next = patchChromePreferences({}, {}, undefined, 'D:\\下载\\18 环境 1')!
+    expect((next.download as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
+    expect((next.savefile as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
+    expect(patchChromePreferences({}, {})!.download).toBeUndefined()
+  })
 })

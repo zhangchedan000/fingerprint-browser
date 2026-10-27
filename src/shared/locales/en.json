@@ -2307,5 +2307,11 @@
   "代理 API 链接无效": "Invalid proxy API link",
   "代理 API 链接要以 http:// 或 https:// 开头": "The proxy API link must start with http:// or https://",
   "连接代理超时": "Connecting to the proxy timed out",
-  "这不是 API 代理": "This is not an API proxy"
+  "这不是 API 代理": "This is not an API proxy",
+  "下载位置": "Download location",
+  "系统默认 · {0}": "System default · {0}",
+  "按窗口分开": "Separate per window",
+  "每个窗口下载到自己的子文件夹，比如「18 环境 1」": "Each window downloads into its own subfolder, e.g. “18 Window 1”",
+  "窗口里下载的文件存到这里，下次打开窗口生效；窗口里在 Chrome 设置中单独改过的会被这里覆盖。": "Files downloaded in windows are saved here, from the next time a window opens; a folder set in a window's own Chrome settings is overridden.",
+  "选择窗口下载文件的保存位置": "Choose where windows save downloaded files"
 }

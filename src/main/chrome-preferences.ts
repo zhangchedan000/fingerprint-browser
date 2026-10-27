@@ -36,9 +36,16 @@ function child(parent: Json, key: string): Json {
 export function patchChromePreferences(
   current: Json,
   fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
-  startupMode?: BrowserProfile['startupMode']
+  startupMode?: BrowserProfile['startupMode'],
+  downloadFolder?: string
 ): Json | undefined {
   const next = structuredClone(current)
+  // Settings → 下载位置: where the window saves downloads (and Save As starts). Unset leaves
+  // whatever the window has (Chrome's default is the user's Downloads folder).
+  if (downloadFolder) {
+    child(next, 'download').default_directory = downloadFolder
+    child(next, 'savefile').default_directory = downloadFolder
+  }
   // Chromium owns session files and restores all windows/tabs, including navigation history.
   // Explicit URL mode must also undo a previously enabled restore preference.
   if (startupMode !== undefined) child(next, 'session').restore_on_startup = startupMode === 'restore' ? 1 : 5
@@ -74,7 +81,8 @@ export function patchChromePreferences(
 export async function applyChromePreferences(
   userDataDir: string,
   fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
-  startupMode?: BrowserProfile['startupMode']
+  startupMode?: BrowserProfile['startupMode'],
+  downloadFolder?: string
 ): Promise<boolean> {
   const directory = join(userDataDir, 'Default')
   const path = join(directory, 'Preferences')
@@ -86,7 +94,7 @@ export async function applyChromePreferences(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
   }
-  const next = patchChromePreferences(current, fingerprint, startupMode)
+  const next = patchChromePreferences(current, fingerprint, startupMode, downloadFolder)
   if (!next) return false
   await mkdir(directory, { recursive: true })
   const temporary = `${path}.fb-tmp`

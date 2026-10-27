@@ -2307,5 +2307,11 @@
   "代理 API 链接无效": "Link da API de proxy inválido",
   "代理 API 链接要以 http:// 或 https:// 开头": "O link da API de proxy deve começar com http:// ou https://",
   "连接代理超时": "Tempo esgotado ao conectar ao proxy",
-  "这不是 API 代理": "Não é um proxy de API"
+  "这不是 API 代理": "Não é um proxy de API",
+  "下载位置": "Local de download",
+  "系统默认 · {0}": "Padrão do sistema · {0}",
+  "按窗口分开": "Separar por janela",
+  "每个窗口下载到自己的子文件夹，比如「18 环境 1」": "Cada janela baixa em sua própria subpasta, por ex. “18 Janela 1”",
+  "窗口里下载的文件存到这里，下次打开窗口生效；窗口里在 Chrome 设置中单独改过的会被这里覆盖。": "Os arquivos baixados nas janelas são salvos aqui, a partir da próxima vez que uma janela abrir; uma pasta definida nas configurações do Chrome da janela é substituída.",
+  "选择窗口下载文件的保存位置": "Escolha onde as janelas salvam os arquivos baixados"
 }
