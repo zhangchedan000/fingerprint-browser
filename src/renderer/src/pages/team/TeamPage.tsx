@@ -2,7 +2,7 @@ import { CloudDownloadOutlined, DatabaseOutlined, LogoutOutlined, PlusOutlined, 
 import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
-import type { TeamBackup, TeamLogEntry, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
+import type { TeamBackup, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
 import { formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { useWindowLauncher } from '../../data/window-actions'
@@ -24,7 +24,9 @@ const ACTIONS: Record<string, string> = {
   member_delete: '删除成员',
   backup_create: '备份服务器',
   backup_download: '下载备份',
-  backup_delete: '删除备份'
+  backup_delete: '删除备份',
+  offsite_set: '开启异地备份',
+  offsite_off: '关闭异地备份'
 }
 
 function displayName(user: Pick<TeamUser, 'name' | 'username'>): string {
@@ -463,6 +465,72 @@ function scheduleText(cron: string): string {
 
 type BackupRow = TeamBackup & { id: string }
 
+/** The R2 address and token keys; the server tries them before it keeps them. */
+function OffsiteModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+  const ws = useWorkspace()
+  const [form] = Form.useForm<TeamOffsiteDraft>()
+  const [busy, setBusy] = useState(false)
+
+  async function save(values: TeamOffsiteDraft): Promise<void> {
+    setBusy(true)
+    try {
+      await window.browserApi.team.setOffsite(values)
+      ws.notify.success('异地备份已开启，1 分钟内会做第一次完整同步')
+      onSaved()
+      onClose()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} title="设置异地备份（Cloudflare R2）" okText="测试并保存" cancelText="取消" confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
+      <Form layout="vertical" form={form} onFinish={(values) => void save(values)} autoComplete="off">
+        <Form.Item name="url" label="S3 API 地址" extra="R2 存储桶「设置」页里的 S3 API，形如 https://xxxx.r2.cloudflarestorage.com/存储桶名"
+          rules={[{ required: true, message: '请填写 S3 API 地址' }, { pattern: /^https:\/\/[a-z0-9.-]+\/[a-z0-9-]+\/?$/i, message: '地址要带上存储桶名' }]}>
+          <Input placeholder="https://xxxx.r2.cloudflarestorage.com/prism-team-backup" />
+        </Form.Item>
+        <Form.Item name="accessKeyId" label="访问密钥 ID" rules={[{ required: true, message: '请填写访问密钥 ID' }]}>
+          <Input autoComplete="off" />
+        </Form.Item>
+        <Form.Item name="secretAccessKey" label="机密访问密钥" extra="只存在你的团队服务器上，软件里不会再显示。" rules={[{ required: true, message: '请填写机密访问密钥' }]}>
+          <Input.Password autoComplete="new-password" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  )
+}
+
+/** The R2 copy: made a minute after each change, so its last time says how fresh it is. */
+function OffsiteStatus({ offsite, onEdit, onRemove }: { offsite?: TeamOffsite; onEdit: () => void; onRemove: () => void }) {
+  if (!offsite?.configured) {
+    return (
+      <Space size={6} wrap>
+        <span className="fb-muted">没有开启</span>
+        <Button size="small" type="primary" onClick={onEdit}>设置异地备份</Button>
+      </Space>
+    )
+  }
+  const last = Math.max(offsite.lastDb ?? 0, offsite.lastFiles ?? 0)
+  const failing = Boolean(offsite.lastErrorAt && offsite.lastErrorAt > last)
+  return (
+    <Space size={6} wrap>
+      <span>Cloudflare R2 · {offsite.bucket}</span>
+      <span className="fb-muted fb-mono">{offsite.accessKeyId}</span>
+      {failing
+        ? <Tag color="red">失败：{offsite.lastError}</Tag>
+        : last
+          ? <Tag color="green">最近同步 {new Date(last).toLocaleString()}</Tag>
+          : <Tag>等待第一次同步</Tag>}
+      {offsite.pending && <Tag color="blue">有改动，1 分钟内同步</Tag>}
+      <Button size="small" type="link" autoInsertSpace={false} onClick={onEdit}>修改</Button>
+      <Button size="small" type="link" danger autoInsertSpace={false} onClick={onRemove}>关闭</Button>
+    </Space>
+  )
+}
+
 function ServerTab() {
   const ws = useWorkspace()
   const [info, setInfo] = useState<TeamServerInfo>()
@@ -470,6 +538,7 @@ function ServerTab() {
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [downloading, setDownloading] = useState<string>()
+  const [offsiteOpen, setOffsiteOpen] = useState(false)
 
   async function reload(): Promise<void> {
     setLoading(true)
@@ -510,6 +579,25 @@ function ServerTab() {
     } finally {
       setDownloading(undefined)
     }
+  }
+
+  function removeOffsite(): void {
+    Modal.confirm({
+      title: '关闭异地备份？',
+      content: '服务器会删掉保存的 R2 密钥，不再往 R2 同步。R2 上已有的备份不会删除。',
+      okText: '关闭',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await window.browserApi.team.removeOffsite()
+          await reload()
+        } catch (error) {
+          ws.fail(error)
+          throw error
+        }
+      }
+    })
   }
 
   function remove(backup: TeamBackup): void {
@@ -561,6 +649,7 @@ function ServerTab() {
           { key: 'members', label: '成员', children: `${info.members} 个` },
           { key: 'profiles', label: '云端窗口', children: `${info.profiles} 个` },
           { key: 'version', label: '服务端版本', children: <span className="fb-mono">PocketBase {info.version || '—'}</span> },
+          { key: 'offsite', label: '异地备份', span: 3, children: <OffsiteStatus offsite={info.offsite} onEdit={() => setOffsiteOpen(true)} onRemove={removeOffsite} /> },
           {
             key: 'locks',
             label: '正在使用',
@@ -589,10 +678,12 @@ function ServerTab() {
             {info?.autoBackup.cron
               ? `服务器${scheduleText(info.autoBackup.cron)}自动备份一次，保留最近 ${info.autoBackup.keep} 份；手动备份不会自动删除。`
               : '服务器没有开启自动备份。'}
+            另外每次有改动（窗口关闭、改配置、改成员），1 分钟内会同步一份到 Cloudflare R2，保留 7 天。
             备份里有全部窗口的配置（含代理和平台账号密码）和登录态，下载后请妥善保管。
           </>
         )}
       />
+      <OffsiteModal open={offsiteOpen} onClose={() => setOffsiteOpen(false)} onSaved={() => void reload()} />
     </>
   )
 }

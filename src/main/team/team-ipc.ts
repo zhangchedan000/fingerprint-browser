@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import type { TeamLogQuery, TeamMemberDraft, TeamProfilePatch } from '../../shared/team'
+import type { TeamLogQuery, TeamMemberDraft, TeamOffsiteDraft, TeamProfilePatch } from '../../shared/team'
 import type { TeamManager } from './team-manager'
 
 export function registerTeamIpc(team: TeamManager): void {
@@ -26,6 +26,8 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:server-info', () => team.serverInfo())
   ipcMain.handle('team:backups', () => team.backups())
   ipcMain.handle('team:backup-create', () => team.createBackup())
+  ipcMain.handle('team:offsite-set', (_event, draft: TeamOffsiteDraft) => team.setOffsite(draft))
+  ipcMain.handle('team:offsite-remove', () => team.removeOffsite())
   ipcMain.handle('team:backup-remove', (_event, key: string) => team.removeBackup(key))
   ipcMain.handle('team:backup-download', async (_event, key: string) => {
     const owner = BrowserWindow.getFocusedWindow()

@@ -6,6 +6,8 @@ import type {
   TeamLinkView,
   TeamLogPage,
   TeamLogQuery,
+  TeamOffsite,
+  TeamOffsiteDraft,
   TeamMemberDraft,
   TeamProfilePatch,
   TeamProfileView,
@@ -302,6 +304,17 @@ export class TeamManager {
     const result = await (await this.requireOwner()).createBackup()
     this.logger?.info('团队服务器已备份', result)
     return result
+  }
+
+  async setOffsite(draft: TeamOffsiteDraft): Promise<TeamOffsite> {
+    const result = await (await this.requireOwner()).setOffsite(draft)
+    this.logger?.info('团队服务器已开启异地备份', { bucket: result.bucket })
+    return result
+  }
+
+  async removeOffsite(): Promise<void> {
+    await (await this.requireOwner()).removeOffsite()
+    this.logger?.info('团队服务器已关闭异地备份')
   }
 
   async removeBackup(key: string): Promise<void> {

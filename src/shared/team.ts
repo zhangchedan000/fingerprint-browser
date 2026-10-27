@@ -119,6 +119,29 @@ export interface TeamServerInfo {
   locks: Array<{ profile: string; holder: string; device: string }>
   /** PocketBase's daily backup: cron in UTC and how many are kept. */
   autoBackup: { cron: string; keep: number }
+  offsite?: TeamOffsite
+}
+
+/** Off-server copy to Cloudflare R2 after each change. Times in epoch milliseconds. */
+export interface TeamOffsite {
+  configured: boolean
+  /** A change is waiting for the next run (within a minute). */
+  pending: boolean
+  bucket?: string
+  endpoint?: string
+  /** Shortened; the secret key never leaves the server. */
+  accessKeyId?: string
+  lastDb?: number
+  lastFiles?: number
+  lastError?: string
+  lastErrorAt?: number
+}
+
+/** What R2 shows for a bucket ("S3 API" address) and its API token. */
+export interface TeamOffsiteDraft {
+  url: string
+  accessKeyId: string
+  secretAccessKey: string
 }
 
 export interface TeamBackup {

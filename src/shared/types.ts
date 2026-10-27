@@ -780,6 +780,8 @@ export interface BrowserApi {
     backups: () => Promise<import('./team').TeamBackup[]>
     createBackup: () => Promise<{ key: string }>
     removeBackup: (key: string) => Promise<void>
+    setOffsite: (draft: import('./team').TeamOffsiteDraft) => Promise<import('./team').TeamOffsite>
+    removeOffsite: () => Promise<void>
     /** Asks where to save it; null when cancelled, otherwise the saved path. */
     downloadBackup: (key: string) => Promise<string | null>
     onSync: (listener: (event: import('./team').TeamSyncEvent) => void) => () => void

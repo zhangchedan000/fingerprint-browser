@@ -3,7 +3,8 @@ FROM alpine:3.20
 ARG PB_VERSION=0.40.6
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates unzip wget \
+# rclone copies backups to Cloudflare R2 (pb_hooks/r2_utils.js).
+RUN apk add --no-cache ca-certificates unzip wget rclone \
  && cd /tmp \
  && wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_${TARGETARCH}.zip" \
  && wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/checksums.txt" \

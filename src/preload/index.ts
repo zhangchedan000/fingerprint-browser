@@ -184,6 +184,8 @@ const api: BrowserApi = {
     backups: () => ipcRenderer.invoke('team:backups'),
     createBackup: () => ipcRenderer.invoke('team:backup-create'),
     removeBackup: (key) => ipcRenderer.invoke('team:backup-remove', key),
+    setOffsite: (draft) => ipcRenderer.invoke('team:offsite-set', draft),
+    removeOffsite: () => ipcRenderer.invoke('team:offsite-remove'),
     downloadBackup: (key) => ipcRenderer.invoke('team:backup-download', key),
     onSync: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, event: TeamSyncEvent): void => listener(event)

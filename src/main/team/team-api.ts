@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
-import type { TeamBackup, TeamLogPage, TeamLogQuery, TeamMemberDraft, TeamProfilePatch, TeamRole, TeamServerInfo, TeamUser } from '../../shared/team'
+import type { TeamBackup, TeamLogPage, TeamLogQuery, TeamOffsite, TeamOffsiteDraft, TeamMemberDraft, TeamProfilePatch, TeamRole, TeamServerInfo, TeamUser } from '../../shared/team'
 
 export type Fetch = typeof fetch
 
@@ -299,6 +299,15 @@ export class TeamApi {
   /** The server zips its whole data folder, which takes a while once there are many login states. */
   createBackup(): Promise<{ key: string }> {
     return this.request('POST', '/api/team/backups', undefined, 30 * 60_000)
+  }
+
+  /** The server writes and removes a test file with the key before it keeps it. */
+  setOffsite(draft: TeamOffsiteDraft): Promise<TeamOffsite> {
+    return this.request('POST', '/api/team/offsite', draft, 60_000)
+  }
+
+  async removeOffsite(): Promise<void> {
+    await this.request('DELETE', '/api/team/offsite')
   }
 
   async removeBackup(key: string): Promise<void> {

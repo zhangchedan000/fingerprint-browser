@@ -3,6 +3,8 @@ services:
     build: .
     container_name: prism-team
     restart: unless-stopped
+    # rclone (the R2 backup) runs as a child of pocketbase; init reaps it.
+    init: true
     env_file: .env
     ports:
       - "127.0.0.1:8090:8090"

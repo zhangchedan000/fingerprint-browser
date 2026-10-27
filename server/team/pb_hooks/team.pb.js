@@ -153,7 +153,8 @@ routerAdd("GET", "/api/team/server", (e) => {
     profiles: profiles.length,
     profileDataBytes: dataBytes,
     locks,
-    autoBackup: { cron: backups.cron, keep: backups.cronMaxKeep }
+    autoBackup: { cron: backups.cron, keep: backups.cronMaxKeep },
+    offsite: require(`${__hooks}/r2_utils.js`).summary()
   })
 }, $apis.requireAuth("users"))
 
