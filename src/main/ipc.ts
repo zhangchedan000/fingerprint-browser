@@ -9,7 +9,7 @@ import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBund
 import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
-import { hostHardwareSnapshot } from './host-hardware'
+import { hostHardwareSnapshot, hostSystem } from './host-hardware'
 import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
 import type { AssignPatch, ProfileStore } from './profile-store'
@@ -354,7 +354,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await settings.update(next)
     return next
   })
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory, host: hostSystem() }))
   ipcMain.handle('app:open-folder', async (_event, folder: unknown) => {
     if (folder !== 'vault' && folder !== 'logs') throw new Error('目录参数无效')
     const error = await shell.openPath(folder === 'vault' ? profiles.vaultPath : logger.directory)
