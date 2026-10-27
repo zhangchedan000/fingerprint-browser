@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectiveScreen, randomScreen, screenChoices, screenFloor } from './screen'
+import { cssScreenSize, effectiveScreen, randomScreen, screenChoices, screenFloor } from './screen'
 
 const host = { width: 2560, height: 1440 }
 const fp = (width: number, height: number, screenSource?: 'host' | 'profile') => ({ screenWidth: width, screenHeight: height, screenSource })
@@ -31,5 +31,13 @@ describe('window screen size', () => {
   it('picks by share among the sizes that fit', () => {
     expect(randomScreen(host, () => 0)).toEqual({ width: 2560, height: 1440 })
     expect(randomScreen(host, () => 0.999)).toEqual({ width: 3840, height: 2160 })
+  })
+
+  it('shows monitors the way Windows Chrome reports them at the display scale', () => {
+    expect(cssScreenSize({ width: 2560, height: 1440 }, 1.5)).toEqual({ width: 1707, height: 960 })
+    expect(cssScreenSize({ width: 1920, height: 1080 }, 1.25)).toEqual({ width: 1536, height: 864 })
+    expect(cssScreenSize({ width: 3840, height: 2160 }, 1.5)).toEqual({ width: 2560, height: 1440 })
+    expect(cssScreenSize({ width: 3840, height: 2160 }, 1.75)).toEqual({ width: 2195, height: 1235 })
+    expect(screenChoices(undefined, 1.5)[0]).toMatchObject({ width: 1280, height: 720, physical: { width: 1920, height: 1080 } })
   })
 })

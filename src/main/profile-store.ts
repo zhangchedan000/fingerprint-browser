@@ -76,7 +76,8 @@ function validProfileSerial(value: unknown): value is number {
 }
 
 function safeWebRtcPolicy(value: unknown): WebRtcPolicy {
-  return value === 'proxy_only' || value === 'public_only' || value === 'default' ? value : 'proxy_only'
+  if (value === 'public_only') return 'default'
+  return value === 'proxy_only' || value === 'privacy' || value === 'default' || value === 'disabled' ? value : 'proxy_only'
 }
 
 function validRecordId(value: unknown): value is string {

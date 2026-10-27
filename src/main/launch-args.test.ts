@@ -58,8 +58,8 @@ describe('launch arguments', () => {
     expect(args).toContain('--fingerprint-gpu-vendor-id=0x10DE')
     expect(args).toContain('--fingerprint-gpu-device-id=0x00002208')
     expect(args).toContain('--fingerprint-gpu-description=NVIDIA GeForce RTX 3080 Ti')
-    // Windows version follows the computer on our kernels (fonts and taskbar are the real ones).
-    expect(args.some((arg) => arg.startsWith('--fingerprint-platform-version'))).toBe(false)
+    // The chosen Windows version is what Sec-CH-UA-Platform-Version reports.
+    expect(args).toContain('--fingerprint-platform-version=10.0.0')
   })
 
   it('refuses a laptop or unknown GPU on the 156 kernel instead of showing another card', () => {
@@ -85,11 +85,29 @@ describe('launch arguments', () => {
       expect(blocked).toContain('--disable-non-proxied-udp')
       expect(blocked.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
     }
-    const other = buildLaunchArgs(profile({ webrtcPolicy: 'public_only' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
-    expect(other.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
+    const other = buildLaunchArgs(profile({ webrtcPolicy: 'default' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
+    expect(other.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg.startsWith('--webrtc-ip-handling-policy'))).toBe(false)
+    // 替换 with a proxy that relays UDP (prism6+): through the relay, no address replaced.
+    const relayed = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check('203.45.6.7'), webrtcRelaySupported: true, webrtcRelayPort: 40123 })
+    expect(relayed).toContain('--fingerprint-webrtc-udp-relay=127.0.0.1:40123')
+    expect(relayed).toContain('--webrtc-ip-handling-policy=default')
+    expect(relayed.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg === '--disable-non-proxied-udp')).toBe(false)
+    // 隐私: no address; 禁止: no WebRTC on prism6+, 隐私 on older kernels.
+    const privacy = buildLaunchArgs(profile({ webrtcPolicy: 'privacy' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
+    expect(privacy).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+    expect(privacy.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
+    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), { ...kernel, webrtcRelaySupported: true })).toContain('--fingerprint-webrtc-disabled')
+    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), kernel)).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
     expect(publicIpv4(' 8.8.4.4 ')).toBe('8.8.4.4')
     expect(publicIpv4('172.20.0.1')).toBeUndefined()
     expect(publicIpv4('256.1.1.1')).toBeUndefined()
+  })
+
+  it('never shows the host fonts on kernels whose fonts follow the interface language', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const real = profile({ disabledSpoofing: ['font'] })
+    expect(buildLaunchArgs(real, kernel).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
+    expect(buildLaunchArgs(real, { ...kernel, languageFonts: true }).some((arg) => arg.includes('font'))).toBe(false)
   })
 
   it('launches with the UI locale Chrome resolves to and keeps the stored languages', () => {
@@ -116,16 +134,23 @@ describe('launch arguments', () => {
     expect(small).toContain('--fingerprint-screen-height=1440')
   })
 
-  it('passes media devices and a chosen voice locale to Prism kernels only', () => {
+  it('passes media devices to Prism kernels only; names and voices follow --lang', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const chosen = buildLaunchArgs(profile({ mediaDevices: '2,1,1', mediaLocale: 'de-de', voicesLocale: 'zh-hk' }), prism)
     expect(chosen).toContain('--fingerprint-media-devices=2,1,1')
-    expect(chosen).toContain('--fingerprint-media-locale=de-de')
-    expect(chosen).toContain('--fingerprint-voices-locale=zh-hk')
+    expect(chosen.some((arg) => arg.startsWith('--fingerprint-media-locale') || arg.startsWith('--fingerprint-voices-locale'))).toBe(false)
     const auto = buildLaunchArgs(profile(), prism)
     expect(auto.some((arg) => /^--fingerprint-media-devices=[0-3],[0-3],[0-3]$/.test(arg))).toBe(true)
     expect(auto.some((arg) => arg.startsWith('--fingerprint-voices-locale'))).toBe(false)
     expect(buildLaunchArgs(profile({ mediaDevices: 'real' }), prism).some((arg) => arg.startsWith('--fingerprint-media-devices'))).toBe(false)
     expect(buildLaunchArgs(profile({ mediaDevices: '2,1,1' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-media'))).toBe(false)
+  })
+
+  it('leaves room for this computer\'s taskbar in screen.availHeight', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
+    const windows = profile({ platform: 'windows', screenWidth: 1920, screenHeight: 1080 })
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 48 } })).toContain('--fingerprint-screen-avail-height=1032')
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1080')
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440 } }).some((arg) => arg.startsWith('--fingerprint-screen-avail-height'))).toBe(false)
   })
 })

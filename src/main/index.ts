@@ -24,6 +24,7 @@ import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
+import { registerLanguageFontsIpc } from './language-fonts'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
 
@@ -162,8 +163,10 @@ app.whenReady().then(async () => {
     for (const profile of changed) mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   })
   launcher.setHostScreenProvider(() => {
-    const { width, height } = screen.getPrimaryDisplay().size
-    return { width, height }
+    const { size, workArea } = screen.getPrimaryDisplay()
+    // Only a taskbar along the bottom (or top) shortens the screen's available height.
+    const taskbarHeight = workArea.width === size.width ? size.height - workArea.height : 0
+    return { width: size.width, height: size.height, taskbarHeight }
   })
   await launcher.initialize()
   const kernels = new KernelManager(
@@ -194,6 +197,7 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
+  registerLanguageFontsIpc(logger)
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),

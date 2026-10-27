@@ -90,10 +90,10 @@ const SCREENS: Record<GpuTier, Record<string, number>> = {
  * A resolution a desktop with this card usually has, among those this computer can claim (see
  * screenFloor); the floor itself when none of the tier's sizes fits.
  */
-export function matchedScreen(gpuModel: string, floor: ScreenSize | undefined, random: () => number = Math.random): ScreenSize | undefined {
+export function matchedScreen(gpuModel: string, floor: ScreenSize | undefined, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
   const weights = SCREENS[gpuTier(gpuModel)]
-  const choices = screenChoices(floor)
-    .map((choice) => ({ ...choice, weight: weights[`${choice.width}x${choice.height}`] ?? 0 }))
+  const choices = screenChoices(floor, scale)
+    .map((choice) => ({ ...choice, weight: weights[`${choice.physical.width}x${choice.physical.height}`] ?? 0 }))
     .filter((choice) => choice.weight > 0)
   if (!choices.length) return floor
   let roll = random() * choices.reduce((sum, choice) => sum + choice.weight, 0)

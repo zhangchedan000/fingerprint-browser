@@ -8,6 +8,13 @@ import { effectiveScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
 import { kernelVendor } from '../shared/kernel-id'
 
+export interface HostScreen {
+  width: number
+  height: number
+  /** Height of this computer's taskbar at the bottom (display size minus work area), in CSS pixels. */
+  taskbarHeight?: number
+}
+
 export interface LaunchArgumentOptions {
   userDataDir: string
   proxyUrl?: string
@@ -20,9 +27,15 @@ export interface LaunchArgumentOptions {
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean
   /** Real primary display size, used when the window follows the computer's screen. */
-  hostScreen?: { width: number; height: number }
+  hostScreen?: HostScreen
   /** EngineStatus.windowScreen of the kernel this window runs. */
   windowScreen?: boolean
+  /** EngineStatus.webrtcRelay of the kernel this window runs (prism6+). */
+  webrtcRelaySupported?: boolean
+  /** prism6+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
+  languageFonts?: boolean
+  /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
+  webrtcRelayPort?: number
 }
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
@@ -66,7 +79,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     throw new Error(`内核 ${options.engineVersion ?? ''} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡`)
   }
   const seed = alignedSeed
-  const disabledSpoofing = effectiveDisabledSpoofing(fp)
+  const disabledSpoofing = effectiveDisabledSpoofing(fp).filter((surface) => !(options.languageFonts && surface === 'font'))
   const brandVersion = resolveFingerprintBrandVersion(fp.brandVersion, {
     fingerprintKernel: options.fingerprintKernel === true,
     version: options.engineVersion
@@ -112,9 +125,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
 
   const explicitGpuKernel = options.fingerprintKernel === true && kernelTakesExplicitGpu(options.engineVersion)
-  // On our own kernels a Windows profile reports the computer's real Windows version: fonts, the
-  // taskbar height and system UI come from the real system, so claiming another version would not match.
-  if (platformVersion && !(explicitGpuKernel && fp.platform === 'windows')) {
+  // Sec-CH-UA-Platform-Version: the chosen Windows (10.0.0 for Windows 10, 19.0.0 for 11 24H2+).
+  if (platformVersion) {
     args.push(`--fingerprint-platform-version=${platformVersion}`)
   }
   if (explicitGpuKernel && !disabledSpoofing.includes('gpu')) {
@@ -137,23 +149,35 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     const memory = Math.min(fp.deviceMemory, maxDeviceMemoryGb(options.engineVersion))
     args.push(`--fingerprint-device-memory=${memory}`)
   }
+  // screen.availHeight leaves room for the taskbar; the kernel assumes 48 (Windows 11 at any scale)
+  // unless told this computer's own, which a small or auto-hidden taskbar changes.
+  const taskbar = options.hostScreen?.taskbarHeight
+  if (options.fingerprintKernel && fp.platform === 'windows' && taskbar !== undefined && Number.isInteger(taskbar) && taskbar >= 0 && taskbar <= 200) {
+    args.push(`--fingerprint-screen-avail-height=${screenHeight - taskbar}`)
+  }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {
-    // Prism 4+: media devices (patch 014) and a chosen voice locale (patch 012).
+    // Prism 4+: media devices (patch 014). Their names and the speech voices (patch 012) follow --lang.
     const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0, effectiveGpu(fp, options.engineVersion)?.model)
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
-    if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
-    if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
   }
-  if (fp.webrtcPolicy === 'proxy_only') {
+  if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
+    // 替换 on prism6+ with a proxy that relays UDP: WebRTC really goes through the proxy.
+    args.push('--webrtc-ip-handling-policy=default')
+    args.push(`--fingerprint-webrtc-udp-relay=127.0.0.1:${options.webrtcRelayPort}`)
+  } else if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')
     args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
-    // 替换: our kernels show the proxy's exit address to pages; without a public IPv4 exit
-    // WebRTC simply stays blocked.
+    // 替换 without UDP through the proxy: our kernels show the proxy's exit address to pages;
+    // without a public IPv4 exit WebRTC simply stays blocked.
     const webrtcIp = publicIpv4(options.proxyIdentity?.ip)
     if (webrtcIp) args.push(`--fingerprint-webrtc-ip=${webrtcIp}`)
-  } else if (fp.webrtcPolicy === 'public_only') {
-    args.push('--webrtc-ip-handling-policy=default_public_interface_only')
+  } else if (fp.webrtcPolicy === 'privacy' || (fp.webrtcPolicy === 'disabled' && !options.webrtcRelaySupported)) {
+    // 隐私 (and 禁止 on kernels that cannot remove WebRTC): no address reaches the page.
+    args.push('--disable-non-proxied-udp')
+    args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+  } else if (fp.webrtcPolicy === 'disabled') {
+    args.push('--fingerprint-webrtc-disabled')
   }
   if (options.proxyUrl) {
     args.push('--disable-quic')

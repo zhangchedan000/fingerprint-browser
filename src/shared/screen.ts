@@ -25,6 +25,20 @@ export const SCREEN_CHOICES: ReadonlyArray<ScreenSize & { weight: number }> = [
   { width: 3840, height: 2160, weight: 12 }
 ]
 
+/**
+ * A monitor's size in CSS pixels at a Windows display scale, as Chrome on Windows reports it:
+ * gfx::ScaleToEnclosingRect(bounds, 1.0f / scale), float math rounded up (ui/display/win/screen_win.cc).
+ * 2560 × 1440 at 150% is 1707 × 960.
+ */
+export function cssScreenSize(physical: ScreenSize, scale = 1): ScreenSize {
+  if (!(scale > 0) || scale === 1) return { width: physical.width, height: physical.height }
+  const inverse = Math.fround(1 / Math.fround(scale))
+  return {
+    width: Math.ceil(Math.fround(physical.width * inverse)),
+    height: Math.ceil(Math.fround(physical.height * inverse))
+  }
+}
+
 function fits(size: ScreenSize, host: ScreenSize | undefined): boolean {
   return !host || (size.width >= host.width && size.height >= host.height)
 }
@@ -41,21 +55,30 @@ export function screenFloor(host: ScreenSize | undefined, windowScreen: boolean 
   return windowScreen ? undefined : host
 }
 
-/** The resolutions a window on this computer can claim (see screenFloor). */
-export function screenChoices(floor: ScreenSize | undefined): Array<ScreenSize & { weight: number }> {
-  return SCREEN_CHOICES.filter((choice) => fits(choice, validHost(floor)))
+export type ScreenChoice = ScreenSize & { weight: number; physical: ScreenSize }
+
+/**
+ * The resolutions a window on this computer can claim (see screenFloor), in CSS pixels. The
+ * window keeps this computer's display scale (devicePixelRatio is real), so a common monitor
+ * appears the way it would at that scale.
+ */
+export function screenChoices(floor: ScreenSize | undefined, scale = 1): ScreenChoice[] {
+  return SCREEN_CHOICES
+    .map((choice) => ({ ...cssScreenSize(choice, scale), weight: choice.weight, physical: { width: choice.width, height: choice.height } }))
+    .filter((choice) => fits(choice, validHost(floor)))
 }
 
 /** A resolution picked by how common it is among those this computer can claim. */
-export function randomScreen(floor: ScreenSize | undefined, random: () => number = Math.random): ScreenSize | undefined {
-  const choices = screenChoices(floor)
+export function randomScreen(floor: ScreenSize | undefined, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
+  const choices = screenChoices(floor, scale)
   const total = choices.reduce((sum, choice) => sum + choice.weight, 0)
   let roll = random() * total
   for (const choice of choices) {
     roll -= choice.weight
     if (roll < 0) return { width: choice.width, height: choice.height }
   }
-  return choices.at(-1)
+  const last = choices.at(-1)
+  return last && { width: last.width, height: last.height }
 }
 
 /** The screen a page sees: the window's own size when the kernel can show it and it fits, otherwise the real one. */

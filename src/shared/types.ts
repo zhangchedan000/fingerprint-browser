@@ -1,4 +1,5 @@
 import type { UiLocale } from './i18n'
+import type { FontPackStatus } from './windows-font-packs'
 export type BrowserPlatform = 'windows' | 'macos'
 export type BrowserBrand = 'Chrome' | 'Edge'
 export type HardwareProfileId =
@@ -14,7 +15,12 @@ export type HardwareProfileId =
   | 'windows-11-rtx4060'
   | 'windows-11-rtx4070'
 export type ProxyProtocol = 'direct' | 'http' | 'https' | 'socks5'
-export type WebRtcPolicy = 'proxy_only' | 'public_only' | 'default'
+/**
+ * 替换 (proxy_only): WebRTC through the proxy (UDP relay on prism6+ when the proxy relays UDP,
+ * otherwise the proxy's address is reported without sending UDP); 隐私 (privacy): WebRTC on but no
+ * address at all; 允许 (default): Chrome as is; 禁止 (disabled): no RTCPeerConnection (prism6+).
+ */
+export type WebRtcPolicy = 'proxy_only' | 'privacy' | 'default' | 'disabled'
 export type NetworkIdentityMode = 'manual' | 'proxy'
 export type ProxyExitPolicy = 'warn' | 'block'
 export type ProfileStatus = 'closed' | 'starting' | 'running' | 'stopping' | 'orphaned' | 'error'
@@ -78,6 +84,8 @@ export interface FingerprintConfig {
   language: string
   acceptLanguages: string
   timezone: string
+  /** Country (ISO 3166) the language and time zone were picked for, by hand. Unset on older profiles. */
+  region?: string
   webrtcPolicy: WebRtcPolicy
   networkIdentityMode: NetworkIdentityMode
   proxyExitPolicy: ProxyExitPolicy
@@ -260,6 +268,8 @@ export interface AppPreferences {
   theme: 'light' | 'dark' | 'system'
   /** Pause between windows opened in one batch. */
   batchLaunchGapSeconds: number
+  /** The one-time offer to install missing Windows language font packages was answered. */
+  fontPacksAsked?: boolean
 }
 
 export interface AppInfo {
@@ -300,6 +310,8 @@ export interface EngineStatus {
   version?: string
   /** The kernel keeps its window inside a claimed screen, so the claim may be smaller than the real one. */
   windowScreen?: boolean
+  /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism6+). */
+  webrtcRelay?: boolean
 }
 
 export interface KernelImportResult {
@@ -330,6 +342,8 @@ export interface KernelRelease {
   update?: boolean
   /** See EngineStatus.windowScreen. */
   windowScreen?: boolean
+  /** See EngineStatus.webrtcRelay. */
+  webrtcRelay?: boolean
   /** An older build of its version, offered for rolling back; installing it replaces the kernel in place. */
   history?: boolean
 }
@@ -355,6 +369,8 @@ export interface KernelHealth {
 export interface ProxyTestResult {
   ok: boolean
   ip?: string
+  /** SOCKS5 only, from the editor's test: whether the proxy relays UDP (WebRTC 替换 on prism6+). */
+  udp?: boolean
   latencyMs: number
   error?: string
   warning?: string
@@ -596,6 +612,10 @@ export interface BrowserApi {
     installUpdate: () => Promise<void>
     openUpdatePage: () => Promise<void>
     onUpdateProgress: (listener: (progress: AppUpdateProgress) => void) => () => void
+    /** Windows language font packages on this computer. */
+    fontPacks: () => Promise<FontPackStatus>
+    /** Installs the missing ones from Microsoft after one administrator prompt. */
+    installFontPacks: () => Promise<FontPackStatus>
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
