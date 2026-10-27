@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import type { TeamLogQuery, TeamMemberDraft, TeamOffsiteDraft, TeamProfilePatch } from '../../shared/team'
+import type { TeamLogQuery, TeamMemberDraft, TeamOffsiteDraft, TeamProfilePatch, TeamRegistration } from '../../shared/team'
 import type { TeamManager } from './team-manager'
 
 export function registerTeamIpc(team: TeamManager): void {
@@ -9,7 +9,12 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:setup', (_event, server: string, code: string, username: string, name: string, password: string) =>
     team.setup(server, code, username, name, password))
   ipcMain.handle('team:login', (_event, server: string, username: string, password: string) => team.login(server, username, password))
+  ipcMain.handle('team:register', (_event, draft: TeamRegistration) => team.register(draft))
+  ipcMain.handle('team:change-password', (_event, oldPassword: string, password: string) => team.changePassword(oldPassword, password))
   ipcMain.handle('team:logout', () => team.logout())
+  ipcMain.handle('team:invites', () => team.invites())
+  ipcMain.handle('team:invite-create', (_event, note: string) => team.createInvite(note))
+  ipcMain.handle('team:invite-revoke', (_event, id: string) => team.revokeInvite(id))
   ipcMain.handle('team:members', () => team.listMembers())
   ipcMain.handle('team:member-create', (_event, draft: TeamMemberDraft) => team.createMember(draft))
   ipcMain.handle('team:member-update', (_event, id: string, draft: TeamMemberDraft) => team.updateMember(id, draft))

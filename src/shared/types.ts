@@ -788,7 +788,15 @@ export interface BrowserApi {
     /** Creates the owner account with the server's setup code, then signs in. */
     setup: (server: string, code: string, username: string, name: string, password: string) => Promise<import('./team').TeamStatus>
     login: (server: string, username: string, password: string) => Promise<import('./team').TeamStatus>
+    /** Signs up with an invite code on the built-in server, then signs in. */
+    register: (draft: import('./team').TeamRegistration) => Promise<import('./team').TeamStatus>
+    /** Own password; signs in again with the new one. */
+    changePassword: (oldPassword: string, password: string) => Promise<import('./team').TeamStatus>
     logout: () => Promise<import('./team').TeamStatus>
+    /** Owner: sign-up codes, one per person. */
+    invites: () => Promise<import('./team').TeamInvite[]>
+    createInvite: (note: string) => Promise<import('./team').TeamInvite>
+    revokeInvite: (id: string) => Promise<void>
     members: () => Promise<import('./team').TeamUser[]>
     createMember: (draft: import('./team').TeamMemberDraft) => Promise<import('./team').TeamUser>
     updateMember: (id: string, draft: import('./team').TeamMemberDraft) => Promise<import('./team').TeamUser>

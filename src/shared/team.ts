@@ -148,6 +148,26 @@ export interface TeamOffsiteDraft {
   secretAccessKey: string
 }
 
+/** One person's sign-up code, made by the owner; used once, valid 7 days. Times in epoch milliseconds. */
+export interface TeamInvite {
+  id: string
+  /** Without dashes; shown as XXXX-XXXX-XXXX. */
+  code: string
+  note: string
+  expires: number
+  /** Who signed up with it; '' while unused. */
+  usedName: string
+  usedAt: number
+  created: string
+}
+
+export interface TeamRegistration {
+  code: string
+  username: string
+  name: string
+  password: string
+}
+
 export interface TeamBackup {
   key: string
   size: number

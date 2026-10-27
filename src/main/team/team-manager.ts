@@ -3,18 +3,20 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   TeamBackup,
+  TeamInvite,
   TeamLinkView,
   TeamLogPage,
   TeamLogQuery,
+  TeamMemberDraft,
   TeamOffsite,
   TeamOffsiteDraft,
-  TeamMemberDraft,
   TeamProfilePatch,
   TeamProfileView,
-  TeamStatus,
-  TeamSyncEvent,
+  TeamRegistration,
   TeamRole,
   TeamServerInfo,
+  TeamStatus,
+  TeamSyncEvent,
   TeamUser
 } from '../../shared/team'
 import type { BrowserProfile, ProfileDraft } from '../../shared/types'
@@ -275,6 +277,27 @@ export class TeamManager {
     return this.status()
   }
 
+  /** Signs up with an invite code on the built-in server, then signs in. */
+  async register(draft: TeamRegistration): Promise<TeamStatus> {
+    const server = this.file.server || DEFAULT_TEAM_SERVER
+    if (!draft.code.trim()) throw new Error('请填写邀请码')
+    if (!/^[^\s@]{2,64}$/.test(draft.username.trim())) throw new Error('用户名 2 到 64 个字符，不能有空格和 @')
+    if (draft.password.length < 8) throw new Error('密码至少 8 位')
+    await new TeamApi(server, this.fetcher).register({ ...draft, username: draft.username.trim(), name: draft.name.trim() })
+    return this.login(server, draft.username, draft.password)
+  }
+
+  /** The server signs out everywhere on a new password; this computer signs in again with it. */
+  async changePassword(oldPassword: string, password: string): Promise<TeamStatus> {
+    await this.restoring
+    const api = this.requireApi()
+    const user = this.user
+    if (!user) throw new Error('请先登录')
+    if (password.length < 8) throw new Error('新密码至少 8 位')
+    await api.changePassword(user.id, oldPassword, password)
+    return this.login(this.file.server || DEFAULT_TEAM_SERVER, user.username, password)
+  }
+
   async logout(): Promise<TeamStatus> {
     if (this.locked.size) throw new Error('还有团队窗口在运行，请先关闭')
     await Promise.allSettled(this.pushes.values())
@@ -304,6 +327,18 @@ export class TeamManager {
 
   async removeMember(id: string): Promise<void> {
     return (await this.requireOwner()).removeMember(id)
+  }
+
+  async invites(): Promise<TeamInvite[]> {
+    return (await this.requireOwner()).listInvites()
+  }
+
+  async createInvite(note: string): Promise<TeamInvite> {
+    return (await this.requireOwner()).createInvite(note.trim())
+  }
+
+  async revokeInvite(id: string): Promise<void> {
+    return (await this.requireOwner()).revokeInvite(id)
   }
 
   async logs(query: TeamLogQuery): Promise<TeamLogPage> {

@@ -1,15 +1,16 @@
-import { Alert, Button, Input, Modal, Radio, Space, Switch, Table, Tag, type TableColumnsType } from 'antd'
+import { CheckOutlined, CloseOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Alert, Button, Input, Modal, Radio, Space, Switch, Table, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { TunnelNodeInfo, TunnelStatus } from '../../../../shared/types'
 import { humanError } from '../../components/format'
 import { useWorkspace } from '../../data/workspace'
 
-const STATE_TAG: Record<TunnelStatus['state'], [string, string]> = {
-  off: ['default', '未开启'],
-  starting: ['processing', '启动中'],
-  running: ['success', '运行中'],
-  error: ['error', '出错']
+const STATE_PILL: Record<TunnelStatus['state'], [string, string]> = {
+  off: ['is-off', '未开启'],
+  starting: ['is-busy', '启动中'],
+  running: ['is-on', '运行中'],
+  error: ['is-bad', '出错']
 }
 
 function DelayText({ delay }: { delay?: number }) {
@@ -109,14 +110,15 @@ export function TunnelSettings() {
       width: 190,
       align: 'right',
       render: (_, node) => <Space size={4}>
-        {node.name === status?.selected && <Tag color="blue">{t("使用中")}</Tag>}
+        {node.name === status?.selected && <span className="fb-tunnel-pill is-on"><CheckOutlined />{t("使用中")}</span>}
         {(node.name !== status?.selected || status.selectionMode === 'auto') && <Button size="small" type="link" autoInsertSpace={false} disabled={Boolean(busy)} onClick={() => void run('select', () => window.browserApi.tunnel.select(node.name))}>{t("固定使用")}</Button>}
         <Button size="small" type="link" autoInsertSpace={false} disabled={Boolean(busy) || !node.sourceId} onClick={() => node.sourceId && void edit(node.sourceId)}>{t("编辑")}</Button>
       </Space>
     }
   ]
 
-  const [color, label] = STATE_TAG[status?.state ?? 'off']
+  const [stateClass, label] = STATE_PILL[status?.state ?? 'off']
+  const manual = status?.selectionMode === 'manual'
   return (
     <>
       <h2>{t("网络加速")}</h2>
@@ -124,39 +126,45 @@ export function TunnelSettings() {
         {t("国外代理 IP 在国内直连常被干扰。开启后，窗口连国外代理时会先经过你自己的节点加密出国，本机不用开 Clash，开不开软路由都能用；国内代理照常直连。网站看到的仍然是窗口代理的 IP。")}
       </p>
       {status && !status.available && <Alert type="warning" showIcon title={t("当前版本没有附带加速通道组件，请安装最新版指纹浏览器。")} className="fb-block-gap" />}
-      <div className="fb-settings-grid">
-        <span className="fb-settings-label">{t("加速通道")}</span>
-        <div className="fb-settings-control">
-          <Switch
-            checked={status?.enabled ?? false}
-            loading={busy === 'enable'}
-            disabled={Boolean(busy) || !status?.available || (!status.sources.length && !status.enabled)}
-            onChange={(checked) => void run('enable', () => window.browserApi.tunnel.setEnabled(checked))}
-          />
-          <Tag color={color}>{t(label)}</Tag>
-          {!status?.sources.length && <span className="fb-muted">{t("先添加节点，再开启")}</span>}
-          {status?.error && <span className="fb-proxy-result bad">{mt(status.error)}</span>}
+      <section className="fb-tunnel-card">
+        <div className="fb-settings-grid">
+          <span className="fb-settings-label">{t("加速通道")}</span>
+          <div className="fb-settings-control">
+            <Switch
+              checked={status?.enabled ?? false}
+              loading={busy === 'enable'}
+              disabled={Boolean(busy) || !status?.available || (!status.sources.length && !status.enabled)}
+              onChange={(checked) => void run('enable', () => window.browserApi.tunnel.setEnabled(checked))}
+            />
+            <span className={`fb-tunnel-state ${stateClass}`}><i />{t(label)}</span>
+            {!status?.sources.length && <span className="fb-muted">{t("先添加节点，再开启")}</span>}
+            {status?.error && <span className="fb-proxy-result bad">{mt(status.error)}</span>}
+          </div>
+          <span className="fb-settings-label">{t("节点来源")}</span>
+          <div className="fb-settings-control">
+            {status?.sources.map((source) => (
+              <span key={source.id} className="fb-tunnel-source">
+                <span className={`fb-tunnel-source-kind${source.kind === 'subscription' ? ' is-sub' : ''}`}>{source.kind === 'subscription' ? t("订阅") : t("手动")}</span>
+                <span className="fb-tunnel-source-name" title={source.name}>{source.name}</span>
+                <Button type="text" size="small" icon={<EditOutlined />} title={t("编辑")} disabled={Boolean(busy)} onClick={() => void edit(source.id)} />
+                <Button type="text" size="small" icon={<CloseOutlined />} title={t("删除")} disabled={Boolean(busy)} onClick={() => remove(source.id, source.name)} />
+              </span>
+            ))}
+            <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => { closeEditor(); setKind('links'); setAdding(true) }} disabled={!status?.available || Boolean(busy)}>{t("添加节点")}</Button>
+          </div>
+          <span className="fb-settings-label">{t("节点选择")}</span>
+          <div className="fb-settings-control">
+            <span className={`fb-tunnel-pill ${manual ? 'is-manual' : 'is-on'}`}>{manual ? t("手动固定") : <><ThunderboltOutlined />{t("自动选择最低延迟")}</>}</span>
+            {manual && (
+              <Button size="small" disabled={Boolean(busy) || !status?.sources.length} loading={busy === 'auto'} onClick={() => void run('auto', () => window.browserApi.tunnel.autoSelect())}>{t("自动选择最低延迟")}</Button>
+            )}
+          </div>
         </div>
-        <span className="fb-settings-label">{t("节点来源")}</span>
-        <div className="fb-settings-control">
-          {status?.sources.map((source) => (
-            <Tag key={source.id} closable={!busy} onClose={(event) => { event.preventDefault(); remove(source.id, source.name) }}>
-              {source.kind === 'subscription' ? t("订阅") : t("手动")} · {source.name}
-              <Button type="link" size="small" disabled={Boolean(busy)} onClick={() => void edit(source.id)}>{t("编辑")}</Button>
-            </Tag>
-          ))}
-          <Button size="small" onClick={() => { closeEditor(); setKind('links'); setAdding(true) }} disabled={!status?.available || Boolean(busy)}>{t("添加节点")}</Button>
-        </div>
-        <span className="fb-settings-label">{t("节点选择")}</span>
-        <div className="fb-settings-control">
-          <Tag color={status?.selectionMode === 'manual' ? 'blue' : 'green'}>{status?.selectionMode === 'manual' ? t("手动固定") : t("自动选择最低延迟")}</Tag>
-          <Button size="small" disabled={Boolean(busy) || !status?.sources.length} loading={busy === 'auto'} onClick={() => void run('auto', () => window.browserApi.tunnel.autoSelect())}>{t("自动选择最低延迟")}</Button>
-        </div>
-      </div>
-      <p className="fb-muted">{t("自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。")}</p>
+        <p className="fb-muted fb-tunnel-note">{t("自动模式每 5 分钟测速，延迟改善超过 50 ms 时切换；手动固定后保持所选节点，重启后仍生效。")}</p>
+      </section>
 
       {running && (
-        <div className="fb-tunnel-nodes">
+        <section className="fb-tunnel-card fb-tunnel-nodes">
           <div className="fb-tunnel-actions">
             <span className="fb-muted">{t("选一个延迟低的节点；所有经加速的窗口共用它出国。")}</span>
             <Button size="small" loading={busy === 'test'} disabled={Boolean(busy)} onClick={() => void run('test', () => window.browserApi.tunnel.test())}>{t("测速")}</Button>
@@ -164,8 +172,10 @@ export function TunnelSettings() {
               <Button size="small" loading={busy === 'refresh'} disabled={Boolean(busy)} onClick={() => void run('refresh', () => window.browserApi.tunnel.refresh())}>{t("更新订阅")}</Button>
             )}
           </div>
-          <Table<TunnelNodeInfo> rowKey="name" size="small" columns={columns} dataSource={status.nodes} pagination={status.nodes.length > 12 ? { pageSize: 12, size: 'small' } : false} />
-        </div>
+          <Table<TunnelNodeInfo> rowKey="name" size="small" columns={columns} dataSource={status.nodes}
+            rowClassName={(node) => node.name === status.selected ? 'fb-tunnel-row-active' : ''}
+            pagination={status.nodes.length > 12 ? { pageSize: 12, size: 'small' } : false} />
+        </section>
       )}
 
       <Modal

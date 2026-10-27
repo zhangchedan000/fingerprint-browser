@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
-import type { TeamBackup, TeamLogPage, TeamLogQuery, TeamOffsite, TeamOffsiteDraft, TeamMemberDraft, TeamProfilePatch, TeamRole, TeamServerInfo, TeamUser } from '../../shared/team'
+import type { TeamBackup, TeamInvite, TeamLogPage, TeamLogQuery, TeamMemberDraft, TeamOffsite, TeamOffsiteDraft, TeamProfilePatch, TeamRegistration, TeamRole, TeamServerInfo, TeamUser } from '../../shared/team'
 
 export type Fetch = typeof fetch
 
@@ -164,6 +164,11 @@ export class TeamApi {
     return this.request('POST', '/api/team/setup', { code, username, name, password })
   }
 
+  /** Makes a member account with an invite code; sign in afterwards. */
+  register(draft: TeamRegistration): Promise<{ ok: boolean }> {
+    return this.request('POST', '/api/team/register', draft)
+  }
+
   async login(username: string, password: string): Promise<TeamUser> {
     const result = await this.request<{ token: string; record: RemoteUser }>('POST', '/api/collections/users/auth-with-password', {
       identity: username,
@@ -206,6 +211,23 @@ export class TeamApi {
       body.passwordConfirm = draft.password
     }
     return toTeamUser(await this.request<RemoteUser>('PATCH', `/api/collections/users/records/${encodeURIComponent(id)}`, body))
+  }
+
+  /** Own password; the server ends this sign-in, so sign in again with the new one. */
+  async changePassword(id: string, oldPassword: string, password: string): Promise<void> {
+    await this.request('PATCH', `/api/collections/users/records/${encodeURIComponent(id)}`, { oldPassword, password, passwordConfirm: password })
+  }
+
+  async listInvites(): Promise<TeamInvite[]> {
+    return (await this.request<{ items: TeamInvite[] }>('GET', '/api/team/invites')).items
+  }
+
+  createInvite(note: string): Promise<TeamInvite> {
+    return this.request('POST', '/api/team/invites', { note })
+  }
+
+  async revokeInvite(id: string): Promise<void> {
+    await this.request('DELETE', `/api/team/invites/${encodeURIComponent(id)}`)
   }
 
   async removeMember(id: string): Promise<void> {

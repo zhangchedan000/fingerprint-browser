@@ -354,8 +354,29 @@ button, input, textarea { font: inherit; }
 .fb-settings-label { color: var(--fb-text-secondary); }
 .fb-settings-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
 .fb-tunnel-intro { margin: 0 0 16px; line-height: 1.6; }
-.fb-tunnel-nodes { margin-top: 20px; }
+.fb-tunnel-card { padding: 18px 20px; border: 1px solid var(--fb-line); border-radius: 10px; background: var(--fb-surface); }
+.fb-tunnel-note { margin: 16px 0 0; padding-top: 12px; border-top: 1px dashed var(--fb-line); font-size: 12px; }
+.fb-tunnel-nodes { margin-top: 16px; }
 .fb-tunnel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.fb-tunnel-state, .fb-tunnel-pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.fb-tunnel-pill { height: 22px; gap: 4px; padding: 0 8px; }
+.fb-tunnel-state i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--fb-idle); }
+.fb-tunnel-state.is-on, .fb-tunnel-pill.is-on { color: var(--fb-success); background: var(--fb-success-soft); }
+.fb-tunnel-state.is-on i { background: var(--fb-success-dot); animation: fb-tunnel-pulse 2s ease-out infinite; }
+.fb-tunnel-state.is-busy, .fb-tunnel-pill.is-manual { color: var(--fb-accent); background: var(--fb-accent-soft); }
+.fb-tunnel-state.is-busy i { background: var(--fb-accent); }
+.fb-tunnel-state.is-bad { color: var(--fb-danger); background: var(--fb-danger-soft); }
+.fb-tunnel-state.is-bad i { background: var(--fb-danger); }
+@keyframes fb-tunnel-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fb-success-dot) 60%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px transparent; }
+}
+.fb-tunnel-source { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; height: 28px; padding: 0 2px 0 4px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--fb-surface-muted); }
+.fb-tunnel-source-kind { padding: 1px 6px; border-radius: 5px; color: var(--fb-text-secondary); background: var(--fb-surface); font-size: 11px; }
+.fb-tunnel-source-kind.is-sub { color: var(--fb-accent); background: var(--fb-accent-soft); }
+.fb-tunnel-source-name { max-width: 220px; margin: 0 4px; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.fb-tunnel-source .ant-btn { width: 22px; height: 22px; color: var(--fb-text-muted); }
+.fb-tunnel-row-active > td { background: var(--fb-accent-soft) !important; }
 .fb-tunnel-actions .fb-muted { flex: 1 1 240px; }
 .fb-tunnel-delay.is-good { color: var(--fb-success); }
 .fb-tunnel-delay.is-fair { color: var(--fb-warning); }
@@ -417,6 +438,16 @@ button, input, textarea { font: inherit; }
 .fb-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--fb-bg); padding: 24px; }
 .fb-login-card { width: 400px; max-width: 100%; }
 .fb-login-wait { display: flex; justify-content: center; padding: 24px 0; }
-.fb-login-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; font-size: 12px; }
-.fb-login-hint { margin: 4px 0 0; font-size: 12px; }.fb-team-server { margin-bottom: 16px; }
+.fb-login-hint { margin: 14px 0 0; font-size: 12px; text-align: center; }
+.fb-login-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: -4px 0 8px; }
+.fb-login-brand strong { font-size: 18px; font-weight: 600; }
+.fb-login-tabs { width: 100%; }
+.fb-login-tabs .ant-tabs-nav { margin-bottom: 4px; }
+.fb-login-tabs .ant-tabs-nav-list { flex: 1; }
+.fb-login-tabs .ant-tabs-tab { flex: 1; justify-content: center; margin: 0 !important; font-size: 15px; }
+.fb-team-server { margin-bottom: 16px; }
+.fb-team-invites { margin-top: 20px; }
+.fb-team-invites h3 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.fb-invite-code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; letter-spacing: .5px; }
+.fb-invite-big { display: block; margin: 8px 0 12px; padding: 14px; border-radius: 8px; background: var(--fb-surface-muted); font-family: ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 600; letter-spacing: 2px; text-align: center; }
 .fb-nowrap { white-space: nowrap; }

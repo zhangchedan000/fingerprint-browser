@@ -3,6 +3,11 @@
 // Shared by team.pb.js. Hook handlers run in their own VMs, so they load this with require.
 
 const LOCK_MS = 90 * 1000
+const INVITE_MS = 7 * 24 * 3600 * 1000
+// Wrong passwords (per account name) or invite codes (per address): this many within HOLD_MS
+// and further tries are refused until HOLD_MS after the first.
+const MAX_FAILURES = 5
+const HOLD_MS = 15 * 60 * 1000
 
 function isOwner(auth) {
   return !!auth && auth.collection().name === "users" && auth.getString("role") === "owner"
@@ -45,6 +50,8 @@ function log(app, e, action, profile, detail, opts) {
     record.set("user_name", displayName(user))
   } else if (user) {
     record.set("user_name", "管理后台")
+  } else if (opts.userName) {
+    record.set("user_name", opts.userName)
   }
   if (profile) {
     record.set("profile", profile.id)
@@ -56,6 +63,32 @@ function log(app, e, action, profile, detail, opts) {
   record.set("detail", detail || {})
   try { record.set("ip", e.realIP()) } catch (_) {}
   app.save(record)
+}
+
+function failures(key) {
+  try {
+    const entry = JSON.parse($app.store().get("fail." + key) || "null")
+    if (entry && Date.now() - entry.first < HOLD_MS) return entry
+  } catch (_) {}
+  return { count: 0, first: Date.now() }
+}
+
+function checkHold(e, key) {
+  const entry = failures(key)
+  if (entry.count >= MAX_FAILURES) {
+    const minutes = Math.max(1, Math.ceil((entry.first + HOLD_MS - Date.now()) / 60000))
+    throw new ApiError(429, "错误次数太多，请 " + minutes + " 分钟后再试", {})
+  }
+}
+
+function addFailure(key) {
+  const entry = failures(key)
+  entry.count += 1
+  $app.store().set("fail." + key, JSON.stringify(entry))
+}
+
+function clearFailures(key) {
+  $app.store().remove("fail." + key)
 }
 
 function userNames(app, ids) {
@@ -123,4 +156,4 @@ function lockRoute(e, mode) {
   return e.json(200, result)
 }
 
-module.exports = { LOCK_MS, isOwner, requireOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }
+module.exports = { LOCK_MS, INVITE_MS, checkHold, addFailure, clearFailures, isOwner, requireOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }

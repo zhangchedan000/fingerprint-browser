@@ -1,8 +1,8 @@
-import { CloudDownloadOutlined, DatabaseOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
+import { CloudDownloadOutlined, DatabaseOutlined, KeyOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, UserAddOutlined } from '@ant-design/icons'
+import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { getLocale, t } from '../../../../shared/i18n'
-import type { TeamBackup, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
+import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
 import { dateTime, formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { useWindowLauncher } from '../../data/window-actions'
@@ -12,6 +12,10 @@ import type { PageProps } from '../registry'
 const ACTIONS: Record<string, string> = {
   setup: '创建主账号',
   login: '登录',
+  login_fail: '登录失败',
+  register: '邀请码注册',
+  invite_create: '生成邀请码',
+  invite_revoke: '作废邀请码',
   open: '打开窗口',
   close: '关闭窗口',
   upload: '上传登录态',
@@ -47,6 +51,8 @@ function logDetail(entry: TeamLogEntry): string {
   if (typeof detail.holder === 'string') parts.push(`原占用人 ${detail.holder}`)
   if (typeof detail.member === 'string') parts.push(detail.member)
   if (typeof detail.key === 'string') parts.push(detail.key)
+  if (typeof detail.username === 'string' && detail.username) parts.push(`用户名 ${detail.username}`)
+  if (typeof detail.note === 'string' && detail.note) parts.push(`备注 ${detail.note}`)
   if (Array.isArray(detail.assignees)) parts.push(`成员：${detail.assignees.join('、') || '无'}`)
   if (Array.isArray(detail.fields)) {
     const names: Record<string, string> = { name: '名称', note: '备注', config: '配置', assignees: '成员', username: '用户名', password: '密码', disabled: '启用状态' }
@@ -94,6 +100,190 @@ function MemberFormModal({ member, open, onClose, onSaved }: { member?: TeamUser
           extra={member ? t("留空则不修改") : undefined}
           rules={[{ required: !member, message: t("请填写密码") }, { min: 8, message: t("密码至少 8 位") }]}
         >
+          <Input.Password autoComplete="new-password" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  )
+}
+
+/** XXXX-XXXX-XXXX, easier to read off a chat message. */
+function inviteCode(code: string): string {
+  return code.match(/.{1,4}/g)?.join('-') ?? code
+}
+
+function inviteState(invite: TeamInvite): 'used' | 'expired' | 'open' {
+  if (invite.usedAt) return 'used'
+  return invite.expires <= Date.now() ? 'expired' : 'open'
+}
+
+/** Owner: one code per person; it signs up one member and is then used up. */
+function InvitesPanel({ reloadMembers }: { reloadMembers: () => void }) {
+  const ws = useWorkspace()
+  const [invites, setInvites] = useState<TeamInvite[]>([])
+  const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [note, setNote] = useState('')
+  const [askOpen, setAskOpen] = useState(false)
+  const [made, setMade] = useState<TeamInvite>()
+
+  async function reload(): Promise<void> {
+    setLoading(true)
+    try {
+      const next = await window.browserApi.team.invites()
+      setInvites(next)
+      // A code used since the last look means a new member.
+      if (next.some((invite) => invite.usedAt && !invites.find((old) => old.id === invite.id)?.usedAt)) reloadMembers()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once
+  useEffect(() => { void reload() }, [])
+
+  async function create(): Promise<void> {
+    setCreating(true)
+    try {
+      const invite = await window.browserApi.team.createInvite(note)
+      setAskOpen(false)
+      setNote('')
+      setMade(invite)
+      await reload()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  function revoke(invite: TeamInvite): void {
+    Modal.confirm({
+      title: t("作废邀请码 {0}？", inviteCode(invite.code)),
+      content: t("作废后这个码不能再注册。"),
+      okText: t("作废"),
+      okButtonProps: { danger: true },
+      cancelText: t("取消"),
+      onOk: async () => {
+        try {
+          await window.browserApi.team.revokeInvite(invite.id)
+          await reload()
+        } catch (error) {
+          ws.fail(error)
+          throw error
+        }
+      }
+    })
+  }
+
+  const columns: TableColumnsType<TeamInvite> = [
+    {
+      title: t("邀请码"),
+      dataIndex: 'code',
+      width: 210,
+      render: (code: string, row) => inviteState(row) === 'open'
+        ? <Typography.Text className="fb-invite-code" copyable={{ text: inviteCode(code) }}>{inviteCode(code)}</Typography.Text>
+        : <span className="fb-invite-code fb-muted">{inviteCode(code)}</span>
+    },
+    { title: t("备注"), dataIndex: 'note', render: (value: string) => value || <span className="fb-muted">—</span> },
+    {
+      title: t("状态"),
+      key: 'state',
+      width: 200,
+      render: (_value, row) => {
+        const state = inviteState(row)
+        if (state === 'used') return <Tag color="green">{t("已被 {0} 使用", row.usedName)}</Tag>
+        if (state === 'expired') return <Tag>{t("已过期")}</Tag>
+        return <Tag color="blue">{t("{0} 前有效", new Date(row.expires).toLocaleDateString())}</Tag>
+      }
+    },
+    { title: t("生成时间"), dataIndex: 'created', width: 180, render: (value: string) => <span className="fb-muted">{time(value)}</span> },
+    {
+      title: t("操作"),
+      key: 'actions',
+      width: 90,
+      align: 'right',
+      render: (_value, row) => inviteState(row) === 'open'
+        ? <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => revoke(row)}>{t("作废")}</Button>
+        : null
+    }
+  ]
+
+  return (
+    <div className="fb-team-invites">
+      <h3>{t("邀请码")}</h3>
+      <ListPage<TeamInvite>
+        toolbar={(
+          <Space>
+            <Button type="primary" icon={<UserAddOutlined />} onClick={() => setAskOpen(true)}>{t("生成邀请码")}</Button>
+            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void reload()}>{t("刷新")}</Button>
+          </Space>
+        )}
+        columns={columns}
+        rows={invites}
+        loading={loading}
+        paginate={false}
+        emptyText={t("还没有邀请码")}
+        footnote={t("把邀请码发给对方，对方在登录页点「注册」，填邀请码、用户名和密码就成为你的成员。一个码只能用一次，7 天内有效。")}
+      />
+      <Modal open={askOpen} title={t("生成邀请码")} okText={t("生成")} cancelText={t("取消")} confirmLoading={creating}
+        onOk={() => void create()} onCancel={() => setAskOpen(false)} destroyOnHidden>
+        <Input placeholder={t("备注（可选），例如：给小王")} maxLength={100} value={note} onChange={(event) => setNote(event.target.value)}
+          onPressEnter={() => void create()} autoFocus />
+      </Modal>
+      <Modal open={Boolean(made)} title={t("邀请码已生成")} okText={t("复制并关闭")} cancelText={t("关闭")}
+        onOk={() => { if (made) void navigator.clipboard.writeText(inviteCode(made.code)).then(() => ws.notify.success(t("已复制"))); setMade(undefined) }}
+        onCancel={() => setMade(undefined)}>
+        {made && (
+          <>
+            <span className="fb-invite-big">{inviteCode(made.code)}</span>
+            <p className="fb-muted">
+              {made.note ? t("备注：{0}。", made.note) : ''}
+              {t("发给对方，在指纹浏览器登录页点「注册」使用。{0} 前有效，只能用一次。", new Date(made.expires).toLocaleString())}
+            </p>
+          </>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+/** Own password; the app signs in again with the new one. */
+function PasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const ws = useWorkspace()
+  const [form] = Form.useForm()
+  const [busy, setBusy] = useState(false)
+
+  async function save(values: { oldPassword: string; password: string }): Promise<void> {
+    setBusy(true)
+    try {
+      await window.browserApi.team.changePassword(values.oldPassword, values.password)
+      ws.notify.success(t("密码已修改，其他电脑上需要用新密码重新登录"))
+      onClose()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} title={t("修改密码")} okText={t("保存")} cancelText={t("取消")} confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
+      <Form layout="vertical" form={form} onFinish={(values) => void save(values)} autoComplete="off">
+        <Form.Item name="oldPassword" label={t("当前密码")} rules={[{ required: true, message: t("请填写当前密码") }]}>
+          <Input.Password autoComplete="current-password" />
+        </Form.Item>
+        <Form.Item name="password" label={t("新密码")} rules={[{ required: true, message: t("请填写新密码") }, { min: 8, message: t("密码至少 8 位") }]}>
+          <Input.Password autoComplete="new-password" />
+        </Form.Item>
+        <Form.Item name="confirm" label={t("确认新密码")} dependencies={['password']} rules={[
+          { required: true, message: t("请再输入一次密码") },
+          ({ getFieldValue }) => ({
+            validator: (_rule, value) => !value || value === getFieldValue('password') ? Promise.resolve() : Promise.reject(new Error(t("两次输入的密码不一样")))
+          })
+        ]}>
           <Input.Password autoComplete="new-password" />
         </Form.Item>
       </Form>
@@ -164,9 +354,10 @@ function MembersTab({ members, reload }: { members: TeamUser[]; reload: () => vo
         rows={rows}
         paginate={false}
         emptyText={t("还没有成员")}
-        footnote={t("成员用自己的用户名和密码在指纹浏览器的「团队」里登录，只能看到分配给他的窗口。")}
+        footnote={t("成员用自己的用户名和密码登录，只能看到自己建的和分配给他的窗口。忘了密码可以点「修改」给他设新密码。")}
       />
       <MemberFormModal open={formOpen} member={editing} onClose={() => setFormOpen(false)} onSaved={reload} />
+      <InvitesPanel reloadMembers={reload} />
     </>
   )
 }
@@ -710,6 +901,7 @@ export function TeamPage(_props: PageProps) {
   const [profiles, setProfiles] = useState<TeamProfileView[]>([])
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState('profiles')
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const owner = status?.user?.role === 'owner'
 
   useEffect(() => {
@@ -761,10 +953,14 @@ export function TeamPage(_props: PageProps) {
         <span>
           <strong>{displayName(user)}</strong>
           <Tag color={owner ? 'blue' : undefined}>{owner ? t("主账号") : t("成员")}</Tag>
-          <span className="fb-muted fb-mono">{status.server}</span>
+          <span className="fb-muted">{user.username}</span>
         </span>
-        <Button icon={<LogoutOutlined />} onClick={() => void logout()}>{t("退出登录")}</Button>
+        <Space>
+          <Button icon={<KeyOutlined />} onClick={() => setPasswordOpen(true)}>{t("修改密码")}</Button>
+          <Button icon={<LogoutOutlined />} onClick={() => void logout()}>{t("退出登录")}</Button>
+        </Space>
       </div>
+      <PasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
       {owner
         ? (
             <Tabs
