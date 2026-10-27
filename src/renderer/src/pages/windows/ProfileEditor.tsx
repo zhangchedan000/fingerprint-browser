@@ -104,9 +104,15 @@ interface ProfileEditorProps {
 
 /** Login pages offered for the most common platforms; any other name can be typed. */
 const WINDOWS_VERSIONS = [
+  // What Chrome reports as Sec-CH-UA-Platform-Version (the UniversalApiContract major):
+  // Windows 10 2004-22H2 report 10, Windows 11 24H2/25H2 report 19.
   { value: '10.0.0', label: 'Windows 10' },
-  { value: '15.0.0', label: 'Windows 11' }
+  { value: '19.0.0', label: 'Windows 11' }
 ]
+/** An older stored value: 13-18 are Windows 11 releases before 24H2, below 13 Windows 10. */
+function windowsVersionLabel(value: string): string {
+  return Number(value.split('.')[0]) >= 13 ? `Windows 11 · ${value}` : `Windows 10 · ${value}`
+}
 const MACOS_VERSIONS = [
   { value: '13.0.0', label: 'macOS 13' },
   { value: '14.0.0', label: 'macOS 14' },
@@ -1151,7 +1157,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             className="fb-fp-select-half"
             value={fp.platformVersion}
             onChange={choosePlatformVersion}
-            options={(fp.platform === 'windows' ? WINDOWS_VERSIONS : MACOS_VERSIONS)}
+            options={fp.platform === 'windows'
+              ? [...WINDOWS_VERSIONS, ...(WINDOWS_VERSIONS.some((item) => item.value === fp.platformVersion) ? [] : [{ value: fp.platformVersion, label: windowsVersionLabel(fp.platformVersion) }])]
+              : MACOS_VERSIONS}
             aria-label={t("系统版本")}
           />
         </Space>

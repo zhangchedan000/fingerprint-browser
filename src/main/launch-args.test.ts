@@ -58,8 +58,8 @@ describe('launch arguments', () => {
     expect(args).toContain('--fingerprint-gpu-vendor-id=0x10DE')
     expect(args).toContain('--fingerprint-gpu-device-id=0x00002208')
     expect(args).toContain('--fingerprint-gpu-description=NVIDIA GeForce RTX 3080 Ti')
-    // Windows version follows the computer on our kernels (fonts and taskbar are the real ones).
-    expect(args.some((arg) => arg.startsWith('--fingerprint-platform-version'))).toBe(false)
+    // The chosen Windows version is what Sec-CH-UA-Platform-Version reports.
+    expect(args).toContain('--fingerprint-platform-version=10.0.0')
   })
 
   it('refuses a laptop or unknown GPU on the 156 kernel instead of showing another card', () => {

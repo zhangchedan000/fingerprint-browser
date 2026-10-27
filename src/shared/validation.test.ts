@@ -67,7 +67,7 @@ describe('profile validation', () => {
     expect(result.fingerprint).toMatchObject({
       hardwareProfileId: 'windows-11-rtx4070',
       platform: 'windows',
-      platformVersion: '10.0.0',
+      platformVersion: '19.0.0',
       hardwareConcurrency: 16,
       screenWidth: 2560,
       screenHeight: 1440

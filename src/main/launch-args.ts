@@ -125,9 +125,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
 
   const explicitGpuKernel = options.fingerprintKernel === true && kernelTakesExplicitGpu(options.engineVersion)
-  // On our own kernels a Windows profile reports the computer's real Windows version: fonts, the
-  // taskbar height and system UI come from the real system, so claiming another version would not match.
-  if (platformVersion && !(explicitGpuKernel && fp.platform === 'windows')) {
+  // Sec-CH-UA-Platform-Version: the chosen Windows (10.0.0 for Windows 10, 19.0.0 for 11 24H2+).
+  if (platformVersion) {
     args.push(`--fingerprint-platform-version=${platformVersion}`)
   }
   if (explicitGpuKernel && !disabledSpoofing.includes('gpu')) {

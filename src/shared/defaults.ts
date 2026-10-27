@@ -31,7 +31,7 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     seed,
     hardwareProfileId: defaultHardwareProfileId(platform),
     platform,
-    platformVersion: platform === 'windows' ? '10.0.0' : '15.0.0',
+    platformVersion: platform === 'windows' ? '19.0.0' : '15.0.0',
     brand: 'Chrome',
     brandVersion: '',
     hardwareConcurrency: 8,
