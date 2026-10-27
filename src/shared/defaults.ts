@@ -51,7 +51,7 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
   return {
     ...applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true }),
     deviceName: deviceName(seed, platform),
-    macAddress: macAddress(seed)
+    macAddress: macAddress(seed, platform)
   }
 }
 

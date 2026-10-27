@@ -120,7 +120,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     throw new Error('设备名称只能包含字母、数字和连字符，最长 63 个字符')
   }
   if (rawFp.macAddress && (typeof rawFp.macAddress !== 'string' || !MAC_ADDRESS_PATTERN.test(rawFp.macAddress.trim()))) {
-    throw new Error('MAC 地址格式应为 7A:C5:6F:F2:C2:84')
+    throw new Error('MAC 地址格式应为 00-1B-21-3A-5C-7E')
   }
   const coresSource = rawFp.coresSource ?? 'profile'
   if (coresSource !== 'profile' && coresSource !== 'host') throw new Error('CPU 核数来源无效')

@@ -1830,7 +1830,7 @@
   "无法识别当前内核的版本，不能使用指定的显卡；请在内核管理里用“导入本地内核”导入，或把显卡改为按种子随机": "Kernel sürümü bilinmiyor, seçilen GPU kullanılamaz; “Yerel kernel içe aktar” ile ekleyin veya Seed'e göre seçin",
   "网页读取不到，仅用于显示和区分窗口": "Web sayfaları bunu okuyamaz; yalnızca pencereleri ayırt etmek için",
   "设备名称只能包含字母、数字和连字符，最长 63 个字符": "Cihaz adı yalnızca harf, rakam ve kısa çizgi içerebilir, en fazla 63 karakter",
-  "MAC 地址格式应为 7A:C5:6F:F2:C2:84": "MAC adresi 7A:C5:6F:F2:C2:84 biçiminde olmalı",
+  "MAC 地址格式应为 00-1B-21-3A-5C-7E": "MAC adresi 00-1B-21-3A-5C-7E biçiminde olmalı",
   "推荐": "Önerilen",
   "有已知问题": "Bilinen sorun",
   "开启指纹后部分网站（如百度）会崩溃，建议使用 148 内核": "Parmak izi açıkken bazı siteler (Baidu gibi) çöküyor; 148 çekirdeğini kullanın",
@@ -2260,5 +2260,6 @@
   "正在从微软下载 {0} / {1} MB": "Microsoft'tan indiriliyor {0} / {1} MB",
   "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "Pencere, sistem dilinin Windows yerleşik yazı tiplerini gösterir; bu yüzden önce o dilin yazı tipi paketi bu bilgisayara kurulmalıdır. Microsoft'tan indirilir ve yalnızca geçerli kullanıcıya kurulur; yönetici izni gerekmez.",
   "这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。": "Bu bilgisayarda {0} yazı tipi paketi eksik: pencerede bu yazı tipleri yok, o dildeki gerçek bir Windows'tan farklı. Lütfen indirin — doğrudan Microsoft'tan, yönetici izni gerekmez.",
-  "已安装{0}字体包": "{0} yazı tipi paketi kurulu"
+  "已安装{0}字体包": "{0} yazı tipi paketi kurulu",
+  "{0} 网卡 · 网页读取不到，仅用于显示和区分窗口": "{0} ağ bağdaştırıcısı · Web siteleri okuyamaz; yalnızca gösterim ve pencereleri ayırt etmek için"
 }

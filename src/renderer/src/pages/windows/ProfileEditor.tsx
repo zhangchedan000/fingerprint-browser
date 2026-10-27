@@ -33,7 +33,7 @@ import {
   effectiveGpu,
   gpuChoices
 } from '../../../../shared/hardware-profiles'
-import { deviceName, macAddress, type NoiseSurface } from '../../../../shared/device-identity'
+import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
@@ -517,7 +517,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** New noise for every surface. The GPU is pinned first so only the noise changes. */
   // Device name and MAC: stored once shuffled or typed, otherwise derived from the seed.
   const shownDeviceName = fp.deviceName || deviceName(fp.seed, fp.platform)
-  const shownMacAddress = fp.macAddress || macAddress(fp.seed)
+  // Random addresses earlier launchers stored give way to a real maker's, in the system's own format.
+  const shownGpuModel = shownGpuKey?.split('|')[0]
+  const shownMacAddress = fp.macAddress && !isRandomMac(fp.macAddress)
+    ? formatMac(fp.macAddress, fp.platform)
+    : macAddress(fp.seed, fp.platform, shownGpuModel)
+  const shownMacVendor = macVendor(shownMacAddress)
 
   /** New noise for every surface. GPU, device name and MAC are pinned first so only the noise changes. */
   function reseedNoise(): void {
@@ -660,13 +665,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // rolled from the new system's list when it is known.
     const next = applyHardwareProfile(form.getFieldValue('fingerprint'), defaultHardwareProfileId(platform), { refreshSeededGpu: true })
     const list = kernelGpuList(windowKernelVersion, platform)
+    const gpu = list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined
     form.setFieldValue('fingerprint', {
       ...next,
       overrides: [],
-      gpu: list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined,
+      gpu,
       disabledSpoofing: next.disabledSpoofing.filter((item) => item !== 'gpu'),
-      // "DESKTOP-…" on Windows, "Name-MacBook-Pro" on macOS.
-      deviceName: deviceName(randomSeed(), platform)
+      // "DESKTOP-…" on Windows, "Name-MacBook-Pro" on macOS; an Apple adapter on a Mac.
+      deviceName: deviceName(randomSeed(), platform),
+      macAddress: macAddress(randomSeed(), platform, gpu?.split('|')[0])
     })
   }
 
@@ -688,7 +695,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       ...(gpu ? matchedToGpu(gpu) : {}),
       disabledSpoofing: [],
       deviceName: deviceName(randomSeed(), fp.platform),
-      macAddress: macAddress(randomSeed())
+      macAddress: macAddress(randomSeed(), fp.platform, gpu?.split('|')[0])
     })
     setScreenCustom(false)
   }
@@ -1500,12 +1507,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onShuffle={() => patchFingerprint({ deviceName: deviceName(randomSeed(), fp.platform) })}
         />
       </Row>
-      <Row label={t("MAC 地址")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
+      <Row
+        label={t("MAC 地址")}
+        hint={shownMacVendor
+          ? t("{0} 网卡 · 网页读取不到，仅用于显示和区分窗口", shownMacVendor)
+          : t("网页读取不到，仅用于显示和区分窗口")}
+      >
         <TextWithShuffle
           label={t("MAC 地址")}
           value={shownMacAddress}
           onChange={(value) => patchFingerprint({ macAddress: value })}
-          onShuffle={() => patchFingerprint({ macAddress: macAddress(randomSeed()) })}
+          onShuffle={() => patchFingerprint({ macAddress: macAddress(randomSeed(), fp.platform, shownGpuModel) })}
         />
       </Row>
       <Row label="Do Not Track">
