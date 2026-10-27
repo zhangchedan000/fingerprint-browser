@@ -2000,7 +2000,7 @@
   "Prism 内核目前只有 Windows 版": "Prism kernels are Windows-only for now",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Only Prism kernels are supported now: import or download one in Kernels and choose it in the window settings",
   "这不是 Prism 内核：只支持导入我们自己编译的 Prism 内核（prism-kernel 发布页的 zip 解压后的 chrome.exe）": "This is not a Prism kernel: only our own Prism builds can be imported (chrome.exe from the unzipped prism-kernel release zip)",
-  "已停用": "Retired",
+  "已停用": "Disabled",
   "旧的第三方内核，已不再支持，可以删除": "Old third-party kernel, no longer supported; you can delete it",
   "我们自己编译的 Prism 内核，下载后会校验文件完整性再安装，并设为默认内核。": "Our own Prism kernel builds. Each download is integrity-checked before it is installed and made the default.",
   "导入本地 Prism 内核": "Import a local Prism kernel",
@@ -2184,5 +2184,6 @@
   "字体和 Canvas 共用一个种子，换一换会一起换": "Fonts and Canvas share one seed, so Shuffle changes them together",
   "不加噪：真实 Windows Chrome 的音频值只有少数几个，很多电脑完全相同，加噪反而像伪装": "No noise: real Windows Chrome produces only a few audio values and many computers match exactly, so noise would look like spoofing",
   "不加偏移：真实浏览器的元素坐标都是 1/64 像素的整数倍，加小数偏移会被识破": "No offset: real browsers place element coordinates on whole multiples of 1/64 px, so fractional offsets would give it away",
-  "网站未授权时只能看到有哪几种设备；授权后看到的设备名按界面语言的 Windows 名称生成": "Without permission sites only see which kinds of devices there are; with permission, device names follow Windows naming in the interface language"
+  "网站未授权时只能看到有哪几种设备；授权后看到的设备名按界面语言的 Windows 名称生成": "Without permission sites only see which kinds of devices there are; with permission, device names follow Windows naming in the interface language",
+  "已退役": "Retired"
 }

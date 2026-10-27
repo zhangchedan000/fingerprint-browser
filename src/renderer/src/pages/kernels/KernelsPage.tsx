@@ -136,7 +136,7 @@ export function KernelsPage({ navigate }: PageProps) {
       render: (version: string) => (
         <span>
           <span className="fb-mono">{kernelName(version)}</span>
-          {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已停用")}</Tag></Tooltip>}
+          {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已退役")}</Tag></Tooltip>}
         </span>
       )
     },
