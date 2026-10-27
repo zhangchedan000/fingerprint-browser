@@ -6,7 +6,7 @@ import { fontPackLabel, windowsFontScript, WINDOWS_FONT_PACKS } from '../../../s
 import { useWorkspace } from '../data/workspace'
 
 /**
- * Asks once whether to install the Windows language font packages that windows on prism6+
+ * Asks once whether to install the Windows language font packages that windows on prism7+
  * kernels need: a window shows the fonts of its interface language only when that language's
  * package is on this computer. Settings > General keeps the button afterwards.
  */
@@ -16,7 +16,7 @@ export function FontPackPrompt() {
 
   useEffect(() => {
     if (asked.current || ws.loading || ws.preferences.fontPacksAsked) return
-    // Scripts the windows on kernels with language fonts (prism6+) need.
+    // Scripts the windows on kernels with language fonts (prism7+) need.
     const needed = new Set<string>()
     for (const profile of ws.profiles) {
       const kernel = profile.kernelVersion ? ws.kernels.find((item) => item.version === profile.kernelVersion) : undefined

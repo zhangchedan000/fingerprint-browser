@@ -425,7 +425,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
   // prism5+ kernels keep the window inside the claimed screen, so it may be smaller than this one.
   const windowScreen = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.windowScreen)
-  // prism6+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
+  // prism7+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
   const webrtcRelay = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.webrtcRelay)
   const floor = screenFloor(hostScreen(), windowScreen)
   // A check describes the settings it ran with; any change since makes it out of date.
@@ -545,7 +545,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
   }
 
-  /** prism6+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
+  /** prism7+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
   function seededControl(surface: NoiseSurface, label: string) {
     const real = fp.disabledSpoofing.includes(surface)
     const value = measured(surface)
@@ -1141,7 +1141,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ...(fp.language && !LANGUAGES.some((item) => item.language === fp.language) ? [{ value: fp.language, label: fp.language, voices: false, devices: false }] : [])
   ]
   const autoUiLocale = chromeUiLocaleFor(shownLanguage)
-  // prism6+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
+  // prism7+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
   const windowUiLocale = fp.uiLocale ?? autoUiLocale
   const fontScript = windowsFontScript(windowUiLocale)
 

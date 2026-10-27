@@ -30,11 +30,11 @@ export interface LaunchArgumentOptions {
   hostScreen?: HostScreen
   /** EngineStatus.windowScreen of the kernel this window runs. */
   windowScreen?: boolean
-  /** EngineStatus.webrtcRelay of the kernel this window runs (prism6+). */
+  /** EngineStatus.webrtcRelay of the kernel this window runs (prism7+). */
   webrtcRelaySupported?: boolean
-  /** prism6+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
+  /** prism7+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
   languageFonts?: boolean
-  /** prism6+: per-window audio samples (006) and whole-1/64-px rect offsets (008) from the seed. */
+  /** prism7+: per-window audio samples (006) and whole-1/64-px rect offsets (008) from the seed. */
   seededAudioRects?: boolean
   /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
   webrtcRelayPort?: number
@@ -147,7 +147,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (networkIdentity.latitude !== undefined && networkIdentity.longitude !== undefined) {
     args.push(`--fingerprint-location=${networkIdentity.latitude},${networkIdentity.longitude},${networkIdentity.accuracyMeters ?? 25000}`)
   }
-  // Each window its own audio and ClientRects on prism6+, unless set to the real values.
+  // Each window its own audio and ClientRects on prism7+, unless set to the real values.
   if (options.fingerprintKernel && options.seededAudioRects) {
     if (!disabledSpoofing.includes('audio')) args.push('--fingerprinting-audio-noise')
     if (!disabledSpoofing.includes('clientrects')) args.push('--fingerprinting-client-rects-noise')
@@ -171,7 +171,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
   }
   if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
-    // 替换 on prism6+ with a proxy that relays UDP: WebRTC really goes through the proxy.
+    // 替换 on prism7+ with a proxy that relays UDP: WebRTC really goes through the proxy.
     args.push('--webrtc-ip-handling-policy=default')
     args.push(`--fingerprint-webrtc-udp-relay=127.0.0.1:${options.webrtcRelayPort}`)
   } else if (fp.webrtcPolicy === 'proxy_only') {

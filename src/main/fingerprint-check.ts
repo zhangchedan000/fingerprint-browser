@@ -253,7 +253,7 @@ export function evaluateFingerprint(input: {
     const [first, second] = observed[surface]
     const real = fp.disabledSpoofing.includes(surface)
     const twin = others.find((other) => other.observed[surface][0] === first)
-    // Before prism6 these stay real; prism6 gives each window its own unless set to real.
+    // Before prism7 these stay real; prism7 gives each window its own unless set to real.
     const alwaysReal = ALWAYS_REAL.has(surface) && !engine.webrtcRelay
     if (first === second && (alwaysReal || (real && ALWAYS_REAL.has(surface)))) {
       add({ row: surface, status: 'ok', message: `${name} 本机真实值 · ${first}（与真实 Chrome 一致，各窗口相同属正常）` })

@@ -1,6 +1,6 @@
 /**
  * Windows' language font packages ("Language.Fonts.<Script>" features on demand). A Windows in a
- * language with its own script has that package; Prism kernels (patch 007, prism6) show a window
+ * language with its own script has that package; Prism kernels (patch 007, prism7) show a window
  * the base Windows 11 fonts plus the package of its interface language and hide the rest. The
  * fonts must be on this computer for the window to show them, so the launcher installs the
  * packages from Microsoft (Add-WindowsCapability).

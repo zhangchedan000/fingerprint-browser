@@ -87,12 +87,12 @@ describe('launch arguments', () => {
     }
     const other = buildLaunchArgs(profile({ webrtcPolicy: 'default' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
     expect(other.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg.startsWith('--webrtc-ip-handling-policy'))).toBe(false)
-    // 替换 with a proxy that relays UDP (prism6+): through the relay, no address replaced.
+    // 替换 with a proxy that relays UDP (prism7+): through the relay, no address replaced.
     const relayed = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check('203.45.6.7'), webrtcRelaySupported: true, webrtcRelayPort: 40123 })
     expect(relayed).toContain('--fingerprint-webrtc-udp-relay=127.0.0.1:40123')
     expect(relayed).toContain('--webrtc-ip-handling-policy=default')
     expect(relayed.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg === '--disable-non-proxied-udp')).toBe(false)
-    // 隐私: no address; 禁止: no WebRTC on prism6+, 隐私 on older kernels.
+    // 隐私: no address; 禁止: no WebRTC on prism7+, 隐私 on older kernels.
     const privacy = buildLaunchArgs(profile({ webrtcPolicy: 'privacy' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
     expect(privacy).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
     expect(privacy.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
@@ -154,7 +154,7 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440 } }).some((arg) => arg.startsWith('--fingerprint-screen-avail-height'))).toBe(false)
   })
 
-  it('gives each window its own audio and rects on prism6 unless set to real', () => {
+  it('gives each window its own audio and rects on prism7 unless set to real', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const seeded = buildLaunchArgs(profile(), { ...kernel, seededAudioRects: true })
     expect(seeded).toContain('--fingerprinting-audio-noise')

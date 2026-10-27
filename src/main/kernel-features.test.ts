@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { executableFitsWindowToScreen, kernelFitsWindowToScreen, localBuildFitsWindowToScreen, prismRevision } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelRelaysWebRtc, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -39,4 +39,24 @@ it('finds the window-screen patch in a local build lock', async () => {
   expect(await localBuildFitsWindowToScreen(exe)).toBe(false)
   await writeFile(join(root, 'prism-build-lock.json'), '{"seriesPath":"extra/fingerprint/015-window-screen.patch"}')
   expect(await localBuildFitsWindowToScreen(exe)).toBe(true)
+})
+
+it('claims the WebRTC relay only for prism7 and later (prism6 only changed media devices)', () => {
+  expect(kernelRelaysWebRtc({ releaseTag: '156.0.8078.47-prism6' })).toBe(false)
+  expect(kernelRelaysWebRtc({ releaseTag: 'kernel-155.0.8059.84-prism6' })).toBe(false)
+  expect(kernelRelaysWebRtc({ releaseTag: '156.0.8078.47-prism7' })).toBe(true)
+  expect(kernelRelaysWebRtc({ releaseTag: 'v0.5.0', assetName: 'ungoogled-chromium_156.0.8078.47-prism7_windows_x64.zip' })).toBe(true)
+  expect(kernelRelaysWebRtc({ releaseTag: 'v0.5.0', assetName: 'ungoogled-chromium_156.0.8078.47-prism6_windows_x64.zip' })).toBe(false)
+  expect(kernelRelaysWebRtc({ webrtcRelay: true })).toBe(true)
+})
+
+it('finds the WebRTC relay in a local build\'s source', async () => {
+  const src = await mkdtemp(join(tmpdir(), 'prism-src-'))
+  await mkdir(join(src, 'out', 'Default'), { recursive: true })
+  await mkdir(join(src, 'services', 'network', 'p2p'), { recursive: true })
+  const exe = join(src, 'out', 'Default', 'chrome.exe')
+  await writeFile(join(src, 'services', 'network', 'p2p', 'socket_udp.cc'), 'void P2PSocketUdp::Send() {}')
+  expect(await localBuildRelaysWebRtc(exe)).toBe(false)
+  await writeFile(join(src, 'services', 'network', 'p2p', 'socket_udp.cc'), 'std::string FingerprintUdpRelay() {}')
+  expect(await localBuildRelaysWebRtc(exe)).toBe(true)
 })

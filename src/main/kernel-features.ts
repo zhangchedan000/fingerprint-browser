@@ -8,11 +8,14 @@ import { dirname, join } from 'node:path'
 const WINDOW_SCREEN_REVISION = 5
 const WINDOW_SCREEN_PATCH = '015-window-screen'
 /**
- * Prism patch 016 (webrtc-relay): WebRTC UDP through the launcher's relay and the "禁止" mode.
- * First shipped in prism6. Older kernels ignore the switches and would send WebRTC UDP directly.
+ * WebRTC UDP through the launcher's relay and the "禁止" mode (patch 013), released with fonts by
+ * system language (007) and per-window audio and rects (006, 008). First shipped in prism7: the
+ * prism6 builds only changed 014. Older kernels ignore the switches and would send WebRTC UDP
+ * directly, so this must never be claimed for them.
  */
-const WEBRTC_RELAY_REVISION = 6
-const WEBRTC_RELAY_PATCH = '016-webrtc-relay'
+const WEBRTC_RELAY_REVISION = 7
+/** Where a local build's source shows the relay is in (patch 013 in prism7). */
+const WEBRTC_RELAY_SOURCE = { file: 'services/network/p2p/socket_udp.cc', marker: 'FingerprintUdpRelay' }
 
 /**
  * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5; app releases (v0.2.0) carry it in the
@@ -47,7 +50,7 @@ export async function executableFitsWindowToScreen(executable: string): Promise<
 
 export async function executableRelaysWebRtc(executable: string): Promise<boolean> {
   const manifest = await installedManifestOf(executable)
-  return manifest ? kernelRelaysWebRtc(manifest) : localBuildHasPatch(executable, WEBRTC_RELAY_PATCH)
+  return manifest ? kernelRelaysWebRtc(manifest) : localBuildRelaysWebRtc(executable)
 }
 
 async function installedManifestOf(executable: string): Promise<ManifestFeatures | undefined> {
@@ -73,7 +76,21 @@ export async function localBuildFitsWindowToScreen(executable: string): Promise<
 }
 
 export async function localBuildRelaysWebRtc(executable: string): Promise<boolean> {
-  return localBuildHasPatch(executable, WEBRTC_RELAY_PATCH)
+  return localBuildSourceHas(executable, WEBRTC_RELAY_SOURCE.file, WEBRTC_RELAY_SOURCE.marker)
+}
+
+/** A local build's own source tree (src\out\Default\chrome.exe → src) contains the marker. */
+async function localBuildSourceHas(executable: string, file: string, marker: string): Promise<boolean> {
+  let folder = dirname(executable)
+  for (let level = 0; level < 4; level++) {
+    try {
+      return (await readFile(join(folder, ...file.split('/')), 'utf8')).includes(marker)
+    } catch { /* not the source root */ }
+    const parent = dirname(folder)
+    if (parent === folder) break
+    folder = parent
+  }
+  return false
 }
 
 async function localBuildHasPatch(executable: string, patch: string): Promise<boolean> {
