@@ -255,7 +255,12 @@ export function evaluateFingerprint(input: {
     const twin = others.find((other) => other.observed[surface][0] === first)
     // Before prism7 these stay real; prism7 gives each window its own unless set to real.
     const alwaysReal = ALWAYS_REAL.has(surface) && !engine.webrtcRelay
-    if (first === second && (alwaysReal || (real && ALWAYS_REAL.has(surface)))) {
+    if (surface === 'font' && engine.webrtcRelay && first === second) {
+      // prism7+: the fonts of a Windows in that language (or this computer's), never noise.
+      add({ row: surface, status: 'ok', message: fp.fontSource === 'host'
+        ? `${name} 本机真实字体 · ${first}（用本机字体的窗口都相同）`
+        : `${name} 跟随系统语言 · ${first}（同一语言的真实 Windows 相同，属正常）` })
+    } else if (first === second && (alwaysReal || (real && ALWAYS_REAL.has(surface)))) {
       add({ row: surface, status: 'ok', message: `${name} 本机真实值 · ${first}（与真实 Chrome 一致，各窗口相同属正常）` })
     } else if (first !== second) {
       add({ row: surface, status: 'bad', message: `${name} 两次读取结果不同，容易被识别为伪装`, fix: 'use-real' })

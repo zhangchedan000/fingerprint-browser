@@ -65,8 +65,13 @@ export interface FingerprintConfig {
   cpu?: string
   /** Shown in the editor only (web pages cannot read it); unset = derived from the seed. */
   deviceName?: string
-  /** Shown in the editor only (web pages cannot read it), e.g. 7A:C5:6F:F2:C2:84; unset = derived from the seed. */
+  /** Shown in the editor only (web pages cannot read it), e.g. 00-1B-21-3A-5C-7E; unset = derived from the seed. */
   macAddress?: string
+  /**
+   * Fonts on prism7+ kernels: 'language' (unset) = the Windows fonts plus the system language's
+   * font package; 'host' = every font installed on this computer.
+   */
+  fontSource?: 'language' | 'host'
   /** Old saves only: position in the 139–144 GPU list. Turned into `gpu` when read. */
   gpuBucket?: number
   /**

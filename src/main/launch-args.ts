@@ -81,7 +81,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     throw new Error(`内核 ${options.engineVersion ?? ''} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡`)
   }
   const seed = alignedSeed
-  const disabledSpoofing = effectiveDisabledSpoofing(fp).filter((surface) => !(options.languageFonts && surface === 'font'))
+  // With language fonts the font list follows fontSource alone ('host': this computer's fonts),
+  // not the 'font' entry older templates put in disabledSpoofing.
+  const disabledSpoofing = [
+    ...effectiveDisabledSpoofing(fp).filter((surface) => !(options.languageFonts && surface === 'font')),
+    ...(options.languageFonts && fp.fontSource === 'host' ? ['font' as const] : [])
+  ]
   const brandVersion = resolveFingerprintBrandVersion(fp.brandVersion, {
     fingerprintKernel: options.fingerprintKernel === true,
     version: options.engineVersion

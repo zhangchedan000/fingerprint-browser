@@ -2261,5 +2261,9 @@
   "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "A window shows the Windows built-in fonts of its system language, so that language's font pack must be installed on this computer first. Downloaded from Microsoft and installed for the current user only; no administrator rights needed.",
   "这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。": "This computer is missing the {0} font pack: the window lacks these fonts, unlike a real Windows in that language. Please download it — straight from Microsoft, no administrator rights needed.",
   "已安装{0}字体包": "{0} font pack installed",
-  "{0} 网卡 · 网页读取不到，仅用于显示和区分窗口": "{0} network adapter · Not readable by websites; only for display and telling windows apart"
+  "{0} 网卡 · 网页读取不到，仅用于显示和区分窗口": "{0} network adapter · Not readable by websites; only for display and telling windows apart",
+  "本机真实字体": "This computer's fonts",
+  "网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样": "Websites see every font installed on this computer, including ones you added; all windows using this computer's fonts are the same",
+  "{0} 本机真实字体 · {1}（用本机字体的窗口都相同）": "{0} this computer's fonts · {1} (the same in every window using this computer's fonts)",
+  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} follows the system language · {1} (the same as any real Windows in that language, which is normal)"
 }

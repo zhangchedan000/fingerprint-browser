@@ -108,6 +108,8 @@ describe('launch arguments', () => {
     const real = profile({ disabledSpoofing: ['font'] })
     expect(buildLaunchArgs(real, kernel).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
     expect(buildLaunchArgs(real, { ...kernel, languageFonts: true }).some((arg) => arg.includes('font'))).toBe(false)
+    const host = buildLaunchArgs(profile({ fontSource: 'host' }), { ...kernel, languageFonts: true })
+    expect(host.some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
   })
 
   it('launches with the UI locale Chrome resolves to and keeps the stored languages', () => {

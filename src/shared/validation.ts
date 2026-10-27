@@ -221,6 +221,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(cpu && rawFp.coresSource !== 'host' ? { cpu: cpu.model } : {}),
       ...(rawFp.deviceName ? { deviceName: rawFp.deviceName.trim() } : {}),
       ...(rawFp.macAddress ? { macAddress: rawFp.macAddress.trim().toUpperCase() } : {}),
+      ...(rawFp.fontSource === 'host' ? { fontSource: 'host' as const } : {}),
       renderIdentityVersion: fp.renderIdentityVersion,
       platform: fp.platform,
       language: fp.language.trim(),

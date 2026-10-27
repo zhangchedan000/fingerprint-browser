@@ -1305,10 +1305,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row
           label={t("字体")}
           check={checkFor('font')}
-          hint={t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
+          hint={fp.fontSource === 'host'
+            ? t("网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样")
+            : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
         >
-          <Fixed>{t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
-          {fontScript && fontPacks?.supported && (
+          <Select
+            className="fb-fp-select fb-fp-select-wide"
+            value={fp.fontSource ?? 'language'}
+            onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
+            options={[
+              { value: 'language', label: t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
+              { value: 'host', label: t("本机真实字体") }
+            ]}
+          />
+          {fp.fontSource !== 'host' && fontScript && fontPacks?.supported && (
             // Whether this computer has the package the window's language needs: red until it is
             // downloaded, since the window would lack fonts every Windows in that language has.
             <div className="fb-check-results">

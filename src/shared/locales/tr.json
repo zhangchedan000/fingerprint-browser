@@ -2261,5 +2261,9 @@
   "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "Pencere, sistem dilinin Windows yerleşik yazı tiplerini gösterir; bu yüzden önce o dilin yazı tipi paketi bu bilgisayara kurulmalıdır. Microsoft'tan indirilir ve yalnızca geçerli kullanıcıya kurulur; yönetici izni gerekmez.",
   "这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。": "Bu bilgisayarda {0} yazı tipi paketi eksik: pencerede bu yazı tipleri yok, o dildeki gerçek bir Windows'tan farklı. Lütfen indirin — doğrudan Microsoft'tan, yönetici izni gerekmez.",
   "已安装{0}字体包": "{0} yazı tipi paketi kurulu",
-  "{0} 网卡 · 网页读取不到，仅用于显示和区分窗口": "{0} ağ bağdaştırıcısı · Web siteleri okuyamaz; yalnızca gösterim ve pencereleri ayırt etmek için"
+  "{0} 网卡 · 网页读取不到，仅用于显示和区分窗口": "{0} ağ bağdaştırıcısı · Web siteleri okuyamaz; yalnızca gösterim ve pencereleri ayırt etmek için",
+  "本机真实字体": "Bu bilgisayarın yazı tipleri",
+  "网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样": "Web siteleri bu bilgisayarda kurulu tüm yazı tiplerini, sizin eklediklerinizi de görür; bilgisayarın yazı tiplerini kullanan tüm pencereler aynıdır",
+  "{0} 本机真实字体 · {1}（用本机字体的窗口都相同）": "{0} bu bilgisayarın yazı tipleri · {1} (bilgisayarın yazı tiplerini kullanan her pencerede aynı)",
+  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} sistem diline göre · {1} (o dildeki gerçek bir Windows ile aynı, normaldir)"
 }
