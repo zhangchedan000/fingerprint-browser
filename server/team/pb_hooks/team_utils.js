@@ -8,6 +8,11 @@ function isOwner(auth) {
   return !!auth && auth.collection().name === "users" && auth.getString("role") === "owner"
 }
 
+/** Server and backup routes: only an active owner. */
+function requireOwner(e) {
+  if (!isOwner(e.auth) || e.auth.getBool("disabled")) throw new ForbiddenError("只有主账号能用")
+}
+
 function displayName(user) {
   if (!user) return ""
   return user.getString("name") || user.getString("username")
@@ -118,4 +123,4 @@ function lockRoute(e, mode) {
   return e.json(200, result)
 }
 
-module.exports = { LOCK_MS, isOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }
+module.exports = { LOCK_MS, isOwner, requireOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }

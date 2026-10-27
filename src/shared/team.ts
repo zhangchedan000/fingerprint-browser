@@ -103,3 +103,29 @@ export interface TeamLinkView {
   /** An upload that failed and will be retried on the next open. */
   pendingUpload: boolean
 }
+
+/** The team server page (owner only). Sizes in bytes. */
+export interface TeamServerInfo {
+  version: string
+  diskTotal: number
+  diskFree: number
+  /** All of the server's data folder, backups included. */
+  dataSize: number
+  /** Uploaded login states. */
+  storageSize: number
+  backupsSize: number
+  members: number
+  profiles: number
+  locks: Array<{ profile: string; holder: string; device: string }>
+  /** PocketBase's daily backup: cron in UTC and how many are kept. */
+  autoBackup: { cron: string; keep: number }
+}
+
+export interface TeamBackup {
+  key: string
+  size: number
+  /** Epoch milliseconds. */
+  modified: number
+  /** Made by the daily schedule (the server keeps the last few); otherwise by hand. */
+  auto: boolean
+}

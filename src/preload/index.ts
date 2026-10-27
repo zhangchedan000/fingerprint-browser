@@ -180,6 +180,11 @@ const api: BrowserApi = {
     addToComputer: (id) => ipcRenderer.invoke('team:add-to-computer', id),
     sync: () => ipcRenderer.invoke('team:sync'),
     logs: (query) => ipcRenderer.invoke('team:logs', query),
+    serverInfo: () => ipcRenderer.invoke('team:server-info'),
+    backups: () => ipcRenderer.invoke('team:backups'),
+    createBackup: () => ipcRenderer.invoke('team:backup-create'),
+    removeBackup: (key) => ipcRenderer.invoke('team:backup-remove', key),
+    downloadBackup: (key) => ipcRenderer.invoke('team:backup-download', key),
     onSync: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, event: TeamSyncEvent): void => listener(event)
       ipcRenderer.on('team:sync', handler)

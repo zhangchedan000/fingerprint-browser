@@ -1,8 +1,9 @@
 import { createWriteStream, openAsBlob } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
-import type { TeamLogPage, TeamLogQuery, TeamMemberDraft, TeamProfilePatch, TeamRole, TeamUser } from '../../shared/team'
+import type { TeamBackup, TeamLogPage, TeamLogQuery, TeamMemberDraft, TeamProfilePatch, TeamRole, TeamServerInfo, TeamUser } from '../../shared/team'
 
 export type Fetch = typeof fetch
 
@@ -285,6 +286,46 @@ export class TeamApi {
     }
     if (!response.ok || !response.body) throw new TeamApiError(`下载登录态失败（HTTP ${response.status}）`, response.status)
     await pipeline(Readable.fromWeb(response.body as WebReadableStream), createWriteStream(target))
+  }
+
+  serverInfo(): Promise<TeamServerInfo> {
+    return this.request('GET', '/api/team/server', undefined, 15_000)
+  }
+
+  async listBackups(): Promise<TeamBackup[]> {
+    return (await this.request<{ items: TeamBackup[] }>('GET', '/api/team/backups')).items
+  }
+
+  /** The server zips its whole data folder, which takes a while once there are many login states. */
+  createBackup(): Promise<{ key: string }> {
+    return this.request('POST', '/api/team/backups', undefined, 30 * 60_000)
+  }
+
+  async removeBackup(key: string): Promise<void> {
+    await this.request('DELETE', `/api/team/backups/${encodeURIComponent(key)}`)
+  }
+
+  async downloadBackup(key: string, target: string): Promise<void> {
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.server}/api/team/backups/${encodeURIComponent(key)}`, {
+        headers: { Authorization: this.token },
+        signal: AbortSignal.timeout(60 * 60_000)
+      })
+    } catch (error) {
+      throw new TeamApiError(`下载备份失败（${error instanceof Error ? error.message : String(error)}）`, 0)
+    }
+    if (!response.ok || !response.body) {
+      let parsed: unknown
+      try { parsed = await response.json() } catch { parsed = undefined }
+      throw new TeamApiError(errorMessage(response.status, parsed as never), response.status)
+    }
+    try {
+      await pipeline(Readable.fromWeb(response.body as WebReadableStream), createWriteStream(target))
+    } catch (error) {
+      await rm(target, { force: true })
+      throw new TeamApiError(`下载备份失败（${error instanceof Error ? error.message : String(error)}）`, 0)
+    }
   }
 
   async logs(query: TeamLogQuery): Promise<TeamLogPage> {

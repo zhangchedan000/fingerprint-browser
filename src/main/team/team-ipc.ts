@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { TeamLogQuery, TeamMemberDraft, TeamProfilePatch } from '../../shared/team'
 import type { TeamManager } from './team-manager'
 
@@ -23,4 +23,20 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:add-to-computer', (_event, id: string) => team.restoreToComputer(id))
   ipcMain.handle('team:sync', () => team.sync())
   ipcMain.handle('team:logs', (_event, query: TeamLogQuery) => team.logs(query))
+  ipcMain.handle('team:server-info', () => team.serverInfo())
+  ipcMain.handle('team:backups', () => team.backups())
+  ipcMain.handle('team:backup-create', () => team.createBackup())
+  ipcMain.handle('team:backup-remove', (_event, key: string) => team.removeBackup(key))
+  ipcMain.handle('team:backup-download', async (_event, key: string) => {
+    const owner = BrowserWindow.getFocusedWindow()
+    const options: Electron.SaveDialogOptions = {
+      title: '保存团队服务器备份',
+      defaultPath: key.replace(/^@/, ''),
+      filters: [{ name: '备份', extensions: ['zip'] }]
+    }
+    const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    await team.downloadBackup(key, result.filePath)
+    return result.filePath
+  })
 }

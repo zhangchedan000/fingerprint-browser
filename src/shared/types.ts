@@ -773,6 +773,13 @@ export interface BrowserApi {
     /** Pulls cloud windows missing here and puts this computer's new windows into the cloud. */
     sync: () => Promise<{ added: number; uploaded: number }>
     logs: (query: import('./team').TeamLogQuery) => Promise<import('./team').TeamLogPage>
+    /** Server page (owner only). */
+    serverInfo: () => Promise<import('./team').TeamServerInfo>
+    backups: () => Promise<import('./team').TeamBackup[]>
+    createBackup: () => Promise<{ key: string }>
+    removeBackup: (key: string) => Promise<void>
+    /** Asks where to save it; null when cancelled, otherwise the saved path. */
+    downloadBackup: (key: string) => Promise<string | null>
     onSync: (listener: (event: import('./team').TeamSyncEvent) => void) => () => void
   }
 }

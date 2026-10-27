@@ -1,8 +1,8 @@
-import { LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
-import { Button, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
+import { CloudDownloadOutlined, DatabaseOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
+import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
-import type { TeamLogEntry, TeamProfileView, TeamStatus, TeamUser } from '../../../../shared/team'
+import type { TeamBackup, TeamLogEntry, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
 import { formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { useWindowLauncher } from '../../data/window-actions'
@@ -21,7 +21,10 @@ const ACTIONS: Record<string, string> = {
   unshare: '删除云端窗口',
   member_create: '新建成员',
   member_update: '修改成员',
-  member_delete: '删除成员'
+  member_delete: '删除成员',
+  backup_create: '备份服务器',
+  backup_download: '下载备份',
+  backup_delete: '删除备份'
 }
 
 function displayName(user: Pick<TeamUser, 'name' | 'username'>): string {
@@ -41,6 +44,7 @@ function logDetail(entry: TeamLogEntry): string {
   if (typeof detail.size === 'number' && detail.size) parts.push(formatBytes(detail.size))
   if (typeof detail.holder === 'string') parts.push(`原占用人 ${detail.holder}`)
   if (typeof detail.member === 'string') parts.push(detail.member)
+  if (typeof detail.key === 'string') parts.push(detail.key)
   if (Array.isArray(detail.assignees)) parts.push(`成员：${detail.assignees.join('、') || '无'}`)
   if (Array.isArray(detail.fields)) {
     const names: Record<string, string> = { name: '名称', note: '备注', config: '配置', assignees: '成员', username: '用户名', password: '密码', disabled: '启用状态' }
@@ -449,6 +453,150 @@ function LogsTab({ members, profiles }: { members: TeamUser[]; profiles: TeamPro
   )
 }
 
+/** "0 19 * * *" (UTC) → "每天 03:00" in this computer's time; anything else is shown as it is. */
+function scheduleText(cron: string): string {
+  const match = cron.match(/^(\d+) (\d+) \* \* \*$/)
+  if (!match) return cron
+  const at = new Date(Date.UTC(2000, 0, 1, Number(match[2]), Number(match[1])))
+  return `每天 ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+}
+
+type BackupRow = TeamBackup & { id: string }
+
+function ServerTab() {
+  const ws = useWorkspace()
+  const [info, setInfo] = useState<TeamServerInfo>()
+  const [backups, setBackups] = useState<TeamBackup[]>([])
+  const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [downloading, setDownloading] = useState<string>()
+
+  async function reload(): Promise<void> {
+    setLoading(true)
+    try {
+      const [nextInfo, nextBackups] = await Promise.all([window.browserApi.team.serverInfo(), window.browserApi.team.backups()])
+      setInfo(nextInfo)
+      setBackups(nextBackups)
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once
+  useEffect(() => { void reload() }, [])
+
+  async function backupNow(): Promise<void> {
+    setCreating(true)
+    try {
+      await window.browserApi.team.createBackup()
+      ws.notify.success('备份完成')
+      await reload()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function download(backup: TeamBackup): Promise<void> {
+    setDownloading(backup.key)
+    try {
+      const saved = await window.browserApi.team.downloadBackup(backup.key)
+      if (saved) ws.notify.success(`已保存到 ${saved}`)
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setDownloading(undefined)
+    }
+  }
+
+  function remove(backup: TeamBackup): void {
+    Modal.confirm({
+      title: `删除备份“${backup.key}”？`,
+      content: '删除后无法恢复。',
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await window.browserApi.team.removeBackup(backup.key)
+          await reload()
+        } catch (error) {
+          ws.fail(error)
+          throw error
+        }
+      }
+    })
+  }
+
+  const columns: TableColumnsType<BackupRow> = [
+    { title: '备份', dataIndex: 'key', render: (value: string) => <span className="fb-mono">{value}</span> },
+    { title: '方式', dataIndex: 'auto', width: 90, render: (value: boolean) => value ? <Tag>自动</Tag> : <Tag color="blue">手动</Tag> },
+    { title: '大小', dataIndex: 'size', width: 110, render: (value: number) => formatBytes(value) },
+    { title: '时间', dataIndex: 'modified', width: 180, render: (value: number) => <span className="fb-muted">{new Date(value).toLocaleString()}</span> },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 150,
+      align: 'right',
+      render: (_value, row) => (
+        <Space size={2}>
+          <Button size="small" type="link" autoInsertSpace={false} loading={downloading === row.key} disabled={Boolean(downloading) && downloading !== row.key}
+            onClick={() => void download(row)}>下载</Button>
+          <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => remove(row)}>删除</Button>
+        </Space>
+      )
+    }
+  ]
+
+  return (
+    <>
+      {info && (
+        <Descriptions className="fb-team-server" size="small" bordered column={3} items={[
+          { key: 'disk', label: '服务器磁盘', children: `剩余 ${formatBytes(info.diskFree)} / 共 ${formatBytes(info.diskTotal)}` },
+          { key: 'data', label: '团队数据', children: `${formatBytes(info.dataSize - info.backupsSize)}（登录态 ${formatBytes(info.storageSize)}）` },
+          { key: 'backups', label: '备份占用', children: formatBytes(info.backupsSize) },
+          { key: 'members', label: '成员', children: `${info.members} 个` },
+          { key: 'profiles', label: '云端窗口', children: `${info.profiles} 个` },
+          { key: 'version', label: '服务端版本', children: <span className="fb-mono">PocketBase {info.version || '—'}</span> },
+          {
+            key: 'locks',
+            label: '正在使用',
+            span: 3,
+            children: info.locks.length
+              ? info.locks.map((lock) => `${lock.holder} · ${lock.profile}${lock.device ? `（${lock.device}）` : ''}`).join('；')
+              : <span className="fb-muted">没有人在用</span>
+          }
+        ]} />
+      )}
+      <ListPage<BackupRow>
+        toolbar={(
+          <Space>
+            <Button type="primary" icon={<DatabaseOutlined />} loading={creating} onClick={() => void backupNow()}>立即备份</Button>
+            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void reload()}>刷新</Button>
+          </Space>
+        )}
+        columns={columns}
+        rows={backups.map((backup) => ({ ...backup, id: backup.key }))}
+        loading={loading}
+        paginate={false}
+        emptyText="还没有备份"
+        footnote={(
+          <>
+            <CloudDownloadOutlined />{' '}
+            {info?.autoBackup.cron
+              ? `服务器${scheduleText(info.autoBackup.cron)}自动备份一次，保留最近 ${info.autoBackup.keep} 份；手动备份不会自动删除。`
+              : '服务器没有开启自动备份。'}
+            备份里有全部窗口的配置（含代理和平台账号密码）和登录态，下载后请妥善保管。
+          </>
+        )}
+      />
+    </>
+  )
+}
+
 /** Team accounts: the owner manages members, shared windows and the log; members open their windows. */
 export function TeamPage(_props: PageProps) {
   const ws = useWorkspace()
@@ -521,7 +669,8 @@ export function TeamPage(_props: PageProps) {
               items={[
                 { key: 'profiles', label: t("云端窗口"), children: <ProfilesTab status={status} members={members} profiles={profiles} loading={loading} reload={() => void reload()} /> },
                 { key: 'members', label: t("成员"), children: <MembersTab members={members} reload={() => void reload()} /> },
-                { key: 'logs', label: t("日志"), children: <LogsTab members={members} profiles={profiles} /> }
+                { key: 'logs', label: t("日志"), children: <LogsTab members={members} profiles={profiles} /> },
+                { key: 'server', label: '服务器', children: <ServerTab /> }
               ]}
             />
           )

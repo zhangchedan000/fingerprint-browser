@@ -115,3 +115,105 @@ onRecordDeleteRequest((e) => {
   e.next()
   t.log($app, e, "member_delete", null, { member })
 }, "users")
+
+// Server page of the app (owner only): status and backups. Backups are PocketBase's own zips of
+// pb_data; the daily one comes from settings.backups (see 1761600003_backups.js).
+
+routerAdd("GET", "/api/team/server", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  t.requireOwner(e)
+  const sizes = {}
+  // storage/ and backups/ only exist once something was uploaded or backed up; du then fails on them.
+  const du = toString($os.cmd("sh", "-c", "du -sk /pb/pb_data /pb/pb_data/storage /pb/pb_data/backups 2>/dev/null; true").output())
+  du.split("\n").forEach((line) => {
+    const parts = line.trim().split(/\s+/)
+    if (parts.length === 2) sizes[parts[1].replace("/pb/pb_data", "").replace("/", "") || "all"] = Number(parts[0]) * 1024
+  })
+  const df = toString($os.cmd("df", "-kP", "/pb/pb_data").output()).trim().split("\n").pop().split(/\s+/)
+  const now = Date.now()
+  const locks = $app.findRecordsByFilter("team_locks", "expires > {:now}", "", 0, 0, { now }).map((lock) => {
+    const holder = t.findOrNull($app, "users", "id = {:id}", { id: lock.getString("holder") })
+    const profile = t.findOrNull($app, "team_profiles", "id = {:id}", { id: lock.getString("profile") })
+    return { profile: profile ? profile.getString("name") : "", holder: t.displayName(holder), device: lock.getString("device") }
+  })
+  const profiles = $app.findRecordsByFilter("team_profiles", "", "", 0, 0)
+  let dataBytes = 0
+  profiles.forEach((profile) => { dataBytes += profile.getInt("data_size") })
+  let version = ""
+  try { version = toString($os.cmd("/pb/pocketbase", "--version").output()).trim().split(" ").pop() } catch (_) {}
+  const backups = $app.settings().backups
+  return e.json(200, {
+    version,
+    diskTotal: Number(df[1]) * 1024,
+    diskFree: Number(df[3]) * 1024,
+    dataSize: sizes.all || 0,
+    storageSize: sizes.storage || 0,
+    backupsSize: sizes.backups || 0,
+    members: $app.countRecords("users", $dbx.hashExp({ role: "member" })),
+    profiles: profiles.length,
+    profileDataBytes: dataBytes,
+    locks,
+    autoBackup: { cron: backups.cron, keep: backups.cronMaxKeep }
+  })
+}, $apis.requireAuth("users"))
+
+routerAdd("GET", "/api/team/backups", (e) => {
+  require(`${__hooks}/team_utils.js`).requireOwner(e)
+  const fsys = $app.newBackupsFilesystem()
+  try {
+    const items = fsys.list("").filter((item) => item && !item.isDir && /\.zip$/.test(item.key)).map((item) => ({
+      key: item.key,
+      size: item.size,
+      modified: item.modTime.unixMilli(),
+      auto: item.key.indexOf("@auto_pb_backup") === 0
+    }))
+    items.sort((a, b) => b.modified - a.modified)
+    return e.json(200, { items })
+  } finally {
+    fsys.close()
+  }
+}, $apis.requireAuth("users"))
+
+routerAdd("POST", "/api/team/backups", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  t.requireOwner(e)
+  const key = "prism_" + new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15) + ".zip"
+  try {
+    $app.createBackup(e.request.context(), key)
+  } catch (err) {
+    throw new BadRequestError("备份没有完成：" + String(err.message || err).slice(0, 200))
+  }
+  t.log($app, e, "backup_create", null, { key })
+  return e.json(200, { key })
+}, $apis.requireAuth("users"))
+
+routerAdd("GET", "/api/team/backups/{key}", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  t.requireOwner(e)
+  const key = e.request.pathValue("key")
+  if (!/^[@a-zA-Z0-9_.-]+\.zip$/.test(key)) throw new NotFoundError("没有这个备份")
+  const fsys = $app.newBackupsFilesystem()
+  try {
+    if (!fsys.exists(key)) throw new NotFoundError("没有这个备份")
+    t.log($app, e, "backup_download", null, { key })
+    fsys.serve(e.response, e.request, key, key)
+  } finally {
+    fsys.close()
+  }
+}, $apis.requireAuth("users"))
+
+routerAdd("DELETE", "/api/team/backups/{key}", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  t.requireOwner(e)
+  const key = e.request.pathValue("key")
+  if (!/^[@a-zA-Z0-9_.-]+\.zip$/.test(key)) throw new NotFoundError("没有这个备份")
+  const fsys = $app.newBackupsFilesystem()
+  try {
+    if (!fsys.exists(key)) throw new NotFoundError("没有这个备份")
+    fsys.delete(key)
+  } finally {
+    fsys.close()
+  }
+  t.log($app, e, "backup_delete", null, { key })
+  return e.json(200, { ok: true })
+}, $apis.requireAuth("users"))

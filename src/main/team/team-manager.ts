@@ -2,6 +2,7 @@ import { hostname } from 'node:os'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
+  TeamBackup,
   TeamLinkView,
   TeamLogPage,
   TeamLogQuery,
@@ -11,6 +12,7 @@ import type {
   TeamStatus,
   TeamSyncEvent,
   TeamRole,
+  TeamServerInfo,
   TeamUser
 } from '../../shared/team'
 import type { ProfileDraft } from '../../shared/types'
@@ -284,6 +286,31 @@ export class TeamManager {
 
   async logs(query: TeamLogQuery): Promise<TeamLogPage> {
     return (await this.requireOwner()).logs(query)
+  }
+
+  // ---- server page -----------------------------------------------------------------------
+
+  async serverInfo(): Promise<TeamServerInfo> {
+    return (await this.requireOwner()).serverInfo()
+  }
+
+  async backups(): Promise<TeamBackup[]> {
+    return (await this.requireOwner()).listBackups()
+  }
+
+  async createBackup(): Promise<{ key: string }> {
+    const result = await (await this.requireOwner()).createBackup()
+    this.logger?.info('团队服务器已备份', result)
+    return result
+  }
+
+  async removeBackup(key: string): Promise<void> {
+    return (await this.requireOwner()).removeBackup(key)
+  }
+
+  async downloadBackup(key: string, target: string): Promise<void> {
+    await (await this.requireOwner()).downloadBackup(key, target)
+    this.logger?.info('团队服务器备份已下载', { key, target })
   }
 
   // ---- cloud windows ---------------------------------------------------------------------
