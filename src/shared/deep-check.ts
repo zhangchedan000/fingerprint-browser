@@ -48,13 +48,18 @@ function iphey(text: string): Parsed | undefined {
   if (!score || !verdict) return undefined
   const all = lines(text)
   const findings: string[] = [`Looks ${verdict}`]
+  const trusted = /trustworthy/i.test(verdict)
   for (const card of ['BROWSER', 'LOCATION', 'IP ADDRESS', 'HARDWARE', 'SOFTWARE']) {
     const index = all.indexOf(card)
     const value = index >= 0 ? all[index + 1] : undefined
-    if (value && (card === 'HARDWARE' || card === 'SOFTWARE') && !/everything is fine/i.test(value)) findings.push(`${card}: ${value}`)
+    if (!value) continue
+    // Hardware and software say what is wrong. Location and IP only name what iphey found; when it
+    // does not trust the window they are usually why (its GeoIP country against the time zone).
+    if ((card === 'HARDWARE' || card === 'SOFTWARE') && !/everything is fine/i.test(value)) findings.push(`${card}: ${value}`)
+    if (!trusted && (card === 'LOCATION' || card === 'IP ADDRESS')) findings.push(`${card}: ${value}`)
   }
   const value = Number(score)
-  return { status: /trustworthy/i.test(verdict) && value >= 90 ? 'ok' : value >= 60 ? 'warn' : 'bad', score, findings }
+  return { status: trusted && value >= 90 ? 'ok' : value >= 60 ? 'warn' : 'bad', score, findings }
 }
 
 /** BrowserScan: "Browser fingerprint authenticity: 90%", then each deduction as a line and "-10%". */
@@ -100,6 +105,14 @@ function creepjs(text: string): Parsed | undefined {
 
 const PARSERS: Record<DeepSite, (text: string) => Parsed | undefined> = { iphey, browserscan, pixelscan, creepjs }
 
+/**
+ * Placeholders the sites show while a value is still coming: BrowserScan's "---.---.---.---" IP
+ * and "--/--", iphey's "Temporary value", "Loading…" anywhere.
+ */
+export function pageStillLoading(text: string): boolean {
+  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…/i.test(text)
+}
+
 /** The site's verdict, or undefined while the page has not produced one yet. */
 export function parseDeepSite(site: DeepSite, text: string): Parsed | undefined {
   return PARSERS[site](text)
@@ -114,5 +127,8 @@ export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
   [/Different languages?/i, '语言与 IP 所在地不一致'],
   [/WebRTC/i, 'WebRTC 相关'],
   [/stealth/i, '发现隐身插件或伪装痕迹'],
-  [/headless/i, '像无头浏览器的特征']
+  [/headless/i, '像无头浏览器的特征'],
+  [/^LOCATION:/, 'iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因'],
+  [/^IP ADDRESS:/, 'iphey 看到的出口 IP'],
+  [/没有完全加载完/, '截图和结论可能不完整，可以打开原网页再看']
 ]

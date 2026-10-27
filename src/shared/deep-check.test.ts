@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDeepSite } from './deep-check'
+import { pageStillLoading, parseDeepSite } from './deep-check'
 
 // Page text as the sites showed it (tools/kernel-smoke BISECT=sites, and a user's iphey result).
 const IPHEY_LOADING = 'Your Digital Identity Looks\n\nBROWSER\n\nTemporary value\n\nHARDWARE\n\nTemporary value\n\n0\nMX SCORE'
@@ -12,6 +12,9 @@ describe('deep check parsers', () => {
   it('waits for iphey to finish, then reads its score and verdict', () => {
     expect(parseDeepSite('iphey', IPHEY_LOADING)).toBeUndefined()
     expect(parseDeepSite('iphey', IPHEY)).toEqual({ status: 'ok', score: '100', findings: ['Looks Trustworthy'] })
+    expect(parseDeepSite('iphey', IPHEY.replace('Trustworthy', 'Unreliable').replace('100\nMX', '90\nMX'))).toEqual({
+      status: 'warn', score: '90', findings: ['Looks Unreliable', 'LOCATION: France', 'IP ADDRESS: 200.36.26.36']
+    })
   })
 
   it('reads BrowserScan authenticity and each deduction', () => {
@@ -28,5 +31,12 @@ describe('deep check parsers', () => {
 
   it('reads CreepJS headless and stealth ratings', () => {
     expect(parseDeepSite('creepjs', CREEPJS)).toEqual({ status: 'ok', score: '25% / 0% / 0%', findings: ['0% headless', '25% like headless', '0% stealth'] })
+  })
+
+  it('knows a page is still filling in', () => {
+    expect(pageStillLoading('IP\n---.---.---.---\n--/--\nBrowser fingerprint authenticity: 100%')).toBe(true)
+    expect(pageStillLoading(IPHEY_LOADING)).toBe(true)
+    expect(pageStillLoading(BROWSERSCAN)).toBe(false)
+    expect(pageStillLoading(IPHEY)).toBe(false)
   })
 })

@@ -2265,5 +2265,9 @@
   "本机真实字体": "Bu bilgisayarın yazı tipleri",
   "网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样": "Web siteleri bu bilgisayarda kurulu tüm yazı tiplerini, sizin eklediklerinizi de görür; bilgisayarın yazı tiplerini kullanan tüm pencereler aynıdır",
   "{0} 本机真实字体 · {1}（用本机字体的窗口都相同）": "{0} bu bilgisayarın yazı tipleri · {1} (bilgisayarın yazı tiplerini kullanan her pencerede aynı)",
-  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} sistem diline göre · {1} (o dildeki gerçek bir Windows ile aynı, normaldir)"
+  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} sistem diline göre · {1} (o dildeki gerçek bir Windows ile aynı, normaldir)",
+  "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "iphey'nin IP'yi konumlandırdığı yer; pencerenin saat dilimi ülkesinden farklıysa puan genellikle bundan düşer",
+  "iphey 看到的出口 IP": "iphey'nin gördüğü çıkış IP'si",
+  "截图和结论可能不完整，可以打开原网页再看": "Ekran görüntüsü ve sonuç eksik olabilir; tamamını görmek için siteyi açın",
+  "页面在限定时间内没有完全加载完": "Sayfa zamanında tam yüklenmedi"
 }

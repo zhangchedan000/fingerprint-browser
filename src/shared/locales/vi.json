@@ -2265,5 +2265,9 @@
   "本机真实字体": "Phông chữ của máy này",
   "网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样": "Trang web thấy mọi phông chữ cài trên máy này, kể cả phông bạn tự cài; mọi cửa sổ dùng phông của máy đều giống nhau",
   "{0} 本机真实字体 · {1}（用本机字体的窗口都相同）": "{0} phông chữ của máy này · {1} (giống nhau ở mọi cửa sổ dùng phông của máy)",
-  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} theo ngôn ngữ hệ thống · {1} (giống mọi Windows thật ở ngôn ngữ đó, là bình thường)"
+  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} theo ngôn ngữ hệ thống · {1} (giống mọi Windows thật ở ngôn ngữ đó, là bình thường)",
+  "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "Vị trí iphey xác định từ IP; nếu khác quốc gia của múi giờ cửa sổ thì thường là lý do bị trừ điểm",
+  "iphey 看到的出口 IP": "IP ra ngoài mà iphey thấy",
+  "截图和结论可能不完整，可以打开原网页再看": "Ảnh chụp và kết luận có thể chưa đầy đủ; hãy mở trang web để xem hết",
+  "页面在限定时间内没有完全加载完": "Trang chưa tải xong trong thời gian cho phép"
 }

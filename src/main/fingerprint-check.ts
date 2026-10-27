@@ -1,5 +1,5 @@
 import { kernelChromiumVersion } from '../shared/kernel-id'
-import { DEEP_SITES, parseDeepSite, type DeepSiteResult } from '../shared/deep-check'
+import { DEEP_SITES, pageStillLoading, parseDeepSite, type DeepSiteResult } from '../shared/deep-check'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -436,16 +436,24 @@ export async function deepCheck(options: FingerprintRunOptions, onSite: (result:
       try {
         await client.send('Page.navigate', { url: spec.url }, 30_000)
         const deadline = Date.now() + spec.timeoutMs
+        // The verdict often shows before the rest of the page (BrowserScan's score comes ahead of
+        // its IP and system rows), so read on until the page text stops changing and no
+        // placeholder is left; the last reading is the result and the picture.
         let parsed: ReturnType<typeof parseDeepSite>
-        while (!parsed && Date.now() < deadline) {
+        let previous: string | undefined
+        let settled = false
+        while (!settled && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 1500))
           const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
-          parsed = parseDeepSite(spec.site, page?.result?.value ?? '')
+          const text = page?.result?.value ?? ''
+          parsed = parseDeepSite(spec.site, text) ?? parsed
+          settled = Boolean(parsed) && text === previous && !pageStillLoading(text)
+          previous = text
         }
         if (parsed) Object.assign(result, parsed)
         else result.error = '没有读到这个网站的结论，请看截图或打开原网页'
-        // Let late parts of the page settle before the picture.
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (parsed && !settled) result.findings.push('页面在限定时间内没有完全加载完')
+        await client.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' }).catch(() => undefined)
         const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
         if (shot?.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`
       } catch (error) {

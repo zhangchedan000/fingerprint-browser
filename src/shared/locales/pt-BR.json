@@ -2265,5 +2265,9 @@
   "本机真实字体": "Fontes deste computador",
   "网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样": "Os sites veem todas as fontes instaladas neste computador, inclusive as que você adicionou; todas as janelas que usam as fontes do computador ficam iguais",
   "{0} 本机真实字体 · {1}（用本机字体的窗口都相同）": "{0} fontes deste computador · {1} (iguais em todas as janelas que usam as fontes do computador)",
-  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} segue o idioma do sistema · {1} (igual a qualquer Windows real nesse idioma, é normal)"
+  "{0} 跟随系统语言 · {1}（同一语言的真实 Windows 相同，属正常）": "{0} segue o idioma do sistema · {1} (igual a qualquer Windows real nesse idioma, é normal)",
+  "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "Onde o iphey localiza o IP; quando difere do país do fuso horário da janela, costuma ser isso que tira pontos",
+  "iphey 看到的出口 IP": "O IP de saída que o iphey vê",
+  "截图和结论可能不完整，可以打开原网页再看": "A captura e o veredito podem estar incompletos; abra o site para ver tudo",
+  "页面在限定时间内没有完全加载完": "A página não terminou de carregar a tempo"
 }

@@ -65,7 +65,7 @@ export function DeepCheck({ draft, profileId }: { draft: () => ProfileDraft; pro
                   </div>
                   {result.findings.map((finding) => (
                     <div key={finding} className="fb-deep-finding">
-                      <span className="fb-mono">{finding}</span>
+                      <span className="fb-mono">{mt(finding)}</span>
                       {note(finding) && <span className="fb-muted">{t(note(finding)!)}</span>}
                     </div>
                   ))}
