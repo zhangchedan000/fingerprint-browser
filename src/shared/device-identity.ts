@@ -23,22 +23,6 @@ const HEX = '0123456789abcdef'
 
 export type NoiseSurface = 'canvas' | 'audio' | 'clientrects' | 'font'
 
-/**
- * What a detection site would show for this surface: a 16-character hash for Canvas, ClientRects
- * and fonts, a decimal sample sum for Audio (real Chrome lands around 124.04).
- */
-export function noiseValue(seed: number, surface: NoiseSurface): string {
-  const next = stream(seed, surface)
-  if (surface === 'audio') {
-    let digits = ''
-    for (let i = 0; i < 11; i++) digits += Math.floor(next() * 10)
-    return `124.04${3 + Math.floor(next() * 4)}${digits}`
-  }
-  let hash = ''
-  for (let i = 0; i < 16; i++) hash += HEX[Math.floor(next() * 16)]
-  return hash
-}
-
 const WINDOWS_NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const FIRST_NAMES = ['Emily', 'James', 'Olivia', 'Michael', 'Sophia', 'David', 'Emma', 'Daniel', 'Ava', 'Ryan',
   'Chloe', 'Kevin', 'Grace', 'Jason', 'Lily', 'Eric', 'Hannah', 'Brian', 'Mia', 'Alex', 'Lucas', 'Zoe', 'Ethan', 'Nora']
