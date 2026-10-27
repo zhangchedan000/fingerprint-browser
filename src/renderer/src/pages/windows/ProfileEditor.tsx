@@ -42,7 +42,7 @@ import { WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
-import { effectiveNetworkIdentity, localeForCountry } from '../../../../shared/network-identity'
+import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, localeForCountry } from '../../../../shared/network-identity'
 import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
@@ -1201,9 +1201,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           )}
       </Row>
-      <Row label={t("语言")} check={checkFor('language')} hint={followIp ? undefined : fp.acceptLanguages}>
+      <Row label={t("语言")} check={checkFor('language')} hint={`Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         {followIp
-          ? <Fixed>{t("基于 IP · {0}", `${networkIdentity.language} · ${networkIdentity.acceptLanguages}`)}</Fixed>
+          ? <Fixed>{t("基于 IP · {0}", networkIdentity.language)}</Fixed>
           : (
             <Select
               showSearch

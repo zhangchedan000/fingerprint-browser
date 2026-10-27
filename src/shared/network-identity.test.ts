@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultFingerprint } from './defaults'
-import { effectiveNetworkIdentity, hasCompleteProxyIdentity, localeForCountry, proxyLaunchError } from './network-identity'
+import { acceptLanguageHeader, effectiveNetworkIdentity, hasCompleteProxyIdentity, localeForCountry, proxyLaunchError } from './network-identity'
 
 describe('proxy-derived network identity', () => {
   it('maps common exit countries to realistic locale headers', () => {
@@ -53,6 +53,12 @@ describe('proxy-derived network identity', () => {
       language: 'zh-CN',
       timezone: 'Asia/Shanghai'
     })
+  })
+
+  it('writes Accept-Language the way Chrome does', () => {
+    expect(acceptLanguageHeader('en-US,en')).toBe('en-US,en;q=0.9')
+    expect(acceptLanguageHeader('de-DE,de,en-US,en')).toBe('de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7')
+    expect(acceptLanguageHeader('a,b,c,d,e,f,g,h,i,j,k,l')).toBe('a,b;q=0.9,c;q=0.8,d;q=0.7,e;q=0.6,f;q=0.5,g;q=0.4,h;q=0.3,i;q=0.2,j;q=0.1,k;q=0.1,l;q=0.1')
   })
 
   it('starts new windows in the United States', () => {

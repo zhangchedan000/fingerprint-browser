@@ -29,6 +29,16 @@ export function chromeAcceptLanguages(language: string, acceptLanguages: string)
   return ordered.filter((entry, index) => ordered.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) === index).join(',')
 }
 
+/** The Accept-Language header Chrome sends for a list (net::HttpUtil::GenerateAcceptLanguageHeader). */
+export function acceptLanguageHeader(languages: string): string {
+  let q = 10
+  return languages.split(',').map((entry) => entry.trim()).filter(Boolean).map((language) => {
+    const item = q === 10 ? language : `${language};q=0.${q}`
+    if (q > 1) q -= 1
+    return item
+  }).join(',')
+}
+
 /**
  * What a Chrome installed in this country shows: the country's language (CLDR), the interface
  * language Chrome picks for it and that interface's default Accept-Language (chrome-languages.ts).
