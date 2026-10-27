@@ -12,7 +12,9 @@ export function registerAppUpdateIpc(updater: AppUpdater, profiles: ProfileStore
   ipcMain.handle('app:update-install', async () => {
     const running = profiles.list().filter((profile) => profile.status !== 'closed' && profile.status !== 'error')
     if (running.length) throw new Error(t("请先关闭全部窗口（还有 {0} 个在运行）", running.length))
-    await updater.prepareInstall()
+    const target = await updater.prepareInstall()
+    // Electron starts the new exe once this process has exited (and released the single-instance lock).
+    app.relaunch({ execPath: target, args: [] })
     setTimeout(() => app.quit(), 300)
   })
 }

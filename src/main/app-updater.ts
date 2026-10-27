@@ -1,8 +1,7 @@
-import { spawn } from 'node:child_process'
 import { t } from '../shared/i18n'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdir, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -34,19 +33,32 @@ export function windowsExeAsset(assets: readonly GithubAsset[]): GithubAsset | u
   return assets.find((asset) => /\.exe$/i.test(asset.name) && asset.browser_download_url.startsWith(TRUSTED_PREFIX))
 }
 
+/** Where the running exe is moved while the new one takes its place; removed on the next start. */
+export function previousExePath(target: string): string {
+  return `${target}.old`
+}
+
 /**
- * Runs after this app has exited: waits for the process, copies the new exe over the one the user
- * started (keeping its path, so shortcuts still work), starts it and removes the download.
- * PowerShell with -EncodedCommand keeps non-ASCII folder names (e.g. D:\\IDM下载) intact.
+ * Puts the new exe where the user's one is (same path, so shortcuts still work). Windows lets a
+ * running exe be renamed but not overwritten, so the running one steps aside first. Done by the
+ * app itself: a hidden script replacing an exe is what antivirus software (e.g. Huorong) blocks.
  */
-export function swapScript(pid: number, downloaded: string, target: string): string {
-  const q = (path: string) => `'${path.replaceAll("'", "''")}'`
-  return [
-    `while (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }`,
-    `for ($i = 0; $i -lt 30; $i++) { try { Copy-Item -LiteralPath ${q(downloaded)} -Destination ${q(target)} -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 1 } }`,
-    `Start-Process -FilePath ${q(target)}`,
-    `Remove-Item -LiteralPath ${q(downloaded)} -Force -ErrorAction SilentlyContinue`
-  ].join('; ')
+export async function replaceExecutable(downloaded: string, target: string): Promise<void> {
+  const previous = previousExePath(target)
+  await rm(previous, { force: true })
+  try {
+    await rename(target, previous)
+  } catch (error) {
+    throw new Error(`无法替换程序文件（${error instanceof Error ? error.message : String(error)}），请到发布页手动下载`)
+  }
+  try {
+    await copyFile(downloaded, target)
+  } catch (error) {
+    await rm(target, { force: true }).catch(() => undefined)
+    await rename(previous, target).catch(() => undefined)
+    throw new Error(`无法替换程序文件（${error instanceof Error ? error.message : String(error)}），请到发布页手动下载`)
+  }
+  await rm(downloaded, { force: true }).catch(() => undefined)
 }
 
 export class AppUpdater {
@@ -137,16 +149,23 @@ export class AppUpdater {
     }
   }
 
-  /** Writes the swap script, starts it detached and returns; the caller quits the app. */
-  async prepareInstall(): Promise<void> {
+  /** Puts the new exe in place and returns its path; the caller restarts into it. */
+  async prepareInstall(): Promise<string> {
     const target = this.target
     if (!target) throw new Error(t("只有 Windows 免安装版支持一键更新，请到发布页手动下载"))
     if (!this.downloaded) throw new Error(t("请先下载更新"))
     // The downloaded file must still be the one that passed the checksum.
     if ((await stat(this.downloaded.path)).size < 10_000_000) throw new Error(t("更新文件不完整，请重新下载"))
-    const encoded = Buffer.from(swapScript(process.pid, this.downloaded.path, target), 'utf16le').toString('base64')
-    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-      { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    await replaceExecutable(this.downloaded.path, target)
     this.logger?.info('即将重启并安装新版本', { version: this.downloaded.version, target })
+    this.downloaded = null
+    return target
+  }
+
+  /** Removes the exe the last update replaced, and downloads it left behind. */
+  async cleanup(): Promise<void> {
+    const target = this.target
+    if (target) await rm(previousExePath(target), { force: true }).catch(() => undefined)
+    await rm(join(this.workPath, 'updates'), { recursive: true, force: true }).catch(() => undefined)
   }
 }

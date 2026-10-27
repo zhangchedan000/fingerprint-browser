@@ -175,13 +175,15 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
-  registerAppUpdateIpc(new AppUpdater(
+  const updater = new AppUpdater(
     app.getVersion(),
     app.getPath('userData'),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),
     logger,
     (input, init) => net.fetch(input as string, init)
-  ), profiles)
+  )
+  void updater.cleanup()
+  registerAppUpdateIpc(updater, profiles)
   mainWindow = createWindow()
 
   app.on('activate', () => {
