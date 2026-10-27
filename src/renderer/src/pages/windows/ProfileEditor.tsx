@@ -38,7 +38,7 @@ import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
-import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
+import { WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
@@ -1013,8 +1013,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   /** The language the window launches with, for "follow the language" labels. */
   const shownLanguage = effectiveNetworkIdentity(fp, profile?.proxyCheck, { allowGeoConflict: true }).language
-  const voicesLabel = (locale: string) =>
-    `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
   const mediaLabel = (set: string) => {
     const [microphones, speakers, cameras] = set.split(',').map(Number)
     // Patch 014 names a second audio output "Headphones", so two outputs read as speakers + headphones.
@@ -1319,40 +1317,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label="ClientRects" check={checkFor('clientrects')} hint={t("不加偏移：真实浏览器的元素坐标都是 1/64 像素的整数倍，加小数偏移会被识破")}>
         {realSurface('clientrects')}
       </Row>
-      <Row label="SpeechVoices" hint={t("默认跟随窗口语言，也可以换成其他语言的 Windows 语音")}>
+      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名按界面语言的 Windows 名称生成")}>
         <Select
           className="fb-fp-select"
-          showSearch
-          value={fp.voicesLocale ?? 'auto'}
-          onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
+          value={fp.mediaDevices ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
           options={[
-            { value: 'auto', label: t("跟随语言 · {0}", voicesLabel(voiceLocaleForLanguage(shownLanguage))) },
-            ...WINDOWS_VOICE_LOCALES.map(({ locale }) => ({ value: locale, label: voicesLabel(locale) }))
+            { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
+            ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
+            { value: 'real', label: t("本机真实") }
           ]}
         />
-      </Row>
-      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名也按这里生成")}>
-        <Space wrap size={8}>
-          <Select
-            className="fb-fp-select"
-            value={fp.mediaDevices ?? 'auto'}
-            onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
-            options={[
-              { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
-              ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
-              { value: 'real', label: t("本机真实") }
-            ]}
-          />
-          {fp.mediaDevices !== 'real' && (
-            <Select
-              className="fb-fp-select"
-              showSearch
-              value={fp.mediaLocale ?? 'auto'}
-              onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
-              options={[{ value: 'auto', label: t("设备名称跟随语言") }, ...MEDIA_LOCALES.map((value) => ({ value, label: value }))]}
-            />
-          )}
-        </Space>
       </Row>
       <Row label={t("设备名称")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
         <TextWithShuffle
