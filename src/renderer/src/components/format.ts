@@ -25,6 +25,13 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
+/** A full date and time, e.g. 2026/10/27 19:27, for telling windows apart by when they were made. */
+export function dateTime(iso: string | undefined, locale: string): string {
+  const time = iso ? Date.parse(iso) : NaN
+  if (Number.isNaN(time)) return '—'
+  return new Date(time).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 export function relativeTime(iso: string | undefined, locale: string, never = t("从未打开")): string {
   if (!iso) return never
   const time = Date.parse(iso)

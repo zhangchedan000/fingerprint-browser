@@ -32,6 +32,10 @@ export interface TeamProfileView {
   id: string
   name: string
   note: string
+  /** 序号 of the window on the computer that made it (the creator's numbering). */
+  serialNumber?: number
+  /** When that window was created. */
+  createdAt: string
   /** Who created it: the owner account, or a member for their own windows. */
   ownerId: string
   assignees: string[]

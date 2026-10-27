@@ -419,3 +419,4 @@ button, input, textarea { font: inherit; }
 .fb-login-wait { display: flex; justify-content: center; padding: 24px 0; }
 .fb-login-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; font-size: 12px; }
 .fb-login-hint { margin: 4px 0 0; font-size: 12px; }.fb-team-server { margin-bottom: 16px; }
+.fb-nowrap { white-space: nowrap; }

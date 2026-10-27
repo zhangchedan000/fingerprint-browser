@@ -18,10 +18,10 @@ import {
 } from '@ant-design/icons'
 import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tag, Tooltip, type MenuProps, type TableColumnsType } from 'antd'
 import { useMemo, useState } from 'react'
-import { t, translateMessage as mt } from '../../../../shared/i18n'
+import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, ProfileDraft, StorageOverview } from '../../../../shared/types'
 import { AssignModal } from '../../components/AssignModal'
-import { ACTIVE_STATUSES, formatBytes, humanError, isEditable, relativeTime } from '../../components/format'
+import { ACTIVE_STATUSES, dateTime, formatBytes, humanError, isEditable, relativeTime } from '../../components/format'
 import { ListPage, type ListTab } from '../../components/ListPage'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
@@ -492,6 +492,13 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       width: 120,
       ellipsis: { showTitle: true },
       render: (note: string) => note ? note : <span className="fb-muted">—</span>
+    },
+    {
+      title: t("创建时间"),
+      dataIndex: 'createdAt',
+      width: 130,
+      sorter: (first, second) => first.createdAt.localeCompare(second.createdAt),
+      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{dateTime(createdAt, getLocale())}</span>
     },
     {
       title: t("最后打开"),

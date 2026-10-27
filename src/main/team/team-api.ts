@@ -22,6 +22,7 @@ export interface RemoteProfile {
   data_rev: number
   data_by: string
   data_size?: number
+  created?: string
   updated: string
   expand?: { data_by?: RemoteUser }
 }

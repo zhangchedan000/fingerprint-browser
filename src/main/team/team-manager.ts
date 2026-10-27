@@ -17,7 +17,7 @@ import type {
   TeamServerInfo,
   TeamUser
 } from '../../shared/team'
-import type { ProfileDraft } from '../../shared/types'
+import type { BrowserProfile, ProfileDraft } from '../../shared/types'
 import { validateProfileDraft } from '../../shared/validation'
 import type { Logger } from '../app-logger'
 import type { CookieManager } from '../cookie-manager'
@@ -60,6 +60,26 @@ const HEARTBEAT_MS = 30_000
 
 /** The team server this build signs in to unless another address is entered. */
 export const DEFAULT_TEAM_SERVER = 'https://temu.orenge.ccwu.cc'
+
+/**
+ * A window's config as it goes to the cloud, with where it came from: the serial number and
+ * creation time it has on the computer that made it, so cloud windows of the same name can be
+ * told apart (and found again after being deleted here).
+ */
+function cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string } } {
+  return { ...portableDraft(profile, { passwords: 'keep', extensions: false }), origin: { serialNumber: profile.serialNumber, createdAt: profile.createdAt } }
+}
+
+/** The origin a cloud config carries (configs uploaded before it was added have none). */
+function configOrigin(config: unknown): { serialNumber?: number; createdAt?: string } {
+  const origin = config && typeof config === 'object' ? (config as { origin?: unknown }).origin : undefined
+  if (!origin || typeof origin !== 'object') return {}
+  const { serialNumber, createdAt } = origin as { serialNumber?: unknown; createdAt?: unknown }
+  return {
+    ...(Number.isInteger(serialNumber) && Number(serialNumber) > 0 ? { serialNumber: Number(serialNumber) } : {}),
+    ...(typeof createdAt === 'string' && !Number.isNaN(Date.parse(createdAt)) ? { createdAt } : {})
+  }
+}
 
 function configDraft(config: unknown, name: string): ProfileDraft {
   if (!config || typeof config !== 'object') throw new Error('团队窗口的配置无效')
@@ -354,10 +374,16 @@ export class TeamManager {
     return records.map((record) => {
       const lock = locks.find((item) => item.profile === record.id && item.expires > now)
       const holder = lock?.expand?.holder
+      const origin = configOrigin(record.config)
+      const local = this.localIdOf(record.id)
+      const localProfile = local ? this.profiles.list().find((item) => item.id === local) : undefined
       return {
         id: record.id,
         name: record.name,
         note: record.note,
+        // Older cloud windows: the linked window here, else when the cloud got it.
+        serialNumber: origin.serialNumber ?? localProfile?.serialNumber,
+        createdAt: origin.createdAt ?? localProfile?.createdAt ?? record.created ?? record.updated,
         ownerId: record.owner ?? '',
         assignees: record.assignees ?? [],
         configRev: record.config_rev,
@@ -397,7 +423,7 @@ export class TeamManager {
         note: profile.note,
         source_id: id,
         owner: this.user!.id,
-        config: portableDraft(profile, { passwords: 'keep', extensions: false })
+        config: cloudConfig(profile)
       }, { ...packed, rev: 1 })
       this.file.links[id] = { teamId: record.id, dataRev: record.data_rev, configRev: record.config_rev, ownerId: this.user!.id }
       await this.save()
@@ -537,7 +563,7 @@ export class TeamManager {
       const record = await this.api.saveProfile(link.teamId, {
         name: profile.name,
         note: profile.note,
-        config: portableDraft(profile, { passwords: 'keep', extensions: false })
+        config: cloudConfig(profile)
       })
       link.configRev = record.config_rev
       await this.save()

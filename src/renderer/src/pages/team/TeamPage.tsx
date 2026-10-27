@@ -1,9 +1,9 @@
 import { CloudDownloadOutlined, DatabaseOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import { t } from '../../../../shared/i18n'
+import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamBackup, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
-import { formatBytes } from '../../components/format'
+import { dateTime, formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
@@ -312,7 +312,21 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     ? t("我")
     : memberNames.get(profile.ownerId) ?? (owner ? t("主账号") : t("主账号分配"))
   const columns: TableColumnsType<TeamProfileView> = [
+    {
+      title: t("序号"),
+      dataIndex: 'serialNumber',
+      width: 64,
+      sorter: (first, second) => (first.serialNumber ?? 0) - (second.serialNumber ?? 0),
+      render: (serial?: number) => <span className="fb-muted">{serial ?? '—'}</span>
+    },
     { title: t("窗口"), dataIndex: 'name', render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
+    {
+      title: t("创建时间"),
+      dataIndex: 'createdAt',
+      width: 130,
+      sorter: (first, second) => first.createdAt.localeCompare(second.createdAt),
+      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{dateTime(createdAt, getLocale())}</span>
+    },
     { title: t("创建人"), key: 'owner', width: 110, render: (_value, row) => <span className="fb-muted">{ownerLabel(row)}</span> },
     ...(owner ? [{
       title: t("分配给"),
