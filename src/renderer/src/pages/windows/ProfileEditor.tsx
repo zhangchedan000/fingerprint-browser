@@ -1,6 +1,6 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
-import { effectiveScreen, kernelSpoofsScreen, randomScreen, SCREEN_CHOICES, screenChoices, screenFloor } from '../../../../shared/screen'
+import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
   Alert,
@@ -118,7 +118,9 @@ const MACOS_VERSIONS = [
 function hostScreen(): { width: number; height: number } {
   return { width: window.screen.width, height: window.screen.height }
 }
-const isChoice = (width: number, height: number) => SCREEN_CHOICES.some((choice) => choice.width === width && choice.height === height)
+/** This computer's Windows display scale; a window keeps it, so resolutions are offered at it. */
+const hostScale = () => window.devicePixelRatio || 1
+const isChoice = (width: number, height: number) => screenChoices(undefined, hostScale()).some((choice) => choice.width === width && choice.height === height)
 const CORE_OPTIONS = [2, 4, 6, 8, 10, 12, 16, 20, 24, 32]
 
 function editorValues(profile: BrowserProfileView | undefined, index: number): EditorValues {
@@ -555,7 +557,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (fp.platform !== 'windows') return {}
     const model = key.split('|')[0]
     const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, floor) : undefined
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, floor, Math.random, hostScale()) : undefined
     return {
       cpu: cpu.model,
       coresSource: 'profile',
@@ -588,7 +590,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function shuffleScreen(): void {
     const current = `${fp.screenWidth}x${fp.screenHeight}`
-    chooseScreen(pickOther(screenChoices(floor).map(({ width, height }) => `${width}x${height}`), current))
+    chooseScreen(pickOther(screenChoices(floor, hostScale()).map(({ width, height }) => `${width}x${height}`), current))
   }
 
   function chooseCores(value: number | 'host'): void {
@@ -633,7 +635,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** "一键随机指纹": a new computer — new noise, GPU, cores and screen. */
   function randomizeAll(): void {
     const list = kernelGpuList(windowKernelVersion, fp.platform)
-    const { width, height } = randomScreen(floor) ?? hostScreen()
+    const { width, height } = randomScreen(floor, Math.random, hostScale()) ?? hostScreen()
     const gpu = list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined
     patchFingerprint({
       seed: randomSeed(),
@@ -1289,7 +1291,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               onShuffle={shuffleScreen}
               options={[
                 { value: 'host', label: t("本机真实") },
-                ...screenChoices(floor).map(({ width, height }) => ({ value: `${width}x${height}`, label: `${width} × ${height}` })),
+                ...screenChoices(floor, hostScale()).map(({ width, height, physical }) => ({
+                  value: `${width}x${height}`,
+                  label: hostScale() === 1 ? `${width} × ${height}` : t("{0} × {1}（{2} × {3} 显示器，缩放 {4}%）", width, height, physical.width, physical.height, Math.round(hostScale() * 100))
+                })),
                 { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
               ]}
             />

@@ -4,7 +4,7 @@ import { constants } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserCrashRecord, BrowserProfile, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
 import { locateBrowserForProfile } from './browser-locator'
-import { buildLaunchArgs } from './launch-args'
+import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { closeProxyBridge, localProxyFor, openProxyBridge } from './proxy-bridge'
@@ -122,14 +122,14 @@ export class BrowserLauncher {
     }
   }
 
-  private hostScreen: () => { width: number; height: number } | undefined = () => undefined
+  private hostScreen: () => HostScreen | undefined = () => undefined
 
   setLaunchHooks(hooks: LaunchHooks): void {
     this.hooks = hooks
   }
 
   /** Provides the primary display size for windows whose resolution follows the computer. */
-  setHostScreenProvider(provider: () => { width: number; height: number } | undefined): void {
+  setHostScreenProvider(provider: () => HostScreen | undefined): void {
     this.hostScreen = provider
   }
 

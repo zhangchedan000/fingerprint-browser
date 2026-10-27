@@ -145,4 +145,12 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(profile({ mediaDevices: 'real' }), prism).some((arg) => arg.startsWith('--fingerprint-media-devices'))).toBe(false)
     expect(buildLaunchArgs(profile({ mediaDevices: '2,1,1' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-media'))).toBe(false)
   })
+
+  it('leaves room for this computer\'s taskbar in screen.availHeight', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
+    const windows = profile({ platform: 'windows', screenWidth: 1920, screenHeight: 1080 })
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 48 } })).toContain('--fingerprint-screen-avail-height=1032')
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1080')
+    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440 } }).some((arg) => arg.startsWith('--fingerprint-screen-avail-height'))).toBe(false)
+  })
 })

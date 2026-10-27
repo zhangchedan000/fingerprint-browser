@@ -8,6 +8,13 @@ import { effectiveScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
 import { kernelVendor } from '../shared/kernel-id'
 
+export interface HostScreen {
+  width: number
+  height: number
+  /** Height of this computer's taskbar at the bottom (display size minus work area), in CSS pixels. */
+  taskbarHeight?: number
+}
+
 export interface LaunchArgumentOptions {
   userDataDir: string
   proxyUrl?: string
@@ -20,7 +27,7 @@ export interface LaunchArgumentOptions {
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean
   /** Real primary display size, used when the window follows the computer's screen. */
-  hostScreen?: { width: number; height: number }
+  hostScreen?: HostScreen
   /** EngineStatus.windowScreen of the kernel this window runs. */
   windowScreen?: boolean
   /** EngineStatus.webrtcRelay of the kernel this window runs (prism6+). */
@@ -142,6 +149,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (fp.deviceMemory) {
     const memory = Math.min(fp.deviceMemory, maxDeviceMemoryGb(options.engineVersion))
     args.push(`--fingerprint-device-memory=${memory}`)
+  }
+  // screen.availHeight leaves room for the taskbar; the kernel assumes 48 (Windows 11 at any scale)
+  // unless told this computer's own, which a small or auto-hidden taskbar changes.
+  const taskbar = options.hostScreen?.taskbarHeight
+  if (options.fingerprintKernel && fp.platform === 'windows' && taskbar !== undefined && Number.isInteger(taskbar) && taskbar >= 0 && taskbar <= 200) {
+    args.push(`--fingerprint-screen-avail-height=${screenHeight - taskbar}`)
   }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {

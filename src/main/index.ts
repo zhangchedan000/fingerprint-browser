@@ -163,8 +163,10 @@ app.whenReady().then(async () => {
     for (const profile of changed) mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   })
   launcher.setHostScreenProvider(() => {
-    const { width, height } = screen.getPrimaryDisplay().size
-    return { width, height }
+    const { size, workArea } = screen.getPrimaryDisplay()
+    // Only a taskbar along the bottom (or top) shortens the screen's available height.
+    const taskbarHeight = workArea.width === size.width ? size.height - workArea.height : 0
+    return { width: size.width, height: size.height, taskbarHeight }
   })
   await launcher.initialize()
   const kernels = new KernelManager(
