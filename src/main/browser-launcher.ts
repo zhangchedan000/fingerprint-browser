@@ -7,8 +7,8 @@ import { locateBrowserForProfile } from './browser-locator'
 import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
-import { closeProxyBridge, localProxyFor, openProxyBridge } from './proxy-bridge'
-import { openWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
+import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
@@ -253,9 +253,8 @@ export class BrowserLauncher {
       })
       // 替换 on prism6+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
       // through the tunnel or a system proxy); otherwise the kernel only reports its address.
-      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5'
-        && !await localProxyFor(profile.proxy)) {
-        webrtcRelay = await openWebRtcRelay(profile.proxy).catch(() => undefined)
+      webrtcRelay = await windowWebRtcRelay(profile, engine)
+      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5') {
         this.logger?.info(webrtcRelay ? 'WebRTC 经代理 UDP 转发' : 'WebRTC 替换为代理 IP（代理不转发 UDP）', { profileId: id })
       }
       const runtimePath = this.profiles.profileRuntimePath(id)

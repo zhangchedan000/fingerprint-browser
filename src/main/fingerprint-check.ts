@@ -21,6 +21,7 @@ import type { Logger } from './app-logger'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { buildLaunchArgs } from './launch-args'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 
 /** Runs inside the checked page and reports what a website would see. */
 const PROBE = String.raw`(async () => {
@@ -338,8 +339,10 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
   let proxyUrl: string | undefined
   let child: ReturnType<typeof spawn> | undefined
   let client: CdpClient | undefined
+  let webrtcRelay: WebRtcRelay | undefined
   try {
     proxyUrl = await openProxyBridge(profile.proxy)
+    webrtcRelay = await windowWebRtcRelay(profile, engine)
     // Same window size as a real launch, just placed off-screen.
     const size = expectedIdentity(profile, options).screen
     const args = buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height: size[1] } }, {
@@ -351,7 +354,12 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       hostPlatformVersion: options.hostPlatformVersion,
       proxyIdentity: options.proxy?.ok ? { ...options.proxy, checkedAt: new Date().toISOString() } : undefined,
       allowGeoConflict: true,
-      hostScreen: options.hostScreen
+      hostScreen: options.hostScreen,
+      // As a real launch of this window (browser-launcher.ts).
+      windowScreen: engine.windowScreen,
+      webrtcRelaySupported: engine.webrtcRelay,
+      languageFonts: engine.webrtcRelay,
+      webrtcRelayPort: webrtcRelay?.port
     }).filter((arg) => !arg.startsWith('--window-name='))
     args.push('--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--disable-extensions')
     // The window sits off-screen: keep its timers and painting at full speed, as for a visible one.
@@ -372,6 +380,7 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     }
     if (child) await stopChild(child)
     await closeProxyBridge(proxyUrl)
+    webrtcRelay?.close()
     // Windows can hold files of a just-exited browser for a moment.
     for (let attempt = 0; attempt < 5; attempt++) {
       try {

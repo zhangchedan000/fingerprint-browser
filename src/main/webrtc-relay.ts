@@ -2,7 +2,8 @@ import { createSocket, type Socket as UdpSocket } from 'node:dgram'
 import { connect, isIP, type Socket } from 'node:net'
 import { lookup } from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
-import type { ProxyConfig } from '../shared/types'
+import type { BrowserProfile, EngineStatus, ProxyConfig } from '../shared/types'
+import { localProxyFor } from './proxy-bridge'
 
 /**
  * WebRTC UDP through the window's SOCKS5 proxy (kernel patch 016, prism6+).
@@ -201,4 +202,15 @@ export async function openWebRtcRelay(proxy: ProxyConfig): Promise<WebRtcRelay |
       try { front.close() } catch { /* already closed */ }
     }
   }
+}
+
+/**
+ * The relay for a window set to 替换 on a prism6+ kernel whose SOCKS5 proxy relays UDP. A proxy
+ * reached through the tunnel or a system proxy is skipped: the relay must talk to it directly.
+ * Undefined means the kernel only reports the proxy's address (the fallback).
+ */
+export async function windowWebRtcRelay(profile: Pick<BrowserProfile, 'fingerprint' | 'proxy'>, engine: Pick<EngineStatus, 'webrtcRelay'>): Promise<WebRtcRelay | undefined> {
+  if (profile.fingerprint.webrtcPolicy !== 'proxy_only' || !engine.webrtcRelay || profile.proxy.protocol !== 'socks5') return undefined
+  if (await localProxyFor(profile.proxy)) return undefined
+  return openWebRtcRelay(profile.proxy).catch(() => undefined)
 }
