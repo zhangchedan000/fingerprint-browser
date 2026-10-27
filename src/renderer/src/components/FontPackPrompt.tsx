@@ -34,7 +34,7 @@ export function FontPackPrompt() {
       const answered = () => ws.setPreferences({ fontPacksAsked: true })
       Modal.confirm({
         title: t("安装语言字体包？"),
-        content: t("有窗口的界面语言是{0}，这台电脑还没有对应的 Windows 字体包，窗口里会缺少这些字体。可以从微软安装所有语言的字体包，需要确认一次管理员权限，下载可能要几分钟。以后也可以在 设置 → 常规 → 语言字体 安装。", names),
+        content: t("有窗口的系统语言是{0}，这台电脑还没有对应的 Windows 字体包，窗口里会缺少这些字体。可以从微软安装所有语言的字体包，需要确认一次管理员权限，下载可能要几分钟。以后也可以在 设置 → 常规 → 语言字体 安装。", names),
         okText: t("从微软安装"),
         cancelText: t("以后再说"),
         onOk: async () => {

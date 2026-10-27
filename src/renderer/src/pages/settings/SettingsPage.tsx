@@ -146,7 +146,7 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
           <>
             <h2>{t("常规")}</h2>
             <div className="fb-settings-grid">
-              <Item label={t("界面语言")}><LanguageSelector /></Item>
+              <Item label={t("启动器语言")}><LanguageSelector /></Item>
               <Item label={t("语言字体")}><FontPacksPanel /></Item>
               <Item label={t("主题")}>
                 <Radio.Group

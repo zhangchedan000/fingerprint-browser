@@ -34,6 +34,8 @@ export interface LaunchArgumentOptions {
   webrtcRelaySupported?: boolean
   /** prism6+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
   languageFonts?: boolean
+  /** prism6+: per-window audio samples (006) and whole-1/64-px rect offsets (008) from the seed. */
+  seededAudioRects?: boolean
   /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
   webrtcRelayPort?: number
 }
@@ -145,6 +147,13 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (networkIdentity.latitude !== undefined && networkIdentity.longitude !== undefined) {
     args.push(`--fingerprint-location=${networkIdentity.latitude},${networkIdentity.longitude},${networkIdentity.accuracyMeters ?? 25000}`)
   }
+  // Each window its own audio and ClientRects on prism6+, unless set to the real values.
+  if (options.fingerprintKernel && options.seededAudioRects) {
+    if (!disabledSpoofing.includes('audio')) args.push('--fingerprinting-audio-noise')
+    if (!disabledSpoofing.includes('clientrects')) args.push('--fingerprinting-client-rects-noise')
+  }
+  // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
+  if (fp.portScanProtection === false) args.push('--disable-features=LocalNetworkAccessChecks')
   if (fp.deviceMemory) {
     const memory = Math.min(fp.deviceMemory, maxDeviceMemoryGb(options.engineVersion))
     args.push(`--fingerprint-device-memory=${memory}`)

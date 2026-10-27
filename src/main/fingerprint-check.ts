@@ -151,7 +151,7 @@ const OS_NAME = { windows: 'Windows', macos: 'macOS' } as const
 /** Turns what the page saw into green / yellow / red results, one or more per editor row. */
 export function evaluateFingerprint(input: {
   fingerprint: FingerprintConfig
-  engine: Pick<EngineStatus, 'version' | 'fingerprintKernel'>
+  engine: Pick<EngineStatus, 'version' | 'fingerprintKernel' | 'webrtcRelay'>
   observed: FingerprintObserved
   expected: ExpectedIdentity
   proxy?: ProxyTestResult
@@ -253,7 +253,9 @@ export function evaluateFingerprint(input: {
     const [first, second] = observed[surface]
     const real = fp.disabledSpoofing.includes(surface)
     const twin = others.find((other) => other.observed[surface][0] === first)
-    if (first === second && ALWAYS_REAL.has(surface)) {
+    // Before prism6 these stay real; prism6 gives each window its own unless set to real.
+    const alwaysReal = ALWAYS_REAL.has(surface) && !engine.webrtcRelay
+    if (first === second && (alwaysReal || (real && ALWAYS_REAL.has(surface)))) {
       add({ row: surface, status: 'ok', message: `${name} 本机真实值 · ${first}（与真实 Chrome 一致，各窗口相同属正常）` })
     } else if (first !== second) {
       add({ row: surface, status: 'bad', message: `${name} 两次读取结果不同，容易被识别为伪装`, fix: 'use-real' })
@@ -359,6 +361,7 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       windowScreen: engine.windowScreen,
       webrtcRelaySupported: engine.webrtcRelay,
       languageFonts: engine.webrtcRelay,
+      seededAudioRects: engine.webrtcRelay,
       webrtcRelayPort: webrtcRelay?.port
     }).filter((arg) => !arg.startsWith('--window-name='))
     args.push('--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--disable-extensions')

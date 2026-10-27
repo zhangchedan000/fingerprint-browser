@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cssScreenSize, effectiveScreen, randomScreen, screenChoices, screenFloor } from './screen'
+import { cssScreenSize, effectiveScreen, screenKind, randomScreen, screenChoices, screenFloor } from './screen'
 
 const host = { width: 2560, height: 1440 }
 const fp = (width: number, height: number, screenSource?: 'host' | 'profile') => ({ screenWidth: width, screenHeight: height, screenSource })
@@ -39,5 +39,14 @@ describe('window screen size', () => {
     expect(cssScreenSize({ width: 3840, height: 2160 }, 1.5)).toEqual({ width: 2560, height: 1440 })
     expect(cssScreenSize({ width: 3840, height: 2160 }, 1.75)).toEqual({ width: 2195, height: 1235 })
     expect(screenChoices(undefined, 1.5)[0]).toMatchObject({ width: 1280, height: 720, physical: { width: 1920, height: 1080 } })
+  })
+
+  it('names monitors by shape and size', () => {
+    expect(screenKind({ width: 1920, height: 1080 })).toEqual({ name: '1080p', ratio: '16:9', ultrawide: false })
+    expect(screenKind({ width: 2560, height: 1440 })).toMatchObject({ name: '2K', ratio: '16:9' })
+    expect(screenKind({ width: 3440, height: 1440 })).toEqual({ name: '2K', ratio: '21:9', ultrawide: true })
+    expect(screenKind({ width: 2560, height: 1080 })).toEqual({ name: undefined, ratio: '21:9', ultrawide: true })
+    expect(screenKind({ width: 1920, height: 1200 })).toMatchObject({ ratio: '16:10' })
+    expect(screenKind({ width: 3840, height: 2160 })).toMatchObject({ name: '4K' })
   })
 })

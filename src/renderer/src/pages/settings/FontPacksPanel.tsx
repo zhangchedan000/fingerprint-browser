@@ -43,7 +43,7 @@ export function FontPacksPanel() {
       <div className="fb-muted">
         {busy
           ? t("正在从 Windows 更新下载，可能需要几分钟，请勿关闭。")
-          : t("窗口按界面语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。安装只需确认一次管理员权限。")}
+          : t("窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。安装只需确认一次管理员权限。")}
       </div>
       {error && <Alert type="error" showIcon message={error} />}
     </div>
