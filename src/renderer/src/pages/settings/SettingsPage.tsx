@@ -10,7 +10,6 @@ import { useWorkspace } from '../../data/workspace'
 import { kernelName } from '../../../../shared/kernel-id'
 import { TunnelSettings } from './TunnelSettings'
 import { AppUpdatePanel } from './AppUpdatePanel'
-import { FontPacksPanel } from './FontPacksPanel'
 import type { PageProps } from '../registry'
 
 type SettingsTab = 'general' | 'launch' | 'network' | 'data' | 'about'
@@ -155,7 +154,6 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
             <h2>{t("常规")}</h2>
             <div className="fb-settings-grid">
               <Item label={t("启动器语言")}><LanguageSelector /></Item>
-              <Item label={t("语言字体")}><FontPacksPanel /></Item>
               <Item label={t("主题")}>
                 <Radio.Group
                   optionType="button"
