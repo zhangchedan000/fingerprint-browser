@@ -15,7 +15,6 @@ import {
   Radio,
   Select,
   Space,
-  Switch,
   Tabs,
   Tag,
   Typography,
@@ -1030,6 +1029,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           {proxyResult?.ok && (
             <span className={`fb-proxy-result ${proxyResult.geoConfidence === 'conflict' ? 'warn' : 'ok'}`}>
               {t("连接正常")} · {proxyResult.ip} · {[proxyResult.country, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
+              {proxyResult.udp !== undefined && ` · ${proxyResult.udp ? t("支持 UDP") : t("不支持 UDP")}`}
               {proxyResult.networkRisk && <Tag color="warning" className="fb-inline-tag">{riskLabels[proxyResult.networkRisk]}</Tag>}
             </span>
           )}
@@ -1040,20 +1040,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Alert type="warning" showIcon className="fb-editor-alert" title={t("代理地理信息存在冲突")} description={t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))} />
       )}
       {proxyResult?.degraded && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
-      <Row
-        label={t("按 IP 匹配")}
-        hint={followIp
-          ? proxyProtocol === 'direct'
-            ? t("直连环境继续使用指纹设置里的手动值；配置代理后自动联动。")
-            : t("启动时按出口 IP 设置：{0} · {1}", networkIdentity.language, networkIdentity.timezone)
-          : t("关闭后使用指纹设置里手动填写的时区和语言")}
-      >
-        <Switch
-          checked={followIp}
-          aria-label={t("按 IP 匹配")}
-          onChange={(checked) => patchFingerprint({ networkIdentityMode: checked ? 'proxy' : 'manual' })}
-        />
-        <span className="fb-switch-label">{t("根据出口 IP 自动设置时区、语言和地理位置")}</span>
+      <Row label={t("时区和语言")}>
+        <span className="fb-muted">
+          {followIp
+            ? proxyProtocol === 'direct'
+              ? t("基于 IP 生成；直连时没有代理 IP，先用指纹里的时区和语言")
+              : t("基于 IP 生成：{0} · {1}", networkIdentity.language, networkIdentity.timezone)
+            : t("按地区「{0}」：{1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
+        </span>
+        <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
       </Row>
       <Row label={t("出口变化时")} hint={t("代理出口 IP 与上次检测不同时的处理方式")}>
         <Radio.Group
@@ -1255,7 +1250,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         check={checkFor('webrtc')}
         hint={fp.webrtcPolicy === 'proxy_only'
           ? webrtcRelay
-            ? t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
+            ? proxyResult?.udp === true
+              ? t("这个代理支持 UDP：WebRTC 走代理，网站看到代理 IP，视频通话可用")
+              : proxyResult?.udp === false
+                ? t("这个代理不支持 UDP：WebRTC 只报代理 IP、不发 UDP，视频通话不可用")
+                : t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
             : t("替换为代理 IP，防止泄露本机 IP")
           : fp.webrtcPolicy === 'privacy'
             ? t("开启 WebRTC，但网站拿不到任何 IP")
@@ -1374,7 +1373,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={DEVICE_MEMORY_CHOICES.map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
-      <Row label="Canvas" check={checkFor('canvas')} hint={t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
       <Row label="AudioContext" check={checkFor('audio')} hint={t("不加噪：真实 Windows Chrome 的音频值只有少数几个，很多电脑完全相同，加噪反而像伪装")}>
         {realSurface('audio')}
       </Row>

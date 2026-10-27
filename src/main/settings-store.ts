@@ -11,7 +11,7 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const theme = input.theme === 'light' || input.theme === 'dark' || input.theme === 'system' ? input.theme : base.theme
   const gap = Number(input.batchLaunchGapSeconds)
   const batchLaunchGapSeconds = Number.isFinite(gap) && gap >= 0.5 && gap <= 30 ? Math.round(gap * 10) / 10 : base.batchLaunchGapSeconds
-  return { theme, batchLaunchGapSeconds }
+  return { theme, batchLaunchGapSeconds, ...(input.fontPacksAsked === true || base.fontPacksAsked ? { fontPacksAsked: true } : {}) }
 }
 
 export class SettingsStore {

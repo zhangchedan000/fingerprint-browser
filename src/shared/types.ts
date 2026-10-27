@@ -268,6 +268,8 @@ export interface AppPreferences {
   theme: 'light' | 'dark' | 'system'
   /** Pause between windows opened in one batch. */
   batchLaunchGapSeconds: number
+  /** The one-time offer to install missing Windows language font packages was answered. */
+  fontPacksAsked?: boolean
 }
 
 export interface AppInfo {
@@ -367,6 +369,8 @@ export interface KernelHealth {
 export interface ProxyTestResult {
   ok: boolean
   ip?: string
+  /** SOCKS5 only, from the editor's test: whether the proxy relays UDP (WebRTC 替换 on prism6+). */
+  udp?: boolean
   latencyMs: number
   error?: string
   warning?: string

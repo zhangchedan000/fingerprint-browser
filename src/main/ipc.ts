@@ -15,6 +15,8 @@ import type { BrowserLauncher } from './browser-launcher'
 import type { AssignPatch, ProfileStore } from './profile-store'
 import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
+import { localProxyFor } from './proxy-bridge'
+import { proxySupportsUdp } from './webrtc-relay'
 import { validateProfileDraft, validateProxyConfig } from '../shared/validation'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
@@ -551,10 +553,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     return kernels.verify(version)
   })
-  ipcMain.handle('proxy:test', (_event, config, profileId?: string, proxyId?: string) => {
+  ipcMain.handle('proxy:test', async (_event, config, profileId?: string, proxyId?: string) => {
     const validated = validateProxyConfig(config)
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
-    return testProxy(proxyForTest(validated, saved))
+    const proxy = proxyForTest(validated, saved)
+    const result = await testProxy(proxy)
+    // WebRTC through the proxy needs UDP; only a proxy reached directly can carry it (webrtc-relay.ts).
+    if (result.ok && proxy.protocol === 'socks5' && !await localProxyFor(proxy).catch(() => undefined)) {
+      return { ...result, udp: await proxySupportsUdp(proxy) }
+    }
+    return result
   })
   // Proxy and group libraries: windows refer to these records by id.
   const proxyView = (id: string) => publicProxyRecord(profiles.getProxy(id), profiles.list())

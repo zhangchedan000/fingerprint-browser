@@ -133,9 +133,14 @@ export function KernelsPage({ navigate }: PageProps) {
     {
       title: t("版本"),
       dataIndex: 'version',
-      render: (version: string) => (
+      render: (version: string, kernel) => (
         <span>
           <span className="fb-mono">{kernelName(version)}</span>
+          {kernel.webrtcRelay && (
+            <Tooltip title={t("WebRTC 可经代理 UDP 转发，可完全关闭 WebRTC；字体按界面语言显示 Windows 自带字体")}>
+              <Tag color="blue" className="fb-inline-tag">{t("WebRTC 代理 · 语言字体")}</Tag>
+            </Tooltip>
+          )}
           {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已退役")}</Tag></Tooltip>}
         </span>
       )
