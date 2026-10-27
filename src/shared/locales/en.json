@@ -2255,9 +2255,10 @@
   "每个窗口微调极少数音频采样，同一窗口每次相同": "Each window slightly adjusts a very few audio samples, the same every time within one window",
   "这个内核只能用本机真实值": "This kernel can only use this computer's real values",
   "每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式": "Each window is shifted as a whole by a few 1/64 px; values keep a real browser's format",
-  "这台电脑还没有{0}字体包，窗口里会缺少这些字体。点下载从微软下载安装，不需要管理员权限。": "This computer doesn't have the {0} font pack yet, so the window will lack these fonts. Download installs it from Microsoft; no administrator rights needed.",
   "下载字体包（{0} MB）": "Download font pack ({0} MB)",
   "正在安装字体…": "Installing fonts…",
   "正在从微软下载 {0} / {1} MB": "Downloading from Microsoft {0} / {1} MB",
-  "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "A window shows the Windows built-in fonts of its system language, so that language's font pack must be installed on this computer first. Downloaded from Microsoft and installed for the current user only; no administrator rights needed."
+  "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "A window shows the Windows built-in fonts of its system language, so that language's font pack must be installed on this computer first. Downloaded from Microsoft and installed for the current user only; no administrator rights needed.",
+  "这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。": "This computer is missing the {0} font pack: the window lacks these fonts, unlike a real Windows in that language. Please download it — straight from Microsoft, no administrator rights needed.",
+  "已安装{0}字体包": "{0} font pack installed"
 }

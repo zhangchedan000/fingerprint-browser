@@ -1298,13 +1298,30 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row
           label={t("字体")}
           check={checkFor('font')}
-          hint={fontScript && fontPacks?.missing.includes(fontScript)
-            ? t("这台电脑还没有{0}字体包，窗口里会缺少这些字体。点下载从微软下载安装，不需要管理员权限。", fontPackLabel(fontScript, getLocale()))
-            : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
+          hint={t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
         >
           <Fixed>{t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
-          {fontScript && fontPacks?.missing.includes(fontScript) && (
-            <FontPackDownload scripts={[fontScript]} onInstalled={setFontPacks} />
+          {fontScript && fontPacks?.supported && (
+            // Whether this computer has the package the window's language needs: red until it is
+            // downloaded, since the window would lack fonts every Windows in that language has.
+            <div className="fb-check-results">
+              {fontPacks.missing.includes(fontScript) ? (
+                <>
+                  <div className="fb-check-item is-bad">
+                    <span className="fb-check-dot" />
+                    <span className="fb-check-message">
+                      {t("这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。", fontPackLabel(fontScript, getLocale()))}
+                    </span>
+                  </div>
+                  <FontPackDownload scripts={[fontScript]} onInstalled={setFontPacks} />
+                </>
+              ) : (
+                <div className="fb-check-item is-ok">
+                  <span className="fb-check-dot" />
+                  <span className="fb-check-message">{t("已安装{0}字体包", fontPackLabel(fontScript, getLocale()))}</span>
+                </div>
+              )}
+            </div>
           )}
         </Row>
       ) : (
