@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pageStillLoading, parseDeepSite } from './deep-check'
+import { DEFAULT_DEEP_CHECK_SITES, knownDeepSite, pageStillLoading, parseDeepSite, validDeepCheckSites } from './deep-check'
 
 // Page text as the sites showed it (tools/kernel-smoke BISECT=sites, and a user's iphey result).
 const IPHEY_LOADING = 'Your Digital Identity Looks\n\nBROWSER\n\nTemporary value\n\nHARDWARE\n\nTemporary value\n\n0\nMX SCORE'
@@ -10,27 +10,27 @@ const CREEPJS = 'Headless543e3565\nchromium: true\n25% like headless: fafdf9d1\n
 
 describe('deep check parsers', () => {
   it('waits for iphey to finish, then reads its score and verdict', () => {
-    expect(parseDeepSite('iphey', IPHEY_LOADING)).toBeUndefined()
-    expect(parseDeepSite('iphey', IPHEY)).toEqual({ status: 'ok', score: '100', findings: ['Looks Trustworthy'] })
-    expect(parseDeepSite('iphey', IPHEY.replace('Trustworthy', 'Unreliable').replace('100\nMX', '90\nMX'))).toEqual({
+    expect(parseDeepSite('https://iphey.com/', IPHEY_LOADING)).toBeUndefined()
+    expect(parseDeepSite('https://iphey.com/', IPHEY)).toEqual({ status: 'ok', score: '100', findings: ['Looks Trustworthy'] })
+    expect(parseDeepSite('https://iphey.com/', IPHEY.replace('Trustworthy', 'Unreliable').replace('100\nMX', '90\nMX'))).toEqual({
       status: 'warn', score: '90', findings: ['Looks Unreliable', 'LOCATION: France', 'IP ADDRESS: 200.36.26.36']
     })
   })
 
   it('reads BrowserScan authenticity and each deduction', () => {
-    expect(parseDeepSite('browserscan', BROWSERSCAN)).toEqual({ status: 'warn', score: '90%', findings: ['Different time zones -10%'] })
-    expect(parseDeepSite('browserscan', 'loading…')).toBeUndefined()
+    expect(parseDeepSite('https://www.browserscan.net/', BROWSERSCAN)).toEqual({ status: 'warn', score: '90%', findings: ['Different time zones -10%'] })
+    expect(parseDeepSite('https://www.browserscan.net/', 'loading…')).toBeUndefined()
   })
 
   it('reads Pixelscan consistency and the flagged checks', () => {
-    expect(parseDeepSite('pixelscan', PIXELSCAN)).toEqual({
+    expect(parseDeepSite('https://pixelscan.net/fingerprint-check', PIXELSCAN)).toEqual({
       status: 'bad',
       findings: ['Fingerprint is inconsistent', 'Location: Timezone spoofed', 'Proxy: Proxy detected', 'Fingerprint: Masking detected']
     })
   })
 
   it('reads CreepJS headless and stealth ratings', () => {
-    expect(parseDeepSite('creepjs', CREEPJS)).toEqual({ status: 'ok', score: '25% / 0% / 0%', findings: ['0% headless', '25% like headless', '0% stealth'] })
+    expect(parseDeepSite('https://abrahamjuliot.github.io/creepjs/', CREEPJS)).toEqual({ status: 'ok', score: '25% / 0% / 0%', findings: ['0% headless', '25% like headless', '0% stealth'] })
   })
 
   it('knows a page is still filling in', () => {
@@ -38,5 +38,24 @@ describe('deep check parsers', () => {
     expect(pageStillLoading(IPHEY_LOADING)).toBe(true)
     expect(pageStillLoading(BROWSERSCAN)).toBe(false)
     expect(pageStillLoading(IPHEY)).toBe(false)
+  })
+
+  it('reads verdicts only from the built-in sites, wherever on them', () => {
+    expect(knownDeepSite('https://browserscan.net/zh')?.site).toBe('browserscan')
+    expect(knownDeepSite('https://pixelscan.net/')?.site).toBe('pixelscan')
+    expect(knownDeepSite('https://abrahamjuliot.github.io/creepjs/tests/x.html')?.site).toBe('creepjs')
+    expect(knownDeepSite('https://someone.github.io/creepjs/')).toBeUndefined()
+    expect(parseDeepSite('https://browserleaks.com/', 'anything')).toBeUndefined()
+  })
+
+  it('keeps only usable sites in the user list', () => {
+    expect(validDeepCheckSites(undefined)).toBeUndefined()
+    expect(validDeepCheckSites([
+      { id: 'a', name: ' Leaks ', url: 'https://browserleaks.com/', enabled: false },
+      { id: 'a', name: 'dup', url: 'https://x.com/' },
+      { id: 'b', name: 'bad', url: 'file:///c:/x' },
+      { id: 'c', name: '', url: 'https://x.com/' }
+    ])).toEqual([{ id: 'a', name: 'Leaks', url: 'https://browserleaks.com/', enabled: false }])
+    expect(DEFAULT_DEEP_CHECK_SITES.map((site) => site.id)).toEqual(['iphey', 'browserscan', 'pixelscan', 'creepjs'])
   })
 })

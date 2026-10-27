@@ -275,6 +275,8 @@ export interface AppPreferences {
   theme: 'light' | 'dark' | 'system'
   /** Pause between windows opened in one batch. */
   batchLaunchGapSeconds: number
+  /** Sites the deep check opens, in order. Unset = the four built-in ones. */
+  deepCheckSites?: import('./deep-check').DeepCheckSite[]
 }
 
 export interface AppInfo {

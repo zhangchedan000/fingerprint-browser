@@ -8,7 +8,8 @@
 export type DeepSite = 'iphey' | 'browserscan' | 'pixelscan' | 'creepjs'
 
 export interface DeepSiteResult {
-  site: DeepSite
+  /** The DeepCheckSite id. */
+  site: string
   name: string
   url: string
   status: 'ok' | 'warn' | 'bad' | 'unknown'
@@ -21,6 +22,14 @@ export interface DeepSiteResult {
   error?: string
 }
 
+/** A site in the user's deep check list (Settings); the four built-in ones are the default list. */
+export interface DeepCheckSite {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+}
+
 export interface DeepSiteSpec {
   site: DeepSite
   name: string
@@ -29,13 +38,13 @@ export interface DeepSiteSpec {
   timeoutMs: number
 }
 
+/** The sites whose verdict the parsers below can read. */
 export const DEEP_SITES: readonly DeepSiteSpec[] = [
   { site: 'iphey', name: 'iphey', url: 'https://iphey.com/', timeoutMs: 60_000 },
   { site: 'browserscan', name: 'BrowserScan', url: 'https://www.browserscan.net/', timeoutMs: 45_000 },
   { site: 'pixelscan', name: 'Pixelscan', url: 'https://pixelscan.net/fingerprint-check', timeoutMs: 45_000 },
   { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 45_000 }
 ]
-
 type Parsed = Pick<DeepSiteResult, 'status' | 'score' | 'findings'>
 
 const lines = (text: string) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
@@ -105,6 +114,54 @@ function creepjs(text: string): Parsed | undefined {
 
 const PARSERS: Record<DeepSite, (text: string) => Parsed | undefined> = { iphey, browserscan, pixelscan, creepjs }
 
+/** The list a new installation starts with, and "恢复默认" brings back. */
+export const DEFAULT_DEEP_CHECK_SITES: readonly DeepCheckSite[] = DEEP_SITES.map((spec) => ({
+  id: spec.site, name: spec.name, url: spec.url, enabled: true
+}))
+
+/** Sites added by the user get no score; this long is spent waiting for their page to settle. */
+const OTHER_SITE_TIMEOUT_MS = 30_000
+
+/** The built-in site this URL is on (its verdict can be read), by host and path. */
+export function knownDeepSite(url: string): DeepSiteSpec | undefined {
+  try {
+    const target = new URL(url)
+    const host = (address: URL) => address.hostname.replace(/^www\./, '')
+    // On shared hosts (CreepJS on github.io) the first path segment names the site.
+    const first = (address: URL) => address.pathname.split('/')[1] ?? ''
+    return DEEP_SITES.find((spec) => {
+      const known = new URL(spec.url)
+      return host(target) === host(known) && (!known.hostname.endsWith('github.io') || first(target) === first(known))
+    })
+  } catch {
+    return undefined
+  }
+}
+
+export function deepSiteTimeout(url: string): number {
+  return knownDeepSite(url)?.timeoutMs ?? OTHER_SITE_TIMEOUT_MS
+}
+
+/** The user's list, cleaned: http(s) URLs, a name, unique ids, at most 20. Undefined = the default list. */
+export function validDeepCheckSites(input: unknown): DeepCheckSite[] | undefined {
+  if (!Array.isArray(input)) return undefined
+  const seen = new Set<string>()
+  const sites: DeepCheckSite[] = []
+  for (const item of input.slice(0, 20)) {
+    if (!item || typeof item !== 'object') continue
+    const { id, name, url, enabled } = item as Partial<DeepCheckSite>
+    if (typeof id !== 'string' || !id || seen.has(id) || typeof name !== 'string' || !name.trim() || typeof url !== 'string') continue
+    try {
+      if (!/^https?:$/.test(new URL(url).protocol)) continue
+    } catch {
+      continue
+    }
+    seen.add(id)
+    sites.push({ id, name: name.trim().slice(0, 40), url: url.trim(), enabled: enabled !== false })
+  }
+  return sites
+}
+
 /**
  * Placeholders the sites show while a value is still coming: BrowserScan's "---.---.---.---" IP
  * and "--/--", iphey's "Temporary value", "Loading…" anywhere.
@@ -113,9 +170,13 @@ export function pageStillLoading(text: string): boolean {
   return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…/i.test(text)
 }
 
-/** The site's verdict, or undefined while the page has not produced one yet. */
-export function parseDeepSite(site: DeepSite, text: string): Parsed | undefined {
-  return PARSERS[site](text)
+/**
+ * The site's verdict, or undefined while the page has not produced one yet. A site that is not
+ * one of the built-in ones has no verdict to read: it is "unknown" with only its page title.
+ */
+export function parseDeepSite(url: string, text: string): Parsed | undefined {
+  const known = knownDeepSite(url)
+  return known ? PARSERS[known.site](text) : undefined
 }
 
 /** Chinese explanations for findings the sites word the same way every time. */

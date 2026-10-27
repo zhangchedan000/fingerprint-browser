@@ -2269,5 +2269,18 @@
   "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "Vị trí iphey xác định từ IP; nếu khác quốc gia của múi giờ cửa sổ thì thường là lý do bị trừ điểm",
   "iphey 看到的出口 IP": "IP ra ngoài mà iphey thấy",
   "截图和结论可能不完整，可以打开原网页再看": "Ảnh chụp và kết luận có thể chưa đầy đủ; hãy mở trang web để xem hết",
-  "页面在限定时间内没有完全加载完": "Trang chưa tải xong trong thời gian cho phép"
+  "页面在限定时间内没有完全加载完": "Trang chưa tải xong trong thời gian cho phép",
+  "网址格式不对": "Địa chỉ không hợp lệ",
+  "最多 20 个检测网站": "Tối đa 20 trang kiểm tra",
+  "深度检测网站": "Trang kiểm tra chuyên sâu",
+  "读取分数": "Đọc điểm",
+  "只截图": "Chỉ chụp màn hình",
+  "没有检测网站，添加一个或恢复默认": "Không có trang kiểm tra; thêm một trang hoặc khôi phục mặc định",
+  "名称（可不填）": "Tên (không bắt buộc)",
+  "iphey、BrowserScan、Pixelscan、CreepJS 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "iphey, BrowserScan, Pixelscan và CreepJS cho điểm và lý do bị trừ; trang bạn tự thêm chỉ có ảnh chụp và tiêu đề trang.",
+  "恢复默认": "Khôi phục mặc định",
+  "让 {0} 这些持续更新的检测网站来评判这个窗口": "Để các trang phát hiện luôn được cập nhật — {0} — đánh giá cửa sổ này",
+  "没有打开的检测网站": "Không có trang kiểm tra nào đang bật",
+  "检测网站": "Trang kiểm tra",
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tất cả trang kiểm tra đều tắt; bấm “Trang kiểm tra” và bật ít nhất một trang"
 }

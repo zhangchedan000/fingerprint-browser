@@ -1,5 +1,5 @@
 import { kernelChromiumVersion } from '../shared/kernel-id'
-import { DEEP_SITES, pageStillLoading, parseDeepSite, type DeepSiteResult } from '../shared/deep-check'
+import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -427,15 +427,19 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
   }
 }
 
-/** Opens each detection site in the check browser and reads its verdict and a screenshot. */
-export async function deepCheck(options: FingerprintRunOptions, onSite: (result: DeepSiteResult) => void = () => undefined): Promise<DeepSiteResult[]> {
+/**
+ * Opens each detection site in the check browser and reads its verdict and a screenshot. Sites the
+ * user added have no verdict to read: they get the page title and the screenshot.
+ */
+export async function deepCheck(options: FingerprintRunOptions, sites: readonly DeepCheckSite[], onSite: (result: DeepSiteResult) => void = () => undefined): Promise<DeepSiteResult[]> {
   return withCheckBrowser(options, 'about:blank', async (client) => {
     const results: DeepSiteResult[] = []
-    for (const spec of DEEP_SITES) {
-      const result: DeepSiteResult = { site: spec.site, name: spec.name, url: spec.url, status: 'unknown', findings: [] }
+    for (const site of sites) {
+      const result: DeepSiteResult = { site: site.id, name: site.name, url: site.url, status: 'unknown', findings: [] }
+      const known = Boolean(knownDeepSite(site.url))
       try {
-        await client.send('Page.navigate', { url: spec.url }, 30_000)
-        const deadline = Date.now() + spec.timeoutMs
+        await client.send('Page.navigate', { url: site.url }, 30_000)
+        const deadline = Date.now() + deepSiteTimeout(site.url)
         // The verdict often shows before the rest of the page (BrowserScan's score comes ahead of
         // its IP and system rows), so read on until the page text stops changing and no
         // placeholder is left; the last reading is the result and the picture.
@@ -446,13 +450,17 @@ export async function deepCheck(options: FingerprintRunOptions, onSite: (result:
           await new Promise((resolve) => setTimeout(resolve, 1500))
           const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
           const text = page?.result?.value ?? ''
-          parsed = parseDeepSite(spec.site, text) ?? parsed
-          settled = Boolean(parsed) && text === previous && !pageStillLoading(text)
+          parsed = parseDeepSite(site.url, text) ?? parsed
+          settled = (Boolean(parsed) || (!known && text.length > 0)) && text === previous && !pageStillLoading(text)
           previous = text
         }
         if (parsed) Object.assign(result, parsed)
-        else result.error = '没有读到这个网站的结论，请看截图或打开原网页'
-        if (parsed && !settled) result.findings.push('页面在限定时间内没有完全加载完')
+        else if (known) result.error = '没有读到这个网站的结论，请看截图或打开原网页'
+        else {
+          const title = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.title', returnByValue: true }).catch(() => undefined)
+          if (title?.result?.value) result.findings.push(title.result.value.slice(0, 120))
+        }
+        if (!settled) result.findings.push('页面在限定时间内没有完全加载完')
         await client.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' }).catch(() => undefined)
         const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
         if (shot?.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`

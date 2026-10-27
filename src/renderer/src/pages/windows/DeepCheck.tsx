@@ -1,7 +1,9 @@
 import { Alert, Button, Image, Tag } from 'antd'
 import { useEffect, useState } from 'react'
-import { t, translateMessage as mt } from '../../../../shared/i18n'
-import { DEEP_SITES, FINDING_NOTES, type DeepSiteResult } from '../../../../shared/deep-check'
+import { formatList, t, translateMessage as mt } from '../../../../shared/i18n'
+import { DEFAULT_DEEP_CHECK_SITES, FINDING_NOTES, type DeepSiteResult } from '../../../../shared/deep-check'
+import { useWorkspace } from '../../data/workspace'
+import { DeepCheckSites } from './DeepCheckSites'
 import type { ProfileDraft } from '../../../../shared/types'
 
 const STATUS: Record<DeepSiteResult['status'], [string, string]> = {
@@ -20,6 +22,9 @@ export function DeepCheck({ draft, profileId }: { draft: () => ProfileDraft; pro
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<DeepSiteResult[]>([])
   const [error, setError] = useState('')
+  const [editingSites, setEditingSites] = useState(false)
+  const ws = useWorkspace()
+  const sites = (ws.preferences.deepCheckSites ?? DEFAULT_DEEP_CHECK_SITES).filter((site) => site.enabled)
 
   useEffect(() => window.browserApi.profiles.onDeepCheckProgress((result) => {
     setResults((current) => [...current.filter((item) => item.site !== result.site), result])
@@ -38,18 +43,22 @@ export function DeepCheck({ draft, profileId }: { draft: () => ProfileDraft; pro
     }
   }
 
-  const pending = running ? DEEP_SITES.filter((spec) => !results.some((item) => item.site === spec.site)) : []
+  const pending = running ? sites.filter((site) => !results.some((item) => item.site === site.id)) : []
   return (
     <div className="fb-deep-check">
       <div className="fb-check-head">
         <span className="fb-check-summary">
           {running
-            ? t("正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…", DEEP_SITES.length)
-            : t("让 iphey、BrowserScan、Pixelscan、CreepJS 这些持续更新的检测网站来评判这个窗口")}
+            ? t("正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…", sites.length)
+            : sites.length
+              ? t("让 {0} 这些持续更新的检测网站来评判这个窗口", formatList(sites.map((site) => site.name)))
+              : t("没有打开的检测网站")}
         </span>
-        <Button loading={running} onClick={() => void run()}>{results.length && !running ? t("重新深度检测") : t("深度检测")}</Button>
+        <Button type="link" size="small" onClick={() => setEditingSites(true)}>{t("检测网站")}</Button>
+        <Button loading={running} disabled={!sites.length} onClick={() => void run()}>{results.length && !running ? t("重新深度检测") : t("深度检测")}</Button>
       </div>
       {error && <Alert type="error" showIcon title={error} />}
+      <DeepCheckSites open={editingSites} onClose={() => setEditingSites(false)} />
       {(results.length > 0 || pending.length > 0) && (
         <div className="fb-deep-results">
           {results.map((result) => {
@@ -75,8 +84,8 @@ export function DeepCheck({ draft, profileId }: { draft: () => ProfileDraft; pro
               </div>
             )
           })}
-          {pending.map((spec) => (
-            <div key={spec.site} className="fb-deep-site is-pending"><b>{spec.name}</b><span className="fb-muted">{t("等待中…")}</span></div>
+          {pending.map((site) => (
+            <div key={site.id} className="fb-deep-site is-pending"><b>{site.name}</b><span className="fb-muted">{t("等待中…")}</span></div>
           ))}
         </div>
       )}

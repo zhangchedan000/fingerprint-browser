@@ -2269,5 +2269,18 @@
   "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "iphey'nin IP'yi konumlandırdığı yer; pencerenin saat dilimi ülkesinden farklıysa puan genellikle bundan düşer",
   "iphey 看到的出口 IP": "iphey'nin gördüğü çıkış IP'si",
   "截图和结论可能不完整，可以打开原网页再看": "Ekran görüntüsü ve sonuç eksik olabilir; tamamını görmek için siteyi açın",
-  "页面在限定时间内没有完全加载完": "Sayfa zamanında tam yüklenmedi"
+  "页面在限定时间内没有完全加载完": "Sayfa zamanında tam yüklenmedi",
+  "网址格式不对": "Geçersiz adres",
+  "最多 20 个检测网站": "En fazla 20 kontrol sitesi",
+  "深度检测网站": "Derin kontrol siteleri",
+  "读取分数": "Puanı okur",
+  "只截图": "Yalnızca ekran görüntüsü",
+  "没有检测网站，添加一个或恢复默认": "Kontrol sitesi yok; bir tane ekleyin veya varsayılanlara dönün",
+  "名称（可不填）": "Ad (isteğe bağlı)",
+  "iphey、BrowserScan、Pixelscan、CreepJS 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "iphey, BrowserScan, Pixelscan ve CreepJS puanı ve puan kesme nedenlerini verir; eklediğiniz siteler yalnızca ekran görüntüsü ve sayfa başlığı alır.",
+  "恢复默认": "Varsayılanlara dön",
+  "让 {0} 这些持续更新的检测网站来评判这个窗口": "Sürekli güncellenen tespit siteleri — {0} — bu pencereyi değerlendirsin",
+  "没有打开的检测网站": "Açık kontrol sitesi yok",
+  "检测网站": "Kontrol siteleri",
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tüm kontrol siteleri kapalı; “Kontrol siteleri”ne tıklayıp en az birini açın"
 }

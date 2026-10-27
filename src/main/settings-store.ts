@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { AppPreferences, AppSettings } from '../shared/types'
 import { DEFAULT_KERNEL_SOURCES, validKernelSources } from '../shared/kernel-sources'
+import { validDeepCheckSites } from '../shared/deep-check'
 
 export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5 }
 
@@ -11,7 +12,8 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const theme = input.theme === 'light' || input.theme === 'dark' || input.theme === 'system' ? input.theme : base.theme
   const gap = Number(input.batchLaunchGapSeconds)
   const batchLaunchGapSeconds = Number.isFinite(gap) && gap >= 0.5 && gap <= 30 ? Math.round(gap * 10) / 10 : base.batchLaunchGapSeconds
-  return { theme, batchLaunchGapSeconds }
+  const deepCheckSites = 'deepCheckSites' in input ? validDeepCheckSites(input.deepCheckSites) : base.deepCheckSites
+  return { theme, batchLaunchGapSeconds, ...(deepCheckSites ? { deepCheckSites } : {}) }
 }
 
 export class SettingsStore {

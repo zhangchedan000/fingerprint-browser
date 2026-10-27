@@ -2269,5 +2269,18 @@
   "iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因": "Où iphey situe l'IP ; si cela diffère du pays du fuseau horaire de la fenêtre, c'est généralement ce qui fait perdre des points",
   "iphey 看到的出口 IP": "L'IP de sortie vue par iphey",
   "截图和结论可能不完整，可以打开原网页再看": "La capture et le verdict peuvent être incomplets ; ouvrez le site pour tout voir",
-  "页面在限定时间内没有完全加载完": "La page n'a pas fini de charger à temps"
+  "页面在限定时间内没有完全加载完": "La page n'a pas fini de charger à temps",
+  "网址格式不对": "URL invalide",
+  "最多 20 个检测网站": "20 sites de vérification au maximum",
+  "深度检测网站": "Sites de vérification approfondie",
+  "读取分数": "Lit le score",
+  "只截图": "Capture seulement",
+  "没有检测网站，添加一个或恢复默认": "Aucun site ; ajoutez-en un ou restaurez les valeurs par défaut",
+  "名称（可不填）": "Nom (facultatif)",
+  "iphey、BrowserScan、Pixelscan、CreepJS 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "iphey, BrowserScan, Pixelscan et CreepJS donnent un score et les raisons des pénalités ; les sites ajoutés n'ont qu'une capture et le titre de la page.",
+  "恢复默认": "Restaurer par défaut",
+  "让 {0} 这些持续更新的检测网站来评判这个窗口": "Laissez des sites de détection constamment mis à jour — {0} — juger cette fenêtre",
+  "没有打开的检测网站": "Aucun site activé",
+  "检测网站": "Sites de vérification",
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tous les sites sont désactivés ; cliquez sur « Sites de vérification » et activez-en au moins un"
 }

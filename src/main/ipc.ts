@@ -6,6 +6,7 @@ import { basename, join } from 'node:path'
 import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
+import { DEFAULT_DEEP_CHECK_SITES } from '../shared/deep-check'
 import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
@@ -244,7 +245,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
 
   ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string): Promise<DeepSiteResult[]> => {
     const { runOptions } = await checkRunOptions(draft, profileId)
-    return deepCheck(runOptions, (result) => event.sender.send('profiles:deep-check-progress', result))
+    const sites = (settings.get().deepCheckSites ?? DEFAULT_DEEP_CHECK_SITES).filter((site) => site.enabled)
+    if (!sites.length) throw new Error('检测网站都关掉了，请点「检测网站」打开至少一个')
+    return deepCheck(runOptions, sites, (result) => event.sender.send('profiles:deep-check-progress', result))
   })
   ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
     const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
@@ -365,7 +368,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('app:preferences', () => validPreferences(settings.get()))
   ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
     const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
-    await settings.update(next)
+    // deepCheckSites always goes in, so going back to the default list clears the stored one.
+    await settings.update({ ...next, deepCheckSites: next.deepCheckSites })
     return next
   })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
