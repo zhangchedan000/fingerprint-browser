@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -169,7 +169,8 @@ describe('TeamManager', () => {
       proxy: { protocol: 'http', host: '10.0.0.1', port: 8080, username: 'u', password: 'proxy-secret' },
       account: { platform: 'TikTok', username: 'shop1', password: 'account-secret' }
     })
-    await writeFile(join(owner.profiles.profileDataPath(local.id), 'owner-file.txt'), 'from owner')
+    await mkdir(join(owner.profiles.profileDataPath(local.id), 'Default'), { recursive: true })
+    await writeFile(join(owner.profiles.profileDataPath(local.id), 'Default', 'Preferences'), 'from owner')
     owner.jars.set(local.id, [cookie('owner-session')])
 
     const [shared] = await owner.team.share([local.id], ['member1'])
@@ -187,7 +188,7 @@ describe('TeamManager', () => {
     expect(() => member.team.assertEditable(copyId)).toThrow('只有主账号可以修改或导出')
 
     await member.team.beforeLaunch(copyId)
-    expect(await readFile(join(member.profiles.profileDataPath(copyId), 'owner-file.txt'), 'utf8')).toBe('from owner')
+    expect(await readFile(join(member.profiles.profileDataPath(copyId), 'Default', 'Preferences'), 'utf8')).toBe('from owner')
     expect(member.jars.get(copyId)).toEqual([cookie('owner-session')])
     expect(server.locks.get(shared.id)?.holder).toBe('member1')
 
@@ -195,7 +196,7 @@ describe('TeamManager', () => {
     await expect(owner.team.beforeLaunch(local.id)).rejects.toThrow('小A」正在使用')
 
     // The member's session changes the state; closing uploads it and frees the window.
-    await writeFile(join(member.profiles.profileDataPath(copyId), 'member-file.txt'), 'from member')
+    await writeFile(join(member.profiles.profileDataPath(copyId), 'Default', 'Preferences'), 'from member')
     member.jars.set(copyId, [cookie('member-session')])
     await member.team.afterExit(copyId)
     expect(server.records.get(shared.id)).toMatchObject({ data_rev: 2, data_by: 'member1' })
@@ -204,7 +205,7 @@ describe('TeamManager', () => {
 
     // The owner opens it next and continues from the member's state.
     await owner.team.beforeLaunch(local.id)
-    expect(await readFile(join(owner.profiles.profileDataPath(local.id), 'member-file.txt'), 'utf8')).toBe('from member')
+    expect(await readFile(join(owner.profiles.profileDataPath(local.id), 'Default', 'Preferences'), 'utf8')).toBe('from member')
     expect(owner.jars.get(local.id)).toEqual([cookie('member-session')])
     await owner.team.afterExit(local.id)
     expect(server.records.get(shared.id)?.data_rev).toBe(3)

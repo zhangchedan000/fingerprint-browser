@@ -456,7 +456,7 @@ export class TeamManager {
           const expected = (record as RemoteProfile & { data_sha256?: string }).data_sha256
           if (expected && await sha256File(archive) !== expected) throw new Error('下载的登录态校验失败，请重试')
           const cookies = await unpackProfileState(archive, this.profiles.profileDataPath(id))
-          if (cookies.length) await this.cookies.importCookies(id, cookies)
+          await this.cookies.importCookies(id, cookies, { replace: true })
           link.dataRev = record.data_rev
           this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: record.data_rev, cookies: cookies.length })
         } finally {

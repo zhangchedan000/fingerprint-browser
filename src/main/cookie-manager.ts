@@ -32,11 +32,15 @@ export class CookieManager {
     return cookies
   }
 
-  async importCookies(id: string, cookies: PortableCookie[]): Promise<number> {
+  /** replace: the window keeps exactly these cookies (team windows taking over another's state). */
+  async importCookies(id: string, cookies: PortableCookie[], options: { replace?: boolean } = {}): Promise<number> {
     this.ensureClosed(id)
     const defaultExpires = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
     const persistentCookies = cookies.map((cookie) => ({ ...cookie, expires: cookie.expires ?? defaultExpires }))
-    await this.withSession(id, (client) => client.send('Network.setCookies', { cookies: persistentCookies }))
+    await this.withSession(id, async (client) => {
+      if (options.replace) await client.send('Network.clearBrowserCookies')
+      if (persistentCookies.length) await client.send('Network.setCookies', { cookies: persistentCookies })
+    })
     this.logger?.info('环境 Cookie 已导入', { profileId: id, count: cookies.length })
     return cookies.length
   }

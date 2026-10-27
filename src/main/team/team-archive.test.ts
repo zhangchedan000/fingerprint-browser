@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,41 +21,51 @@ async function put(path: string, content: string): Promise<void> {
 }
 
 describe('team login state archive', () => {
-  it('carries site data and cookies, leaves caches and computer-bound files behind', async () => {
+  it('carries the login state and cookies only, and replaces just that on the other computer', async () => {
     const root = await tempRoot()
     // Outside every ANSI code page Windows tar could use for its arguments.
     const source = join(root, '源 ก user-data')
     await put(join(source, 'Default', 'Local Storage', 'leveldb', '000003.log'), 'local storage')
-    await put(join(source, 'Default', 'Preferences'), '{}')
+    await put(join(source, 'Default', 'IndexedDB', 'https_example.com_0.indexeddb.leveldb', 'LOG'), 'indexeddb')
+    await put(join(source, 'Default', 'WebStorage', '1', 'IndexedDB', 'db'), 'bucket')
+    await put(join(source, 'Default', 'WebStorage', '1', 'CacheStorage', 'big'), 'bucket cache')
+    await put(join(source, 'Default', 'Sessions', 'Tabs_1'), 'tabs')
+    await put(join(source, 'Default', 'Preferences'), '{"profile":{}}')
+    await put(join(source, 'Default', 'History'), 'source history')
+    await put(join(source, 'Default', 'Service Worker', 'ScriptCache', 'x'), 'scripts')
     await put(join(source, 'Default', 'Cache', 'Cache_Data', 'f_000001'), 'cache')
     await put(join(source, 'Default', 'Network', 'Cookies'), 'dpapi cookies')
-    await put(join(source, 'Default', 'Login Data'), 'dpapi passwords')
     await put(join(source, 'Local State'), 'source key')
-    await put(join(source, 'SingletonLock'), 'lock')
     const cookies = [{ name: 'sid', value: 'abc', domain: '.example.com', path: '/' }]
 
     const packed = await packProfileState(source, cookies as never, join(root, 'state.tgz'))
     expect(packed.size).toBeGreaterThan(0)
     expect(packed.sha256).toMatch(/^[a-f\d]{64}$/)
+    expect(existsSync(join(source, '.prism-team-cookies.json'))).toBe(false)
 
     const target = join(root, '目标 ก user-data')
     await put(join(target, 'Local State'), 'target key')
-    await put(join(target, 'Default', 'Old'), 'replaced')
+    await put(join(target, 'Default', 'History'), 'target history')
+    await put(join(target, 'Default', 'Session Storage', 'stale'), 'signed-out leftover')
     const restored = await unpackProfileState(packed.file, target)
 
     expect(restored).toEqual(cookies)
     expect(await readFile(join(target, 'Default', 'Local Storage', 'leveldb', '000003.log'), 'utf8')).toBe('local storage')
-    expect(await readFile(join(target, 'Default', 'Preferences'), 'utf8')).toBe('{}')
-    // This computer's key stays, everything else is the shared copy.
+    expect(await readFile(join(target, 'Default', 'IndexedDB', 'https_example.com_0.indexeddb.leveldb', 'LOG'), 'utf8')).toBe('indexeddb')
+    expect(await readFile(join(target, 'Default', 'WebStorage', '1', 'IndexedDB', 'db'), 'utf8')).toBe('bucket')
+    expect(await readFile(join(target, 'Default', 'Sessions', 'Tabs_1'), 'utf8')).toBe('tabs')
+    expect(await readFile(join(target, 'Default', 'Preferences'), 'utf8')).toBe('{"profile":{}}')
+    // Not login state: this computer's own copy stays.
+    expect(await readFile(join(target, 'Default', 'History'), 'utf8')).toBe('target history')
     expect(await readFile(join(target, 'Local State'), 'utf8')).toBe('target key')
     for (const gone of [
-      ['Default', 'Old'],
+      ['Default', 'Session Storage', 'stale'],
+      ['Default', 'WebStorage', '1', 'CacheStorage'],
+      ['Default', 'Service Worker'],
       ['Default', 'Cache'],
       ['Default', 'Network', 'Cookies'],
-      ['Default', 'Login Data'],
-      ['SingletonLock'],
       ['.prism-team-cookies.json']
     ]) expect(existsSync(join(target, ...gone)), gone.join('/')).toBe(false)
-    expect((await import('node:fs/promises')).readdir(root)).resolves.not.toContainEqual(expect.stringMatching(/incoming|previous/))
+    expect((await readdir(root)).filter((name) => /incoming|previous/.test(name))).toEqual([])
   })
 })
