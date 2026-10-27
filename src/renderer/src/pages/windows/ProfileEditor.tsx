@@ -1182,7 +1182,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
 
       <h3 className="fb-fp-group">{t("地区与网络")}</h3>
-      <Row label={t("国家/地区")} hint={followIp ? t("启动时按代理出口 IP 的国家设置时区、系统语言和浏览器语言") : t("按这个国家的电脑配套设置时区、系统语言和浏览器语言，下面三项都可以再单独调整")}>
+      <Row label={t("国家/地区")} hint={followIp ? t("按代理 IP 所在国家，自动配好下面三项") : t("这台电脑在哪个国家；选了它，下面三项自动配好，也能单独改")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1207,7 +1207,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           action={<Button size="small" onClick={() => patchFingerprint({ networkIdentityMode: 'proxy' })}>{t("基于 IP 生成")}</Button>}
         />
       )}
-      <Row label={t("时区")} check={checkFor('timezone')}>
+      <Row label={t("时区")} check={checkFor('timezone')} hint={t("这台 Windows 的系统时区，网页里的时间按它显示")}>
         {followIp
           ? <Fixed>{t("基于 IP · {0}", fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone)}</Fixed>
           : (
@@ -1216,7 +1216,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           )}
       </Row>
-      <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，新装的 Chrome 菜单也是这个语言；决定字体、语音、设备名和网页里日期数字的默认格式")}>
+      <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，Chrome 菜单也是它；字体、语音、设备名都跟着它")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1230,7 +1230,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           aria-label={t("系统语言")}
         />
       </Row>
-      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 设置里的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
+      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         {followIp
           ? <Fixed>{t("基于 IP · {0}", networkIdentity.language)}</Fixed>
           : (
