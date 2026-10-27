@@ -126,6 +126,11 @@ const PAGE = '<!doctype html><html><head><meta charset="utf-8"><title>check</tit
 
 const SURFACE_NAMES = { canvas: 'Canvas', audio: 'AudioContext', clientrects: 'ClientRects', font: '字体' } as const
 type Surface = keyof typeof SURFACE_NAMES
+/**
+ * Prism kernels leave these as the real machine computes them (patches 006, 008): Windows Chrome
+ * has only a few audio sums and whole-1/64-px rects, shared by many real computers.
+ */
+const ALWAYS_REAL: ReadonlySet<Surface> = new Set(['audio', 'clientrects'])
 
 export interface ExpectedIdentity {
   cores: number
@@ -247,7 +252,9 @@ export function evaluateFingerprint(input: {
     const [first, second] = observed[surface]
     const real = fp.disabledSpoofing.includes(surface)
     const twin = others.find((other) => other.observed[surface][0] === first)
-    if (first !== second) {
+    if (first === second && ALWAYS_REAL.has(surface)) {
+      add({ row: surface, status: 'ok', message: `${name} 本机真实值 · ${first}（与真实 Chrome 一致，各窗口相同属正常）` })
+    } else if (first !== second) {
       add({ row: surface, status: 'bad', message: `${name} 两次读取结果不同，容易被识别为伪装`, fix: 'use-real' })
     } else if (twin && !real) {
       add({ row: surface, status: 'bad', message: `${name} 与窗口 ${twin.label} 相同，两个窗口会被关联`, fix: 'reseed' })

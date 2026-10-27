@@ -31,7 +31,7 @@ import {
   effectiveGpu,
   gpuChoices
 } from '../../../../shared/hardware-profiles'
-import { deviceName, macAddress, noiseValue, type NoiseSurface } from '../../../../shared/device-identity'
+import { deviceName, macAddress, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
@@ -447,10 +447,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     })
   }
 
-  /** The value a site sees: measured by the last check when it is still current, else derived from the seed. */
+  /** The value a site sees, as the last check measured it; never a made-up stand-in. */
+  function measured(surface: NoiseSurface): string | undefined {
+    return checkReport && !checkStale ? checkReport.observed[surface][0] : undefined
+  }
+
   function shownNoise(surface: NoiseSurface): string {
-    if (checkReport && !checkStale) return checkReport.observed[surface][0]
-    return noiseValue(fp.seed, surface)
+    return measured(surface) ?? t("按种子变化，检测后显示")
+  }
+
+  /** Audio and ClientRects stay as the real machine computes them (kernel patches 006, 008). */
+  function realSurface(surface: NoiseSurface) {
+    const value = measured(surface)
+    return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
   }
 
   function noiseControl(surface: NoiseSurface, label: string) {
@@ -1271,10 +1280,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={DEVICE_MEMORY_CHOICES.map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
-      <Row label="Canvas" check={checkFor('canvas')}>{noiseControl('canvas', 'Canvas')}</Row>
-      <Row label="AudioContext" check={checkFor('audio')}>{noiseControl('audio', 'AudioContext')}</Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("字体、Canvas、Audio、ClientRects 共用一个种子，换一换会一起换")}>
-        {noiseControl('clientrects', 'ClientRects')}
+      <Row label="Canvas" check={checkFor('canvas')} hint={t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="AudioContext" check={checkFor('audio')} hint={t("不加噪：真实 Windows Chrome 的音频值只有少数几个，很多电脑完全相同，加噪反而像伪装")}>
+        {realSurface('audio')}
+      </Row>
+      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("不加偏移：真实浏览器的元素坐标都是 1/64 像素的整数倍，加小数偏移会被识破")}>
+        {realSurface('clientrects')}
       </Row>
       <Row label="SpeechVoices" hint={t("默认跟随窗口语言，也可以换成其他语言的 Windows 语音")}>
         <Select
