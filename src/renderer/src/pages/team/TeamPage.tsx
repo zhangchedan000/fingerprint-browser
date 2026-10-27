@@ -51,77 +51,6 @@ function logDetail(entry: TeamLogEntry): string {
   return parts.join(' · ')
 }
 
-/** Sign in, or create the owner account on a new server. */
-function SignIn({ status, onDone }: { status: TeamStatus; onDone: (status: TeamStatus) => void }) {
-  const ws = useWorkspace()
-  const [server, setServer] = useState(status.server)
-  const [ready, setReady] = useState<boolean>()
-  const [busy, setBusy] = useState(false)
-  const [form] = Form.useForm()
-
-  async function connect(): Promise<void> {
-    setBusy(true)
-    try {
-      const probe = await window.browserApi.team.probe(server)
-      setServer(probe.server)
-      setReady(probe.ready)
-    } catch (error) {
-      ws.fail(error)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function submit(values: { code?: string; username: string; name?: string; password: string }): Promise<void> {
-    setBusy(true)
-    try {
-      onDone(ready
-        ? await window.browserApi.team.login(server, values.username, values.password)
-        : await window.browserApi.team.setup(server, values.code ?? '', values.username, values.name ?? '', values.password))
-      ws.notify.success(ready ? t("已登录团队") : t("主账号已创建"))
-    } catch (error) {
-      ws.fail(error)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Card className="fb-team-signin" title={ready === false ? t("创建主账号") : t("登录团队")}>
-      <Form layout="vertical" form={form} onFinish={(values) => void submit(values)}>
-        <Form.Item label={t("团队服务器地址")} extra={t("由主账号提供，例如 team.example.com")}>
-          <Space.Compact style={{ width: '100%' }}>
-            <Input value={server} placeholder="team.example.com" onChange={(event) => { setServer(event.target.value); setReady(undefined) }} onPressEnter={() => void connect()} />
-            <Button loading={busy && ready === undefined} disabled={!server.trim()} onClick={() => void connect()}>{t("连接")}</Button>
-          </Space.Compact>
-        </Form.Item>
-        {ready === false && (
-          <>
-            <Alert type="info" showIcon className="fb-team-alert" message={t("这台服务器还没有主账号。初始化码在服务器的 /opt/prism-team/.env 里，只能用一次。")} />
-            <Form.Item name="code" label={t("初始化码")} rules={[{ required: true, message: t("请填写初始化码") }]}>
-              <Input.Password autoComplete="off" />
-            </Form.Item>
-            <Form.Item name="name" label={t("显示名称")}>
-              <Input placeholder={t("例如：老板")} />
-            </Form.Item>
-          </>
-        )}
-        {ready !== undefined && (
-          <>
-            <Form.Item name="username" label={t("用户名")} rules={[{ required: true, message: t("请填写用户名") }]}>
-              <Input autoComplete="username" />
-            </Form.Item>
-            <Form.Item name="password" label={t("密码")} rules={[{ required: true, min: ready ? 1 : 8, message: ready ? t("请填写密码") : t("密码至少 8 位") }]}>
-              <Input.Password autoComplete={ready ? 'current-password' : 'new-password'} />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" loading={busy} block>{ready ? t("登录") : t("创建并登录")}</Button>
-          </>
-        )}
-      </Form>
-    </Card>
-  )
-}
-
 function MemberFormModal({ member, open, onClose, onSaved }: { member?: TeamUser; open: boolean; onClose: () => void; onSaved: () => void }) {
   const ws = useWorkspace()
   const [form] = Form.useForm()
@@ -555,16 +484,16 @@ export function TeamPage(_props: PageProps) {
 
   async function logout(): Promise<void> {
     try {
-      setStatus(await window.browserApi.team.logout())
-      setProfiles([])
-      setMembers([])
+      await window.browserApi.team.logout()
+      // The app is only used signed in: back to the sign-in page.
+      window.location.reload()
     } catch (error) {
       ws.fail(error)
     }
   }
 
   if (!status) return null
-  if (!status.user) return <SignIn status={status} onDone={setStatus} />
+  if (!status.user) return null
 
   const user = status.user
   return (

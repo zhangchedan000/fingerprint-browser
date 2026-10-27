@@ -228,6 +228,26 @@ describe('TeamManager', () => {
     expect(server.locks.has(shared.id)).toBe(false)
   })
 
+  it('opens no window at all until signed in, and stays locked while the server is unreachable', async () => {
+    const server = fakeServer()
+    const owner = await computer(server)
+    const local = await owner.profiles.create(defaultProfileDraft())
+    await expect(owner.team.beforeLaunch(local.id)).rejects.toThrow('请先登录')
+    expect(await owner.team.status()).toMatchObject({ server: 'https://temu.orenge.ccwu.cc', user: undefined })
+
+    await owner.team.login('http://team.test', 'boss', 'ownerpass')
+    await owner.team.beforeLaunch(local.id)
+
+    // Next start: the saved sign-in cannot be checked, so the app stays on the sign-in page.
+    const restarted = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined,
+      (async () => { throw new Error('getaddrinfo ENOTFOUND') }) as unknown as typeof fetch)
+    await restarted.initialize()
+    const status = await restarted.status()
+    expect(status.user).toBeUndefined()
+    expect(status.offline).toContain('ENOTFOUND')
+    await expect(restarted.beforeLaunch(local.id)).rejects.toThrow('请先登录')
+  })
+
   it('keeps a failed upload and sends it on the next open', async () => {
     const server = fakeServer()
     const owner = await computer(server)

@@ -729,6 +729,8 @@ export interface BrowserApi {
   /** Team accounts (main/team): windows shared through the team server. */
   team: {
     status: () => Promise<import('./team').TeamStatus>
+    /** Checks the saved sign-in with the server again (after it was unreachable). */
+    retry: () => Promise<import('./team').TeamStatus>
     /** Checks the address; ready = the server already has an owner account. */
     probe: (server: string) => Promise<{ server: string; ready: boolean }>
     /** Creates the owner account with the server's setup code, then signs in. */

@@ -398,3 +398,9 @@ button, input, textarea { font: inherit; }
 .fb-team-head > span { display: flex; align-items: center; gap: 8px; }
 .fb-team-hint { margin: 10px 0 0; font-size: 12px; }
 .fb-team-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
+/* Sign-in page shown before the app */
+.fb-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--fb-bg); padding: 24px; }
+.fb-login-card { width: 400px; max-width: 100%; }
+.fb-login-wait { display: flex; justify-content: center; padding: 24px 0; }
+.fb-login-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; font-size: 12px; }
+.fb-login-hint { margin: 4px 0 0; font-size: 12px; }

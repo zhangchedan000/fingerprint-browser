@@ -160,6 +160,7 @@ const api: BrowserApi = {
   },
   team: {
     status: () => ipcRenderer.invoke('team:status'),
+    retry: () => ipcRenderer.invoke('team:retry'),
     probe: (server) => ipcRenderer.invoke('team:probe', server),
     setup: (server, code, username, name, password) => ipcRenderer.invoke('team:setup', server, code, username, name, password),
     login: (server, username, password) => ipcRenderer.invoke('team:login', server, username, password),

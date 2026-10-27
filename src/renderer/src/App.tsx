@@ -3,6 +3,7 @@ import { Button, Layout, Space } from 'antd'
 import { useState } from 'react'
 import { t } from '../../shared/i18n'
 import { LanguageSelector } from './components/LanguageSelector'
+import { LoginGate } from './components/LoginGate'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
 import { useTeamSyncNotices } from './data/team-sync'
@@ -50,8 +51,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <WorkspaceProvider>
-      <Shell />
-    </WorkspaceProvider>
+    <LoginGate>
+      <WorkspaceProvider>
+        <Shell />
+      </WorkspaceProvider>
+    </LoginGate>
   )
 }

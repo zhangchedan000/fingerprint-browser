@@ -170,7 +170,7 @@ export class TeamApi {
 
   /** New token and the current account (role or disabled may have changed). */
   async refresh(): Promise<TeamUser> {
-    const result = await this.request<{ token: string; record: RemoteUser }>('POST', '/api/collections/users/auth-refresh')
+    const result = await this.request<{ token: string; record: RemoteUser }>('POST', '/api/collections/users/auth-refresh', undefined, 10_000)
     this.token = result.token
     return toTeamUser(result.record)
   }

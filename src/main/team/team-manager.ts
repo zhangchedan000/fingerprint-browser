@@ -45,6 +45,9 @@ interface TeamFile {
 
 const HEARTBEAT_MS = 30_000
 
+/** The team server this build signs in to unless another address is entered. */
+export const DEFAULT_TEAM_SERVER = 'https://temu.orenge.ccwu.cc'
+
 function configDraft(config: unknown, name: string): ProfileDraft {
   if (!config || typeof config !== 'object') throw new Error('团队窗口的配置无效')
   const candidate = config as ProfileDraft
@@ -117,21 +120,64 @@ export class TeamManager {
   }
 
   private restoring?: Promise<void>
+  /** Why the saved sign-in could not be checked (server unreachable); the app stays locked. */
+  private offline?: string
+  private verifiedAt = 0
 
   private async restoreSession(api: TeamApi): Promise<void> {
+    this.offline = undefined
     try {
       this.user = await api.refresh()
+      this.verifiedAt = Date.now()
       this.file.role = this.user.role
       this.file.token = this.secrets.encode(api.token)
       await this.save()
     } catch (error) {
-      // Offline: keep the token for later calls; rejected (expired, disabled): sign out.
+      // Unreachable: keep the token so "retry" can try again; rejected (expired, disabled): sign out.
+      this.user = undefined
       if (error instanceof TeamApiError && error.status > 0) {
         this.api = undefined
         this.file.token = ''
         await this.save().catch(() => undefined)
+      } else {
+        this.offline = error instanceof Error ? error.message : String(error)
       }
       this.logger?.error('团队登录恢复失败', { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** Checks the saved sign-in with the server again (the "retry" on the sign-in page). */
+  async retry(): Promise<TeamStatus> {
+    if (this.api && this.file.token) {
+      this.restoring = this.restoreSession(this.api)
+      await this.restoring
+    }
+    return this.status()
+  }
+
+  /**
+   * The app is used signed in and online. Every window launch checks the sign-in with the server
+   * (at most once a minute), so a disabled member cannot open anything from then on.
+   */
+  private async verifySession(): Promise<void> {
+    await this.restoring
+    const api = this.requireApi()
+    if (!this.user) throw new Error('请先登录')
+    if (Date.now() - this.verifiedAt < 60_000) return
+    try {
+      this.user = await api.refresh()
+      this.verifiedAt = Date.now()
+      this.file.token = this.secrets.encode(api.token)
+      await this.save()
+    } catch (error) {
+      if (error instanceof TeamApiError && error.status > 0) {
+        this.api = undefined
+        this.user = undefined
+        this.file.token = ''
+        await this.save().catch(() => undefined)
+        throw new Error('登录已失效（账号可能已被停用），请重新登录')
+      }
+      throw new Error(`连不上团队服务器，暂时不能打开窗口（${error instanceof Error ? error.message : String(error)}）`)
     }
   }
 
@@ -144,11 +190,11 @@ export class TeamManager {
 
   async status(): Promise<TeamStatus> {
     await this.restoring
-    return { server: this.file.server, user: this.user }
+    return { server: this.file.server || DEFAULT_TEAM_SERVER, user: this.user, offline: this.offline }
   }
 
   private requireApi(): TeamApi {
-    if (!this.api || !this.file.token) throw new Error('请先在「团队」里登录')
+    if (!this.api || !this.file.token) throw new Error('请先登录')
     return this.api
   }
 
@@ -182,6 +228,8 @@ export class TeamManager {
     if (this.user && this.user.id !== user.id && this.locked.size) throw new Error('还有团队窗口在运行，请先关闭再切换账号')
     this.api = api
     this.user = user
+    this.offline = undefined
+    this.verifiedAt = Date.now()
     this.file.server = normalized
     this.file.token = this.secrets.encode(api.token)
     this.file.role = user.role
@@ -370,6 +418,7 @@ export class TeamManager {
 
   /** Before a linked window starts: take the lock, then bring config and login state up to date. */
   async beforeLaunch(id: string): Promise<void> {
+    await this.verifySession()
     const link = this.file.links[id]
     if (!link) return
     const pending = this.pushes.get(id)

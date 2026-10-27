@@ -14,8 +14,10 @@ export interface TeamUser {
 export interface TeamStatus {
   /** The server address saved on this computer; '' before the first connection. */
   server: string
-  /** Signed in as; undefined when signed out. */
+  /** Signed in as; undefined when signed out. The app is only usable signed in. */
   user?: TeamUser
+  /** The saved sign-in could not be checked because the server was unreachable. */
+  offline?: string
 }
 
 /** Who holds a shared window right now. */
