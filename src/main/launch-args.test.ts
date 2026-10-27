@@ -153,4 +153,20 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1080')
     expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440 } }).some((arg) => arg.startsWith('--fingerprint-screen-avail-height'))).toBe(false)
   })
+
+  it('gives each window its own audio and rects on prism6 unless set to real', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const seeded = buildLaunchArgs(profile(), { ...kernel, seededAudioRects: true })
+    expect(seeded).toContain('--fingerprinting-audio-noise')
+    expect(seeded).toContain('--fingerprinting-client-rects-noise')
+    const real = buildLaunchArgs(profile({ disabledSpoofing: ['audio', 'clientrects'] }), { ...kernel, seededAudioRects: true })
+    expect(real.some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
+    expect(buildLaunchArgs(profile(), kernel).some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
+  })
+
+  it('turns Chrome\'s port scan protection off only when asked', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    expect(buildLaunchArgs(profile(), kernel).some((arg) => arg.startsWith('--disable-features'))).toBe(false)
+    expect(buildLaunchArgs(profile({ portScanProtection: false }), kernel)).toContain('--disable-features=LocalNetworkAccessChecks')
+  })
 })

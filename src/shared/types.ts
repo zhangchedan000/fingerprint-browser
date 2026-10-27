@@ -105,6 +105,8 @@ export interface FingerprintConfig {
   geolocationPermission?: 'ask' | 'allow' | 'block'
   /** Do Not Track request header. Default: leave Chromium's own setting. */
   doNotTrack?: 'default' | 'on' | 'off'
+  /** Chrome's Local Network Access checks (pages need permission to reach this computer and the LAN). Default: on. */
+  portScanProtection?: boolean
   /** Windows voices of another locale (e.g. "zh-hk"). Unset = the window's language. */
   voicesLocale?: string
   /** "auto" (unset, from the seed), "real", or "microphones,speakers,cameras". */

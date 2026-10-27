@@ -15,6 +15,7 @@ import {
   Radio,
   Select,
   Space,
+  Switch,
   Tabs,
   Tag,
   Typography,
@@ -37,7 +38,7 @@ import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
-import { WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
+import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
@@ -130,7 +131,7 @@ function screenLabel(width: number, height: number, physical: { width: number; h
   const scale = hostScale()
   return scale === 1
     ? `${width} × ${height} · ${note}`
-    : t("{0} × {1} · {2}（{3} × {4} 显示器，缩放 {5}%）", width, height, note, physical.width, physical.height, Math.round(scale * 100))
+    : t("{0} × {1} · {2} {3} 显示器 · 缩放 {4}%", width, height, `${physical.width}×${physical.height}`, note, Math.round(scale * 100))
 }
 
 /** This computer's Windows display scale; a window keeps it, so resolutions are offered at it. */
@@ -325,16 +326,21 @@ const samePrimary = (first: string, second: string) => first.split('-')[0].toLow
  * navigator.language / Accept-Language such a Chrome reports, and whether the Windows language
  * packs give it Microsoft voices and device names.
  */
+// One entry per browser language: several Chrome interface languages start their list with the
+// same language (Urdu's is en-US), so keep the one whose interface is that language.
 const LANGUAGES = CHROME_UI_LOCALES.map((uiLocale) => {
   const { language, acceptLanguages } = chromeLanguageProfile(uiLocale)
   return {
     uiLocale,
     language,
     acceptLanguages,
-    name: ownLanguageName(uiLocale),
+    name: ownLanguageName(language),
     voices: WINDOWS_VOICE_LOCALES.some(({ locale }) => samePrimary(locale, language)),
     devices: MEDIA_LOCALES.some((locale) => samePrimary(locale, language))
   }
+}).filter((item, _index, all) => {
+  const same = all.filter((other) => other.language === item.language)
+  return item === (same.find((other) => samePrimary(other.uiLocale, other.language)) ?? same[0])
 })
 
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave }: ProfileEditorProps) {
@@ -530,13 +536,29 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   function shownNoise(surface: NoiseSurface): string {
-    return measured(surface) ?? t("按种子变化，检测后显示")
+    return measured(surface) ?? t("每个窗口不同")
   }
 
   /** Audio and ClientRects stay as the real machine computes them (kernel patches 006, 008). */
   function realSurface(surface: NoiseSurface) {
     const value = measured(surface)
     return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
+  }
+
+  /** prism6+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
+  function seededControl(surface: NoiseSurface, label: string) {
+    const real = fp.disabledSpoofing.includes(surface)
+    const value = measured(surface)
+    return (
+      <ValueChoice
+        label={label}
+        value={real ? 'real' : 'noise'}
+        onChange={(next: string) => setSpoofing(surface, next === 'noise')}
+        options={[{ value: 'noise', label: value && !real ? t("每个窗口不同 · {0}", value) : t("每个窗口不同") }, { value: 'real', label: t("本机真实") }]}
+        onShuffle={reseedNoise}
+        shuffleDisabled={real}
+      />
+    )
   }
 
   function noiseControl(surface: NoiseSurface, label: string) {
@@ -1130,7 +1152,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Button onClick={randomizeAll}>{t("一键随机指纹")}</Button>
       </div>
 
-      <h3 className="fb-fp-group">{t("基础信息")}</h3>
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("系统与浏览器")}</h3>
+        </div>
       <Row label={t("浏览器内核")} hint={t("每个窗口可单独指定，在内核管理里导入更多版本")}>
         <Form.Item name="kernelVersion" noStyle>
           <Select
@@ -1180,13 +1205,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </div>
       </Row>
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
+      </section>
 
-      <h3 className="fb-fp-group">{t("地区与网络")}</h3>
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("国家与语言")}</h3>
+          <span className="fb-fp-card-sub">{t("以下随国家/地区自动配套，也可以单独修改")}</span>
+        </div>
       <Row label={t("国家/地区")} hint={followIp ? t("按代理 IP 所在国家，自动配好下面三项") : t("这台电脑在哪个国家；选了它，下面三项自动配好，也能单独改")}>
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select"
+          className="fb-fp-select fb-fp-select-wide"
           value={followIp ? 'ip' : fp.region ?? 'custom'}
           onChange={chooseRegion}
           options={[
@@ -1212,7 +1242,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ? <Fixed>{t("基于 IP · {0}", fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone)}</Fixed>
           : (
             <Form.Item name={['fingerprint', 'timezone']} noStyle>
-              <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} aria-label={t("时区")} />
+              <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
             </Form.Item>
           )}
       </Row>
@@ -1220,7 +1250,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select"
+          className="fb-fp-select fb-fp-select-wide"
           value={fp.uiLocale ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value })}
           options={[
@@ -1237,7 +1267,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             <Select
               showSearch
               optionFilterProp="label"
-              className="fb-fp-select"
+              className="fb-fp-select fb-fp-select-wide"
               value={fp.language}
               onChange={(language: string) => {
                 const item = LANGUAGES.find((entry) => entry.language === language)
@@ -1257,77 +1287,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
         <Select
-          className="fb-fp-select"
+          className="fb-fp-select fb-fp-select-wide"
           value={fp.geolocationPermission ?? 'ask'}
           onChange={(geolocationPermission) => patchFingerprint({ geolocationPermission })}
           options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
         />
       </Row>
-      <Row
-        label="WebRTC"
-        check={checkFor('webrtc')}
-        hint={fp.webrtcPolicy === 'proxy_only'
-          ? webrtcRelay
-            ? proxyResult?.udp === true
-              ? t("这个代理支持 UDP：WebRTC 走代理，网站看到代理 IP，视频通话可用")
-              : proxyResult?.udp === false
-                ? t("这个代理不支持 UDP：WebRTC 只报代理 IP、不发 UDP，视频通话不可用")
-                : t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
-            : t("替换为代理 IP，防止泄露本机 IP")
-          : fp.webrtcPolicy === 'privacy'
-            ? t("开启 WebRTC，但网站拿不到任何 IP")
-            : fp.webrtcPolicy === 'disabled'
-              ? webrtcRelay
-                ? t("完全关闭 WebRTC；真实 Chrome 不会没有 WebRTC，网站可能视为异常")
-                : t("这个内核不能关闭 WebRTC，按「隐私」处理")
-              : t("原版 Chrome 行为，不经过代理，会暴露本机真实 IP")}
-      >
-        <Select
-          className="fb-fp-select"
-          value={fp.webrtcPolicy}
-          onChange={(webrtcPolicy) => patchFingerprint({ webrtcPolicy })}
-          options={[
-            { value: 'proxy_only', label: t("替换") },
-            { value: 'privacy', label: t("隐私") },
-            { value: 'default', label: t("允许") },
-            { value: 'disabled', label: t("禁止") }
-          ]}
-        />
-      </Row>
-
-      <h3 className="fb-fp-group">{t("显示")}</h3>
-      {kernelSpoofsScreen(windowKernelVersion) ? (
-        <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
-          ? t("浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以", hostScreen().width, hostScreen().height)
-          : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
-          <Space wrap size={8}>
-            <ValueChoice
-              label={t("分辨率")}
-              value={screenValue}
-              onChange={chooseScreen}
-              onShuffle={shuffleScreen}
-              options={[
-                { value: 'host', label: t("本机真实") },
-                ...screenChoices(floor, hostScale()).map(({ width, height, physical }) => ({
-                  value: `${width}x${height}`,
-                  label: screenLabel(width, height, physical)
-                })),
-                { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
-              ]}
-            />
-            {screenValue === 'custom' && screenCustom && (
-              <>
-                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={floor?.width ?? 800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
-                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={floor?.height ?? 600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
-              </>
-            )}
-          </Space>
-        </Row>
-      ) : (
-        <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
-          <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
-        </Row>
-      )}
       {webrtcRelay ? (
         <Row
           label={t("字体")}
@@ -1342,7 +1307,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
       )}
 
-      <h3 className="fb-fp-group">{t("硬件指纹")}</h3>
+      <Row label={t("随系统语言")}>
+        <span className="fb-muted">
+          {t("语音：{0}", WINDOWS_VOICE_LOCALES.find((item) => item.locale === voiceLocaleForLanguage(windowUiLocale))?.voices.join(', ') ?? '—')}
+          {' · '}
+          {t("媒体设备名：{0}", ownLanguageName(windowUiLocale))}
+        </span>
+      </Row>
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("硬件")}</h3>
+          <span className="fb-fp-card-sub">{t("以下随显卡自动配套，也可以单独修改")}</span>
+        </div>
       <Row
         label={t("显卡")}
         check={checkFor('gpu')}
@@ -1391,13 +1369,39 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={DEVICE_MEMORY_CHOICES.map((value) => ({ value, label: `${value} GB` }))}
         />
       </Row>
-      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
-      <Row label="AudioContext" check={checkFor('audio')} hint={t("不加噪：真实 Windows Chrome 的音频值只有少数几个，很多电脑完全相同，加噪反而像伪装")}>
-        {realSurface('audio')}
-      </Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} hint={t("不加偏移：真实浏览器的元素坐标都是 1/64 像素的整数倍，加小数偏移会被识破")}>
-        {realSurface('clientrects')}
-      </Row>
+      {kernelSpoofsScreen(windowKernelVersion) ? (
+        <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
+          ? t("浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以", hostScreen().width, hostScreen().height)
+          : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
+          <Space wrap size={8}>
+            <ValueChoice
+              label={t("分辨率")}
+              wide
+              value={screenValue}
+              onChange={chooseScreen}
+              onShuffle={shuffleScreen}
+              options={[
+                { value: 'host', label: t("本机真实") },
+                ...screenChoices(floor, hostScale()).map(({ width, height, physical }) => ({
+                  value: `${width}x${height}`,
+                  label: screenLabel(width, height, physical)
+                })),
+                { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
+              ]}
+            />
+            {screenValue === 'custom' && screenCustom && (
+              <>
+                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={floor?.width ?? 800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={floor?.height ?? 600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+              </>
+            )}
+          </Space>
+        </Row>
+      ) : (
+        <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
+          <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
+        </Row>
+      )}
       <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名按系统语言的 Windows 名称生成")}>
         <Select
           className="fb-fp-select"
@@ -1410,6 +1414,63 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
         />
       </Row>
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("网络")}</h3>
+        </div>
+      <Row
+        label="WebRTC"
+        check={checkFor('webrtc')}
+        hint={fp.webrtcPolicy === 'proxy_only'
+          ? webrtcRelay
+            ? proxyResult?.udp === true
+              ? t("这个代理支持 UDP：WebRTC 走代理，网站看到代理 IP，视频通话可用")
+              : proxyResult?.udp === false
+                ? t("这个代理不支持 UDP：WebRTC 只报代理 IP、不发 UDP，视频通话不可用")
+                : t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
+            : t("替换为代理 IP，防止泄露本机 IP")
+          : fp.webrtcPolicy === 'privacy'
+            ? t("开启 WebRTC，但网站拿不到任何 IP")
+            : fp.webrtcPolicy === 'disabled'
+              ? webrtcRelay
+                ? t("完全关闭 WebRTC；真实 Chrome 不会没有 WebRTC，网站可能视为异常")
+                : t("这个内核不能关闭 WebRTC，按「隐私」处理")
+              : t("原版 Chrome 行为，不经过代理，会暴露本机真实 IP")}
+      >
+        <Select
+          className="fb-fp-select"
+          value={fp.webrtcPolicy}
+          onChange={(webrtcPolicy) => patchFingerprint({ webrtcPolicy })}
+          options={[
+            { value: 'proxy_only', label: t("替换") },
+            { value: 'privacy', label: t("隐私") },
+            { value: 'default', label: t("允许") },
+            { value: 'disabled', label: t("禁止") }
+          ]}
+        />
+      </Row>
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("指纹值")}</h3>
+          <span className="fb-fp-card-sub">{t("每个窗口不同，同一个窗口每次读取都相同")}</span>
+        </div>
+      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="AudioContext" check={checkFor('audio')} hint={webrtcRelay ? t("每个窗口微调极少数音频采样，同一窗口每次相同") : t("这个内核只能用本机真实值")}>
+        {webrtcRelay ? seededControl('audio', 'AudioContext') : realSurface('audio')}
+      </Row>
+      <Row label="ClientRects" check={checkFor('clientrects')} hint={webrtcRelay ? t("每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式") : t("这个内核只能用本机真实值")}>
+        {webrtcRelay ? seededControl('clientrects', 'ClientRects') : realSurface('clientrects')}
+      </Row>
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("其他")}</h3>
+        </div>
       <Row label={t("设备名称")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
         <TextWithShuffle
           label={t("设备名称")}
@@ -1426,8 +1487,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onShuffle={() => patchFingerprint({ macAddress: macAddress(randomSeed()) })}
         />
       </Row>
-
-      <h3 className="fb-fp-group">{t("其他")}</h3>
       <Row label="Do Not Track">
         <Select
           className="fb-fp-select"
@@ -1437,8 +1496,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       <Row label={t("端口扫描保护")}>
-        <Fixed>{t("与 Chrome 一致：网页访问本机和局域网需要用户授权")}</Fixed>
+        <Switch checked={fp.portScanProtection !== false} onChange={(on) => patchFingerprint({ portScanProtection: on ? undefined : false })} aria-label={t("端口扫描保护")} />
       </Row>
+      </section>
 
       <h3 className="fb-fp-group">{t("指纹检测")}</h3>
       <div className="fb-check-panel">

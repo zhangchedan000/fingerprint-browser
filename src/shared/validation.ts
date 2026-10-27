@@ -135,6 +135,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   if (!['ask', 'allow', 'block'].includes(geolocationPermission)) throw new Error('地理位置权限无效')
   const doNotTrack = rawFp.doNotTrack ?? 'default'
   if (!['default', 'on', 'off'].includes(doNotTrack)) throw new Error('Do Not Track 设置无效')
+  if (rawFp.portScanProtection !== undefined && typeof rawFp.portScanProtection !== 'boolean') throw new Error('端口扫描保护设置无效')
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -241,6 +242,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(rawFp.deviceMemory !== undefined && rawFp.deviceMemory !== 8 ? { deviceMemory: rawFp.deviceMemory } : {}),
       ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
       ...(doNotTrack !== 'default' ? { doNotTrack } : {}),
+      ...(rawFp.portScanProtection === false ? { portScanProtection: false } : {}),
       ...(rawFp.voicesLocale ? { voicesLocale: rawFp.voicesLocale } : {}),
       ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
       ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {}),
