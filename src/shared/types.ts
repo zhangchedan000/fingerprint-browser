@@ -281,7 +281,7 @@ export interface AppUpdateInfo {
   size?: number
   /** The newer exe is already downloaded and checked. */
   downloaded?: boolean
-  /** One-click install works (the Windows portable build); otherwise download from the page. */
+  /** One-click install works (the installed Windows app); otherwise download from the page. */
   canInstall: boolean
 }
 

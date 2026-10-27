@@ -21,7 +21,8 @@ import { AppSessionTracker } from './app-session'
 import { migrateMacLegacyKernelSelection } from './browser-locator'
 import { WorkspaceMigrationManager } from './workspace-migration'
 import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
-import { AppUpdater } from './app-updater'
+import electronUpdater from 'electron-updater'
+import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
@@ -37,6 +38,23 @@ if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.
 
 if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_USER_DATA && isAbsolute(process.env.PRISM_E2E_USER_DATA)) {
   app.setPath('userData', process.env.PRISM_E2E_USER_DATA)
+}
+
+/** electron-updater for the installed Windows app; other builds update from the release page. */
+function installedUpdater(log: AppLogger): UpdaterEngine | undefined {
+  if (!app.isPackaged || process.platform !== 'win32' || process.env.PORTABLE_EXECUTABLE_FILE) return undefined
+  const { autoUpdater } = electronUpdater
+  autoUpdater.logger = {
+    info: (message?: unknown) => log.info('自动更新', { message: String(message) }),
+    warn: (message?: unknown) => log.info('自动更新', { warning: String(message) }),
+    error: (message?: unknown) => log.error('自动更新出错', { message: String(message) }),
+    debug: () => undefined
+  }
+  // Update tests serve their own latest.yml and installer.
+  if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_UPDATE_FEED) {
+    autoUpdater.setFeedURL({ provider: 'generic', url: process.env.PRISM_E2E_UPDATE_FEED })
+  }
+  return autoUpdater
 }
 
 function createWindow(): BrowserWindow {
@@ -175,15 +193,13 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
-  const updater = new AppUpdater(
+  registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
-    app.getPath('userData'),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),
+    installedUpdater(logger),
     logger,
     (input, init) => net.fetch(input as string, init)
-  )
-  void updater.cleanup()
-  registerAppUpdateIpc(updater, profiles)
+  ), profiles, async () => { await team?.flush() })
   mainWindow = createWindow()
 
   app.on('activate', () => {

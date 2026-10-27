@@ -1,9 +1,29 @@
-import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isNewerVersion, parseAppVersion, previousExePath, replaceExecutable, windowsExeAsset } from './app-updater'
+import type { AppUpdateProgress } from '../shared/types'
+import { AppUpdater, isNewerVersion, parseAppVersion, windowsExeAsset, type UpdaterEngine } from './app-updater'
+
+function fakeEngine(version: string) {
+  const listeners: Array<(progress: { transferred: number; total: number }) => void> = []
+  const calls: string[] = []
+  const engine: UpdaterEngine & { calls: string[] } = {
+    autoDownload: true,
+    autoInstallOnAppQuit: true,
+    calls,
+    checkForUpdates: async () => ({ updateInfo: { version, releaseDate: '2026-10-27T00:00:00Z', files: [{ size: 1000 }] } }),
+    downloadUpdate: async () => {
+      calls.push('download')
+      for (const listener of listeners) listener({ transferred: 500, total: 1000 })
+    },
+    quitAndInstall: (isSilent, isForceRunAfter) => { calls.push(`install silent=${isSilent} run=${isForceRunAfter}`) },
+    on: (_event, listener) => { listeners.push(listener) }
+  }
+  return engine
+}
+
+const githubRelease = (tag: string) => async () => new Response(JSON.stringify({
+  tag_name: tag, name: tag, body: '## 更新内容', published_at: '2026-10-27T01:00:00Z', html_url: `https://github.com/x/releases/${tag}`,
+  assets: [{ name: 'Fingerprint-Browser-Setup.exe', size: 1000, browser_download_url: 'https://github.com/zhangchedan000/fingerprint-browser/releases/download/v/x.exe', digest: null }]
+}))
 
 describe('app updates', () => {
   it('compares release versions', () => {
@@ -16,43 +36,31 @@ describe('app updates', () => {
   })
 
   it('takes the exe only from this repository', () => {
-    const asset = (url: string) => ({ name: 'Fingerprint-Browser-0.2.0.exe', size: 1, browser_download_url: url, digest: null })
-    expect(windowsExeAsset([asset('https://github.com/zhangchedan000/fingerprint-browser/releases/download/v0.2.0/x.exe')])).toBeDefined()
-    expect(windowsExeAsset([asset('https://github.com/other/repo/releases/download/v0.2.0/x.exe')])).toBeUndefined()
+    const asset = (url: string) => ({ name: 'Fingerprint-Browser-Setup-0.4.0.exe', size: 1, browser_download_url: url, digest: null })
+    expect(windowsExeAsset([asset('https://github.com/zhangchedan000/fingerprint-browser/releases/download/v0.4.0/x.exe')])).toBeDefined()
+    expect(windowsExeAsset([asset('https://github.com/other/repo/releases/download/v0.4.0/x.exe')])).toBeUndefined()
   })
 
-  it('replaces the exe in place while it is open, keeping the old one aside', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'app-updater-'))
-    try {
-      const target = join(root, 'IDM下载', "Bob's Fingerprint.Browser.0.2.0.exe")
-      const downloaded = join(root, 'Fingerprint-Browser-0.3.0.exe')
-      await mkdir(join(root, 'IDM下载'))
-      await writeFile(target, 'old')
-      await writeFile(downloaded, 'new')
-      const running = await open(target, 'r')
-      try {
-        await replaceExecutable(downloaded, target)
-      } finally {
-        await running.close()
-      }
-      expect(await readFile(target, 'utf8')).toBe('new')
-      expect(await readFile(previousExePath(target), 'utf8')).toBe('old')
-      expect(existsSync(downloaded)).toBe(false)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+  it('downloads with electron-updater and installs silently, restarting into the new version', async () => {
+    const engine = fakeEngine('0.4.1')
+    const progress: AppUpdateProgress[] = []
+    const updater = new AppUpdater('0.4.0', (item) => progress.push(item), engine, undefined, githubRelease('v0.4.1'))
+    expect(engine.autoDownload).toBe(false)
+    expect(engine.autoInstallOnAppQuit).toBe(false)
+
+    expect(await updater.check()).toMatchObject({ latest: '0.4.1', available: true, canInstall: true, notes: '## 更新内容', size: 1000, downloaded: false })
+    expect(() => updater.install()).toThrow('请先下载更新')
+    expect(await updater.download()).toMatchObject({ downloaded: true })
+    expect(progress[0]).toMatchObject({ version: '0.4.1', receivedBytes: 500, totalBytes: 1000 })
+    updater.install()
+    expect(engine.calls).toEqual(['download', 'install silent=true run=true'])
   })
 
-  it('puts the old exe back when the new one cannot be copied', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'app-updater-'))
-    try {
-      const target = join(root, 'Fingerprint.Browser.0.2.0.exe')
-      await writeFile(target, 'old')
-      await expect(replaceExecutable(join(root, 'missing.exe'), target)).rejects.toThrow('无法替换程序文件')
-      expect(await readFile(target, 'utf8')).toBe('old')
-      expect(existsSync(previousExePath(target))).toBe(false)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+  it('reports no update for the same version, and only the page outside the installed app', async () => {
+    expect(await new AppUpdater('0.4.1', () => undefined, fakeEngine('0.4.1'), undefined, githubRelease('v0.4.1')).check())
+      .toMatchObject({ available: false, canInstall: true })
+    const portable = new AppUpdater('0.3.1', () => undefined, undefined, undefined, githubRelease('v0.4.0'))
+    expect(await portable.check()).toMatchObject({ latest: '0.4.0', available: true, canInstall: false })
+    await expect(portable.download()).rejects.toThrow('只有安装版支持一键更新')
   })
 })
