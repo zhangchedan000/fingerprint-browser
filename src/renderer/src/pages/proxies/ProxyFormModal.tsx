@@ -26,13 +26,16 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const passwordStored = Form.useWatch('passwordStored', { form, preserve: true }) === true
   const password = Form.useWatch('password', form) ?? ''
   const protocol = Form.useWatch('protocol', form) ?? 'socks5'
+  // API 提取: only the provider's extraction link; the proxy and its protocol come from it.
+  const [apiMode, setApiMode] = useState(false)
 
   useEffect(() => {
     if (!open) return
     form.resetFields()
     form.setFieldsValue(proxy
-      ? { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: '', passwordStored: proxy.passwordStored, note: proxy.note }
+      ? { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: '', passwordStored: proxy.passwordStored, note: proxy.note, apiUrl: proxy.apiUrl ?? '' }
       : EMPTY)
+    setApiMode(Boolean(proxy?.apiUrl))
     setPaste('')
     setPasteError('')
     setPasted(null)
@@ -54,9 +57,20 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     }
   }
 
+  /** What an API proxy is saved and tested as: the link only (the app fills in the proxy). */
+  function apiDraft(): ProxyDraft {
+    const values = form.getFieldsValue(true) as ProxyDraft
+    return { protocol: 'http', host: '', port: undefined, username: '', password: '', note: values.note ?? '', apiUrl: (values.apiUrl ?? '').trim() }
+  }
+
   async function submit(): Promise<void> {
+    if (apiMode) {
+      await form.validateFields(['apiUrl'])
+      await onSubmit(apiDraft())
+      return
+    }
     const values = await form.validateFields()
-    await onSubmit({ ...form.getFieldsValue(true), ...values })
+    await onSubmit({ ...form.getFieldsValue(true), ...values, apiUrl: undefined })
   }
 
   return (
@@ -72,6 +86,24 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       width={560}
     >
       <Form form={form} layout="vertical" requiredMark={false}>
+        <Form.Item label={t("方式")}>
+          <Radio.Group
+            optionType="button"
+            value={apiMode ? 'api' : 'fixed'}
+            onChange={(event) => { setApiMode(event.target.value === 'api'); setResult(null) }}
+            options={[{ value: 'fixed', label: t("固定代理") }, { value: 'api', label: t("API 提取") }]}
+          />
+        </Form.Item>
+        {apiMode ? (
+          <Form.Item
+            name="apiUrl"
+            label={t("API 链接")}
+            extra={t("每次打开窗口都从这个链接取一个代理，自动识别是 SOCKS5 还是 HTTP。白名单模式要先在服务商后台把这台电脑的 IP 加进白名单。")}
+            rules={[{ required: true, message: t("请输入 API 链接") }, { pattern: /^https?:\/\//i, message: t("API 链接要以 http:// 或 https:// 开头") }]}
+          >
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="https://example.com/api?num=1&format=txt" />
+          </Form.Item>
+        ) : (<>
         <Form.Item
           label={t("快速粘贴")}
           help={pasteError
@@ -101,12 +133,18 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
             <Input.Password autoComplete="new-password" />
           </Form.Item>
         </div>
+        </>)}
         <Form.Item name="note" label={t("备注")}>
           <Input maxLength={200} placeholder={t("例如：住宅 IP、BM 专用")} />
         </Form.Item>
         <ProxyTestButton
           result={result}
           onTest={async () => {
+            if (apiMode) {
+              await form.validateFields(['apiUrl'])
+              setResult(await window.browserApi.proxy.test({ ...apiDraft(), password: '' }, undefined, proxy?.id))
+              return
+            }
             const values = await form.validateFields(['host', 'port'])
             const draft = { ...form.getFieldsValue(true), ...values } as ProxyDraft
             const tested = await window.browserApi.proxy.test({ ...draft, password: draft.password ?? '' }, undefined, proxy?.id)

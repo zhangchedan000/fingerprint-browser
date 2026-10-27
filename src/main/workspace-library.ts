@@ -43,7 +43,7 @@ export class WorkspaceLibrary {
   /** The connection settings of a library proxy, in the shape the launcher and tester use. */
   proxyConfig(id: string): ProxyConfig | undefined {
     const proxy = this.proxies.get(id)
-    return proxy && { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: proxy.password }
+    return proxy && { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: proxy.password, ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}) }
   }
 
   /**
@@ -86,9 +86,14 @@ export class WorkspaceLibrary {
     return record.id
   }
 
+  /** The library's API proxy with this extraction URL (an API proxy is the same one by its URL). */
+  private findApiProxy(apiUrl: string): ProxyRecord | undefined {
+    return this.listProxies().find((proxy) => proxy.apiUrl === apiUrl)
+  }
+
   addProxy(input: ProxyDraft, now: string): ProxyRecord {
     const draft = validateProxyDraft(input)
-    if (this.findProxy(draft)) throw new Error('代理库中已有相同的代理')
+    if (draft.apiUrl ? this.findApiProxy(draft.apiUrl) : this.findProxy(draft)) throw new Error('代理库中已有相同的代理')
     const record: ProxyRecord = {
       id: randomUUID(),
       protocol: draft.protocol,
@@ -98,7 +103,8 @@ export class WorkspaceLibrary {
       password: draft.password,
       note: draft.note,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      ...(draft.apiUrl ? { apiUrl: draft.apiUrl } : {})
     }
     this.proxies.set(record.id, record)
     return record
@@ -108,7 +114,7 @@ export class WorkspaceLibrary {
     const current = this.getProxy(id)
     const draft = validateProxyDraft(input)
     const password = !draft.password && draft.passwordStored && sameProxyIdentity(draft, current) ? current.password : draft.password
-    const duplicate = this.findProxy({ ...draft, password })
+    const duplicate = draft.apiUrl ? this.findApiProxy(draft.apiUrl) : this.findProxy({ ...draft, password })
     if (duplicate && duplicate.id !== id) throw new Error('代理库中已有相同的代理')
     const connectionChanged = !sameProxyIdentity(draft, current) || password !== current.password
     const record: ProxyRecord = {
@@ -121,8 +127,19 @@ export class WorkspaceLibrary {
       note: draft.note,
       updatedAt: now
     }
+    if (draft.apiUrl) record.apiUrl = draft.apiUrl
+    else delete record.apiUrl
     // A check of the old connection says nothing about the new one.
     if (connectionChanged) delete record.check
+    this.proxies.set(id, record)
+    return record
+  }
+
+  /** The proxy an API proxy's extraction gave last, kept so lists show it; its check stays. */
+  setApiEndpoint(id: string, endpoint: Pick<ProxyRecord, 'protocol' | 'host' | 'port' | 'username' | 'password'>, now: string): ProxyRecord {
+    const current = this.getProxy(id)
+    if (!current.apiUrl) throw new Error('这不是 API 代理')
+    const record: ProxyRecord = { ...current, ...endpoint, updatedAt: now }
     this.proxies.set(id, record)
     return record
   }

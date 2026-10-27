@@ -184,12 +184,12 @@ export function ProxiesPage() {
       sorter: (a, b) => proxyAddress(a).localeCompare(proxyAddress(b), undefined, { numeric: true }),
       render: (_value, proxy) => (
         <div className="fb-two-line">
-          <span className="fb-mono">{proxyAddress(proxy)}</span>
-          <small>{proxy.note || proxy.username || '—'}</small>
+          <span className="fb-mono">{proxy.apiUrl ? t("API 提取") : proxyAddress(proxy)}</span>
+          <small className="fb-ellipsis" title={proxy.apiUrl}>{proxy.apiUrl ? `${t("上次")} ${proxyAddress(proxy)}${proxy.note ? ` · ${proxy.note}` : ''}` : proxy.note || proxy.username || '—'}</small>
         </div>
       )
     },
-    { title: t("类型"), dataIndex: 'protocol', width: 80, render: (protocol: string) => protocol.toUpperCase() },
+    { title: t("类型"), dataIndex: 'protocol', width: 90, render: (protocol: string, proxy) => proxy.apiUrl ? `API · ${protocol.toUpperCase()}` : protocol.toUpperCase() },
     {
       title: t("出口 IP / 地区"),
       key: 'exit',

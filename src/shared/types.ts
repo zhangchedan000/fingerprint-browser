@@ -45,6 +45,11 @@ export interface ProxyConfig {
   username: string
   password: string
   passwordStored?: boolean
+  /**
+   * An extraction API ("API 提取"): every launch asks it for a fresh proxy and finds out whether it
+   * is SOCKS5 or HTTP; protocol/host/port/username/password are the last one it gave.
+   */
+  apiUrl?: string
 }
 
 /** Login the window is used for. The password is encrypted at rest and never sent to the UI. */
@@ -143,6 +148,8 @@ export interface ProxyRecord {
   updatedAt: string
   /** Latest check of this proxy, shared by every window that uses it. */
   check?: ProxyCheckSummary
+  /** See ProxyConfig.apiUrl. */
+  apiUrl?: string
 }
 
 export type ProxyRecordView = Omit<ProxyRecord, 'password'> & {
@@ -161,6 +168,8 @@ export interface ProxyDraft {
   /** Keep the saved password when password is empty. */
   passwordStored?: boolean
   note?: string
+  /** See ProxyConfig.apiUrl; host and port are then filled in from the API. */
+  apiUrl?: string
 }
 
 /** A window group. Windows refer to it by id, so renaming it renames it everywhere. */

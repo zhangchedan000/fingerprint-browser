@@ -52,7 +52,7 @@ export function proxyLabel(proxy: ProxyRecordView) {
   ].filter(Boolean)
   return (
     <span className="fb-proxy-option">
-      <span className="fb-mono">{proxy.protocol.toUpperCase()} · {proxyAddress(proxy)}{proxy.username ? ` · ${proxy.username}` : ''}</span>
+      <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname) : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username ? ` · ${proxy.username}` : ''}`}</span>
       <small>{details.join(' · ')}</small>
     </span>
   )

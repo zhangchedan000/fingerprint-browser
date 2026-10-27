@@ -8,6 +8,7 @@ import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { resolveApiProxy } from './api-proxy'
 import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
@@ -240,6 +241,13 @@ export class BrowserLauncher {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
+    }
+    if (profile.proxy.apiUrl && profile.proxyId) {
+      // API 提取: a fresh proxy from the provider for this launch.
+      const endpoint = await resolveApiProxy(profile.proxy.apiUrl)
+      await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint)
+      profile = this.profiles.get(id)
+      this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()

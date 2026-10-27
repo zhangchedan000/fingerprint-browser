@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
+import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig, ProxyDraft } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
@@ -18,7 +18,8 @@ import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
 import { localProxyFor } from './proxy-bridge'
 import { proxySupportsUdp } from './webrtc-relay'
-import { validateProfileDraft, validateProxyConfig } from '../shared/validation'
+import { validateProfileDraft, validateProxyConfig, validProxyApiUrl } from '../shared/validation'
+import { resolveApiProxy } from './api-proxy'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
 import { clearProfileCache, profileStorageInfo, storageOverview } from './profile-data'
@@ -204,8 +205,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const existing = profileId ? profiles.get(profileId) : undefined
     let proxy: ProxyConfig
     if (draft.proxyId) {
-      const { protocol, host, port, username, password } = profiles.getProxy(draft.proxyId)
-      proxy = { protocol, host, port, username, password }
+      const { protocol, host, port, username, password, apiUrl } = profiles.getProxy(draft.proxyId)
+      // An API proxy is checked with a fresh one, as a launch would get.
+      proxy = apiUrl ? { ...await resolveApiProxy(apiUrl) } : { protocol, host, port, username, password }
     } else {
       proxy = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
     }
@@ -590,7 +592,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     return kernels.verify(version)
   })
-  ipcMain.handle('proxy:test', async (_event, config, profileId?: string, proxyId?: string) => {
+  /** An API proxy draft with the proxy its API gives now filled in (others as they are). */
+  const resolveDraft = async <T extends ProxyDraft | ProxyConfig>(draft: T): Promise<T> => {
+    if (!draft || typeof draft !== 'object' || !draft.apiUrl) return draft
+    const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl))
+    return { ...draft, ...endpoint, passwordStored: false }
+  }
+  ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string) => {
+    const config = await resolveDraft(input as ProxyConfig)
     const validated = validateProxyConfig(config)
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
     const proxy = proxyForTest(validated, saved)
@@ -607,18 +616,20 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const windows = profiles.list()
     return profiles.listProxies().map((proxy) => publicProxyRecord(proxy, windows))
   })
-  ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(draft)).id))
+  ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(await resolveDraft(draft as ProxyDraft))).id))
   ipcMain.handle('proxy:create-many', async (_event, drafts) => {
     const result = await profiles.createProxies(drafts)
     const windows = profiles.list()
     return { ...result, created: result.created.map((proxy) => publicProxyRecord(proxy, windows)) }
   })
-  ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, draft)).id))
+  ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, await resolveDraft(draft as ProxyDraft))).id))
   ipcMain.handle('proxy:remove', (_event, id: string, replaceWith?: unknown) => {
     if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
     return profiles.removeProxy(id, replaceWith)
   })
   ipcMain.handle('proxy:check', async (_event, id: string) => {
+    const saved = profiles.getProxy(id)
+    if (saved.apiUrl) await profiles.setApiProxyEndpoint(id, await resolveApiProxy(saved.apiUrl))
     const tested = profiles.getProxy(id)
     const result = await testProxy(tested)
     const current = profiles.getProxy(id)

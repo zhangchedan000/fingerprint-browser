@@ -10,7 +10,7 @@ import type {
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
-import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft } from '../shared/validation'
+import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
 import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
@@ -332,7 +332,8 @@ export class ProfileStore {
         note: typeof stored.note === 'string' ? stored.note.slice(0, 200) : '',
         createdAt: stored.createdAt,
         updatedAt: stored.updatedAt,
-        ...(check ? { check } : {})
+        ...(check ? { check } : {}),
+        ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {})
       })
     }
     const groups: GroupRecord[] = []
@@ -684,6 +685,14 @@ export class ProfileStore {
     })
   }
 
+  /** Records the proxy an API proxy's extraction just gave (windows already running keep theirs). */
+  async setApiProxyEndpoint(id: string, endpoint: Pick<ProxyRecord, 'protocol' | 'host' | 'port' | 'username' | 'password'>): Promise<ProxyRecord> {
+    const record = this.library.setApiEndpoint(id, endpoint, new Date().toISOString())
+    await this.persist()
+    this.notify(this.proxyUsers(id).map((profile) => profile.id))
+    return { ...record }
+  }
+
   async updateProxy(id: string, input: ProxyDraft): Promise<ProxyRecord> {
     const users = this.proxyUsers(id)
     return this.withLibraryRollback(async () => {
@@ -1002,7 +1011,8 @@ export class ProfileStore {
   /** Saves a test result for a library proxy (from the proxy library page or a window). */
   async setLibraryProxyCheck(proxyId: string, check: ProxyCheckSummary, baselineIp?: string, sourceProfileId?: string): Promise<ProxyRecord> {
     const record = this.library.getProxy(proxyId)
-    const next = { ...record, check: nextProxyCheck(check, record.check, baselineIp) }
+    // An API proxy gives a new exit every time: no "exit changed" against the last one.
+    const next = { ...record, check: record.apiUrl ? nextProxyCheck(check, undefined) : nextProxyCheck(check, record.check, baselineIp) }
     this.library.proxies.set(proxyId, next)
     await this.persist()
     this.notify(this.list().filter((profile) => profile.proxyId === proxyId && profile.id !== sourceProfileId).map((profile) => profile.id))

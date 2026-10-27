@@ -253,6 +253,18 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   }
 }
 
+/** An extraction API address: http(s), at most 2048 characters. */
+export function validProxyApiUrl(input: unknown): string {
+  if (typeof input !== 'string' || input.trim().length > 2048) throw new Error('代理 API 链接无效')
+  try {
+    const url = new URL(input.trim())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error()
+    return url.href
+  } catch {
+    throw new Error('代理 API 链接要以 http:// 或 https:// 开头')
+  }
+}
+
 export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   if (!input || typeof input.protocol !== 'string') throw new Error('代理配置不完整')
   if (typeof input.host !== 'string' || typeof input.username !== 'string' || typeof input.password !== 'string') {
@@ -270,6 +282,7 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
     password: input.password
   }
   if (input.passwordStored === true) proxy.passwordStored = true
+  if (input.apiUrl !== undefined && input.apiUrl !== '') proxy.apiUrl = validProxyApiUrl(input.apiUrl)
   if (proxy.protocol === 'direct') {
     return { protocol: 'direct', host: '', username: '', password: '' }
   }
@@ -307,6 +320,7 @@ export function validateProxyDraft(input: ProxyDraft): ProxyDraft & { port: numb
     username: proxy.username,
     password: proxy.password,
     ...(proxy.passwordStored ? { passwordStored: true } : {}),
+    ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}),
     note
   }
 }
