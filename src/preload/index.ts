@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { DeepSiteResult } from '../shared/deep-check'
 import type { TeamSyncEvent } from '../shared/team'
+import type { FontPackProgress } from '../shared/windows-font-packs'
 import type { AppUpdateProgress, BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
@@ -33,7 +34,12 @@ const api: BrowserApi = {
       return () => ipcRenderer.removeListener('app:update-progress', handler)
     },
     fontPacks: () => ipcRenderer.invoke('fonts:packs'),
-    installFontPacks: () => ipcRenderer.invoke('fonts:install-packs')
+    installFontPacks: (scripts?: string[]) => ipcRenderer.invoke('fonts:install-packs', scripts),
+    onFontPackProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: FontPackProgress): void => listener(progress)
+      ipcRenderer.on('fonts:progress', handler)
+      return () => ipcRenderer.removeListener('fonts:progress', handler)
+    }
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),

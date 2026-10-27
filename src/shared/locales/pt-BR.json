@@ -2254,5 +2254,10 @@
   "每个窗口一个种子，换一换会换成另一组 Canvas 值": "Uma seed por janela; Trocar muda para outro conjunto de valores de Canvas",
   "每个窗口微调极少数音频采样，同一窗口每次相同": "Cada janela ajusta levemente pouquíssimas amostras de áudio, sempre iguais na mesma janela",
   "这个内核只能用本机真实值": "Este kernel só pode usar os valores reais deste computador",
-  "每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式": "Cada janela é deslocada por inteiro em alguns 1/64 de pixel; os valores mantêm o formato de um navegador real"
+  "每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式": "Cada janela é deslocada por inteiro em alguns 1/64 de pixel; os valores mantêm o formato de um navegador real",
+  "这台电脑还没有{0}字体包，窗口里会缺少这些字体。点下载从微软下载安装，不需要管理员权限。": "Este computador ainda não tem o pacote de fontes de {0}, então a janela ficará sem essas fontes. Baixar instala pela Microsoft; não precisa de permissão de administrador.",
+  "下载字体包（{0} MB）": "Baixar pacote de fontes ({0} MB)",
+  "正在安装字体…": "Instalando fontes…",
+  "正在从微软下载 {0} / {1} MB": "Baixando da Microsoft {0} / {1} MB",
+  "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "A janela mostra as fontes nativas do Windows do idioma do sistema, então o pacote de fontes desse idioma precisa estar instalado neste computador. É baixado da Microsoft e instalado só para o usuário atual; não precisa de permissão de administrador."
 }

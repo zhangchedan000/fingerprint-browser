@@ -1,5 +1,6 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
+import { FontPackDownload } from '../../components/FontPackDownload'
 import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
@@ -1298,10 +1299,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           label={t("字体")}
           check={checkFor('font')}
           hint={fontScript && fontPacks?.missing.includes(fontScript)
-            ? t("本机没有{0}字体包，窗口里看不到这些字体。可在 设置 → 常规 → 语言字体 安装。", fontPackLabel(fontScript, getLocale()))
+            ? t("这台电脑还没有{0}字体包，窗口里会缺少这些字体。点下载从微软下载安装，不需要管理员权限。", fontPackLabel(fontScript, getLocale()))
             : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
         >
           <Fixed>{t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
+          {fontScript && fontPacks?.missing.includes(fontScript) && (
+            <FontPackDownload scripts={[fontScript]} onInstalled={setFontPacks} />
+          )}
         </Row>
       ) : (
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>

@@ -1,4 +1,3 @@
-import { FontPackPrompt } from './components/FontPackPrompt'
 import { PoweroffOutlined } from '@ant-design/icons'
 import { Button, Layout, Space } from 'antd'
 import { useState } from 'react'
@@ -31,7 +30,6 @@ function Shell() {
   return (
     <Layout className="app-shell" hasSider>
       <Sidebar active={active} onNavigate={navigate} />
-      <FontPackPrompt />
       <Layout>
         <header className="fb-topbar">
           <h1>{page.label()}</h1>

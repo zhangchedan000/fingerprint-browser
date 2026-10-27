@@ -197,7 +197,11 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
-  registerLanguageFontsIpc(logger)
+  registerLanguageFontsIpc(
+    (input, init) => net.fetch(input as string, init),
+    (progress) => mainWindow?.webContents.send('fonts:progress', progress),
+    logger
+  )
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),
