@@ -1182,7 +1182,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
 
       <h3 className="fb-fp-group">{t("地区与网络")}</h3>
-      <Row label={t("地区")} hint={followIp ? t("启动时按代理出口 IP 的国家设置时区和语言") : t("按这个国家的 Windows 电脑设置时区和语言，两者都可以再单独调整")}>
+      <Row label={t("国家/地区")} hint={followIp ? t("启动时按代理出口 IP 的国家设置时区、系统语言和浏览器语言") : t("按这个国家的电脑配套设置时区、系统语言和浏览器语言，下面三项都可以再单独调整")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1194,7 +1194,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
             ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
           ]}
-          aria-label={t("地区")}
+          aria-label={t("国家/地区")}
         />
       </Row>
       {regionMismatch && (
@@ -1216,7 +1216,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           )}
       </Row>
-      <Row label={t("语言")} check={checkFor('language')} hint={`Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
+      <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，新装的 Chrome 菜单也是这个语言；决定字体、语音、设备名和网页里日期数字的默认格式")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select"
+          value={fp.uiLocale ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value })}
+          options={[
+            { value: 'auto', label: t("跟随浏览器语言 · {0}", `${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
+            ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
+          ]}
+          aria-label={t("系统语言")}
+        />
+      </Row>
+      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 设置里的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         {followIp
           ? <Fixed>{t("基于 IP · {0}", networkIdentity.language)}</Fixed>
           : (
@@ -1237,23 +1251,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
                 </span>
               )}
-              aria-label={t("语言")}
+              aria-label={t("浏览器语言")}
             />
           )}
-      </Row>
-      <Row label={t("界面语言")} hint={t("Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式")}>
-        <Select
-          showSearch
-          optionFilterProp="label"
-          className="fb-fp-select"
-          value={fp.uiLocale ?? 'auto'}
-          onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value })}
-          options={[
-            { value: 'auto', label: t("跟随语言 · {0}", `${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
-            ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
-          ]}
-          aria-label={t("界面语言")}
-        />
       </Row>
       <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
         <Select
@@ -1334,9 +1334,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           check={checkFor('font')}
           hint={fontScript && fontPacks?.missing.includes(fontScript)
             ? t("本机没有{0}字体包，窗口里看不到这些字体。可在 设置 → 常规 → 语言字体 安装。", fontPackLabel(fontScript, getLocale()))
-            : t("Windows 11 自带字体，加上界面语言对应的语言字体包；本机另装的字体不显示")}
+            : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
         >
-          <Fixed>{t("跟随界面语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
+          <Fixed>{t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
         </Row>
       ) : (
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
@@ -1398,7 +1398,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label="ClientRects" check={checkFor('clientrects')} hint={t("不加偏移：真实浏览器的元素坐标都是 1/64 像素的整数倍，加小数偏移会被识破")}>
         {realSurface('clientrects')}
       </Row>
-      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名按界面语言的 Windows 名称生成")}>
+      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名按系统语言的 Windows 名称生成")}>
         <Select
           className="fb-fp-select"
           value={fp.mediaDevices ?? 'auto'}
