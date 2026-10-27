@@ -47,7 +47,12 @@ interface IpcDependencies {
 export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
-  ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => publicProfile(await profiles.create(draft)))
+  // Every window is a cloud window: new ones here go up shortly after (team.sync).
+  ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
+    const profile = publicProfile(await profiles.create(draft))
+    team.scheduleSync()
+    return profile
+  })
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
     const profile = publicProfile(await profiles.update(id, draft))
@@ -56,7 +61,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:duplicate', async (_event, id: string) => {
     team.assertEditable(id)
-    return publicProfile(await profiles.duplicate(id))
+    const profile = publicProfile(await profiles.duplicate(id))
+    team.scheduleSync()
+    return profile
   })
   ipcMain.handle('profiles:export-config', async (_event, id: string) => {
     team.assertEditable(id)
@@ -87,6 +94,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if ((await stat(path)).size > 1024 * 1024) throw new Error('环境配置文件不能超过 1 MB')
     const profile = await profiles.create(parseProfileConfig(await readFile(path, 'utf8')))
     logger.info('环境配置已导入', { profileId: profile.id })
+    team.scheduleSync()
     return publicProfile(profile)
   })
   // One pending import at a time: the preview keeps the checked rows here until commit.
@@ -144,6 +152,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       }
     }
     logger.info('已批量导入窗口', { count: created.length, skipped: pending.table.rows.length - rows.length, cookieErrors: cookieErrors.length })
+    team.scheduleSync()
     return { created: created.map(publicProfile), skipped: pending.table.rows.length - rows.length, cookiesImported, cookieErrors }
   })
   ipcMain.handle('profiles:batch-import-save-errors', async (_event, token: string) => {
@@ -302,6 +311,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
     const imported = await backups.import(result.filePaths[0])
+    team.scheduleSync()
     return { profile: publicProfile(imported.profile), result: imported.result }
   })
   ipcMain.handle('profiles:export-workspace', async (_event, password: string) => {
@@ -329,12 +339,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
-    return workspaceMigration.importAll(result.filePaths[0], password, conflictPolicy)
+    const imported = await workspaceMigration.importAll(result.filePaths[0], password, conflictPolicy)
+    team.scheduleSync()
+    return imported
   })
   ipcMain.handle('profiles:trash', () => profiles.listTrash())
   ipcMain.handle('profiles:restore', async (_event, trashId: string) => {
     const profile = await profiles.restore(trashId)
     logger.info('浏览器环境已从回收站恢复', { profileId: profile.id })
+    // Linked to its cloud window again (team.sync).
+    team.scheduleSync()
     return publicProfile(profile)
   })
   ipcMain.handle('profiles:purge-trash', async (_event, trashId: string) => {

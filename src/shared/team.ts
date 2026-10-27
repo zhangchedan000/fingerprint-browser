@@ -32,6 +32,8 @@ export interface TeamProfileView {
   id: string
   name: string
   note: string
+  /** Who created it: the owner account, or a member for their own windows. */
+  ownerId: string
   assignees: string[]
   configRev: number
   dataRev: number
@@ -42,6 +44,8 @@ export interface TeamProfileView {
   lock?: TeamLockView
   /** The window on this computer linked to it, if any. */
   localId?: string
+  /** Deleted on this computer; the cloud keeps it and it is not pulled again by itself. */
+  removedHere: boolean
   /** The owner's own window it was shared from (owner only). */
   sourceId: string
 }

@@ -20,6 +20,7 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:profile-update', async (_event, id: string, patch: TeamProfilePatch) => { await team.updateProfile(id, patch) })
   ipcMain.handle('team:unshare', (_event, id: string) => team.unshare(id))
   ipcMain.handle('team:force-unlock', (_event, id: string) => team.forceUnlock(id))
-  ipcMain.handle('team:add-to-computer', (_event, id: string) => team.addToComputer(id))
+  ipcMain.handle('team:add-to-computer', (_event, id: string) => team.restoreToComputer(id))
+  ipcMain.handle('team:sync', () => team.sync())
   ipcMain.handle('team:logs', (_event, query: TeamLogQuery) => team.logs(query))
 }

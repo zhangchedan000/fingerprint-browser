@@ -176,6 +176,7 @@ const api: BrowserApi = {
     unshare: (id) => ipcRenderer.invoke('team:unshare', id),
     forceUnlock: (id) => ipcRenderer.invoke('team:force-unlock', id),
     addToComputer: (id) => ipcRenderer.invoke('team:add-to-computer', id),
+    sync: () => ipcRenderer.invoke('team:sync'),
     logs: (query) => ipcRenderer.invoke('team:logs', query),
     onSync: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, event: TeamSyncEvent): void => listener(event)

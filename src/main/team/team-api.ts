@@ -12,12 +12,15 @@ export interface RemoteProfile {
   name: string
   note: string
   source_id: string
+  /** Who created it (the owner account, or a member for their own windows). */
+  owner: string
   config: unknown
   config_rev: number
   assignees: string[]
   data: string
   data_rev: number
   data_by: string
+  data_size?: number
   updated: string
   expand?: { data_by?: RemoteUser }
 }
@@ -224,7 +227,7 @@ export class TeamApi {
   /** Creates (no id) or updates a shared window; with dataFile, also uploads the login state. */
   async saveProfile(
     id: string | undefined,
-    fields: { name?: string; note?: string; source_id?: string; config?: unknown; assignees?: string[] },
+    fields: { name?: string; note?: string; source_id?: string; owner?: string; config?: unknown; assignees?: string[] },
     data?: { file: string; rev: number; size: number; sha256: string }
   ): Promise<RemoteProfile> {
     const form = new FormData()

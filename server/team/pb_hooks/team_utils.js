@@ -15,7 +15,8 @@ function displayName(user) {
 
 function canSee(profile, auth) {
   if (isOwner(auth)) return true
-  return !auth.getBool("disabled") && profile.getStringSlice("assignees").indexOf(auth.id) >= 0
+  if (auth.getBool("disabled")) return false
+  return profile.getString("owner") === auth.id || profile.getStringSlice("assignees").indexOf(auth.id) >= 0
 }
 
 function findOrNull(app, collection, filter, params) {

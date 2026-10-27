@@ -31,6 +31,8 @@ interface TeamLink {
   configRev: number
   /** Closing could not upload; the next open uploads first. */
   pendingUpload?: boolean
+  /** Who created the cloud window; members may change their own ones. */
+  ownerId?: string
 }
 
 interface TeamFile {
@@ -40,7 +42,14 @@ interface TeamFile {
   token: string
   /** Role of the account last signed in here; decides what linked windows allow offline. */
   role?: TeamRole
+  /** Account last signed in here. */
+  userId?: string
   links: Record<string, TeamLink>
+  /**
+   * Windows deleted on this computer: the cloud keeps them, this computer does not pull them
+   * again, and restoring one from the recycle bin links it back.
+   */
+  removed?: Record<string, TeamLink>
 }
 
 const HEARTBEAT_MS = 30_000
@@ -130,8 +139,10 @@ export class TeamManager {
       this.user = await api.refresh()
       this.verifiedAt = Date.now()
       this.file.role = this.user.role
+      this.file.userId = this.user.id
       this.file.token = this.secrets.encode(api.token)
       await this.save()
+      this.scheduleSync()
     } catch (error) {
       // Unreachable: keep the token so "retry" can try again; rejected (expired, disabled): sign out.
       this.user = undefined
@@ -233,7 +244,9 @@ export class TeamManager {
     this.file.server = normalized
     this.file.token = this.secrets.encode(api.token)
     this.file.role = user.role
+    this.file.userId = user.id
     await this.save()
+    this.scheduleSync()
     this.logger?.info('团队已登录', { server: normalized, user: user.username, role: user.role })
     return this.status()
   }
@@ -273,19 +286,22 @@ export class TeamManager {
     return (await this.requireOwner()).logs(query)
   }
 
-  // ---- shared windows ------------------------------------------------------------------
+  // ---- cloud windows ---------------------------------------------------------------------
 
   private localIdOf(teamId: string): string | undefined {
     return Object.entries(this.file.links).find(([, link]) => link.teamId === teamId)?.[0]
   }
 
+  /** Members use the windows assigned to them as they are; their own ones they may change. */
+  private isReadOnly(link: TeamLink): boolean {
+    return this.file.role !== 'owner' && link.ownerId !== this.file.userId
+  }
+
   links(): TeamLinkView[] {
-    // Until an owner signs in here, linked windows stay read-only (also while offline).
-    const member = this.file.role !== 'owner'
     return Object.entries(this.file.links).map(([profileId, link]) => ({
       profileId,
       teamId: link.teamId,
-      readOnly: member,
+      readOnly: this.isReadOnly(link),
       pendingUpload: Boolean(link.pendingUpload)
     }))
   }
@@ -293,6 +309,7 @@ export class TeamManager {
   async listProfiles(): Promise<TeamProfileView[]> {
     const api = this.requireApi()
     const [records, locks] = await Promise.all([api.listProfiles(), api.listLocks()])
+    const removed = new Set(Object.values(this.file.removed ?? {}).map((link) => link.teamId))
     const now = Date.now()
     return records.map((record) => {
       const lock = locks.find((item) => item.profile === record.id && item.expires > now)
@@ -301,14 +318,16 @@ export class TeamManager {
         id: record.id,
         name: record.name,
         note: record.note,
+        ownerId: record.owner ?? '',
         assignees: record.assignees ?? [],
         configRev: record.config_rev,
         dataRev: record.data_rev,
         dataByName: record.expand?.data_by?.name || record.expand?.data_by?.username || '',
-        dataSize: Number((record as RemoteProfile & { data_size?: number }).data_size ?? 0),
+        dataSize: Number(record.data_size ?? 0),
         updated: record.updated,
         sourceId: record.source_id,
         localId: this.localIdOf(record.id),
+        removedHere: removed.has(record.id),
         lock: lock
           ? { holderId: lock.holder, holderName: holder?.name || holder?.username || '', device: lock.device, expires: lock.expires }
           : undefined
@@ -316,9 +335,9 @@ export class TeamManager {
     })
   }
 
-  private assertClosed(id: string): void {
+  private isClosed(id: string): boolean {
     const profile = this.profiles.get(id)
-    if (profile.status !== 'closed' && profile.status !== 'error') throw new Error(`请先关闭窗口「${profile.name}」`)
+    return profile.status === 'closed' || profile.status === 'error'
   }
 
   private async packLocal(id: string): Promise<{ file: string; size: number; sha256: string }> {
@@ -327,37 +346,99 @@ export class TeamManager {
     return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`))
   }
 
-  /** Owner: shares local windows (config and current login state) with these members. */
-  async share(ids: string[], assignees: string[]): Promise<TeamProfileView[]> {
-    const api = await this.requireOwner()
-    for (const id of ids) this.assertClosed(id)
-    for (const id of ids) {
-      const profile = this.profiles.get(id)
-      const config = portableDraft(profile, { passwords: 'keep', extensions: false })
-      const existing = this.file.links[id]
-      if (existing) {
-        // Already shared: the login state moves only through open and close.
-        const record = await api.saveProfile(existing.teamId, { name: profile.name, note: profile.note, config, assignees })
-        existing.configRev = record.config_rev
-        await this.save()
-        continue
-      }
-      const packed = await this.packLocal(id)
-      try {
-        const record = await api.saveProfile(undefined, {
-          name: profile.name,
-          note: profile.note,
-          source_id: id,
-          config,
-          assignees
-        }, { ...packed, rev: 1 })
-        this.file.links[id] = { teamId: record.id, dataRev: record.data_rev, configRev: record.config_rev }
-        await this.save()
-        this.logger?.info('窗口已共享到团队', { profileId: id, teamId: record.id, bytes: packed.size })
-      } finally {
-        await rm(packed.file, { force: true })
-      }
+  /** Puts a window of this computer into the cloud: its config and current login state. */
+  private async uploadNew(id: string): Promise<void> {
+    const api = this.requireApi()
+    const profile = this.profiles.get(id)
+    const packed = await this.packLocal(id)
+    try {
+      const record = await api.saveProfile(undefined, {
+        name: profile.name,
+        note: profile.note,
+        source_id: id,
+        owner: this.user!.id,
+        config: portableDraft(profile, { passwords: 'keep', extensions: false })
+      }, { ...packed, rev: 1 })
+      this.file.links[id] = { teamId: record.id, dataRev: record.data_rev, configRev: record.config_rev, ownerId: this.user!.id }
+      await this.save()
+      this.logger?.info('窗口已存到云端', { profileId: id, teamId: record.id, bytes: packed.size })
+    } finally {
+      await rm(packed.file, { force: true })
     }
+  }
+
+  private syncing?: Promise<void>
+  private syncTimer?: NodeJS.Timeout
+
+  /** Delay of scheduleSync; tests set it below 0 and call sync() themselves. */
+  syncDelayMs = 1000
+
+  /** Runs sync() soon; several changes in a row make one pass. */
+  scheduleSync(): void {
+    if (this.syncDelayMs < 0) return
+    if (this.syncTimer) clearTimeout(this.syncTimer)
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = undefined
+      void this.sync().catch((error) => {
+        this.logger?.error('云端窗口同步失败', { error: error instanceof Error ? error.message : String(error) })
+      })
+    }, this.syncDelayMs)
+  }
+
+  /**
+   * Every window is a cloud window. Windows of this account that are not on this computer come
+   * down (config now, login state on first open); windows of this computer not in the cloud yet
+   * go up. Windows deleted here stay in the cloud and are not pulled again.
+   */
+  async sync(): Promise<{ added: number; uploaded: number }> {
+    if (this.syncing) {
+      await this.syncing
+      return this.sync()
+    }
+    let result = { added: 0, uploaded: 0 }
+    this.syncing = (async () => {
+      await this.restoring
+      if (!this.api || !this.user) return
+      const removed = this.file.removed ?? (this.file.removed = {})
+      // Restored from the recycle bin: linked again rather than uploaded as a new window.
+      for (const [profileId, link] of Object.entries(removed)) {
+        if (this.profiles.list().some((profile) => profile.id === profileId)) {
+          this.file.links[profileId] = link
+          delete removed[profileId]
+        }
+      }
+      const records = await this.api.listProfiles()
+      const hidden = new Set(Object.values(removed).map((link) => link.teamId))
+      for (const record of records) {
+        if (this.localIdOf(record.id) || hidden.has(record.id)) continue
+        await this.addToComputer(record.id, record)
+        result.added += 1
+      }
+      for (const profile of this.profiles.list()) {
+        // A running window goes up once it is closed (afterExit runs sync again).
+        if (this.file.links[profile.id] || !this.isClosed(profile.id)) continue
+        try {
+          await this.uploadNew(profile.id)
+          result.uploaded += 1
+        } catch (error) {
+          this.logger?.error('窗口上传到云端失败', { profileId: profile.id, error: error instanceof Error ? error.message : String(error) })
+        }
+      }
+      await this.save()
+    })()
+    try {
+      await this.syncing
+    } finally {
+      this.syncing = undefined
+    }
+    if (result.added || result.uploaded) this.logger?.info('云端窗口已同步', result)
+    return result
+  }
+
+  /** Owner: who may use these cloud windows (the owner always can). */
+  async share(teamIds: string[], assignees: string[]): Promise<TeamProfileView[]> {
+    const api = await this.requireOwner()
+    for (const teamId of teamIds) await api.updateProfile(teamId, { assignees })
     return this.listProfiles()
   }
 
@@ -365,35 +446,52 @@ export class TeamManager {
     return (await this.requireOwner()).updateProfile(teamId, patch)
   }
 
-  /** Owner: stops sharing. Members lose access; local windows stay as normal windows. */
+  /**
+   * Owner: deletes a cloud window for everyone. This computer's copy goes to the recycle bin
+   * too (it would otherwise go up again as a new window); other computers keep theirs, unopenable.
+   */
   async unshare(teamId: string): Promise<void> {
-    await (await this.requireOwner()).removeProfile(teamId)
+    const api = await this.requireOwner()
     const localId = this.localIdOf(teamId)
+    if (localId && !this.isClosed(localId)) throw new Error('请先关闭这个窗口')
+    await api.removeProfile(teamId)
     if (localId) {
       delete this.file.links[localId]
       await this.save()
+      await this.profiles.remove(localId)
     }
+    for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {
+      if (link.teamId === teamId) delete this.file.removed![profileId]
+    }
+    await this.save()
   }
 
   async forceUnlock(teamId: string): Promise<void> {
     return (await this.requireOwner()).unlock(teamId, true)
   }
 
-  /** Member: puts a shared window on this computer; its login state comes down on first open. */
-  async addToComputer(teamId: string): Promise<string> {
+  /** Puts a cloud window on this computer; its login state comes down on first open. */
+  async addToComputer(teamId: string, known?: RemoteProfile): Promise<string> {
     const existing = this.localIdOf(teamId)
     if (existing) return existing
-    const record = await this.requireApi().getProfile(teamId)
+    const record = known ?? await this.requireApi().getProfile(teamId)
     const created = await this.profiles.create(configDraft(record.config, record.name))
-    this.file.links[created.id] = { teamId, dataRev: 0, configRev: record.config_rev }
+    this.file.links[created.id] = { teamId, dataRev: 0, configRev: record.config_rev, ownerId: record.owner }
+    for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {
+      if (link.teamId === teamId) delete this.file.removed![profileId]
+    }
     await this.save()
+    this.onProfileAdded?.(created.id)
     return created.id
   }
 
-  /** Owner edited a linked window here: send the new config to the server. */
+  /** Tells the window list about windows that came down from the cloud. */
+  onProfileAdded?: (id: string) => void
+
+  /** A window changed here: send the new config to the cloud (the owner's, or a member's own). */
   async afterLocalEdit(id: string): Promise<void> {
     const link = this.file.links[id]
-    if (!link || this.user?.role !== 'owner' || !this.api) return
+    if (!link || !this.api || this.isReadOnly(link)) return
     const profile = this.profiles.get(id)
     try {
       const record = await this.api.saveProfile(link.teamId, {
@@ -404,14 +502,15 @@ export class TeamManager {
       link.configRev = record.config_rev
       await this.save()
     } catch (error) {
-      this.logger?.error('团队窗口配置同步失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
-      throw new Error(`本机已保存，但同步到团队失败：${error instanceof Error ? error.message : String(error)}`)
+      this.logger?.error('云端窗口配置同步失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      throw new Error(`本机已保存，但同步到云端失败：${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
-  /** Members only use team windows; changing or copying them out is the owner's call. */
+  /** Windows assigned to a member are used as they are; changing or copying them out is the owner's call. */
   assertEditable(id: string): void {
-    if (this.file.links[id] && this.file.role !== 'owner') throw new Error('这是团队分配的窗口，只有主账号可以修改或导出')
+    const link = this.file.links[id]
+    if (link && this.isReadOnly(link)) throw new Error('这是分配给你的窗口，只有主账号可以修改或导出')
   }
 
   // ---- open and close ------------------------------------------------------------------
@@ -482,6 +581,8 @@ export class TeamManager {
   /** After a linked window exits: upload its login state, then give the lock back. */
   afterExit(id: string): Promise<void> {
     const link = this.file.links[id]
+    // A window that was not in the cloud yet (opened before it went up) goes up now.
+    if (!link) this.scheduleSync()
     if (!link || !this.locked.has(id)) return Promise.resolve()
     this.stopHeartbeat(id)
     const push = (async () => {
@@ -551,10 +652,21 @@ export class TeamManager {
     await Promise.allSettled(this.pushes.values())
   }
 
-  /** A linked window was deleted here. */
+  /** A window was deleted here: the cloud keeps it, this computer does not pull it again. */
   async forget(id: string): Promise<void> {
-    if (!this.file.links[id]) return
+    const link = this.file.links[id]
+    if (!link) return
+    ;(this.file.removed ??= {})[id] = link
     delete this.file.links[id]
     await this.save()
+  }
+
+  /** Puts a window deleted here back on this computer (from the Team page). */
+  async restoreToComputer(teamId: string): Promise<string> {
+    for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {
+      if (link.teamId === teamId) delete this.file.removed![profileId]
+    }
+    await this.save()
+    return this.addToComputer(teamId)
   }
 }

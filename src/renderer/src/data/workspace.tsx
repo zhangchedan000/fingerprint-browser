@@ -110,7 +110,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .catch(fail)
       .finally(() => setLoading(false))
     return window.browserApi.profiles.onChanged((changed) => {
-      setProfiles((current) => current.map((profile) => profile.id === changed.id ? changed : profile))
+      // A window can also arrive this way: pulled down from the cloud.
+      setProfiles((current) => current.some((profile) => profile.id === changed.id)
+        ? current.map((profile) => profile.id === changed.id ? changed : profile)
+        : [changed, ...current])
     })
   }, [fail, reloadLibraries])
 

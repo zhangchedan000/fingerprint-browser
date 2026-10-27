@@ -748,8 +748,10 @@ export interface BrowserApi {
     updateProfile: (id: string, patch: import('./team').TeamProfilePatch) => Promise<void>
     unshare: (id: string) => Promise<void>
     forceUnlock: (id: string) => Promise<void>
-    /** Member: puts an assigned window on this computer; returns its local id. */
+    /** Puts a cloud window on this computer (also one deleted here before); returns its local id. */
     addToComputer: (id: string) => Promise<string>
+    /** Pulls cloud windows missing here and puts this computer's new windows into the cloud. */
+    sync: () => Promise<{ added: number; uploaded: number }>
     logs: (query: import('./team').TeamLogQuery) => Promise<import('./team').TeamLogPage>
     onSync: (listener: (event: import('./team').TeamSyncEvent) => void) => () => void
   }

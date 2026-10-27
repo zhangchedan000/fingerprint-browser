@@ -21,6 +21,7 @@ interface FakeRecord {
   name: string
   note: string
   source_id: string
+  owner: string
   config: unknown
   config_rev: number
   assignees: string[]
@@ -47,7 +48,7 @@ function fakeServer() {
   let sequence = 0
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const userOf = (request: Request) => users.find((user) => request.headers.get('authorization') === `token-${user.id}`)
-  const visible = (record: FakeRecord, user: (typeof users)[number]) => user.role === 'owner' || record.assignees.includes(user.id)
+  const visible = (record: FakeRecord, user: (typeof users)[number]) => user.role === 'owner' || record.owner === user.id || record.assignees.includes(user.id)
   const publicUser = ({ password: _password, ...user }: (typeof users)[number]) => user
 
   const fetcher = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -99,9 +100,10 @@ function fakeServer() {
       if (request.method === 'GET') return json(200, existing)
       const form = await request.formData()
       const field = (name: string) => form.get(name) === null ? undefined : String(form.get(name))
-      if (user.role !== 'owner' && ['name', 'note', 'config', 'assignees'].some((name) => form.has(name))) return json(404, {})
+      // Members change only their own windows, and never who may use them.
+      if (user.role !== 'owner' && (form.has('assignees') || (existing && existing.owner !== user.id && ['name', 'note', 'config'].some((name) => form.has(name))))) return json(404, {})
       const record: FakeRecord = existing ?? {
-        id: `rec${++sequence}`, name: '', note: '', source_id: '', config: null, config_rev: 0, assignees: [],
+        id: `rec${++sequence}`, name: '', note: '', source_id: '', owner: user.id, config: null, config_rev: 0, assignees: [],
         data: '', data_rev: 0, data_by: '', data_sha256: '', data_size: 0, updated: ''
       }
       if (field('name') !== undefined) record.name = field('name')!
@@ -147,6 +149,7 @@ async function computer(server: ReturnType<typeof fakeServer>) {
   } as unknown as CookieManager
   const events: TeamSyncEvent[] = []
   const team = new TeamManager(vault, profiles, cookies, identitySecretCodec, (event) => events.push(event), undefined, server.fetcher)
+  team.syncDelayMs = -1
   await team.initialize()
   return { vault, profiles, jars, team, events }
 }
@@ -173,13 +176,17 @@ describe('TeamManager', () => {
     await writeFile(join(owner.profiles.profileDataPath(local.id), 'Default', 'Preferences'), 'from owner')
     owner.jars.set(local.id, [cookie('owner-session')])
 
-    const [shared] = await owner.team.share([local.id], ['member1'])
-    expect(shared).toMatchObject({ name: '店铺 1', assignees: ['member1'], dataRev: 1, localId: local.id })
+    // Every window goes up by itself; the owner then assigns it.
+    expect(await owner.team.sync()).toEqual({ added: 0, uploaded: 1 })
+    const teamId = owner.team.links()[0].teamId
+    const [shared] = await owner.team.share([teamId], ['member1'])
+    expect(shared).toMatchObject({ name: '店铺 1', assignees: ['member1'], dataRev: 1, localId: local.id, ownerId: 'owner1' })
 
     // The member sees it, puts it on their computer and opens it: config and state come down.
     const visible = await member.team.listProfiles()
     expect(visible.map((item) => item.id)).toEqual([shared.id])
-    const copyId = await member.team.addToComputer(shared.id)
+    expect(await member.team.sync()).toEqual({ added: 1, uploaded: 0 })
+    const copyId = member.team.links()[0].profileId
     const copy = member.profiles.get(copyId)
     expect(copy.proxy.password).toBe('proxy-secret')
     expect(copy.account.password).toBe('account-secret')
@@ -218,7 +225,8 @@ describe('TeamManager', () => {
     await owner.team.login('http://team.test', 'boss', 'ownerpass')
     await member.team.login('http://team.test', 'alice', 'alicepass')
     const local = await owner.profiles.create({ ...defaultProfileDraft(), name: '旧名字' })
-    const [shared] = await owner.team.share([local.id], ['member1'])
+    await owner.team.sync()
+    const [shared] = await owner.team.share([owner.team.links()[0].teamId], ['member1'])
     const copyId = await member.team.addToComputer(shared.id)
 
     await owner.profiles.update(local.id, { ...owner.profiles.get(local.id), name: '新名字', startUrls: ['https://example.com/'] })
@@ -242,6 +250,7 @@ describe('TeamManager', () => {
     // Next start: the saved sign-in cannot be checked, so the app stays on the sign-in page.
     const restarted = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined,
       (async () => { throw new Error('getaddrinfo ENOTFOUND') }) as unknown as typeof fetch)
+    restarted.syncDelayMs = -1
     await restarted.initialize()
     const status = await restarted.status()
     expect(status.user).toBeUndefined()
@@ -249,12 +258,47 @@ describe('TeamManager', () => {
     await expect(restarted.beforeLaunch(local.id)).rejects.toThrow('请先登录')
   })
 
+  it('puts members’ own windows in the cloud too, and deleting here keeps the cloud copy', async () => {
+    const server = fakeServer()
+    const owner = await computer(server)
+    const member = await computer(server)
+    await owner.team.login('http://team.test', 'boss', 'ownerpass')
+    await member.team.login('http://team.test', 'alice', 'alicepass')
+
+    // A member's own window: it goes up, and the member may still change it.
+    const own = await member.profiles.create({ ...defaultProfileDraft(), name: '小A 自己的' })
+    expect(await member.team.sync()).toEqual({ added: 0, uploaded: 1 })
+    expect(member.team.links()).toMatchObject([{ profileId: own.id, readOnly: false }])
+    expect(() => member.team.assertEditable(own.id)).not.toThrow()
+    await member.profiles.update(own.id, { ...member.profiles.get(own.id), name: '小A 改过的' })
+    await member.team.afterLocalEdit(own.id)
+
+    // The owner sees it (and gets it on this computer); members do not see each other's.
+    expect(await owner.team.sync()).toEqual({ added: 1, uploaded: 0 })
+    expect((await owner.team.listProfiles()).map((item) => [item.name, item.ownerId])).toEqual([['小A 改过的', 'member1']])
+
+    // Deleted here: the cloud keeps it and the next sync does not bring it back.
+    const ownerCopy = owner.team.links()[0].profileId
+    const teamId = owner.team.links()[0].teamId
+    await owner.profiles.remove(ownerCopy)
+    await owner.team.forget(ownerCopy)
+    expect(await owner.team.sync()).toEqual({ added: 0, uploaded: 0 })
+    expect(await owner.team.listProfiles()).toMatchObject([{ id: teamId, localId: undefined, removedHere: true }])
+
+    // Restored from the recycle bin: linked again, not uploaded as a second window.
+    const trashed = (await owner.profiles.listTrash()).find((item) => item.profileId === ownerCopy)!
+    await owner.profiles.restore(trashed.trashId)
+    expect(await owner.team.sync()).toEqual({ added: 0, uploaded: 0 })
+    expect(owner.team.links()).toMatchObject([{ profileId: ownerCopy, teamId }])
+    expect(server.records.size).toBe(1)
+  })
+
   it('keeps a failed upload and sends it on the next open', async () => {
     const server = fakeServer()
     const owner = await computer(server)
     await owner.team.login('http://team.test', 'boss', 'ownerpass')
     const local = await owner.profiles.create(defaultProfileDraft())
-    await owner.team.share([local.id], [])
+    await owner.team.sync()
     await owner.team.beforeLaunch(local.id)
 
     const original = server.fetcher

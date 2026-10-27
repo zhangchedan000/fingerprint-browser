@@ -189,6 +189,7 @@ app.whenReady().then(async () => {
     mainWindow?.webContents.send('team:sync', event)
   }, logger)
   team = activeTeam
+  activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))
   await activeTeam.initialize()
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)

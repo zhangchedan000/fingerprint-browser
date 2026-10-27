@@ -1,11 +1,10 @@
-import { LogoutOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
+import { LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
+import { Button, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { TeamLogEntry, TeamProfileView, TeamStatus, TeamUser } from '../../../../shared/team'
 import { formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
-import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
@@ -17,9 +16,9 @@ const ACTIONS: Record<string, string> = {
   close: '关闭窗口',
   upload: '上传登录态',
   force_unlock: '强制释放',
-  share: '共享窗口',
+  share: '新建云端窗口',
   update: '修改窗口',
-  unshare: '取消共享',
+  unshare: '删除云端窗口',
   member_create: '新建成员',
   member_update: '修改成员',
   member_delete: '删除成员'
@@ -209,6 +208,7 @@ function MemberSelect({ members, value, onChange }: { members: TeamUser[]; value
   )
 }
 
+/** Every window is a cloud window: the owner assigns them; everyone opens theirs from here or the window list. */
 function ProfilesTab({ status, members, profiles, loading, reload }: {
   status: TeamStatus
   members: TeamUser[]
@@ -219,21 +219,19 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   const ws = useWorkspace()
   const { launch } = useWindowLauncher()
   const owner = status.user?.role === 'owner'
-  const [pickOpen, setPickOpen] = useState(false)
-  const [shareIds, setShareIds] = useState<string[]>()
-  const [shareTo, setShareTo] = useState<string[]>([])
+  const me = status.user?.id
   const [assigning, setAssigning] = useState<TeamProfileView>()
   const [busy, setBusy] = useState<string>()
   const memberNames = useMemo(() => new Map(members.map((member) => [member.id, displayName(member)])), [members])
-  const linkedIds = new Set(profiles.map((profile) => profile.localId).filter(Boolean))
 
-  async function share(): Promise<void> {
-    if (!shareIds) return
-    setBusy('share')
+  async function syncNow(): Promise<void> {
+    setBusy('sync')
     try {
-      await window.browserApi.team.share(shareIds, shareTo)
-      ws.notify.success(t("已共享 {0} 个窗口", shareIds.length))
-      setShareIds(undefined)
+      const result = await window.browserApi.team.sync()
+      await ws.reloadProfiles()
+      ws.notify.success(result.added || result.uploaded
+        ? t("已同步：下载 {0} 个，上传 {1} 个", result.added, result.uploaded)
+        : t("已是最新"))
       reload()
     } catch (error) {
       ws.fail(error)
@@ -259,16 +257,31 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     }
   }
 
-  function unshare(profile: TeamProfileView): void {
+  async function addHere(profile: TeamProfileView): Promise<void> {
+    setBusy(profile.id)
+    try {
+      await window.browserApi.team.addToComputer(profile.id)
+      await ws.reloadProfiles()
+      ws.notify.success(t("已添加到本机"))
+      reload()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(undefined)
+    }
+  }
+
+  function removeFromCloud(profile: TeamProfileView): void {
     Modal.confirm({
-      title: t("取消共享“{0}”？", profile.name),
-      content: t("服务器上的配置和登录态会被删除，成员再也打不开它。你本机的窗口保留，变成普通窗口。"),
-      okText: t("取消共享"),
+      title: t("删除云端窗口“{0}”？", profile.name),
+      content: t("云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。"),
+      okText: t("删除"),
       okButtonProps: { danger: true },
-      cancelText: t("返回"),
+      cancelText: t("取消"),
       onOk: async () => {
         try {
           await window.browserApi.team.unshare(profile.id)
+          await ws.reloadProfiles()
           reload()
         } catch (error) {
           ws.fail(error)
@@ -289,8 +302,12 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   }
 
   const localStatus = (profile: TeamProfileView) => ws.profiles.find((item) => item.id === profile.localId)?.status
+  const ownerLabel = (profile: TeamProfileView) => profile.ownerId === me
+    ? t("我")
+    : memberNames.get(profile.ownerId) ?? (owner ? t("主账号") : t("主账号分配"))
   const columns: TableColumnsType<TeamProfileView> = [
     { title: t("窗口"), dataIndex: 'name', render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
+    { title: t("创建人"), key: 'owner', width: 110, render: (_value, row) => <span className="fb-muted">{ownerLabel(row)}</span> },
     ...(owner ? [{
       title: t("分配给"),
       key: 'assignees',
@@ -301,35 +318,47 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("使用情况"),
       key: 'lock',
-      width: 200,
+      width: 170,
       render: (_value, row) => row.lock
         ? <Tooltip title={row.lock.device ? t("设备：{0}", row.lock.device) : undefined}><Tag color="orange">{t("{0} 正在使用", row.lock.holderName)}</Tag></Tooltip>
         : <Tag>{t("空闲")}</Tag>
     },
     {
-      title: t("登录态"),
+      title: t("登录状态"),
       key: 'data',
-      width: 200,
+      width: 190,
       render: (_value, row) => row.dataRev
         ? <span className="fb-muted">{t("第 {0} 版", row.dataRev)}{row.dataByName && ` · ${row.dataByName}`}{row.dataSize ? ` · ${formatBytes(row.dataSize)}` : ''}</span>
         : <span className="fb-muted">—</span>
     },
-    { title: t("更新时间"), dataIndex: 'updated', width: 170, render: (value: string) => <span className="fb-muted">{time(value)}</span> },
+    {
+      title: t("本机"),
+      key: 'local',
+      width: 90,
+      render: (_value, row) => row.localId
+        ? <Tag color="green">{t("已在本机")}</Tag>
+        : <Tag>{row.removedHere ? t("已从本机删除") : t("未添加")}</Tag>
+    },
     {
       title: t("操作"),
       key: 'actions',
-      width: owner ? 280 : 120,
+      width: owner ? 300 : 150,
       align: 'right',
       render: (_value, row) => {
         const running = localStatus(row) === 'running' || localStatus(row) === 'starting'
+        const heldByOther = Boolean(row.lock && row.lock.holderId !== me)
         return (
           <Space size={2}>
-            <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} disabled={running || Boolean(row.lock && row.lock.holderId !== status.user?.id)} onClick={() => void open(row)}>
-              {running ? t("运行中") : t("打开")}
-            </Button>
+            {row.localId
+              ? (
+                  <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} disabled={running || heldByOther} onClick={() => void open(row)}>
+                    {running ? t("运行中") : t("打开")}
+                  </Button>
+                )
+              : <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} onClick={() => void addHere(row)}>{t("添加到本机")}</Button>}
             {owner && <Button size="small" type="link" autoInsertSpace={false} onClick={() => setAssigning(row)}>{t("分配")}</Button>}
             {owner && row.lock && <Button size="small" type="link" autoInsertSpace={false} onClick={() => void forceUnlock(row)}>{t("强制释放")}</Button>}
-            {owner && <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => unshare(row)}>{t("取消共享")}</Button>}
+            {owner && <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => removeFromCloud(row)}>{t("删除云端")}</Button>}
           </Space>
         )
       }
@@ -341,41 +370,18 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       <ListPage<TeamProfileView>
         toolbar={(
           <>
-            {owner && <Button type="primary" icon={<ShareAltOutlined />} onClick={() => setPickOpen(true)}>{t("共享窗口")}</Button>}
+            <Button type="primary" icon={<SyncOutlined />} loading={busy === 'sync'} onClick={() => void syncNow()}>{t("立即同步")}</Button>
             <Button icon={<ReloadOutlined />} onClick={reload}>{t("刷新")}</Button>
           </>
         )}
         columns={columns}
         rows={profiles}
         loading={loading}
-        emptyText={owner ? t("还没有共享窗口") : t("还没有分配给你的窗口")}
+        emptyText={owner ? t("还没有云端窗口") : t("还没有你的窗口")}
         footnote={owner
-          ? t("同一个窗口同一时间只能一个人打开。关闭时自动上传登录态，下一个人打开时自动拉取。")
-          : t("打开时自动拉取最新的登录态，关闭时自动上传。团队窗口不能修改或导出。")}
+          ? t("所有窗口都自动存到云端：新建后上传配置，关闭时上传登录状态，换电脑登录后自动出现。同一个窗口同一时间只能一个人打开。")
+          : t("你自己建的窗口和分配给你的窗口都在这里。分配给你的窗口不能修改或导出。")}
       />
-      <PickWindowsModal
-        open={pickOpen}
-        title={t("选择要共享的窗口")}
-        windows={ws.profiles.filter((profile) => !linkedIds.has(profile.id))}
-        detailTitle={t("状态")}
-        detail={(window) => <span className="fb-muted">{window.status === 'closed' || window.status === 'error' ? t("可共享") : t("请先关闭")}</span>}
-        okText={t("下一步")}
-        busy={false}
-        onSubmit={(ids) => { setPickOpen(false); setShareTo([]); setShareIds(ids) }}
-        onClose={() => setPickOpen(false)}
-      />
-      <Modal
-        open={Boolean(shareIds)}
-        title={t("共享 {0} 个窗口给", shareIds?.length ?? 0)}
-        okText={t("共享")}
-        cancelText={t("取消")}
-        confirmLoading={busy === 'share'}
-        onOk={() => void share()}
-        onCancel={() => setShareIds(undefined)}
-      >
-        <MemberSelect members={members} value={shareTo} onChange={setShareTo} />
-        <p className="fb-muted fb-team-hint">{t("会上传窗口配置（含代理和平台账号密码）和当前登录态。以后可以随时改分配。")}</p>
-      </Modal>
       <AssignModal open={Boolean(assigning)} profile={assigning} members={members} onClose={() => setAssigning(undefined)} onSaved={reload} />
     </>
   )
@@ -513,7 +519,7 @@ export function TeamPage(_props: PageProps) {
               activeKey={tab}
               onChange={setTab}
               items={[
-                { key: 'profiles', label: t("共享窗口"), children: <ProfilesTab status={status} members={members} profiles={profiles} loading={loading} reload={() => void reload()} /> },
+                { key: 'profiles', label: t("云端窗口"), children: <ProfilesTab status={status} members={members} profiles={profiles} loading={loading} reload={() => void reload()} /> },
                 { key: 'members', label: t("成员"), children: <MembersTab members={members} reload={() => void reload()} /> },
                 { key: 'logs', label: t("日志"), children: <LogsTab members={members} profiles={profiles} /> }
               ]}

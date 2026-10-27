@@ -50,6 +50,7 @@ onRecordCreateRequest((e) => {
   e.record.set("config_rev", 1)
   e.record.set("data_rev", body.data_rev !== undefined ? 1 : 0)
   if (body.data_rev !== undefined && e.auth) e.record.set("data_by", e.auth.id)
+  if (!e.record.getString("owner") && e.auth) e.record.set("owner", e.auth.id)
   e.next()
   t.log($app, e, "share", e.record, { assignees: t.userNames($app, e.record.getStringSlice("assignees")) })
 }, "team_profiles")
