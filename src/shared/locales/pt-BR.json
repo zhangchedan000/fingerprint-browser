@@ -2284,5 +2284,9 @@
   "检测网站": "Sites de verificação",
   "检测网站都关掉了，请点「检测网站」打开至少一个": "Todos os sites estão desativados; clique em “Sites de verificação” e ative pelo menos um",
   "上次检测：{0}": "Última verificação: {0}",
-  "在这个窗口里打开": "Abrir nesta janela"
+  "在这个窗口里打开": "Abrir nesta janela",
+  "正在检测实际值…": "Verificando o valor real…",
+  "网站读到": "Os sites leem",
+  "设置已修改": "Configurações alteradas",
+  "检测实际值": "verificar o valor real"
 }

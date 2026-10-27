@@ -2284,5 +2284,9 @@
   "检测网站": "Trang kiểm tra",
   "检测网站都关掉了，请点「检测网站」打开至少一个": "Tất cả trang kiểm tra đều tắt; bấm “Trang kiểm tra” và bật ít nhất một trang",
   "上次检测：{0}": "Lần kiểm tra trước: {0}",
-  "在这个窗口里打开": "Mở trong cửa sổ này"
+  "在这个窗口里打开": "Mở trong cửa sổ này",
+  "正在检测实际值…": "Đang kiểm tra giá trị thực…",
+  "网站读到": "Trang web đọc được",
+  "设置已修改": "Cài đặt đã thay đổi",
+  "检测实际值": "kiểm tra giá trị thực"
 }

@@ -361,6 +361,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [screenCustom, setScreenCustom] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
   const [checking, setChecking] = useState(false)
+  // 换一换 on a fingerprint value runs the check again once the new settings are in the form.
+  const [recheck, setRecheck] = useState(false)
   const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
   const [fontPacks, setFontPacks] = useState<FontPackStatus>()
   const [checkError, setCheckError] = useState('')
@@ -437,6 +439,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     checkProxyKey(proxyMode === 'library' ? proxyId : undefined, typedProxy ?? { protocol: 'direct', host: '' })
   )
   const checkStale = Boolean(checkReport && checkReport.checkedSettings !== currentSettingsKey)
+  useEffect(() => {
+    if (!recheck || checking) return
+    setRecheck(false)
+    void runCheck()
+  }, [recheck, checking, currentSettingsKey])
   const checkFor = (...rows: FingerprintCheckRow[]) => checkReport
     ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={checkStale} onFix={applyFix} />
     : undefined
@@ -545,6 +552,35 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return measured(surface) ?? t("每个窗口不同")
   }
 
+  /** 换一换 on Canvas / AudioContext / ClientRects: new values, then the check reads what they are. */
+  function reseedAndCheck(): void {
+    reseedNoise()
+    setRecheck(true)
+  }
+
+  /**
+   * What a site reads for this value in this window, measured by the fingerprint check (the kernel
+   * computes it on this computer's GPU and CPU, so the launcher cannot know it beforehand).
+   */
+  function measuredLine(surface: NoiseSurface) {
+    const value = measured(surface)
+    if (checking) return <span className="fb-fp-measured fb-muted">{t("正在检测实际值…")}</span>
+    if (value) {
+      return (
+        <span className="fb-fp-measured">
+          {t("网站读到")}<b className="fb-mono">{value}</b>
+          <span className="fb-muted"> · {relativeTime(checkReport!.checkedAt, getLocale())}</span>
+        </span>
+      )
+    }
+    return (
+      <span className="fb-fp-measured fb-muted">
+        {checkReport ? t("设置已修改") : t("未检测")}
+        <Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button>
+      </span>
+    )
+  }
+
   /** Audio and ClientRects stay as the real machine computes them (kernel patches 006, 008). */
   function realSurface(surface: NoiseSurface) {
     const value = measured(surface)
@@ -554,14 +590,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** prism7+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
   function seededControl(surface: NoiseSurface, label: string) {
     const real = fp.disabledSpoofing.includes(surface)
-    const value = measured(surface)
     return (
       <ValueChoice
         label={label}
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
-        options={[{ value: 'noise', label: value && !real ? t("每个窗口不同 · {0}", value) : t("每个窗口不同") }, { value: 'real', label: t("本机真实") }]}
-        onShuffle={reseedNoise}
+        options={[{ value: 'noise', label: t("每个窗口不同") }, { value: 'real', label: t("本机真实") }]}
+        onShuffle={reseedAndCheck}
         shuffleDisabled={real}
       />
     )
@@ -574,8 +609,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label={label}
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
-        options={[{ value: 'noise', label: shownNoise(surface) }, { value: 'real', label: t("本机真实") }]}
-        onShuffle={reseedNoise}
+        options={[{ value: 'noise', label: webrtcRelay ? t("每个窗口不同") : shownNoise(surface) }, { value: 'real', label: t("本机真实") }]}
+        onShuffle={webrtcRelay ? reseedAndCheck : reseedNoise}
         shuffleDisabled={real}
       />
     )
@@ -1496,12 +1531,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("指纹值")}</h3>
           <span className="fb-fp-card-sub">{t("每个窗口不同，同一个窗口每次读取都相同")}</span>
         </div>
-      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>{noiseControl('canvas', 'Canvas')}</Row>
+      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
+        {noiseControl('canvas', 'Canvas')}
+        {webrtcRelay && measuredLine('canvas')}
+      </Row>
       <Row label="AudioContext" check={checkFor('audio')} hint={webrtcRelay ? t("每个窗口微调极少数音频采样，同一窗口每次相同") : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('audio', 'AudioContext') : realSurface('audio')}
+        {webrtcRelay && measuredLine('audio')}
       </Row>
       <Row label="ClientRects" check={checkFor('clientrects')} hint={webrtcRelay ? t("每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式") : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('clientrects', 'ClientRects') : realSurface('clientrects')}
+        {webrtcRelay && measuredLine('clientrects')}
       </Row>
       </section>
 

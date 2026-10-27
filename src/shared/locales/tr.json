@@ -2284,5 +2284,9 @@
   "检测网站": "Kontrol siteleri",
   "检测网站都关掉了，请点「检测网站」打开至少一个": "Tüm kontrol siteleri kapalı; “Kontrol siteleri”ne tıklayıp en az birini açın",
   "上次检测：{0}": "Son kontrol: {0}",
-  "在这个窗口里打开": "Bu pencerede aç"
+  "在这个窗口里打开": "Bu pencerede aç",
+  "正在检测实际值…": "Gerçek değer kontrol ediliyor…",
+  "网站读到": "Web sitelerinin okuduğu",
+  "设置已修改": "Ayarlar değişti",
+  "检测实际值": "gerçek değeri kontrol et"
 }
