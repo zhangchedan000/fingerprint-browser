@@ -2254,5 +2254,11 @@
   "每个窗口一个种子，换一换会换成另一组 Canvas 值": "Pencere başına bir seed; Değiştir başka bir Canvas değer setine geçer",
   "每个窗口微调极少数音频采样，同一窗口每次相同": "Her pencere çok az sayıda ses örneğini hafifçe değiştirir, aynı pencerede her seferinde aynıdır",
   "这个内核只能用本机真实值": "Bu çekirdek yalnızca bu bilgisayarın gerçek değerlerini kullanabilir",
-  "每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式": "Her pencere bütün olarak birkaç 1/64 piksel kaydırılır; değerler gerçek bir tarayıcının biçiminde kalır"
+  "每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式": "Her pencere bütün olarak birkaç 1/64 piksel kaydırılır; değerler gerçek bir tarayıcının biçiminde kalır",
+  "下载字体包（{0} MB）": "Yazı tipi paketini indir ({0} MB)",
+  "正在安装字体…": "Yazı tipleri kuruluyor…",
+  "正在从微软下载 {0} / {1} MB": "Microsoft'tan indiriliyor {0} / {1} MB",
+  "窗口按系统语言显示该语言 Windows 自带的字体，需要先在本机安装对应的语言字体包。从微软官方下载，只给当前用户安装，不需要管理员权限。": "Pencere, sistem dilinin Windows yerleşik yazı tiplerini gösterir; bu yüzden önce o dilin yazı tipi paketi bu bilgisayara kurulmalıdır. Microsoft'tan indirilir ve yalnızca geçerli kullanıcıya kurulur; yönetici izni gerekmez.",
+  "这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。": "Bu bilgisayarda {0} yazı tipi paketi eksik: pencerede bu yazı tipleri yok, o dildeki gerçek bir Windows'tan farklı. Lütfen indirin — doğrudan Microsoft'tan, yönetici izni gerekmez.",
+  "已安装{0}字体包": "{0} yazı tipi paketi kurulu"
 }

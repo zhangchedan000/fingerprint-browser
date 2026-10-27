@@ -251,7 +251,7 @@ export class BrowserLauncher {
           })
         }
       })
-      // 替换 on prism6+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
+      // 替换 on prism7+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
       // through the tunnel or a system proxy); otherwise the kernel only reports its address.
       webrtcRelay = await windowWebRtcRelay(profile, engine)
       if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5') {

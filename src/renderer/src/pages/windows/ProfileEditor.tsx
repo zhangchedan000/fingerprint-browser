@@ -1,5 +1,6 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
+import { FontPackDownload } from '../../components/FontPackDownload'
 import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
@@ -425,7 +426,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
   // prism5+ kernels keep the window inside the claimed screen, so it may be smaller than this one.
   const windowScreen = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.windowScreen)
-  // prism6+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
+  // prism7+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
   const webrtcRelay = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.webrtcRelay)
   const floor = screenFloor(hostScreen(), windowScreen)
   // A check describes the settings it ran with; any change since makes it out of date.
@@ -545,7 +546,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
   }
 
-  /** prism6+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
+  /** prism7+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
   function seededControl(surface: NoiseSurface, label: string) {
     const real = fp.disabledSpoofing.includes(surface)
     const value = measured(surface)
@@ -1141,7 +1142,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ...(fp.language && !LANGUAGES.some((item) => item.language === fp.language) ? [{ value: fp.language, label: fp.language, voices: false, devices: false }] : [])
   ]
   const autoUiLocale = chromeUiLocaleFor(shownLanguage)
-  // prism6+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
+  // prism7+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
   const windowUiLocale = fp.uiLocale ?? autoUiLocale
   const fontScript = windowsFontScript(windowUiLocale)
 
@@ -1297,11 +1298,31 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row
           label={t("字体")}
           check={checkFor('font')}
-          hint={fontScript && fontPacks?.missing.includes(fontScript)
-            ? t("本机没有{0}字体包，窗口里看不到这些字体。可在 设置 → 常规 → 语言字体 安装。", fontPackLabel(fontScript, getLocale()))
-            : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
+          hint={t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
         >
           <Fixed>{t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
+          {fontScript && fontPacks?.supported && (
+            // Whether this computer has the package the window's language needs: red until it is
+            // downloaded, since the window would lack fonts every Windows in that language has.
+            <div className="fb-check-results">
+              {fontPacks.missing.includes(fontScript) ? (
+                <>
+                  <div className="fb-check-item is-bad">
+                    <span className="fb-check-dot" />
+                    <span className="fb-check-message">
+                      {t("这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。", fontPackLabel(fontScript, getLocale()))}
+                    </span>
+                  </div>
+                  <FontPackDownload scripts={[fontScript]} onInstalled={setFontPacks} />
+                </>
+              ) : (
+                <div className="fb-check-item is-ok">
+                  <span className="fb-check-dot" />
+                  <span className="fb-check-message">{t("已安装{0}字体包", fontPackLabel(fontScript, getLocale()))}</span>
+                </div>
+              )}
+            </div>
+          )}
         </Row>
       ) : (
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>

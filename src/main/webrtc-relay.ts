@@ -6,7 +6,7 @@ import type { BrowserProfile, EngineStatus, ProxyConfig } from '../shared/types'
 import { localProxyFor } from './proxy-bridge'
 
 /**
- * WebRTC UDP through the window's SOCKS5 proxy (kernel patch 016, prism6+).
+ * WebRTC UDP through the window's SOCKS5 proxy (kernel patch 013, prism7+).
  *
  * The kernel sends every WebRTC packet for a public address to 127.0.0.1:<port> framed as a SOCKS5
  * UDP request (RFC 1928, section 7). Each kernel socket gets its own UDP association with the proxy
@@ -205,7 +205,7 @@ export async function openWebRtcRelay(proxy: ProxyConfig): Promise<WebRtcRelay |
 }
 
 /**
- * The relay for a window set to 替换 on a prism6+ kernel whose SOCKS5 proxy relays UDP. A proxy
+ * The relay for a window set to 替换 on a prism7+ kernel whose SOCKS5 proxy relays UDP. A proxy
  * reached through the tunnel or a system proxy is skipped: the relay must talk to it directly.
  * Undefined means the kernel only reports the proxy's address (the fallback).
  */

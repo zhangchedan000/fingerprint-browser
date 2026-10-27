@@ -1,5 +1,5 @@
 import type { UiLocale } from './i18n'
-import type { FontPackStatus } from './windows-font-packs'
+import type { FontPackProgress, FontPackStatus } from './windows-font-packs'
 export type BrowserPlatform = 'windows' | 'macos'
 export type BrowserBrand = 'Chrome' | 'Edge'
 export type HardwareProfileId =
@@ -16,9 +16,9 @@ export type HardwareProfileId =
   | 'windows-11-rtx4070'
 export type ProxyProtocol = 'direct' | 'http' | 'https' | 'socks5'
 /**
- * 替换 (proxy_only): WebRTC through the proxy (UDP relay on prism6+ when the proxy relays UDP,
+ * 替换 (proxy_only): WebRTC through the proxy (UDP relay on prism7+ when the proxy relays UDP,
  * otherwise the proxy's address is reported without sending UDP); 隐私 (privacy): WebRTC on but no
- * address at all; 允许 (default): Chrome as is; 禁止 (disabled): no RTCPeerConnection (prism6+).
+ * address at all; 允许 (default): Chrome as is; 禁止 (disabled): no RTCPeerConnection (prism7+).
  */
 export type WebRtcPolicy = 'proxy_only' | 'privacy' | 'default' | 'disabled'
 export type NetworkIdentityMode = 'manual' | 'proxy'
@@ -270,8 +270,6 @@ export interface AppPreferences {
   theme: 'light' | 'dark' | 'system'
   /** Pause between windows opened in one batch. */
   batchLaunchGapSeconds: number
-  /** The one-time offer to install missing Windows language font packages was answered. */
-  fontPacksAsked?: boolean
 }
 
 export interface AppInfo {
@@ -312,7 +310,7 @@ export interface EngineStatus {
   version?: string
   /** The kernel keeps its window inside a claimed screen, so the claim may be smaller than the real one. */
   windowScreen?: boolean
-  /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism6+). */
+  /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism7+). */
   webrtcRelay?: boolean
 }
 
@@ -371,7 +369,7 @@ export interface KernelHealth {
 export interface ProxyTestResult {
   ok: boolean
   ip?: string
-  /** SOCKS5 only, from the editor's test: whether the proxy relays UDP (WebRTC 替换 on prism6+). */
+  /** SOCKS5 only, from the editor's test: whether the proxy relays UDP (WebRTC 替换 on prism7+). */
   udp?: boolean
   latencyMs: number
   error?: string
@@ -616,8 +614,9 @@ export interface BrowserApi {
     onUpdateProgress: (listener: (progress: AppUpdateProgress) => void) => () => void
     /** Windows language font packages on this computer. */
     fontPacks: () => Promise<FontPackStatus>
-    /** Installs the missing ones from Microsoft after one administrator prompt. */
-    installFontPacks: () => Promise<FontPackStatus>
+    /** Downloads packages from Microsoft and installs them for this user (all missing ones by default). */
+    installFontPacks: (scripts?: string[]) => Promise<FontPackStatus>
+    onFontPackProgress: (listener: (progress: FontPackProgress) => void) => () => void
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
