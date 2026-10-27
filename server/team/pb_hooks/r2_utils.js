@@ -109,7 +109,7 @@ function check(config) {
   } catch (err) {
     const text = String(err.message || err)
     if (/Unauthorized|status code: 401|SignatureDoesNotMatch|InvalidAccessKeyId/.test(text)) throw new Error("密钥不对：访问密钥 ID 和机密访问密钥要来自同一个 R2 API 令牌，复制时别多空格或少字符")
-    if (/AccessDenied|status code: 403/.test(text)) throw new Error("这个令牌没有写入权限：创建 R2 API 令牌时权限要选「对象读和写」，并包含这个存储桶")
+    if (/AccessDenied|status code: 403/.test(text)) throw new Error("R2 拒绝访问：机密访问密钥不对（别填成「令牌值」），或者令牌的权限不是「对象读和写」、没包含这个存储桶")
     if (/NoSuchBucket|status code: 404/.test(text)) throw new Error("找不到这个存储桶：检查 S3 API 地址最后的存储桶名")
     throw err
   }
