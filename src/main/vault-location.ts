@@ -1,5 +1,5 @@
 import { access, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { existsSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /**
@@ -7,8 +7,26 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
  * small pointer file in userData names the new folder (and the old one, kept until the user
  * deletes it or moves back).
  */
-/** Inside the data folder: the launcher's own Chromium data (its cache), see vaultPathSync. */
+/** Inside the data folder: where 0.5.5 and 0.5.6 kept the launcher's own Chromium data. */
 export const APP_CACHE_FOLDER = 'app-cache'
+
+/**
+ * Before the app is ready: when userData has no "Local State" (the key safeStorage encrypted saved
+ * passwords with) but the app-cache folder of 0.5.5/0.5.6 has one, take that key back, so data
+ * first saved under those versions can still be read. An existing userData key always wins.
+ */
+export function adoptAppCacheKey(userData: string, appCache: string): void {
+  const key = join(userData, 'Local State')
+  const moved = join(appCache, 'Local State')
+  try {
+    if (!existsSync(key) && existsSync(moved)) {
+      mkdirSync(userData, { recursive: true })
+      copyFileSync(moved, key)
+    }
+  } catch {
+    // Without it the app starts as before; the store reports any password it cannot read.
+  }
+}
 
 /**
  * The data folder, read before the app is ready (where Electron must be told to keep its own

@@ -8,8 +8,8 @@ const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(bytes < 10 * 
 
 /**
  * Downloads language font packages from Microsoft and installs them for this user, with the
- * progress of the package being downloaded. Used where a missing package shows: a window's font
- * row and Settings.
+ * progress of the package being downloaded. Shown in a window's font row when the
+ * package its language needs is missing.
  */
 export function FontPackDownload({ scripts, onInstalled }: { scripts: string[]; onInstalled: (status: FontPackStatus) => void }) {
   const [busy, setBusy] = useState(false)

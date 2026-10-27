@@ -76,3 +76,22 @@ describe('data folder location', () => {
     expect(rewritePaths({ a: '/v/x', b: '/vault2/x', c: ['/v'] }, '/v', '/n')).toEqual({ a: '/n/x', b: '/vault2/x', c: ['/n'] })
   })
 })
+
+describe('the key 0.5.5 and 0.5.6 kept in app-cache', () => {
+  it('is taken back only when userData has none', async () => {
+    const { adoptAppCacheKey } = await import('./vault-location')
+    const { mkdtempSync, mkdirSync, readFileSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const root = mkdtempSync(join(tmpdir(), 'fb-key-'))
+    const userData = join(root, 'userData')
+    const appCache = join(root, 'vault', 'app-cache')
+    mkdirSync(appCache, { recursive: true })
+    writeFileSync(join(appCache, 'Local State'), 'moved')
+    adoptAppCacheKey(userData, appCache)
+    expect(readFileSync(join(userData, 'Local State'), 'utf8')).toBe('moved')
+    writeFileSync(join(userData, 'Local State'), 'original')
+    adoptAppCacheKey(userData, appCache)
+    expect(readFileSync(join(userData, 'Local State'), 'utf8')).toBe('original')
+  })
+})
