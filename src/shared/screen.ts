@@ -55,6 +55,14 @@ export function screenFloor(host: ScreenSize | undefined, windowScreen: boolean 
   return windowScreen ? undefined : host
 }
 
+/** What a monitor of this size is called: its common name and shape. */
+export function screenKind(physical: ScreenSize): { name?: string; ratio: string; ultrawide: boolean } {
+  const ratio = physical.width / physical.height
+  const shape = Math.abs(ratio - 16 / 9) < 0.02 ? '16:9' : Math.abs(ratio - 16 / 10) < 0.02 ? '16:10' : ratio > 2.3 ? '21:9' : `${physical.width}:${physical.height}`
+  const name = physical.height >= 2160 ? '4K' : physical.height >= 1440 ? '2K' : physical.height >= 1080 && shape === '16:9' ? '1080p' : undefined
+  return { name, ratio: shape, ultrawide: ratio > 2.3 }
+}
+
 export type ScreenChoice = ScreenSize & { weight: number; physical: ScreenSize }
 
 /**

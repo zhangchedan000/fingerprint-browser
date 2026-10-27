@@ -1,6 +1,6 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
-import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor } from '../../../../shared/screen'
+import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
   Alert,
@@ -123,6 +123,16 @@ const MACOS_VERSIONS = [
 function hostScreen(): { width: number; height: number } {
   return { width: window.screen.width, height: window.screen.height }
 }
+/** "1920 × 1080 · 1080p 16:9", "3440 × 1440 · 带鱼屏 21:9 2K", with the monitor size when the display is scaled. */
+function screenLabel(width: number, height: number, physical: { width: number; height: number }): string {
+  const kind = screenKind(physical)
+  const note = [kind.ultrawide ? t("带鱼屏") : '', kind.ratio, kind.name ?? ''].filter(Boolean).join(' ')
+  const scale = hostScale()
+  return scale === 1
+    ? `${width} × ${height} · ${note}`
+    : t("{0} × {1} · {2}（{3} × {4} 显示器，缩放 {5}%）", width, height, note, physical.width, physical.height, Math.round(scale * 100))
+}
+
 /** This computer's Windows display scale; a window keeps it, so resolutions are offered at it. */
 const hostScale = () => window.devicePixelRatio || 1
 const isChoice = (width: number, height: number) => screenChoices(undefined, hostScale()).some((choice) => choice.width === width && choice.height === height)
@@ -1300,7 +1310,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 { value: 'host', label: t("本机真实") },
                 ...screenChoices(floor, hostScale()).map(({ width, height, physical }) => ({
                   value: `${width}x${height}`,
-                  label: hostScale() === 1 ? `${width} × ${height}` : t("{0} × {1}（{2} × {3} 显示器，缩放 {4}%）", width, height, physical.width, physical.height, Math.round(hostScale() * 100))
+                  label: screenLabel(width, height, physical)
                 })),
                 { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
               ]}
