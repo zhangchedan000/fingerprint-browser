@@ -42,7 +42,8 @@ import { WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
-import { effectiveNetworkIdentity } from '../../../../shared/network-identity'
+import { effectiveNetworkIdentity, localeForCountry } from '../../../../shared/network-identity'
+import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
@@ -272,6 +273,24 @@ const TIME_ZONES: string[] = (() => {
   try { return Intl.supportedValuesOf('timeZone') } catch { return ['Asia/Shanghai', 'America/New_York', 'Europe/London'] }
 })()
 
+/** A country named in the launcher's language. */
+function regionName(code: string): string {
+  try {
+    return new Intl.DisplayNames([getLocale()], { type: 'region' }).of(code) ?? code
+  } catch {
+    return code
+  }
+}
+
+/** Countries a window can be set to: a Windows zone and a language Chrome has for it. */
+function regionChoices() {
+  return windowsCountries()
+    .map((code) => ({ code, locale: localeForCountry(code), zone: defaultCountryZone(code) }))
+    .filter((item): item is { code: string; locale: NonNullable<ReturnType<typeof localeForCountry>>; zone: string } => Boolean(item.locale && item.zone))
+    .map((item) => ({ ...item, name: regionName(item.code) }))
+    .sort((a, b) => (a.code === 'US' ? -1 : b.code === 'US' ? 1 : a.name.localeCompare(b.name, getLocale())))
+}
+
 /** A Chrome interface language named in itself, the way Chrome's language list shows it (zh-TW as zh-Hant). */
 function ownLanguageName(locale: string): string {
   const named = locale === 'zh-TW' ? 'zh-Hant' : locale === 'zh-CN' ? 'zh-Hans' : locale
@@ -413,6 +432,41 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const followIp = fp.networkIdentityMode === 'proxy'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
+  const regions = useMemo(regionChoices, [])
+  // The exit country the proxy was last seen in, against the country picked by hand.
+  const exitCountry = (proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)?.countryCode
+  const regionMismatch = !followIp && fp.region && exitCountry && proxyProtocol !== 'direct' && exitCountry.toUpperCase() !== fp.region
+    ? { ip: exitCountry.toUpperCase(), window: fp.region }
+    : undefined
+  // Windows only has its own zones: the picked country's first, then the rest as Windows lists them.
+  const timezoneOptions = useMemo(() => {
+    const locale = getLocale()
+    if (fp.platform !== 'windows') return [{ label: t("全部时区"), options: TIME_ZONES.map((zone) => ({ value: zone, label: zone })) }]
+    const local = fp.region ? countryWindowsZones(fp.region, locale) : []
+    const shown = new Set(local.map((zone) => zone.windows))
+    const option = (zone: { iana: string; label: string }) => ({ value: zone.iana, label: `${zone.label} · ${zone.iana}` })
+    const groups = [
+      ...(local.length ? [{ label: regionName(fp.region!), options: local.map(option) }] : []),
+      { label: t("全部时区"), options: allWindowsZones(locale).filter((zone) => !shown.has(zone.windows)).map(option) }
+    ]
+    const known = groups.some((group) => group.options.some((item) => item.value === fp.timezone))
+    return known || !fp.timezone ? groups : [{ label: t("当前"), options: [{ value: fp.timezone, label: windowsZoneLabel(fp.timezone, locale) }] }, ...groups]
+  }, [fp.platform, fp.region, fp.timezone])
+
+  function chooseRegion(value: string): void {
+    if (value === 'ip') { patchFingerprint({ networkIdentityMode: 'proxy' }); return }
+    if (value === 'custom') { patchFingerprint({ networkIdentityMode: 'manual' }); return }
+    const item = regions.find((entry) => entry.code === value)
+    if (!item) return
+    patchFingerprint({
+      networkIdentityMode: 'manual',
+      region: item.code,
+      language: item.locale.language,
+      acceptLanguages: item.locale.acceptLanguages,
+      uiLocale: undefined,
+      timezone: item.zone
+    })
+  }
   const running = Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
 
   function patchFingerprint(patch: Partial<FingerprintConfig>): void {
@@ -1113,38 +1167,44 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
 
       <h3 className="fb-fp-group">{t("地区与网络")}</h3>
-      <Row label={t("时区")} check={checkFor('timezone')} hint={followIp ? networkIdentity.timezone : t("时区和语言一起跟随 IP 或一起自定义")}>
-        <Space wrap size={8}>
-          <Select
-            className="fb-fp-select-half"
-            value={followIp ? 'ip' : 'custom'}
-            onChange={(mode) => patchFingerprint({ networkIdentityMode: mode === 'ip' ? 'proxy' : 'manual' })}
-            options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
-            aria-label={t("时区")}
-          />
-          {!followIp && (
+      <Row label={t("地区")} hint={followIp ? t("启动时按代理出口 IP 的国家设置时区和语言") : t("按这个国家的 Windows 电脑设置时区和语言，两者都可以再单独调整")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select"
+          value={followIp ? 'ip' : fp.region ?? 'custom'}
+          onChange={chooseRegion}
+          options={[
+            { value: 'ip', label: t("基于 IP 生成") },
+            ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
+            ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
+          ]}
+          aria-label={t("地区")}
+        />
+      </Row>
+      {regionMismatch && (
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+          description={t("时区、语言和 IP 所在国家不一致，网站可能发现。可以改成基于 IP 生成，或换一个那个国家的代理。")}
+          action={<Button size="small" onClick={() => patchFingerprint({ networkIdentityMode: 'proxy' })}>{t("基于 IP 生成")}</Button>}
+        />
+      )}
+      <Row label={t("时区")} check={checkFor('timezone')}>
+        {followIp
+          ? <Fixed>{t("基于 IP · {0}", fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone)}</Fixed>
+          : (
             <Form.Item name={['fingerprint', 'timezone']} noStyle>
-              <Select
-                showSearch
-                className="fb-fp-select"
-                placeholder="Asia/Shanghai"
-                options={TIME_ZONES.map((zone) => ({ value: zone, label: zone }))}
-                aria-label={t("时区")}
-              />
+              <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} aria-label={t("时区")} />
             </Form.Item>
           )}
-        </Space>
       </Row>
-      <Row label={t("语言")} check={checkFor('language')} hint={followIp ? `${networkIdentity.language} · ${networkIdentity.acceptLanguages}` : fp.acceptLanguages}>
-        <Space wrap size={8}>
-          <Select
-            className="fb-fp-select-half"
-            value={followIp ? 'ip' : 'custom'}
-            onChange={(mode) => patchFingerprint({ networkIdentityMode: mode === 'ip' ? 'proxy' : 'manual' })}
-            options={[{ value: 'ip', label: t("基于 IP 生成") }, { value: 'custom', label: t("自定义") }]}
-            aria-label={t("语言")}
-          />
-          {!followIp && (
+      <Row label={t("语言")} check={checkFor('language')} hint={followIp ? undefined : fp.acceptLanguages}>
+        {followIp
+          ? <Fixed>{t("基于 IP · {0}", `${networkIdentity.language} · ${networkIdentity.acceptLanguages}`)}</Fixed>
+          : (
             <Select
               showSearch
               optionFilterProp="label"
@@ -1165,7 +1225,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               aria-label={t("语言")}
             />
           )}
-        </Space>
       </Row>
       <Row label={t("界面语言")} hint={t("Chrome 菜单和设置页的语言，也决定网页里日期、数字的默认格式")}>
         <Select

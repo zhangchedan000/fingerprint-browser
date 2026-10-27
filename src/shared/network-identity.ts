@@ -1,5 +1,6 @@
 import type { FingerprintConfig, ProxyTestResult } from './types'
 import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
+import { windowsReportedZone } from './windows-time-zones'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -77,7 +78,8 @@ export function effectiveNetworkIdentity(
     language: locale?.language ?? fallback.language,
     acceptLanguages: locale?.acceptLanguages ?? fallback.acceptLanguages,
     uiLocale: fingerprint.uiLocale ?? locale?.uiLocale ?? fallback.uiLocale,
-    timezone: check.timezone ?? fallback.timezone,
+    // Windows only has its own zones; Chrome there reports the id CLDR gives that zone in the country.
+    timezone: (fingerprint.platform === 'windows' ? windowsReportedZone(check.timezone, check.countryCode) : undefined) ?? check.timezone,
     latitude: check.latitude,
     longitude: check.longitude,
     accuracyMeters: check.accuracyMeters,

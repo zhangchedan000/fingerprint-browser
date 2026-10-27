@@ -16,7 +16,7 @@ describe('proxy-derived network identity', () => {
   })
 
   it('uses verified proxy geography as one atomic identity', () => {
-    const fingerprint = defaultFingerprint(1)
+    const fingerprint = { ...defaultFingerprint(1), networkIdentityMode: 'proxy' as const }
     const identity = effectiveNetworkIdentity(fingerprint, {
       ok: true,
       latencyMs: 20,
@@ -37,16 +37,15 @@ describe('proxy-derived network identity', () => {
     })
   })
 
-  it('keeps legacy manual identity unchanged', () => {
-    const fingerprint = defaultFingerprint(1)
-    fingerprint.networkIdentityMode = 'manual'
+  it('keeps a manual identity unchanged', () => {
+    const fingerprint = { ...defaultFingerprint(1), language: 'zh-CN', acceptLanguages: 'zh-CN,zh', timezone: 'Asia/Shanghai' }
     expect(effectiveNetworkIdentity(fingerprint, { ok: true, latencyMs: 1, countryCode: 'US', timezone: 'America/New_York' })).toMatchObject({
       source: 'manual', language: 'zh-CN', timezone: 'Asia/Shanghai'
     })
   })
 
   it('never creates a partially proxy-derived identity from degraded lookup data', () => {
-    const fingerprint = defaultFingerprint(1)
+    const fingerprint = { ...defaultFingerprint(1), networkIdentityMode: 'proxy' as const, language: 'zh-CN', acceptLanguages: 'zh-CN,zh', timezone: 'Asia/Shanghai' }
     const incomplete = { ok: true as const, latencyMs: 10, countryCode: 'US', timezone: 'America/New_York' }
     expect(hasCompleteProxyIdentity(incomplete)).toBe(false)
     expect(effectiveNetworkIdentity(fingerprint, incomplete)).toMatchObject({
@@ -56,8 +55,19 @@ describe('proxy-derived network identity', () => {
     })
   })
 
+  it('starts new windows in the United States', () => {
+    expect(defaultFingerprint(1)).toMatchObject({ networkIdentityMode: 'manual', region: 'US', language: 'en-US', acceptLanguages: 'en-US,en', timezone: 'America/New_York' })
+  })
+
+  it('reports the IP time zone the way Windows Chrome does', () => {
+    const lookup = { ok: true as const, latencyMs: 5, ip: '198.51.100.7', countryCode: 'US', timezone: 'America/Detroit', latitude: 42.33, longitude: -83.05 }
+    const windows = { ...defaultFingerprint(1), platform: 'windows' as const, networkIdentityMode: 'proxy' as const }
+    expect(effectiveNetworkIdentity(windows, lookup).timezone).toBe('America/New_York')
+    expect(effectiveNetworkIdentity({ ...windows, platform: 'macos' }, lookup).timezone).toBe('America/Detroit')
+  })
+
   it('rejects automatic identity when GeoIP providers disagree', () => {
-    const fingerprint = defaultFingerprint(1)
+    const fingerprint = { ...defaultFingerprint(1), networkIdentityMode: 'proxy' as const }
     const conflict = {
       ok: true as const,
       latencyMs: 10,

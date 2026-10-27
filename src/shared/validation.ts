@@ -128,6 +128,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   if (rawFp.mediaDevices && !isMediaDevicesChoice(rawFp.mediaDevices)) throw new Error('媒体设备设置无效')
   if (rawFp.mediaLocale && !MEDIA_LOCALES.includes(rawFp.mediaLocale)) throw new Error('设备名称语言无效')
   if (rawFp.uiLocale && !CHROME_UI_LOCALES.includes(rawFp.uiLocale)) throw new Error('界面语言无效')
+  if (rawFp.region !== undefined && (typeof rawFp.region !== 'string' || !/^[A-Z]{2}$/.test(rawFp.region))) throw new Error('地区无效')
   const screenSource = rawFp.screenSource ?? 'profile'
   if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
   const geolocationPermission = rawFp.geolocationPermission ?? 'ask'
@@ -243,7 +244,8 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(rawFp.voicesLocale ? { voicesLocale: rawFp.voicesLocale } : {}),
       ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
       ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {}),
-      ...(rawFp.uiLocale ? { uiLocale: rawFp.uiLocale } : {})
+      ...(rawFp.uiLocale ? { uiLocale: rawFp.uiLocale } : {}),
+      ...(rawFp.region ? { region: rawFp.region } : {})
     }
   }
 }

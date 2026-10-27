@@ -84,6 +84,8 @@ export interface FingerprintConfig {
   language: string
   acceptLanguages: string
   timezone: string
+  /** Country (ISO 3166) the language and time zone were picked for, by hand. Unset on older profiles. */
+  region?: string
   webrtcPolicy: WebRtcPolicy
   networkIdentityMode: NetworkIdentityMode
   proxyExitPolicy: ProxyExitPolicy

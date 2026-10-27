@@ -35,12 +35,14 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     brand: 'Chrome',
     brandVersion: '',
     hardwareConcurrency: 8,
-    language: 'zh-CN',
-    // Chrome's own Accept-Language for a Simplified Chinese interface (IDS_ACCEPT_LANGUAGES).
-    acceptLanguages: 'zh-CN,zh',
-    timezone: 'Asia/Shanghai',
+    // A computer in the United States: Chrome's en-US interface and its Accept-Language
+    // (IDS_ACCEPT_LANGUAGES), and the Windows Eastern zone. "Based on IP" is one choice away.
+    language: 'en-US',
+    acceptLanguages: 'en-US,en',
+    timezone: 'America/New_York',
+    region: 'US',
     webrtcPolicy: 'proxy_only',
-    networkIdentityMode: 'proxy',
+    networkIdentityMode: 'manual',
     proxyExitPolicy: 'block',
     screenWidth: 1440,
     screenHeight: 900,
