@@ -7,7 +7,8 @@ import { locateBrowserForProfile } from './browser-locator'
 import { buildLaunchArgs } from './launch-args'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
-import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { closeProxyBridge, localProxyFor, openProxyBridge } from './proxy-bridge'
+import { openWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
@@ -230,6 +231,7 @@ export class BrowserLauncher {
 
     this.onChanged(await this.profiles.setRuntime(id, { status: 'starting', lastError: undefined }))
     let localProxyUrl: string | undefined
+    let webrtcRelay: WebRtcRelay | undefined
     try {
       localProxyUrl = await openProxyBridge(profile.proxy, {
         onFailure: (error) => {
@@ -249,6 +251,13 @@ export class BrowserLauncher {
           })
         }
       })
+      // 替换 on prism6+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
+      // through the tunnel or a system proxy); otherwise the kernel only reports its address.
+      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5'
+        && !await localProxyFor(profile.proxy)) {
+        webrtcRelay = await openWebRtcRelay(profile.proxy).catch(() => undefined)
+        this.logger?.info(webrtcRelay ? 'WebRTC 经代理 UDP 转发' : 'WebRTC 替换为代理 IP（代理不转发 UDP）', { profileId: id })
+      }
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
       try {
@@ -270,7 +279,9 @@ export class BrowserLauncher {
         proxyIdentity: profile.proxyCheck,
         allowGeoConflict: options.allowGeoConflict === true,
         hostScreen: this.hostScreen(),
-        windowScreen: engine.windowScreen
+        windowScreen: engine.windowScreen,
+        webrtcRelaySupported: engine.webrtcRelay,
+        webrtcRelayPort: webrtcRelay?.port
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
@@ -333,6 +344,7 @@ export class BrowserLauncher {
         this.processes.delete(id)
         this.orphanProcesses.delete(id)
         try {
+          webrtcRelay?.close()
           const cleanup = await Promise.allSettled([
             closeProxyBridge(localProxyUrl),
             rm(join(runtimePath, 'process.json'), { force: true })
@@ -452,6 +464,7 @@ export class BrowserLauncher {
     } catch (error) {
       this.logger?.error('浏览器环境启动流程失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
       await closeProxyBridge(localProxyUrl)
+      webrtcRelay?.close()
       const safeError = safeErrorText(error)
       const next = await this.profiles.setRuntime(id, {
         status: 'error',
@@ -776,10 +789,12 @@ export class BrowserLauncher {
           : profile.proxyCheck.geoConflict ?? '自动网络身份缺少国家、时区或坐标，请重新检测代理')
       }
     }
-    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy !== 'proxy_only') {
-      add('webrtc', 'WebRTC', 'warning', '当前兼容策略可能暴露代理之外的公网或本地地址')
+    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy === 'default') {
+      add('webrtc', 'WebRTC', 'warning', 'WebRTC 为「允许」：不经过代理，会暴露本机公网地址')
     } else {
-      add('webrtc', 'WebRTC', 'pass', '已启用非代理 UDP 防泄漏策略')
+      add('webrtc', 'WebRTC', 'pass', profile.fingerprint.webrtcPolicy === 'proxy_only'
+        ? 'WebRTC 走代理或只报代理地址，不暴露本机地址'
+        : profile.fingerprint.webrtcPolicy === 'disabled' ? 'WebRTC 已关闭' : 'WebRTC 不提供任何地址')
     }
     if (profile.proxy.protocol !== 'direct') {
       add('dns', 'DNS 路由', 'pass', '域名解析、预取与 QUIC 均限制在代理路径，回环地址除外')

@@ -7,6 +7,12 @@ import { dirname, join } from 'node:path'
  */
 const WINDOW_SCREEN_REVISION = 5
 const WINDOW_SCREEN_PATCH = '015-window-screen'
+/**
+ * Prism patch 016 (webrtc-relay): WebRTC UDP through the launcher's relay and the "禁止" mode.
+ * First shipped in prism6. Older kernels ignore the switches and would send WebRTC UDP directly.
+ */
+const WEBRTC_RELAY_REVISION = 6
+const WEBRTC_RELAY_PATCH = '016-webrtc-relay'
 
 /**
  * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5; app releases (v0.2.0) carry it in the
@@ -17,9 +23,16 @@ export function prismRevision(name: string | undefined): number | undefined {
   return match ? Number(match[1]) : undefined
 }
 
-export function kernelFitsWindowToScreen(manifest: { windowScreen?: boolean; releaseTag?: string; assetName?: string }): boolean {
-  const revision = prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
-  return manifest.windowScreen ?? revision >= WINDOW_SCREEN_REVISION
+type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; releaseTag?: string; assetName?: string }
+
+const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
+
+export function kernelFitsWindowToScreen(manifest: ManifestFeatures): boolean {
+  return manifest.windowScreen ?? revisionOf(manifest) >= WINDOW_SCREEN_REVISION
+}
+
+export function kernelRelaysWebRtc(manifest: ManifestFeatures): boolean {
+  return manifest.webrtcRelay ?? revisionOf(manifest) >= WEBRTC_RELAY_REVISION
 }
 
 /**
@@ -28,17 +41,27 @@ export function kernelFitsWindowToScreen(manifest: { windowScreen?: boolean; rel
  * a local build is checked through its source tree.
  */
 export async function executableFitsWindowToScreen(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelFitsWindowToScreen(manifest) : localBuildFitsWindowToScreen(executable)
+}
+
+export async function executableRelaysWebRtc(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelRelaysWebRtc(manifest) : localBuildHasPatch(executable, WEBRTC_RELAY_PATCH)
+}
+
+async function installedManifestOf(executable: string): Promise<ManifestFeatures | undefined> {
   let folder = dirname(executable)
   for (let level = 0; level < 3; level++) {
     try {
       const manifest = JSON.parse(await readFile(join(folder, 'manifest.json'), 'utf8')) as Record<string, unknown>
-      if (typeof manifest.executableRelative === 'string') return kernelFitsWindowToScreen(manifest)
+      if (typeof manifest.executableRelative === 'string') return manifest as ManifestFeatures
     } catch { /* not a kernel folder */ }
     const parent = dirname(folder)
     if (parent === folder) break
     folder = parent
   }
-  return localBuildFitsWindowToScreen(executable)
+  return undefined
 }
 
 /**
@@ -46,10 +69,18 @@ export async function executableFitsWindowToScreen(executable: string): Promise<
  * tree's prism-build-lock.json, a few folders above the executable.
  */
 export async function localBuildFitsWindowToScreen(executable: string): Promise<boolean> {
+  return localBuildHasPatch(executable, WINDOW_SCREEN_PATCH)
+}
+
+export async function localBuildRelaysWebRtc(executable: string): Promise<boolean> {
+  return localBuildHasPatch(executable, WEBRTC_RELAY_PATCH)
+}
+
+async function localBuildHasPatch(executable: string, patch: string): Promise<boolean> {
   let folder = dirname(executable)
   for (let level = 0; level < 4; level++) {
     try {
-      return (await readFile(join(folder, 'prism-build-lock.json'), 'utf8')).includes(WINDOW_SCREEN_PATCH)
+      return (await readFile(join(folder, 'prism-build-lock.json'), 'utf8')).includes(patch)
     } catch { /* not in this folder */ }
     const parent = dirname(folder)
     if (parent === folder) break

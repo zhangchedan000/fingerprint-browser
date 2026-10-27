@@ -7,7 +7,7 @@ import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
 import { DEVICE_MEMORY_CHOICES } from './types'
-import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft } from './types'
+import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, WebRtcPolicy } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -174,8 +174,10 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   } catch {
     throw new Error('界面语言必须是有效的语言代码，例如 zh-CN')
   }
-  const webrtcPolicy = fp.webrtcPolicy ?? 'proxy_only'
-  if (!['proxy_only', 'public_only', 'default'].includes(webrtcPolicy)) throw new Error('WebRTC 防泄漏策略无效')
+  // Windows saved before v0.5 may still say 'public_only' (仅公网); it is now 允许.
+  const rawWebrtcPolicy = (fp.webrtcPolicy as string | undefined) ?? 'proxy_only'
+  const webrtcPolicy = (rawWebrtcPolicy === 'public_only' ? 'default' : rawWebrtcPolicy) as WebRtcPolicy
+  if (!['proxy_only', 'privacy', 'default', 'disabled'].includes(webrtcPolicy)) throw new Error('WebRTC 防泄漏策略无效')
   const networkIdentityMode = fp.networkIdentityMode ?? 'manual'
   if (!['manual', 'proxy'].includes(networkIdentityMode)) throw new Error('网络身份同步策略无效')
   const proxyExitPolicy = fp.proxyExitPolicy ?? 'warn'

@@ -20,7 +20,7 @@ import type { SettingsStore } from './settings-store'
 import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
-import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen } from './kernel-features'
+import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, kernelRelaysWebRtc } from './kernel-features'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -47,6 +47,8 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   publishedAt?: string
   /** Local builds: built with patch 015 (window-screen); downloads tell by their release tag. */
   windowScreen?: boolean
+  /** Local builds: built with patch 016 (webrtc-relay). */
+  webrtcRelay?: boolean
 }
 
 interface KernelActivationBackup {
@@ -139,7 +141,8 @@ export class KernelManager {
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
         executable,
-        windowScreen: kernelFitsWindowToScreen(manifest)
+        windowScreen: kernelFitsWindowToScreen(manifest),
+        webrtcRelay: kernelRelaysWebRtc(manifest)
       })
     }
     return releases.sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
@@ -202,6 +205,7 @@ export class KernelManager {
         source: release.source,
         tag: release.tag,
         windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
+        webrtcRelay: manifest ? kernelRelaysWebRtc(manifest) : kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
@@ -226,6 +230,7 @@ export class KernelManager {
         source: release.source,
         tag: release.tag,
         windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
+        webrtcRelay: kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
         history: true
       })
     }
@@ -242,7 +247,8 @@ export class KernelManager {
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
         executable: join(this.kernelPath(manifest.version), manifest.executableRelative),
-        windowScreen: kernelFitsWindowToScreen(manifest)
+        windowScreen: kernelFitsWindowToScreen(manifest),
+        webrtcRelay: kernelRelaysWebRtc(manifest)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
   }
@@ -396,7 +402,8 @@ export class KernelManager {
         ...integrity,
         source: 'local-build',
         target: `${process.platform}-${process.arch}`,
-        windowScreen: await localBuildFitsWindowToScreen(executable)
+        windowScreen: await localBuildFitsWindowToScreen(executable),
+        webrtcRelay: await localBuildRelaysWebRtc(executable)
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
       await rename(stagingPath, destination)

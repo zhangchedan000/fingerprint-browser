@@ -23,6 +23,10 @@ export interface LaunchArgumentOptions {
   hostScreen?: { width: number; height: number }
   /** EngineStatus.windowScreen of the kernel this window runs. */
   windowScreen?: boolean
+  /** EngineStatus.webrtcRelay of the kernel this window runs (prism6+). */
+  webrtcRelaySupported?: boolean
+  /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
+  webrtcRelayPort?: number
 }
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
@@ -145,15 +149,23 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
     if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
   }
-  if (fp.webrtcPolicy === 'proxy_only') {
+  if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
+    // 替换 on prism6+ with a proxy that relays UDP: WebRTC really goes through the proxy.
+    args.push('--webrtc-ip-handling-policy=default')
+    args.push(`--fingerprint-webrtc-udp-relay=127.0.0.1:${options.webrtcRelayPort}`)
+  } else if (fp.webrtcPolicy === 'proxy_only') {
     args.push('--disable-non-proxied-udp')
     args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
-    // 替换: our kernels show the proxy's exit address to pages; without a public IPv4 exit
-    // WebRTC simply stays blocked.
+    // 替换 without UDP through the proxy: our kernels show the proxy's exit address to pages;
+    // without a public IPv4 exit WebRTC simply stays blocked.
     const webrtcIp = publicIpv4(options.proxyIdentity?.ip)
     if (webrtcIp) args.push(`--fingerprint-webrtc-ip=${webrtcIp}`)
-  } else if (fp.webrtcPolicy === 'public_only') {
-    args.push('--webrtc-ip-handling-policy=default_public_interface_only')
+  } else if (fp.webrtcPolicy === 'privacy' || (fp.webrtcPolicy === 'disabled' && !options.webrtcRelaySupported)) {
+    // 隐私 (and 禁止 on kernels that cannot remove WebRTC): no address reaches the page.
+    args.push('--disable-non-proxied-udp')
+    args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+  } else if (fp.webrtcPolicy === 'disabled') {
+    args.push('--fingerprint-webrtc-disabled')
   }
   if (options.proxyUrl) {
     args.push('--disable-quic')

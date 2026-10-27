@@ -371,7 +371,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         fingerprintKernel: true,
         label: pinnedKernel ? t("Prism 内核（环境固定）") : t("固定内核未安装"),
         version: kernelVersion,
-        windowScreen: pinnedKernel?.windowScreen
+        windowScreen: pinnedKernel?.windowScreen,
+        webrtcRelay: pinnedKernel?.webrtcRelay
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
@@ -379,6 +380,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
   // prism5+ kernels keep the window inside the claimed screen, so it may be smaller than this one.
   const windowScreen = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.windowScreen)
+  // prism6+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
+  const webrtcRelay = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.webrtcRelay)
   const floor = screenFloor(hostScreen(), windowScreen)
   // A check describes the settings it ran with; any change since makes it out of date.
   const typedProxy = Form.useWatch('proxy', { form, preserve: true }) as ProxyConfig | undefined
@@ -1186,16 +1189,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label="WebRTC"
         check={checkFor('webrtc')}
         hint={fp.webrtcPolicy === 'proxy_only'
-          ? t("替换为代理 IP，防止泄露本机 IP")
-          : fp.webrtcPolicy === 'public_only'
-            ? t("可能暴露真实公网 IP")
-            : t("高风险：WebRTC 使用所有接口")}
+          ? webrtcRelay
+            ? t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
+            : t("替换为代理 IP，防止泄露本机 IP")
+          : fp.webrtcPolicy === 'privacy'
+            ? t("开启 WebRTC，但网站拿不到任何 IP")
+            : fp.webrtcPolicy === 'disabled'
+              ? webrtcRelay
+                ? t("完全关闭 WebRTC；真实 Chrome 不会没有 WebRTC，网站可能视为异常")
+                : t("这个内核不能关闭 WebRTC，按「隐私」处理")
+              : t("原版 Chrome 行为，不经过代理，会暴露本机真实 IP")}
       >
         <Select
           className="fb-fp-select"
           value={fp.webrtcPolicy}
           onChange={(webrtcPolicy) => patchFingerprint({ webrtcPolicy })}
-          options={[{ value: 'proxy_only', label: t("替换") }, { value: 'public_only', label: t("仅公网") }, { value: 'default', label: t("真实") }]}
+          options={[
+            { value: 'proxy_only', label: t("替换") },
+            { value: 'privacy', label: t("隐私") },
+            { value: 'default', label: t("允许") },
+            { value: 'disabled', label: t("禁止") }
+          ]}
         />
       </Row>
 

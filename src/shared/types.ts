@@ -14,7 +14,12 @@ export type HardwareProfileId =
   | 'windows-11-rtx4060'
   | 'windows-11-rtx4070'
 export type ProxyProtocol = 'direct' | 'http' | 'https' | 'socks5'
-export type WebRtcPolicy = 'proxy_only' | 'public_only' | 'default'
+/**
+ * 替换 (proxy_only): WebRTC through the proxy (UDP relay on prism6+ when the proxy relays UDP,
+ * otherwise the proxy's address is reported without sending UDP); 隐私 (privacy): WebRTC on but no
+ * address at all; 允许 (default): Chrome as is; 禁止 (disabled): no RTCPeerConnection (prism6+).
+ */
+export type WebRtcPolicy = 'proxy_only' | 'privacy' | 'default' | 'disabled'
 export type NetworkIdentityMode = 'manual' | 'proxy'
 export type ProxyExitPolicy = 'warn' | 'block'
 export type ProfileStatus = 'closed' | 'starting' | 'running' | 'stopping' | 'orphaned' | 'error'
@@ -300,6 +305,8 @@ export interface EngineStatus {
   version?: string
   /** The kernel keeps its window inside a claimed screen, so the claim may be smaller than the real one. */
   windowScreen?: boolean
+  /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism6+). */
+  webrtcRelay?: boolean
 }
 
 export interface KernelImportResult {
@@ -330,6 +337,8 @@ export interface KernelRelease {
   update?: boolean
   /** See EngineStatus.windowScreen. */
   windowScreen?: boolean
+  /** See EngineStatus.webrtcRelay. */
+  webrtcRelay?: boolean
   /** An older build of its version, offered for rolling back; installing it replaces the kernel in place. */
   history?: boolean
 }
