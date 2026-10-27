@@ -276,8 +276,6 @@ export interface AppInfo {
   version: string
   vaultPath: string
   logsPath: string
-  /** This computer's system, e.g. { platform: 'windows', name: 'Windows 11', build: '26200' }. */
-  host?: { platform: BrowserPlatform; name: string; build: string }
 }
 
 /** The newest release of this app on GitHub, compared with the running version. */

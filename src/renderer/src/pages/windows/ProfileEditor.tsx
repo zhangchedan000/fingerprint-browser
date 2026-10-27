@@ -47,7 +47,6 @@ import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedPro
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
 import type {
-  AppInfo,
   BrowserExtension,
   BrowserPlatform,
   BrowserProfileView,
@@ -341,8 +340,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [checking, setChecking] = useState(false)
   const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
   const [fontPacks, setFontPacks] = useState<FontPackStatus>()
-  const [host, setHost] = useState<AppInfo['host']>()
-  useEffect(() => { void window.browserApi.app.info().then((info) => setHost(info.host)).catch(() => undefined) }, [])
   const [checkError, setCheckError] = useState('')
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
@@ -1141,13 +1138,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'Chrome', label: 'Chrome' }, { value: 'Edge', label: 'Edge' }]}
         />
       </Row>
-      <Row
-        label={t("操作系统")}
-        check={checkFor('system', 'platformVersion')}
-        hint={fp.platform === 'windows' && kernelTakesExplicitGpu(windowKernelVersion)
-          ? t("Windows 版本跟本机一致：字体、任务栏和系统界面都来自本机，报别的版本会对不上。User-Agent 里 Windows 10 和 11 都写 Windows NT 10.0")
-          : undefined}
-      >
+      <Row label={t("操作系统")} check={checkFor('system', 'platformVersion')}>
         <Space wrap size={8}>
           <Select
             className="fb-fp-select-half"
@@ -1156,17 +1147,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             options={[{ value: 'windows', label: 'Windows' }, { value: 'macos', label: 'macOS' }]}
             aria-label={t("操作系统")}
           />
-          {fp.platform === 'windows' && kernelTakesExplicitGpu(windowKernelVersion)
-            ? <Fixed>{host?.platform === 'windows' ? t("本机真实 · {0}（版本 {1}）", host.name, host.build) : t("本机真实")}</Fixed>
-            : (
-              <Select
-                className="fb-fp-select-half"
-                value={fp.platformVersion}
-                onChange={choosePlatformVersion}
-                options={(fp.platform === 'windows' ? WINDOWS_VERSIONS : MACOS_VERSIONS)}
-                aria-label={t("系统版本")}
-              />
-            )}
+          <Select
+            className="fb-fp-select-half"
+            value={fp.platformVersion}
+            onChange={choosePlatformVersion}
+            options={(fp.platform === 'windows' ? WINDOWS_VERSIONS : MACOS_VERSIONS)}
+            aria-label={t("系统版本")}
+          />
         </Space>
       </Row>
       <Row label="User-Agent" hint={t("与内核版本和系统自动匹配")}>
