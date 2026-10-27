@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import type { PortableCookie } from '../cookie-file'
 import { CACHE_PATHS } from '../profile-data'
 
@@ -40,17 +41,27 @@ function tarExecutable(): string {
   return process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
 }
 
-function runTar(args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(tarExecutable(), args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true })
-    let stderr = ''
-    child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-2000) })
-    child.once('error', (error) => reject(new Error(`无法运行系统 tar：${error.message}`)))
-    child.once('exit', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`打包登录态失败（tar 退出码 ${code}）${stderr.trim() ? `：${stderr.trim()}` : ''}`))
-    })
+/**
+ * Runs tar in `cwd` with the archive on stdin or stdout. Windows tar takes its arguments in the
+ * ANSI code page, so a path such as C:\Users\王\… would arrive as "?"; no path is passed at all.
+ */
+async function runTar(args: string[], cwd: string, archive: { read: string } | { write: string }): Promise<void> {
+  const child = spawn(tarExecutable(), args, {
+    cwd,
+    stdio: ['read' in archive ? 'pipe' : 'ignore', 'write' in archive ? 'pipe' : 'ignore', 'pipe'],
+    windowsHide: true
   })
+  let stderr = ''
+  child.stderr!.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-2000) })
+  const exited = new Promise<number | null>((resolve, reject) => {
+    child.once('error', (error) => reject(new Error(`无法运行系统 tar：${error.message}`)))
+    child.once('exit', resolve)
+  })
+  const transfer = 'read' in archive
+    ? pipeline(createReadStream(archive.read), child.stdin!)
+    : pipeline(child.stdout!, createWriteStream(archive.write))
+  const [code] = await Promise.all([exited, transfer.catch((error) => { child.kill(); throw error })])
+  if (code !== 0) throw new Error(`处理登录态失败（tar 退出码 ${code}）${stderr.trim() ? `：${stderr.trim()}` : ''}`)
 }
 
 export async function sha256File(path: string): Promise<string> {
@@ -67,14 +78,14 @@ export interface PackedState {
 
 /** Packs a closed window's data folder and its cookies into `target` (.tgz). */
 export async function packProfileState(userDataPath: string, cookies: PortableCookie[], target: string): Promise<PackedState> {
-  const extra = `${target}.extra`
-  await mkdir(extra, { recursive: true })
+  // The window is closed, so the cookies file can sit in its folder while tar reads it.
+  const cookiesPath = join(userDataPath, COOKIES_FILE)
+  await writeFile(cookiesPath, JSON.stringify(cookies), { encoding: 'utf8', mode: 0o600 })
   try {
-    await writeFile(join(extra, COOKIES_FILE), JSON.stringify(cookies), { encoding: 'utf8', mode: 0o600 })
     const excludes = EXCLUDED_PATHS.flatMap((path) => ['--exclude', `./${path}`])
-    await runTar(['-czf', target, ...excludes, '-C', userDataPath, '.', '-C', extra, COOKIES_FILE])
+    await runTar(['-czf', '-', ...excludes, '.'], userDataPath, { write: target })
   } finally {
-    await rm(extra, { recursive: true, force: true })
+    await rm(cookiesPath, { force: true })
   }
   const [info, sha256] = await Promise.all([stat(target), sha256File(target)])
   return { file: target, size: info.size, sha256 }
@@ -89,7 +100,7 @@ export async function unpackProfileState(archive: string, userDataPath: string):
   await mkdir(staging, { recursive: true })
   try {
     // -P is not passed, so bsdtar refuses absolute paths and "..", keeping files inside staging.
-    await runTar(['-xzf', archive, '-C', staging])
+    await runTar(['-xzf', '-'], staging, { read: archive })
     let cookies: PortableCookie[] = []
     const cookiesPath = join(staging, COOKIES_FILE)
     try {

@@ -23,7 +23,8 @@ async function put(path: string, content: string): Promise<void> {
 describe('team login state archive', () => {
   it('carries site data and cookies, leaves caches and computer-bound files behind', async () => {
     const root = await tempRoot()
-    const source = join(root, '源 user-data')
+    // Outside every ANSI code page Windows tar could use for its arguments.
+    const source = join(root, '源 ก user-data')
     await put(join(source, 'Default', 'Local Storage', 'leveldb', '000003.log'), 'local storage')
     await put(join(source, 'Default', 'Preferences'), '{}')
     await put(join(source, 'Default', 'Cache', 'Cache_Data', 'f_000001'), 'cache')
@@ -37,7 +38,7 @@ describe('team login state archive', () => {
     expect(packed.size).toBeGreaterThan(0)
     expect(packed.sha256).toMatch(/^[a-f\d]{64}$/)
 
-    const target = join(root, 'target user-data')
+    const target = join(root, '目标 ก user-data')
     await put(join(target, 'Local State'), 'target key')
     await put(join(target, 'Default', 'Old'), 'replaced')
     const restored = await unpackProfileState(packed.file, target)
