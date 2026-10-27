@@ -2282,5 +2282,7 @@
   "让 {0} 这些持续更新的检测网站来评判这个窗口": "Sürekli güncellenen tespit siteleri — {0} — bu pencereyi değerlendirsin",
   "没有打开的检测网站": "Açık kontrol sitesi yok",
   "检测网站": "Kontrol siteleri",
-  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tüm kontrol siteleri kapalı; “Kontrol siteleri”ne tıklayıp en az birini açın"
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tüm kontrol siteleri kapalı; “Kontrol siteleri”ne tıklayıp en az birini açın",
+  "上次检测：{0}": "Son kontrol: {0}",
+  "在这个窗口里打开": "Bu pencerede aç"
 }

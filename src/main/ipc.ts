@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
-import { DEFAULT_DEEP_CHECK_SITES } from '../shared/deep-check'
+import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
 import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
@@ -243,11 +243,25 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return { validated, proxy, engine, proxyResult, runOptions }
   }
 
-  ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string): Promise<DeepSiteResult[]> => {
+  /** A window's last deep check, screenshots included, lives in its runtime folder. */
+  const deepCheckFile = (id: string) => join(profiles.profileRuntimePath(id), 'deep-check.json')
+  ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<DeepSiteResult[]> => {
     const { runOptions } = await checkRunOptions(draft, profileId)
     const sites = (settings.get().deepCheckSites ?? DEFAULT_DEEP_CHECK_SITES).filter((site) => site.enabled)
     if (!sites.length) throw new Error('检测网站都关掉了，请点「检测网站」打开至少一个')
-    return deepCheck(runOptions, sites, (result) => event.sender.send('profiles:deep-check-progress', result))
+    const results = await deepCheck(runOptions, sites, (result) => event.sender.send('profiles:deep-check-progress', result))
+    if (profileId) {
+      const record: DeepCheckRecord = { checkedAt: new Date().toISOString(), ...(typeof settingsKey === 'string' ? { checkedSettings: settingsKey } : {}), results }
+      await mkdir(profiles.profileRuntimePath(profileId), { recursive: true })
+      await writeFile(deepCheckFile(profileId), JSON.stringify(record), { mode: 0o600 }).catch((error) => {
+        logger.error('保存深度检测结果失败', { profileId, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+    return results
+  })
+  ipcMain.handle('profiles:last-deep-check', async (_event, id: string): Promise<DeepCheckRecord | null> => {
+    profiles.get(id)
+    return readFile(deepCheckFile(id), 'utf8').then((text) => JSON.parse(text) as DeepCheckRecord).catch(() => null)
   })
   ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
     const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
@@ -437,6 +451,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:launch', (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
     return launcher.launch(id, { allowGeoConflict: options?.allowGeoConflict === true }).then(publicProfile)
+  })
+  ipcMain.handle('profiles:open-url', (_event, id: string, url: string, options?: { allowGeoConflict?: unknown }) => {
+    if (typeof url !== 'string') throw new Error('网址无效')
+    if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
+    return launcher.openUrl(id, url, { allowGeoConflict: options?.allowGeoConflict === true }).then(publicProfile)
   })
   ipcMain.handle('profiles:close', (_event, id: string) => launcher.close(id).then(publicProfile))
   ipcMain.handle('profiles:close-all', () => launcher.closeAll())

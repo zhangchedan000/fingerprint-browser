@@ -2282,5 +2282,7 @@
   "让 {0} 这些持续更新的检测网站来评判这个窗口": "Laissez des sites de détection constamment mis à jour — {0} — juger cette fenêtre",
   "没有打开的检测网站": "Aucun site activé",
   "检测网站": "Sites de vérification",
-  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tous les sites sont désactivés ; cliquez sur « Sites de vérification » et activez-en au moins un"
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "Tous les sites sont désactivés ; cliquez sur « Sites de vérification » et activez-en au moins un",
+  "上次检测：{0}": "Dernière vérification : {0}",
+  "在这个窗口里打开": "Ouvrir dans cette fenêtre"
 }

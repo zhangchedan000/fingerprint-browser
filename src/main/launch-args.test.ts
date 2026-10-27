@@ -108,6 +108,8 @@ describe('launch arguments', () => {
     const real = profile({ disabledSpoofing: ['font'] })
     expect(buildLaunchArgs(real, kernel).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
     expect(buildLaunchArgs(real, { ...kernel, languageFonts: true }).some((arg) => arg.includes('font'))).toBe(false)
+    const opened = buildLaunchArgs(profile({}), { ...kernel, extraUrls: ['https://iphey.com/'] })
+    expect(opened.at(-1)).toBe('https://iphey.com/')
     const host = buildLaunchArgs(profile({ fontSource: 'host' }), { ...kernel, languageFonts: true })
     expect(host.some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
   })

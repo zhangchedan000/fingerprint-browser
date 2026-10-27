@@ -59,7 +59,8 @@ const api: BrowserApi = {
     openDataFolder: (id: string) => ipcRenderer.invoke('profiles:open-data-folder', id),
     clearCache: (id: string) => ipcRenderer.invoke('profiles:clear-cache', id),
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:check-fingerprint', draft, profileId, settingsKey),
-    deepCheck: (draft: ProfileDraft, profileId?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId),
+    deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId, settingsKey),
+    lastDeepCheck: (id: string) => ipcRenderer.invoke('profiles:last-deep-check', id),
     onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult): void => listener(result)
       ipcRenderer.on('profiles:deep-check-progress', handler)
@@ -80,6 +81,7 @@ const api: BrowserApi = {
     importCookies: (id: string) => ipcRenderer.invoke('profiles:import-cookies', id),
     remove: (id: string) => ipcRenderer.invoke('profiles:remove', id),
     launch: (id: string, options?: ProfileLaunchOptions) => ipcRenderer.invoke('profiles:launch', id, options),
+    openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => ipcRenderer.invoke('profiles:open-url', id, url, options),
     close: (id: string) => ipcRenderer.invoke('profiles:close', id),
     closeAll: () => ipcRenderer.invoke('profiles:close-all'),
     testProxy: (id: string) => ipcRenderer.invoke('profiles:test-proxy', id),

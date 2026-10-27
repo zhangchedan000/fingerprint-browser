@@ -26,6 +26,8 @@ export type ProxyExitPolicy = 'warn' | 'block'
 export type ProfileStatus = 'closed' | 'starting' | 'running' | 'stopping' | 'orphaned' | 'error'
 export interface ProfileLaunchOptions {
   allowGeoConflict?: boolean
+  /** A page to open as an extra tab (openUrl on a closed window). */
+  openUrl?: string
 }
 export type EnginePreference = 'auto' | 'bundled' | 'system'
 export interface ProfileWindowConfig {
@@ -647,7 +649,9 @@ export interface BrowserApi {
     /** Starts the draft's exact browser setup in a throwaway profile and reports what a site sees. */
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<FingerprintCheckReport>
     /** Opens public detection sites in a throwaway browser with these settings; results stream in by site. */
-    deepCheck: (draft: ProfileDraft, profileId?: string) => Promise<import('./deep-check').DeepSiteResult[]>
+    deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<import('./deep-check').DeepSiteResult[]>
+    /** The window's last deep check, or null. */
+    lastDeepCheck: (id: string) => Promise<import('./deep-check').DeepCheckRecord | null>
     onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult) => void) => () => void
     /** Last saved check of a window, or null. */
     lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>
@@ -665,6 +669,8 @@ export interface BrowserApi {
     importCookies: (id: string) => Promise<CookieTransferResult | null>
     remove: (id: string) => Promise<void>
     launch: (id: string, options?: ProfileLaunchOptions) => Promise<BrowserProfileView>
+    /** Opens a page in the window: a new tab when it runs, otherwise it starts with that page. */
+    openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => Promise<BrowserProfileView>
     close: (id: string) => Promise<BrowserProfileView>
     closeAll: () => Promise<void>
     testProxy: (id: string) => Promise<BrowserProfileView>

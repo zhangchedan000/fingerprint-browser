@@ -2282,5 +2282,7 @@
   "让 {0} 这些持续更新的检测网站来评判这个窗口": "Let detection sites that keep updating — {0} — judge this window",
   "没有打开的检测网站": "No check sites are on",
   "检测网站": "Check sites",
-  "检测网站都关掉了，请点「检测网站」打开至少一个": "All check sites are off; click “Check sites” and turn at least one on"
+  "检测网站都关掉了，请点「检测网站」打开至少一个": "All check sites are off; click “Check sites” and turn at least one on",
+  "上次检测：{0}": "Last checked: {0}",
+  "在这个窗口里打开": "Open in this window"
 }

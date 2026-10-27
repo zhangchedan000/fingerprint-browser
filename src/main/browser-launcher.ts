@@ -30,6 +30,8 @@ type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
 interface RunningBrowser {
   process: ChildProcess
+  /** The kernel it runs, to hand it more pages (openUrl). */
+  executable?: string
   automation?: BrowserControlSession
   proxyUrl?: string
   proxyIdentityIp?: string
@@ -193,6 +195,26 @@ export class BrowserLauncher {
     }
   }
 
+  /**
+   * Opens a page in the window: a new tab when it is running (Chrome hands a second start on the
+   * same user data folder to the running browser), otherwise the window starts as usual (its proxy
+   * and fingerprint) with the page as an extra tab.
+   */
+  async openUrl(id: string, url: string, options: ProfileLaunchOptions = {}): Promise<BrowserProfile> {
+    if (!/^https?:\/\//i.test(url)) throw new Error('只能打开 http 或 https 网址')
+    const running = this.processes.get(id)
+    if (!running) return this.launch(id, { ...options, openUrl: url })
+    if (!running.executable) throw new Error('这个窗口正在启动，请稍后再试')
+    const child = this.browserSpawner(running.executable, [`--user-data-dir=${this.profiles.profileDataPath(id)}`, url], {
+      stdio: 'ignore',
+      detached: true,
+      windowsHide: false
+    })
+    child.unref()
+    this.logger?.info('在窗口中打开网页', { profileId: id, url })
+    return this.profiles.get(id)
+  }
+
   private async launchProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
@@ -282,7 +304,8 @@ export class BrowserLauncher {
         webrtcRelaySupported: engine.webrtcRelay,
         languageFonts: engine.webrtcRelay,
         seededAudioRects: engine.webrtcRelay,
-        webrtcRelayPort: webrtcRelay?.port
+        webrtcRelayPort: webrtcRelay?.port,
+        extraUrls: options.openUrl ? [options.openUrl] : undefined
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
@@ -376,6 +399,7 @@ export class BrowserLauncher {
       const running: RunningBrowser = {
         process: child,
         automation,
+        executable: engine.executable,
         proxyUrl: localProxyUrl,
         proxyIdentityIp: profile.proxyCheck?.ip,
         proxyMonitorRunning: false,

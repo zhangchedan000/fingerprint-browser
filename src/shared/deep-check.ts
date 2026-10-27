@@ -22,6 +22,14 @@ export interface DeepSiteResult {
   error?: string
 }
 
+/** The last deep check of a window, kept in its folder so it is there when the editor opens again. */
+export interface DeepCheckRecord {
+  checkedAt: string
+  /** The editor's settings key when it ran, to tell when the window has changed since. */
+  checkedSettings?: string
+  results: DeepSiteResult[]
+}
+
 /** A site in the user's deep check list (Settings); the four built-in ones are the default list. */
 export interface DeepCheckSite {
   id: string

@@ -17,6 +17,8 @@ export interface HostScreen {
 
 export interface LaunchArgumentOptions {
   userDataDir: string
+  /** Pages to open besides the window's own start pages. */
+  extraUrls?: string[]
   proxyUrl?: string
   remoteDebuggingPort?: number
   extensionPaths?: string[]
@@ -207,5 +209,6 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (options.extensionPaths?.length) args.push(`--load-extension=${options.extensionPaths.join(',')}`)
   if (profile.startupMode === 'restore') args.push('--restore-last-session')
   else args.push(...profile.startUrls)
+  args.push(...(options.extraUrls ?? []))
   return args
 }

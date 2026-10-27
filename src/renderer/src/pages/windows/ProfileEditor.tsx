@@ -1574,7 +1574,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ].map(([name, value]) => <span key={name}>{name}<b className="fb-mono">{value}</b></span>)}
           </div>
         )}
-        <DeepCheck draft={currentDraft} profileId={profile?.id} />
+        <DeepCheck draft={currentDraft} profileId={profile?.id} settingsKey={currentSettingsKey} />
       </div>
     </div>
   )

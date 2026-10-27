@@ -49,6 +49,18 @@ export function useWindowLauncher() {
     }
   }
 
+  /** Opens a page in the window: a new tab when it runs, otherwise it starts with the page. */
+  async function openUrl(profile: BrowserProfileView, url: string): Promise<BrowserProfileView | undefined> {
+    try {
+      return await window.browserApi.profiles.openUrl(profile.id, url)
+    } catch (error) {
+      const warning = geoConflictConfirmationMessage(humanError(error))
+      if (!warning) throw error
+      if (!await confirmGeoConflict(profile, warning)) return undefined
+      return window.browserApi.profiles.openUrl(profile.id, url, { allowGeoConflict: true })
+    }
+  }
+
   /** Opens closed windows one after another with the batch gap; collects the failures. */
   async function openMany(profiles: BrowserProfileView[], onEach?: (profile: BrowserProfileView) => void): Promise<OpenManyResult> {
     const candidates = orderBatchLaunchProfiles(profiles.filter(isEditable))
@@ -71,5 +83,5 @@ export function useWindowLauncher() {
     return { total: candidates.length, succeeded: candidates.length - errors.length, errors }
   }
 
-  return { launch, openMany }
+  return { launch, openUrl, openMany }
 }
