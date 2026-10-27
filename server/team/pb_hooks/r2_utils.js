@@ -69,7 +69,8 @@ function markFiles() { $app.store().set(KEY.files, true) }
 
 /** Runs a shell line; throws with its output when it fails. Arguments are ours, never a user's. */
 function sh(line) {
-  const out = toString($os.cmd("sh", "-c", line + " 2>&1; echo \"#exit $?\"").output()).trim()
+  // A subshell, so every command's errors are caught and an "exit" in the line stops only it.
+  const out = toString($os.cmd("sh", "-c", "(" + line + ") 2>&1; echo \"#exit $?\"").output()).trim()
   const at = out.lastIndexOf("#exit ")
   const code = Number(out.slice(at + 6))
   const text = out.slice(0, at).trim()
@@ -103,7 +104,15 @@ function fullPass(r) {
 
 /** Writes and removes a small file, so a wrong address or key shows before it is saved. */
 function check(config) {
-  sh(rcloneEnv(config) + "printf ok | rclone rcat r2:" + config.R2_BUCKET + "/.prism-check && rclone deletefile r2:" + config.R2_BUCKET + "/.prism-check")
+  try {
+    sh(rcloneEnv(config) + "printf ok | rclone rcat r2:" + config.R2_BUCKET + "/.prism-check && rclone deletefile r2:" + config.R2_BUCKET + "/.prism-check")
+  } catch (err) {
+    const text = String(err.message || err)
+    if (/Unauthorized|status code: 401|SignatureDoesNotMatch|InvalidAccessKeyId/.test(text)) throw new Error("密钥不对：访问密钥 ID 和机密访问密钥要来自同一个 R2 API 令牌，复制时别多空格或少字符")
+    if (/AccessDenied|status code: 403/.test(text)) throw new Error("这个令牌没有写入权限：创建 R2 API 令牌时权限要选「对象读和写」，并包含这个存储桶")
+    if (/NoSuchBucket|status code: 404/.test(text)) throw new Error("找不到这个存储桶：检查 S3 API 地址最后的存储桶名")
+    throw err
+  }
 }
 
 /** Saves the bucket and key (after check) and starts over with a full pass on the next minute. */
