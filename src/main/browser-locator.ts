@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import type { AppSettings, EngineStatus } from '../shared/types'
 import type { SettingsStore } from './settings-store'
-import { kernelFitsWindowToScreen } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen } from './kernel-features'
 import {
   validateKernelIntegrityFields,
   verifyKernelIntegrity,
@@ -284,7 +284,8 @@ export async function locateBrowserSelection(settings: AppSettings, resourcesPat
       source: 'configured',
       fingerprintKernel: settings.fingerprintKernel,
       label: settings.fingerprintKernel ? 'Prism 内核' : '自定义 Chromium（兼容模式）',
-      version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined
+      version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined,
+      windowScreen: settings.fingerprintKernel ? await executableFitsWindowToScreen(settings.browserExecutable) : undefined
     }
   }
 

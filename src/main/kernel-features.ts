@@ -23,6 +23,25 @@ export function kernelFitsWindowToScreen(manifest: { windowScreen?: boolean; rel
 }
 
 /**
+ * The kernel chosen as default is stored by its executable path: an installed kernel
+ * (kernels\<version>\browser\chrome.exe) has its manifest.json a folder or two above it,
+ * a local build is checked through its source tree.
+ */
+export async function executableFitsWindowToScreen(executable: string): Promise<boolean> {
+  let folder = dirname(executable)
+  for (let level = 0; level < 3; level++) {
+    try {
+      const manifest = JSON.parse(await readFile(join(folder, 'manifest.json'), 'utf8')) as Record<string, unknown>
+      if (typeof manifest.executableRelative === 'string') return kernelFitsWindowToScreen(manifest)
+    } catch { /* not a kernel folder */ }
+    const parent = dirname(folder)
+    if (parent === folder) break
+    folder = parent
+  }
+  return localBuildFitsWindowToScreen(executable)
+}
+
+/**
  * A local build (out\Default\chrome.exe) carries the patches it was built with in the source
  * tree's prism-build-lock.json, a few folders above the executable.
  */

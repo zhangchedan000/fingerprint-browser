@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen, prismRevision } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen, localBuildFitsWindowToScreen, prismRevision } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -17,6 +17,19 @@ it('lets prism5 and later kernels claim a smaller screen', () => {
   expect(kernelFitsWindowToScreen({})).toBe(false)
   expect(kernelFitsWindowToScreen({ windowScreen: true })).toBe(true)
   expect(kernelFitsWindowToScreen({ releaseTag: 'v0.2.0', assetName: 'ungoogled-chromium_155.0.8059.84-prism5_windows_x64.zip' })).toBe(true)
+})
+
+it('reads the default kernel from the manifest next to its executable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'prism-kernels-'))
+  const kernel = (version: string, assetName: string) => {
+    const folder = join(root, 'kernels', version)
+    return mkdir(join(folder, 'browser'), { recursive: true })
+      .then(() => writeFile(join(folder, 'manifest.json'), JSON.stringify({ version, executableRelative: 'browser\\chrome.exe', assetName, releaseTag: 'v0.2.0' })))
+      .then(() => join(folder, 'browser', 'chrome.exe'))
+  }
+  expect(await executableFitsWindowToScreen(await kernel('prism-156.0.8078.47', 'ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip'))).toBe(true)
+  expect(await executableFitsWindowToScreen(await kernel('prism-155.0.8059.84', 'ungoogled-chromium_155.0.8059.84-prism4_windows_x64.zip'))).toBe(false)
+  expect(await executableFitsWindowToScreen(join(root, 'elsewhere', 'chrome.exe'))).toBe(false)
 })
 
 it('finds the window-screen patch in a local build lock', async () => {
