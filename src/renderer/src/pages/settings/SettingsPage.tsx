@@ -10,6 +10,7 @@ import { useWorkspace } from '../../data/workspace'
 import { kernelName } from '../../../../shared/kernel-id'
 import { TunnelSettings } from './TunnelSettings'
 import { AppUpdatePanel } from './AppUpdatePanel'
+import { ACCENT_PRESETS, setAccent, useTheme } from '../../theme'
 import type { PageProps } from '../registry'
 
 type SettingsTab = 'general' | 'launch' | 'network' | 'data' | 'about'
@@ -34,6 +35,7 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
   const ws = useWorkspace()
   const { preferences, notify, engine, profiles } = ws
   const migration = useWorkspaceMigration()
+  const theme = useTheme()
   const [tab, setTab] = useState<SettingsTab>(params?.settingsTab ?? 'general')
   useEffect(() => { if (params?.settingsTab) setTab(params.settingsTab) }, [params?.settingsTab])
   const [info, setInfo] = useState<AppInfo>()
@@ -161,6 +163,15 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
                   onChange={(event) => void save({ theme: event.target.value })}
                   options={[{ value: 'light', label: t("浅色") }, { value: 'dark', label: t("深色") }, { value: 'system', label: t("跟随系统") }]}
                 />
+              </Item>
+              <Item label={t("主题色")}>
+                <div className="fb-accent-picker" role="radiogroup" aria-label={t("主题色")}>
+                  {ACCENT_PRESETS.map((color) => (
+                    <button key={color} type="button" role="radio" aria-checked={theme.accent === color}
+                      className={`fb-accent-swatch${theme.accent === color ? ' is-active' : ''}`}
+                      style={{ background: color }} onClick={() => setAccent(color)} />
+                  ))}
+                </div>
               </Item>
               <Item label={t("关闭主界面时")}>
                 <NotYet><Select disabled value="quit" className="fb-wide-select" options={[{ value: 'quit', label: t("退出并关闭所有窗口") }]} /></NotYet>

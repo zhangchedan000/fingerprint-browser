@@ -33,12 +33,14 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
         <span className={`fb-cc${check?.ok && check.countryCode ? '' : ' muted'}`}>{check?.ok && check.countryCode ? check.countryCode : '—'}</span>
         <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxyAddress(proxy)}</span>
       </div>
-      <small className="fb-ellipsis" title={check?.ok ? [check.country, check.region, check.city].filter(Boolean).join(' · ') : undefined}>
-        {proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
-      </small>
-      {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
-      {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}
-      {check?.exitChanged && <Tooltip title={t("出口 IP 与上次不同")}><small className="fb-proxy-warn">{t("出口变化")}</small></Tooltip>}
+      <div className="fb-proxy-meta">
+        <small className="fb-ellipsis" title={check?.ok ? [check.country, check.region, check.city].filter(Boolean).join(' · ') : undefined}>
+          {proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
+        </small>
+        {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
+        {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}
+        {check?.exitChanged && <Tooltip title={t("出口 IP 与上次不同")}><small className="fb-proxy-warn">{t("出口变化")}</small></Tooltip>}
+      </div>
     </div>
   )
 }

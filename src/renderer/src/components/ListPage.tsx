@@ -2,6 +2,7 @@ import { Button, Empty, Spin, Table, Tabs, type TableColumnsType } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { t } from '../../../shared/i18n'
+import { resizableHeaderComponents, useResizableColumns } from './resizable-columns'
 
 export interface ListTab {
   key: string
@@ -57,6 +58,7 @@ export function ListPage<T extends { id: string }>({
   onRowClick, activeRowId, footnote, paginate = true
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
+  const resizable = useResizableColumns(columns, scrollX)
   const selected = new Set(selection?.ids ?? [])
   return (
     <>
@@ -90,7 +92,8 @@ export function ListPage<T extends { id: string }>({
           <Table<T>
             rowKey="id"
             size="middle"
-            columns={columns}
+            columns={resizable.columns}
+            components={resizableHeaderComponents}
             dataSource={rows}
             rowClassName={(row) => [
               selected.has(row.id) || row.id === activeRowId ? 'fb-row-selected' : '',
@@ -110,7 +113,7 @@ export function ListPage<T extends { id: string }>({
               showTotal: (total) => t("共 {0} 条", total),
               hideOnSinglePage: false
             }}
-            scroll={scrollX ? { x: scrollX } : undefined}
+            scroll={resizable.scrollX ? { x: resizable.scrollX } : undefined}
             locale={{ emptyText: <Empty description={emptyText}>{emptyAction}</Empty> }}
           />
         </Spin>

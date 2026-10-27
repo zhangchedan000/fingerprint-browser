@@ -5,6 +5,7 @@ import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
 import { dateTime, formatBytes } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
+import { StatusPill } from '../../components/StatusPill'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
@@ -194,9 +195,9 @@ function InvitesPanel({ reloadMembers }: { reloadMembers: () => void }) {
       width: 200,
       render: (_value, row) => {
         const state = inviteState(row)
-        if (state === 'used') return <Tag color="green">{t("已被 {0} 使用", row.usedName)}</Tag>
-        if (state === 'expired') return <Tag>{t("已过期")}</Tag>
-        return <Tag color="blue">{t("{0} 前有效", new Date(row.expires).toLocaleDateString())}</Tag>
+        if (state === 'used') return <StatusPill tone="success">{t("已被 {0} 使用", row.usedName)}</StatusPill>
+        if (state === 'expired') return <StatusPill>{t("已过期")}</StatusPill>
+        return <StatusPill tone="info">{t("{0} 前有效", new Date(row.expires).toLocaleDateString())}</StatusPill>
       }
     },
     { title: t("生成时间"), dataIndex: 'created', width: 180, render: (value: string) => <span className="fb-muted">{time(value)}</span> },
@@ -329,7 +330,7 @@ function MembersTab({ members, reload }: { members: TeamUser[]; reload: () => vo
   const columns: TableColumnsType<TeamUser> = [
     { title: t("用户名"), dataIndex: 'username', render: (value: string) => <strong>{value}</strong> },
     { title: t("显示名称"), dataIndex: 'name', render: (value: string) => value || <span className="fb-muted">—</span> },
-    { title: t("状态"), key: 'disabled', width: 100, render: (_value, row) => row.disabled ? <Tag>{t("已停用")}</Tag> : <Tag color="green">{t("正常")}</Tag> },
+    { title: t("状态"), key: 'disabled', width: 100, render: (_value, row) => row.disabled ? <StatusPill>{t("已停用")}</StatusPill> : <StatusPill tone="success">{t("正常")}</StatusPill> },
     { title: t("创建时间"), dataIndex: 'created', width: 180, render: (value: string) => <span className="fb-muted">{time(value)}</span> },
     {
       title: t("操作"),
@@ -510,7 +511,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       sorter: (first, second) => (first.serialNumber ?? 0) - (second.serialNumber ?? 0),
       render: (serial?: number) => <span className="fb-muted">{serial ?? '—'}</span>
     },
-    { title: t("窗口"), dataIndex: 'name', render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
+    { title: t("窗口"), dataIndex: 'name', width: 220, render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
     {
       title: t("创建时间"),
       dataIndex: 'createdAt',
@@ -522,6 +523,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     ...(owner ? [{
       title: t("分配给"),
       key: 'assignees',
+      width: 180,
       render: (_value: unknown, row: TeamProfileView) => row.assignees.length
         ? row.assignees.map((id) => <Tag key={id}>{memberNames.get(id) ?? id}</Tag>)
         : <span className="fb-muted">{t("未分配")}</span>
@@ -531,8 +533,8 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       key: 'lock',
       width: 170,
       render: (_value, row) => row.lock
-        ? <Tooltip title={row.lock.device ? t("设备：{0}", row.lock.device) : undefined}><Tag color="orange">{t("{0} 正在使用", row.lock.holderName)}</Tag></Tooltip>
-        : <Tag>{t("空闲")}</Tag>
+        ? <Tooltip title={row.lock.device ? t("设备：{0}", row.lock.device) : undefined}><span><StatusPill tone="warning" pulse>{t("{0} 正在使用", row.lock.holderName)}</StatusPill></span></Tooltip>
+        : <StatusPill>{t("空闲")}</StatusPill>
     },
     {
       title: t("登录状态"),
@@ -545,10 +547,10 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("本机"),
       key: 'local',
-      width: 90,
+      width: 110,
       render: (_value, row) => row.localId
-        ? <Tag color="green">{t("已在本机")}</Tag>
-        : <Tag>{row.removedHere ? t("已从本机删除") : t("未添加")}</Tag>
+        ? <StatusPill tone="success">{t("已在本机")}</StatusPill>
+        : <StatusPill>{row.removedHere ? t("已从本机删除") : t("未添加")}</StatusPill>
     },
     {
       title: t("操作"),
@@ -588,6 +590,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
         columns={columns}
         rows={profiles}
         loading={loading}
+        scrollX={owner ? 1420 : 1100}
         emptyText={owner ? t("还没有云端窗口") : t("还没有你的窗口")}
         footnote={owner
           ? t("所有窗口都自动存到云端：新建后上传配置，关闭时上传登录状态，换电脑登录后自动出现。同一个窗口同一时间只能一个人打开。")
@@ -725,11 +728,11 @@ function OffsiteStatus({ offsite, onEdit, onRemove }: { offsite?: TeamOffsite; o
       <span>Cloudflare R2 · {offsite.bucket}</span>
       <span className="fb-muted fb-mono">{offsite.accessKeyId}</span>
       {failing
-        ? <Tag color="red">失败：{offsite.lastError}</Tag>
+        ? <StatusPill tone="danger">失败：{offsite.lastError}</StatusPill>
         : last
-          ? <Tag color="green">最近同步 {new Date(last).toLocaleString()}</Tag>
-          : <Tag>等待第一次同步</Tag>}
-      {offsite.pending && <Tag color="blue">有改动，1 分钟内同步</Tag>}
+          ? <StatusPill tone="success">最近同步 {new Date(last).toLocaleString()}</StatusPill>
+          : <StatusPill>等待第一次同步</StatusPill>}
+      {offsite.pending && <StatusPill tone="info" pulse>有改动，1 分钟内同步</StatusPill>}
       <Button size="small" type="link" autoInsertSpace={false} onClick={onEdit}>修改</Button>
       <Button size="small" type="link" danger autoInsertSpace={false} onClick={onRemove}>关闭</Button>
     </Space>
@@ -826,7 +829,7 @@ function ServerTab() {
 
   const columns: TableColumnsType<BackupRow> = [
     { title: '备份', dataIndex: 'key', render: (value: string) => <span className="fb-mono">{value}</span> },
-    { title: '方式', dataIndex: 'auto', width: 90, render: (value: boolean) => value ? <Tag>自动</Tag> : <Tag color="blue">手动</Tag> },
+    { title: '方式', dataIndex: 'auto', width: 90, render: (value: boolean) => value ? <StatusPill dot={false}>自动</StatusPill> : <StatusPill tone="info" dot={false}>手动</StatusPill> },
     { title: '大小', dataIndex: 'size', width: 110, render: (value: number) => formatBytes(value) },
     { title: '时间', dataIndex: 'modified', width: 180, render: (value: number) => <span className="fb-muted">{new Date(value).toLocaleString()}</span> },
     {
