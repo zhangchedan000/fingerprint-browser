@@ -5,7 +5,8 @@ import {
   DeploymentUnitOutlined,
   FolderOutlined,
   RestOutlined,
-  SettingOutlined
+  SettingOutlined,
+  TeamOutlined
 } from '@ant-design/icons'
 import type { ComponentType, ReactNode } from 'react'
 import { t } from '../../../shared/i18n'
@@ -16,9 +17,10 @@ import { KernelsPage } from './kernels/KernelsPage'
 import { ProxiesPage, proxiesSubtitle } from './proxies/ProxiesPage'
 import { RecyclePage } from './recycle/RecyclePage'
 import { SettingsPage } from './settings/SettingsPage'
+import { TeamPage } from './team/TeamPage'
 import { windowsSubtitle, WindowsPage } from './windows/WindowsPage'
 
-export type PageKey = 'windows' | 'groups' | 'proxies' | 'extensions' | 'kernels' | 'recycle' | 'settings'
+export type PageKey = 'windows' | 'groups' | 'proxies' | 'team' | 'extensions' | 'kernels' | 'recycle' | 'settings'
 export type SectionKey = 'workspace' | 'tools' | 'system'
 
 /** Context one page can hand to another, e.g. "show this group's windows". */
@@ -88,6 +90,14 @@ export const PAGES: PageDefinition[] = [
     count: (ws) => ws.proxies.length,
     subtitle: () => proxiesSubtitle(),
     page: ProxiesPage
+  },
+  {
+    key: 'team',
+    section: 'workspace',
+    icon: <TeamOutlined />,
+    label: () => t("团队"),
+    subtitle: () => t("把窗口分配给成员使用，登录态在成员之间自动同步"),
+    page: TeamPage
   },
   {
     key: 'extensions',

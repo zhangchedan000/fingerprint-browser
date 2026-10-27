@@ -390,3 +390,11 @@ button, input, textarea { font: inherit; }
 .fb-update-panel { display: flex; flex-direction: column; gap: 8px; }
 .fb-update-notes pre { max-height: 220px; overflow: auto; margin: 4px 0 0; padding: 8px; border-radius: 6px; background: var(--fb-surface-muted); white-space: pre-wrap; font: inherit; }
 .fb-language-option { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Team page */
+.fb-team-signin { max-width: 440px; margin: 24px auto; }
+.fb-team-alert { margin-bottom: 16px; }
+.fb-team-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.fb-team-head > span { display: flex; align-items: center; gap: 8px; }
+.fb-team-hint { margin: 10px 0 0; font-size: 12px; }
+.fb-team-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }

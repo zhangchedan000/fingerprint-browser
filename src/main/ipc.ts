@@ -28,6 +28,7 @@ import { proxyForTest, publicGroupRecord, publicProfile, publicProxyRecord, same
 import type { ProfileBackupManager } from './profile-backup'
 import type { AppSessionTracker } from './app-session'
 import type { WorkspaceMigrationManager } from './workspace-migration'
+import type { TeamManager } from './team/team-manager'
 
 interface IpcDependencies {
   profiles: ProfileStore
@@ -40,15 +41,25 @@ interface IpcDependencies {
   backups: ProfileBackupManager
   workspaceMigration: WorkspaceMigrationManager
   appSession: AppSessionTracker
+  team: TeamManager
 }
 
-export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession }: IpcDependencies): void {
+export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => publicProfile(await profiles.create(draft)))
-  ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => publicProfile(await profiles.update(id, draft)))
-  ipcMain.handle('profiles:duplicate', async (_event, id: string) => publicProfile(await profiles.duplicate(id)))
+  ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
+    team.assertEditable(id)
+    const profile = publicProfile(await profiles.update(id, draft))
+    await team.afterLocalEdit(id)
+    return profile
+  })
+  ipcMain.handle('profiles:duplicate', async (_event, id: string) => {
+    team.assertEditable(id)
+    return publicProfile(await profiles.duplicate(id))
+  })
   ipcMain.handle('profiles:export-config', async (_event, id: string) => {
+    team.assertEditable(id)
     const profile = profiles.get(id)
     if (profile.status !== 'closed' && profile.status !== 'error') throw new Error('请先关闭环境再导出配置')
     const owner = BrowserWindow.getFocusedWindow()
@@ -273,6 +284,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return result
   })
   ipcMain.handle('profiles:export-backup', async (_event, id: string) => {
+    team.assertEditable(id)
     const profile = profiles.get(id)
     if (launcher.isRunning(id) || (profile.status !== 'closed' && profile.status !== 'error')) throw new Error('请先关闭环境再备份完整数据')
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
@@ -355,6 +367,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return days
   })
   ipcMain.handle('profiles:export-cookies', async (_event, id: string) => {
+    team.assertEditable(id)
     const profile = profiles.get(id)
     if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导出 Cookie')
     const owner = BrowserWindow.getFocusedWindow()
@@ -399,6 +412,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (launcher.isRunning(id)) throw new Error('请先关闭运行中的环境')
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
     await profiles.remove(id)
+    await team.forget(id)
   })
   ipcMain.handle('profiles:launch', (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
@@ -454,6 +468,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       if (cookies.isBusy(id)) throw new Error(`环境“${profiles.get(id).name}”正在执行 Cookie 操作`)
     }
     await profiles.removeMany(ids)
+    for (const id of ids) await team.forget(id)
   })
 
   ipcMain.handle('engine:status', () => locateBrowser(settings))

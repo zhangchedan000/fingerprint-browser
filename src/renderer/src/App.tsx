@@ -5,6 +5,7 @@ import { t } from '../../shared/i18n'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
+import { useTeamSyncNotices } from './data/team-sync'
 import { pageDefinition, type PageKey, type PageParams } from './pages/registry'
 
 /** The app shell: side menu, top bar and the current page, all driven by pages/registry. */
@@ -14,6 +15,8 @@ function Shell() {
   const [params, setParams] = useState<PageParams | undefined>()
   const page = pageDefinition(active)
   const Page = page.page
+
+  useTeamSyncNotices()
 
   function navigate(key: PageKey, next?: PageParams): void {
     const target = pageDefinition(key)

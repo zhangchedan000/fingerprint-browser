@@ -1,0 +1,21 @@
+services:
+  prism-team:
+    build: .
+    container_name: prism-team
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./pb_data:/pb/pb_data
+      - ./pb_migrations:/pb/pb_migrations:ro
+      - ./pb_hooks:/pb/pb_hooks:ro
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    # Nginx Proxy Manager's network: its proxy host forwards to http://prism-team:8090.
+    name: ${PROXY_NETWORK:-nginx-proxy-manager_default}
+    external: true

@@ -726,6 +726,31 @@ export interface BrowserApi {
     setGlobalEnabled: (id: string, enabled: boolean) => Promise<BrowserExtension>
     remove: (id: string) => Promise<void>
   }
+  /** Team accounts (main/team): windows shared through the team server. */
+  team: {
+    status: () => Promise<import('./team').TeamStatus>
+    /** Checks the address; ready = the server already has an owner account. */
+    probe: (server: string) => Promise<{ server: string; ready: boolean }>
+    /** Creates the owner account with the server's setup code, then signs in. */
+    setup: (server: string, code: string, username: string, name: string, password: string) => Promise<import('./team').TeamStatus>
+    login: (server: string, username: string, password: string) => Promise<import('./team').TeamStatus>
+    logout: () => Promise<import('./team').TeamStatus>
+    members: () => Promise<import('./team').TeamUser[]>
+    createMember: (draft: import('./team').TeamMemberDraft) => Promise<import('./team').TeamUser>
+    updateMember: (id: string, draft: import('./team').TeamMemberDraft) => Promise<import('./team').TeamUser>
+    removeMember: (id: string) => Promise<void>
+    profiles: () => Promise<import('./team').TeamProfileView[]>
+    links: () => Promise<import('./team').TeamLinkView[]>
+    /** Owner: shares local windows with these members (already shared ones get the new members). */
+    share: (ids: string[], assignees: string[]) => Promise<import('./team').TeamProfileView[]>
+    updateProfile: (id: string, patch: import('./team').TeamProfilePatch) => Promise<void>
+    unshare: (id: string) => Promise<void>
+    forceUnlock: (id: string) => Promise<void>
+    /** Member: puts an assigned window on this computer; returns its local id. */
+    addToComputer: (id: string) => Promise<string>
+    logs: (query: import('./team').TeamLogQuery) => Promise<import('./team').TeamLogPage>
+    onSync: (listener: (event: import('./team').TeamSyncEvent) => void) => () => void
+  }
 }
 
 /** Built-in tunnel (main/tunnel-manager.ts): how foreign window proxies are reached from China. */

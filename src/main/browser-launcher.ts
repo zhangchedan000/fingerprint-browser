@@ -81,7 +81,18 @@ function closeCapture(file: WriteStream | undefined): Promise<void> {
   })
 }
 
+/** Work around a window's run that lives outside the launcher (team windows: lock and sync). */
+export interface LaunchHooks {
+  /** Before the browser starts, while the window is still closed. Throwing cancels the launch. */
+  beforeLaunch(id: string): Promise<void>
+  /** The launch failed after beforeLaunch succeeded. */
+  launchFailed(id: string): Promise<void>
+  /** After the browser exited and the window is closed again. */
+  afterExit(id: string): Promise<void>
+}
+
 export class BrowserLauncher {
+  private hooks?: LaunchHooks
   private readonly processes = new Map<string, RunningBrowser>()
   private readonly orphanProcesses = new Map<string, number>()
   private readonly launchOperations = new Map<string, Promise<BrowserProfile>>()
@@ -111,6 +122,10 @@ export class BrowserLauncher {
   }
 
   private hostScreen: () => { width: number; height: number } | undefined = () => undefined
+
+  setLaunchHooks(hooks: LaunchHooks): void {
+    this.hooks = hooks
+  }
 
   /** Provides the primary display size for windows whose resolution follows the computer. */
   setHostScreenProvider(provider: () => { width: number; height: number } | undefined): void {
@@ -180,10 +195,23 @@ export class BrowserLauncher {
   private async launchProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
+    await this.guardProfileAvailable(id)
+    // Hooks may bring a newer config, so the window is read after them.
+    await this.hooks?.beforeLaunch(id)
+    try {
+      return await this.startProfile(id, options)
+    } catch (error) {
+      await this.hooks?.launchFailed(id).catch((hookError) => {
+        this.logger?.error('启动失败后的清理出错', { profileId: id, error: hookError instanceof Error ? hookError.message : String(hookError) })
+      })
+      throw error
+    }
+  }
+
+  private async startProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
     let profile = this.profiles.get(id)
     // Never fall back to the real network when the chosen proxy is gone.
     if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
-    await this.guardProfileAvailable(id)
     const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
     if (!engine.executable) {
       throw new Error(profile.kernelVersion
@@ -327,6 +355,10 @@ export class BrowserLauncher {
         } finally {
           resolveExited()
         }
+        // Not awaited: an upload can take minutes; the hook owner waits for it on quit.
+        void this.hooks?.afterExit(id).catch((error) => {
+          this.logger?.error('浏览器退出后的处理出错', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+        })
       }
       const running: RunningBrowser = {
         process: child,

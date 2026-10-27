@@ -23,12 +23,15 @@ import { WorkspaceMigrationManager } from './workspace-migration'
 import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import { AppUpdater } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
+import { TeamManager } from './team/team-manager'
+import { registerTeamIpc } from './team/team-ipc'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
 let logger: AppLogger | null = null
 let appSession: AppSessionTracker | null = null
 let tunnel: TunnelManager | null = null
+let team: TeamManager | null = null
 
 if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.desktop')
 
@@ -164,7 +167,14 @@ app.whenReady().then(async () => {
   const cookies = new CookieManager(profiles, settings, logger)
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)
-  registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession })
+  const activeTeam = new TeamManager(vaultPath, profiles, cookies, new ElectronSecretCodec(), (event) => {
+    mainWindow?.webContents.send('team:sync', event)
+  }, logger)
+  team = activeTeam
+  await activeTeam.initialize()
+  launcher.setLaunchHooks(activeTeam)
+  registerTeamIpc(activeTeam)
+  registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
     app.getPath('userData'),
@@ -200,6 +210,8 @@ app.on('before-quit', (event) => {
   const current = launcher
   launcher = null
   void current.closeAll().catch((error) => logger?.error('关闭浏览器环境失败', error)).finally(async () => {
+    // Team windows upload their login state after closing; quitting must not cut that off.
+    await team?.flush()
     logger?.info('指纹浏览器已退出')
     await appSession?.complete().catch((error) => logger?.error('清理应用会话标记失败', error))
     await logger?.flush()

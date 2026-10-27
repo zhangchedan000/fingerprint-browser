@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { DeepSiteResult } from '../shared/deep-check'
+import type { TeamSyncEvent } from '../shared/team'
 import type { AppUpdateProgress, BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
@@ -156,6 +157,30 @@ const api: BrowserApi = {
     openSourceFolder: (id: string) => ipcRenderer.invoke('extensions:open-source-folder', id),
     setGlobalEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('extensions:set-global-enabled', id, enabled),
     remove: (id: string) => ipcRenderer.invoke('extensions:remove', id)
+  },
+  team: {
+    status: () => ipcRenderer.invoke('team:status'),
+    probe: (server) => ipcRenderer.invoke('team:probe', server),
+    setup: (server, code, username, name, password) => ipcRenderer.invoke('team:setup', server, code, username, name, password),
+    login: (server, username, password) => ipcRenderer.invoke('team:login', server, username, password),
+    logout: () => ipcRenderer.invoke('team:logout'),
+    members: () => ipcRenderer.invoke('team:members'),
+    createMember: (draft) => ipcRenderer.invoke('team:member-create', draft),
+    updateMember: (id, draft) => ipcRenderer.invoke('team:member-update', id, draft),
+    removeMember: (id) => ipcRenderer.invoke('team:member-remove', id),
+    profiles: () => ipcRenderer.invoke('team:profiles'),
+    links: () => ipcRenderer.invoke('team:links'),
+    share: (ids, assignees) => ipcRenderer.invoke('team:share', ids, assignees),
+    updateProfile: (id, patch) => ipcRenderer.invoke('team:profile-update', id, patch),
+    unshare: (id) => ipcRenderer.invoke('team:unshare', id),
+    forceUnlock: (id) => ipcRenderer.invoke('team:force-unlock', id),
+    addToComputer: (id) => ipcRenderer.invoke('team:add-to-computer', id),
+    logs: (query) => ipcRenderer.invoke('team:logs', query),
+    onSync: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, event: TeamSyncEvent): void => listener(event)
+      ipcRenderer.on('team:sync', handler)
+      return () => ipcRenderer.removeListener('team:sync', handler)
+    }
   }
 }
 

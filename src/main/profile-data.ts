@@ -2,7 +2,7 @@ import { lstat, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProfileStorageInfo, StorageOverview } from '../shared/types'
 
-const CACHE_PATHS = [
+export const CACHE_PATHS = [
   ['Default', 'Cache'],
   ['Default', 'Code Cache'],
   ['Default', 'GPUCache'],
