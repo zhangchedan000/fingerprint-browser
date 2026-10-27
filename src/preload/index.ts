@@ -31,7 +31,9 @@ const api: BrowserApi = {
       const handler = (_event: Electron.IpcRendererEvent, progress: AppUpdateProgress): void => listener(progress)
       ipcRenderer.on('app:update-progress', handler)
       return () => ipcRenderer.removeListener('app:update-progress', handler)
-    }
+    },
+    fontPacks: () => ipcRenderer.invoke('fonts:packs'),
+    installFontPacks: () => ipcRenderer.invoke('fonts:install-packs')
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),

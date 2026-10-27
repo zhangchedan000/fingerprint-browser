@@ -1,4 +1,5 @@
 import type { UiLocale } from './i18n'
+import type { FontPackStatus } from './windows-font-packs'
 export type BrowserPlatform = 'windows' | 'macos'
 export type BrowserBrand = 'Chrome' | 'Edge'
 export type HardwareProfileId =
@@ -605,6 +606,10 @@ export interface BrowserApi {
     installUpdate: () => Promise<void>
     openUpdatePage: () => Promise<void>
     onUpdateProgress: (listener: (progress: AppUpdateProgress) => void) => () => void
+    /** Windows language font packages on this computer. */
+    fontPacks: () => Promise<FontPackStatus>
+    /** Installs the missing ones from Microsoft after one administrator prompt. */
+    installFontPacks: () => Promise<FontPackStatus>
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>

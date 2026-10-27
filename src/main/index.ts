@@ -24,6 +24,7 @@ import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
+import { registerLanguageFontsIpc } from './language-fonts'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
 
@@ -193,6 +194,7 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
+  registerLanguageFontsIpc(logger)
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),

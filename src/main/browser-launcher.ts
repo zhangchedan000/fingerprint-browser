@@ -281,6 +281,7 @@ export class BrowserLauncher {
         hostScreen: this.hostScreen(),
         windowScreen: engine.windowScreen,
         webrtcRelaySupported: engine.webrtcRelay,
+        languageFonts: engine.webrtcRelay,
         webrtcRelayPort: webrtcRelay?.port
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {

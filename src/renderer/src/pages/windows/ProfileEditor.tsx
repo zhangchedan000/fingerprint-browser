@@ -1,4 +1,5 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
+import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { effectiveScreen, kernelSpoofsScreen, randomScreen, SCREEN_CHOICES, screenChoices, screenFloor } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import {
@@ -318,6 +319,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
   const [checking, setChecking] = useState(false)
   const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
+  const [fontPacks, setFontPacks] = useState<FontPackStatus>()
   const [checkError, setCheckError] = useState('')
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
@@ -349,6 +351,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     form.setFieldsValue(editorValues(profile, suggestedIndex))
     setTab('basic')
     setProxyResult(null)
+    void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
     setPasteError('')
@@ -1051,6 +1054,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ...(fp.language && !LANGUAGES.some((item) => item.language === fp.language) ? [{ value: fp.language, label: fp.language, voices: false, devices: false }] : [])
   ]
   const autoUiLocale = chromeUiLocaleFor(shownLanguage)
+  // prism6+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
+  const windowUiLocale = fp.uiLocale ?? autoUiLocale
+  const fontScript = windowsFontScript(windowUiLocale)
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -1243,7 +1249,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
         </Row>
       )}
-      <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
+      {webrtcRelay ? (
+        <Row
+          label={t("字体")}
+          check={checkFor('font')}
+          hint={fontScript && fontPacks?.missing.includes(fontScript)
+            ? t("本机没有{0}字体包，窗口里看不到这些字体。可在 设置 → 常规 → 语言字体 安装。", fontPackLabel(fontScript, getLocale()))
+            : t("Windows 11 自带字体，加上界面语言对应的语言字体包；本机另装的字体不显示")}
+        >
+          <Fixed>{t("跟随界面语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`)}</Fixed>
+        </Row>
+      ) : (
+        <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
+      )}
 
       <h3 className="fb-fp-group">{t("硬件指纹")}</h3>
       <Row

@@ -103,6 +103,13 @@ describe('launch arguments', () => {
     expect(publicIpv4('256.1.1.1')).toBeUndefined()
   })
 
+  it('never shows the host fonts on kernels whose fonts follow the interface language', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const real = profile({ disabledSpoofing: ['font'] })
+    expect(buildLaunchArgs(real, kernel).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
+    expect(buildLaunchArgs(real, { ...kernel, languageFonts: true }).some((arg) => arg.includes('font'))).toBe(false)
+  })
+
   it('launches with the UI locale Chrome resolves to and keeps the stored languages', () => {
     const mx = buildLaunchArgs(profile({ language: 'es-MX', acceptLanguages: 'es-MX,es,en-US,en' }), { userDataDir: '/data' })
     expect(mx).toContain('--lang=es-419')

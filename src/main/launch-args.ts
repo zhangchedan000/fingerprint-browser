@@ -25,6 +25,8 @@ export interface LaunchArgumentOptions {
   windowScreen?: boolean
   /** EngineStatus.webrtcRelay of the kernel this window runs (prism6+). */
   webrtcRelaySupported?: boolean
+  /** prism6+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
+  languageFonts?: boolean
   /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
   webrtcRelayPort?: number
 }
@@ -70,7 +72,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     throw new Error(`内核 ${options.engineVersion ?? ''} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡`)
   }
   const seed = alignedSeed
-  const disabledSpoofing = effectiveDisabledSpoofing(fp)
+  const disabledSpoofing = effectiveDisabledSpoofing(fp).filter((surface) => !(options.languageFonts && surface === 'font'))
   const brandVersion = resolveFingerprintBrandVersion(fp.brandVersion, {
     fingerprintKernel: options.fingerprintKernel === true,
     version: options.engineVersion
