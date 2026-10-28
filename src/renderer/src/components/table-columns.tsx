@@ -200,9 +200,13 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
     let total = 0
     const build = (id: string): Column<T> => {
       const column = byId.get(id)!
-      const width = layout.widths[id] ?? (typeof column.width === 'number' ? column.width : undefined)
+      // The row buttons keep the width the page gives them: a width saved by dragging another
+      // column could be narrower than the buttons, which then spilled into the next cell.
+      const ownWidth = column.key === 'actions'
+      const width = (ownWidth ? undefined : layout.widths[id]) ?? (typeof column.width === 'number' ? column.width : undefined)
       total += width ?? FALLBACK_WIDTH
       const canMove = movable.includes(id)
+      if (ownWidth) return { ...column, width } as Column<T>
       return {
         ...column,
         width,

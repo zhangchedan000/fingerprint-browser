@@ -1827,7 +1827,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
         </Row>
       )}
-      <Row label={t("媒体设备")} hint={t("自动：按显卡档次配一套台式机常见的设备，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备")}>
+      <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备")}>
         <Select
           className="fb-fp-select fb-fp-select-wide"
           value={fp.mediaDevices ?? 'auto'}

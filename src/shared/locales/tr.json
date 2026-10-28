@@ -2486,5 +2486,6 @@
   "检测这些": "Kontrol et",
   "基本信息": "Temel bilgiler",
   "登录状态与备注": "Oturum ve notlar",
-  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Henüz eklenti yok. Bir Chrome eklentisini klasöre açın, içe aktarın, sonra bir pencerede etkinleştirin."
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Henüz eklenti yok. Bir Chrome eklentisini klasöre açın, içe aktarın, sonra bir pencerede etkinleştirin.",
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Otomatik: hoparlör + USB kulaklık, masaüstünde en yaygın set; kaydedince sabitlenir. Mikrofon veya kamera izni yoksa siteler yalnızca cihaz türlerini görür"
 }

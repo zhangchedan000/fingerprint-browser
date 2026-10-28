@@ -137,21 +137,20 @@ export function ListPage<T extends { id: string }>({
 
 /**
  * Batch actions in a fixed place in the toolbar: always shown, greyed while no row is ticked, so
- * nothing appears or moves when rows are ticked. The count of ticked rows rides on the menu button.
+ * nothing appears or moves when rows are ticked. How many are ticked shows beside the paging.
  */
 function BatchActions({ selection }: { selection: ListSelection }) {
   const count = selection.ids.length
   const none = count === 0
-  const badge = count ? <span className="fb-batch-count">{count}</span> : null
   const menu = selection.menu ?? []
   const buttons = selection.buttons ?? []
   if (!buttons.length && !menu.length) return null
   return (
     <div className="fb-batch-group" role="group" aria-label={t("批量操作")}>
-      {buttons.map((action, index) => (
+      {buttons.map((action) => (
         <Tooltip key={action.key} title={none ? selection.hint : undefined}>
           <Button icon={action.icon} danger={action.danger} disabled={none || action.disabled} loading={action.loading} onClick={action.onClick}>
-            {action.label}{!menu.length && index === 0 && badge}
+            {action.label}
           </Button>
         </Tooltip>
       ))}
@@ -169,8 +168,8 @@ function BatchActions({ selection }: { selection: ListSelection }) {
               onClick: ({ key }) => key === '__clear' ? selection.onChange([]) : menu.find((action) => action.key === key)?.onClick()
             }}
           >
-            <Button className="fb-batch-menu" disabled={none} loading={menu.some((action) => action.loading)}>
-              {t("批量操作")}{badge}<DownOutlined className="fb-button-caret" />
+            <Button disabled={none} loading={menu.some((action) => action.loading)}>
+              {t("批量操作")}<DownOutlined className="fb-button-caret" />
             </Button>
           </Dropdown>
         </Tooltip>

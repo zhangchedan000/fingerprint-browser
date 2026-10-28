@@ -2486,5 +2486,6 @@
   "检测这些": "Comprobarlos",
   "基本信息": "Datos básicos",
   "登录状态与备注": "Sesión y notas",
-  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Aún no hay extensiones. Descomprime una extensión de Chrome en una carpeta, impórtala y actívala en una ventana."
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Aún no hay extensiones. Descomprime una extensión de Chrome en una carpeta, impórtala y actívala en una ventana.",
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Automático: altavoces + auriculares USB, lo más habitual en un sobremesa; fijo al guardar. Sin permiso de micrófono o cámara, los sitios solo ven qué tipos de dispositivos hay"
 }

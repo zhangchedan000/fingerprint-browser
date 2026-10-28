@@ -1,10 +1,9 @@
-import { gpuTier, type GpuTier } from './hardware-match'
 import { closestLocale } from './locale-match'
 /**
  * The microphones, speakers and cameras a window lists (Prism patch 014). Pages without
  * permission only see which kinds exist; with permission they see names built from the Windows
- * endpoint names of the window's language. "auto" derives a usual set for the window's GPU from
- * the seed. With two audio outputs the kernel names one "Speakers" and the other "Headphones".
+ * endpoint names of the window's language. "auto" is the most usual desktop: speakers and a USB
+ * headset. With two audio outputs the kernel names one "Speakers" and the other "Headphones".
  */
 export type MediaDevicesChoice = string
 
@@ -42,17 +41,6 @@ export const MEDIA_SETUPS: readonly MediaSetup[] = [
 /** Sets offered besides auto and the real devices. */
 export const MEDIA_PRESETS: readonly string[] = MEDIA_SETUPS.map((setup) => setup.set)
 
-/**
- * The setups a desktop with this card usually has (a judgement, not survey data): entry cards in
- * everyday computers, speakers or a headset; gaming cards a USB headset; the top cards a webcam too.
- */
-const SETUPS_BY_TIER: Record<GpuTier, string[]> = {
-  entry: ['0,1,0', '1,1,0'],
-  mid: ['1,1,0', '1,2,0'],
-  high: ['1,2,0', '1,1,1'],
-  top: ['1,2,0', '2,2,1']
-}
-
 const SET = /^[0-3],[0-3],[0-3]$/
 
 export function isMediaDevicesChoice(value: string): boolean {
@@ -73,15 +61,15 @@ function seededRandom(seed: number): () => number {
   }
 }
 
+/** The set a new window starts with: speakers and a USB headset (microphone + headphones). */
+export const DEFAULT_MEDIA_DEVICES = '1,2,0'
+
 /**
- * The setup for this seed and GPU: one of the usual ones for the card's tier. A laptop: its
- * built-in microphone, speakers and webcam. Saved windows keep the set they were saved with.
+ * The set 自动 stands for: the same for every window (the seed and GPU are kept in the signature
+ * for windows written before this rule). Saved windows keep the set they were saved with.
  */
-export function autoMediaDevices(seed: number, gpuModel?: string): string {
-  const next = seededRandom(seed)
-  if (isLaptopGpu(gpuModel)) return '1,1,1'
-  const choices = SETUPS_BY_TIER[gpuTier(gpuModel ?? '')]
-  return choices[Math.floor(next() * choices.length)]
+export function autoMediaDevices(_seed: number, _gpuModel?: string): string {
+  return DEFAULT_MEDIA_DEVICES
 }
 
 /**
