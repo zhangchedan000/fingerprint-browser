@@ -1,7 +1,7 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { FontPackDownload } from '../../components/FontPackDownload'
-import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
+import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import { fittingCountryZone, ipZoneFix, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
@@ -165,9 +165,14 @@ function screenLabel(width: number, height: number, physical: { width: number; h
   const kind = screenKind(physical)
   const note = [kind.ultrawide ? t("带鱼屏") : '', kind.ratio, kind.name ?? ''].filter(Boolean).join(' ')
   const scale = hostScale()
-  return scale === 1
+  const label = scale === 1
     ? `${width} × ${height} · ${note}`
     : t("{0} × {1} · {2} {3} 显示器 · 缩放 {4}%", width, height, `${physical.width}×${physical.height}`, note, Math.round(scale * 100))
+  // 4K at Windows' default 150% (shared/screen scaledScreen).
+  const scaled = scaledScreen({ width, height })
+  return scaled.scale
+    ? `${label} · ${t("缩放 {0}%，网页看到 {1} × {2}", Math.round(scaled.scale * 100), scaled.screen.width, scaled.screen.height)}`
+    : label
 }
 
 /** This computer's Windows display scale; a window keeps it, so resolutions are offered at it. */
@@ -1506,6 +1511,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // The resolution a site sees, as the monitor's own pixels, against what desktops with this card have.
   const screenPhysical = { width: Math.round(shownScreen.width * hostScale()), height: Math.round(shownScreen.height * hostScale()) }
   const screenOdd = Boolean(gpu?.model && !gpuReal && !screenSuitsGpu(gpu.model, screenPhysical))
+  // No longer offered: today mostly 16-inch laptops.
+  const laptopScreen = fp.screenSource !== 'host' && screenPhysical.width === 2560 && screenPhysical.height === 1600
+  // Larger than this computer's monitor: maximize stops at this monitor, full screen gives a smaller page.
+  const hostPhysical = { width: Math.round(hostScreen().width * hostScale()), height: Math.round(hostScreen().height * hostScale()) }
+  const screenLarger = fp.screenSource !== 'host' && (screenPhysical.width > hostPhysical.width || screenPhysical.height > hostPhysical.height)
   const coreOptions = [...new Set([...CORE_OPTIONS, fp.hardwareConcurrency])].sort((a, b) => a - b)
   const gpuValue = gpuReal ? 'real' : shownGpuKey ?? 'kernel'
   const gpuSelectOptions = [
@@ -1903,7 +1913,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               </>
             )}
           </Space>
-          {screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
+          {laptopScreen ? (
+            <RowWarning fix={{
+              label: t("改成 {0}", '2560 × 1440'),
+              apply: () => { const size = cssScreenSize({ width: 2560, height: 1440 }, hostScale()); chooseScreen(`${size.width}x${size.height}`) }
+            }}>
+              {t("2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭")}
+            </RowWarning>
+          ) : screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
+          {screenLarger && (
+            <RowWarning>
+              {t("这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来", hostPhysical.width, hostPhysical.height)}
+            </RowWarning>
+          )}
         </Row>
       ) : (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>

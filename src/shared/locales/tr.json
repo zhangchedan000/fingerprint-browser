@@ -2495,5 +2495,8 @@
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Pencere açık: ad, grup, notlar vb. değiştirilebilir; proxy ve parmak izi ancak kapattıktan sonra",
   "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Pencere açık: bunlar başlatıldığı ayarlar; kapattıktan sonra değiştirilebilir. Ad, grup, notlar vb. «Temel» bölümünde değiştirilip kaydedilir",
   "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "{0} GB RAM'li bir bilgisayarda Chrome'un JS bellek sınırı daha düşüktür; bu pencere 8 GB veya üzeri bir bilgisayarın değerini bildirir ve siteler bunu karşılaştırabilir",
-  "改为 8 GB": "8 GB yap"
+  "改为 8 GB": "8 GB yap",
+  "缩放 {0}%，网页看到 {1} × {2}": "%{0} ölçek, sayfalar {1} × {2} görür",
+  "2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭": "2560 × 1600 artık çoğunlukla 16 inç dizüstü ekranıdır ve masaüstü ekran kartıyla uyuşmaz",
+  "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "Bu bilgisayarın ekranı ({0} × {1}) seçilen çözünürlükten küçük: ekranı kaplama yalnızca bu ekranı doldurur; sayfalarda tam ekran kullanmayın, sayfa ekran boyutundan küçük olur ve siteler bunu anlar"
 }

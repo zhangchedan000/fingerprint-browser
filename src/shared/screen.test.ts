@@ -6,8 +6,8 @@ const fp = (width: number, height: number, screenSource?: 'host' | 'profile') =>
 
 describe('window screen size', () => {
   it('offers only resolutions at least as large as the real screen', () => {
-    expect(screenChoices(host).map((s) => `${s.width}x${s.height}`)).toEqual(['2560x1440', '2560x1600', '3440x1440', '3840x2160'])
-    expect(screenChoices({ width: 1920, height: 1080 })).toHaveLength(7)
+    expect(screenChoices(host).map((s) => `${s.width}x${s.height}`)).toEqual(['2560x1440', '3440x1440', '3840x2160'])
+    expect(screenChoices({ width: 1920, height: 1080 })).toHaveLength(6)
   })
 
   it('shows a larger screen on Prism kernels and the real one otherwise', () => {
@@ -19,7 +19,7 @@ describe('window screen size', () => {
   it('claims a smaller screen only on kernels that keep the window inside it', () => {
     expect(effectiveScreen(fp(1920, 1080), 'prism-156.0.8078.47', host, true)).toEqual({ width: 1920, height: 1080 })
     expect(effectiveScreen(fp(1920, 1080), '144.0.7559.132', host, true)).toEqual(host)
-    expect(screenChoices(screenFloor(host, true))).toHaveLength(7)
+    expect(screenChoices(screenFloor(host, true))).toHaveLength(6)
     expect(screenFloor(host, false)).toEqual(host)
   })
 

@@ -2495,5 +2495,8 @@
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Ventana abierta: se pueden cambiar nombre, grupo, notas, etc.; proxy y huella solo tras cerrarla",
   "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Ventana abierta: es la configuración con la que se inició; se puede cambiar al cerrarla. Nombre, grupo, notas, etc. se cambian y guardan en Básicos",
   "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "En un equipo con {0} GB de RAM, el límite de memoria JS de Chrome es menor; esta ventana informa el valor de un equipo de 8 GB o más, y los sitios pueden compararlo",
-  "改为 8 GB": "Cambiar a 8 GB"
+  "改为 8 GB": "Cambiar a 8 GB",
+  "缩放 {0}%，网页看到 {1} × {2}": "Escala {0}%, las páginas ven {1} × {2}",
+  "2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭": "2560 × 1600 hoy es sobre todo la pantalla de portátiles de 16 pulgadas y no encaja con una tarjeta gráfica de sobremesa",
+  "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "La pantalla de este equipo ({0} × {1}) es más pequeña que la resolución elegida: maximizar solo llena esta pantalla; no uses la pantalla completa en páginas, la página quedaría más pequeña que la pantalla y los sitios lo notan"
 }

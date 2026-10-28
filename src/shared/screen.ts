@@ -20,7 +20,6 @@ export const SCREEN_CHOICES: ReadonlyArray<ScreenSize & { weight: number }> = [
   { width: 1920, height: 1200, weight: 4 },
   { width: 2560, height: 1080, weight: 3 },
   { width: 2560, height: 1440, weight: 22 },
-  { width: 2560, height: 1600, weight: 3 },
   { width: 3440, height: 1440, weight: 6 },
   { width: 3840, height: 2160, weight: 12 }
 ]
@@ -37,6 +36,16 @@ export function cssScreenSize(physical: ScreenSize, scale = 1): ScreenSize {
     width: Math.ceil(Math.fround(physical.width * inverse)),
     height: Math.ceil(Math.fround(physical.height * inverse))
   }
+}
+
+/**
+ * Windows runs a 4K monitor at 150% by default, so Chrome on one reports 2560 × 1440 at
+ * devicePixelRatio 1.5. A window claiming 3840 × 2160 (CSS pixels, chosen on a computer at 100%)
+ * is shown that way: the kernel is told 2560 × 1440 and the 150% scale (--force-device-scale-factor).
+ */
+export function scaledScreen(claimed: ScreenSize): { screen: ScreenSize; scale?: number } {
+  if (claimed.width === 3840 && claimed.height === 2160) return { screen: cssScreenSize(claimed, 1.5), scale: 1.5 }
+  return { screen: claimed }
 }
 
 function fits(size: ScreenSize, host: ScreenSize | undefined): boolean {
@@ -102,4 +111,17 @@ export function effectiveScreen(
   if (!kernelSpoofsScreen(kernelVersion) || fp.screenSource === 'host') return real
   if (!windowScreen && !fits(own, real)) return real
   return own
+}
+
+/** The screen and scale the kernel is told: the claimed screen, a 4K one of the window's own at 150% (scaledScreen). */
+export function launchedScreen(
+  fp: Pick<FingerprintConfig, 'screenSource' | 'screenWidth' | 'screenHeight'>,
+  kernelVersion: string | null | undefined,
+  host: ScreenSize | undefined,
+  windowScreen = false
+): { screen: ScreenSize; scale?: number } {
+  const claimed = effectiveScreen(fp, kernelVersion, host, windowScreen)
+  const own = kernelSpoofsScreen(kernelVersion) && fp.screenSource !== 'host' &&
+    claimed.width === fp.screenWidth && claimed.height === fp.screenHeight
+  return own ? scaledScreen(claimed) : { screen: claimed }
 }

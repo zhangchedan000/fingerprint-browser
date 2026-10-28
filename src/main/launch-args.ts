@@ -4,7 +4,7 @@ import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../sh
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
-import { effectiveScreen } from '../shared/screen'
+import { launchedScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
 import { kernelVendor } from '../shared/kernel-id'
 import { gpuAv1Support } from '../shared/gpu-catalog'
@@ -98,7 +98,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const networkIdentity = effectiveNetworkIdentity(fp, options.proxyIdentity, {
     allowGeoConflict: options.allowGeoConflict
   })
-  const { width: screenWidth, height: screenHeight } = effectiveScreen(
+  // A 4K window at Windows' default 150% (scaledScreen).
+  const { screen: { width: screenWidth, height: screenHeight }, scale: forcedScale } = launchedScreen(
     fp,
     options.fingerprintKernel ? options.engineVersion : undefined,
     options.hostScreen,
@@ -130,9 +131,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
 
   // Automatic size: no --window-size, so the kernel opens its own default window the way a
   // fresh Chrome does, and remembers the size the user drags it to.
+  if (forcedScale) args.push(`--force-device-scale-factor=${forcedScale}`)
   if (profile.window.mode === 'custom') {
-    args.push(`--window-size=${profile.window.width},${profile.window.height}`)
-    args.push(`--window-position=${profile.window.x},${profile.window.y}`)
+    // Sizes are in CSS pixels, which the forced scale makes larger: the same place on this monitor.
+    const css = (value: number) => Math.round(value / (forcedScale ?? 1))
+    args.push(`--window-size=${css(profile.window.width)},${css(profile.window.height)}`)
+    args.push(`--window-position=${css(profile.window.x)},${css(profile.window.y)}`)
   }
 
   const explicitGpuKernel = options.fingerprintKernel === true && kernelTakesExplicitGpu(options.engineVersion)

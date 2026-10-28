@@ -164,12 +164,30 @@ describe('launch arguments', () => {
 
   it('lets a Prism window claim a screen larger than the real one, never a smaller one', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', hostScreen: { width: 2560, height: 1440 } }
-    const large = buildLaunchArgs(profile({ screenWidth: 3840, screenHeight: 2160 }), prism)
-    expect(large).toContain('--fingerprint-screen-width=3840')
-    expect(large).toContain('--fingerprint-screen-height=2160')
+    const large = buildLaunchArgs(profile({ screenWidth: 3440, screenHeight: 1440 }), prism)
+    expect(large).toContain('--fingerprint-screen-width=3440')
+    expect(large).toContain('--fingerprint-screen-height=1440')
     const small = buildLaunchArgs(profile({ screenWidth: 1920, screenHeight: 1080 }), prism)
     expect(small).toContain('--fingerprint-screen-width=2560')
     expect(small).toContain('--fingerprint-screen-height=1440')
+  })
+
+  it('shows a 4K window the way Windows runs a 4K monitor: 150%, pages see 2560 × 1440', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', hostScreen: { width: 2560, height: 1440, taskbarHeight: 48 } }
+    const window4k = profile({ ...WINDOWS, screenWidth: 3840, screenHeight: 2160 })
+    window4k.window = { mode: 'custom', width: 1500, height: 1200, x: 30, y: 15 }
+    const args = buildLaunchArgs(window4k, prism)
+    expect(args).toContain('--force-device-scale-factor=1.5')
+    expect(args).toContain('--fingerprint-screen-width=2560')
+    expect(args).toContain('--fingerprint-screen-height=1440')
+    expect(args).toContain('--fingerprint-screen-avail-height=1392')
+    // The same place on this monitor in the larger CSS pixels.
+    expect(args).toContain('--window-size=1000,800')
+    expect(args).toContain('--window-position=20,10')
+    // This computer's own 4K screen, and other kernels, stay as they are.
+    const host4k = { ...prism, hostScreen: { width: 3840, height: 2160 } }
+    expect(buildLaunchArgs(profile({ ...WINDOWS, screenSource: 'host' }), host4k).some((arg) => arg.startsWith('--force-device-scale-factor'))).toBe(false)
+    expect(buildLaunchArgs(profile({ ...WINDOWS, screenWidth: 3840, screenHeight: 2160 }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--force-device-scale-factor'))).toBe(false)
   })
 
   it('passes media devices and the kept voice and device-name languages to Prism kernels only', () => {
