@@ -1,3 +1,5 @@
+import { kernelSourceFamily } from '../shared/kernel-sources'
+
 /**
  * Picks the Windows x64 kernel zips out of a GitHub project's releases. Prism releases name them
  * "ungoogled-chromium_<version>-1.1_windows_x64.zip", and one app release ("v0.2.0") carries a
@@ -111,7 +113,7 @@ export type PlannedRow<R extends ReleaseCandidate> =
 export function planKernelRows<R extends ReleaseCandidate>(installed: readonly InstalledKernel[], releases: readonly R[]): PlannedRow<R>[] {
   const newest = new Map<string, R>()
   for (const release of [...releases].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))) {
-    const key = `${release.source.toLowerCase()}|${release.chromium}`
+    const key = `${kernelSourceFamily(release.source)}|${release.chromium}`
     if (!newest.has(key)) newest.set(key, release)
   }
   const latest = [...newest.values()]
@@ -120,7 +122,7 @@ export function planKernelRows<R extends ReleaseCandidate>(installed: readonly I
   for (const kernel of installed) {
     const same = latest
       .filter((release) => release.chromium === kernel.chromium)
-      .filter((release) => !kernel.sourceRepo || release.source.toLowerCase() === kernel.sourceRepo.toLowerCase())
+      .filter((release) => !kernel.sourceRepo || kernelSourceFamily(release.source) === kernelSourceFamily(kernel.sourceRepo))
     const release = same[0]
     if (!release) continue
     covered.add(release.chromium)

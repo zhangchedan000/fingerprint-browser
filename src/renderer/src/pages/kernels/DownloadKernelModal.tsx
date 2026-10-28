@@ -4,7 +4,7 @@ import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { EngineStatus, KernelInstallProgress, KernelRelease } from '../../../../shared/types'
 import { formatBytes, humanError } from '../../components/format'
 import { kernelChromiumVersion, kernelName, kernelVendor } from '../../../../shared/kernel-id'
-import { normalizeKernelSource, OFFICIAL_KERNEL_SOURCE } from '../../../../shared/kernel-sources'
+import { isOfficialKernelSource, normalizeKernelSource } from '../../../../shared/kernel-sources'
 
 interface Props {
   open: boolean
@@ -79,7 +79,7 @@ export function DownloadKernelModal({ open, onClose, onInstalled }: Props) {
   }
 
   function confirmInstall(release: KernelRelease): void {
-    if (!release.source || release.source === OFFICIAL_KERNEL_SOURCE) {
+    if (!release.source || isOfficialKernelSource(release.source)) {
       void install(release)
       return
     }

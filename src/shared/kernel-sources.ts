@@ -1,9 +1,30 @@
 /**
  * Where "在线下载内核" looks for kernels: GitHub projects ("owner/repo") whose releases carry a
- * Windows x64 zip. The user adds and removes them; this app's own repository is the default.
+ * Windows x64 zip. The user adds and removes them; the official ones are the default.
+ *
+ * Prism kernels are published in their own repository; this app's repository carried them up to
+ * prism8 and keeps those releases, so it stays listed (older apps only look there).
  */
-export const OFFICIAL_KERNEL_SOURCE = 'zhangchedan000/fingerprint-browser'
-export const DEFAULT_KERNEL_SOURCES: readonly string[] = [OFFICIAL_KERNEL_SOURCE]
+export const OFFICIAL_KERNEL_SOURCE = 'zhangchedan000/prism-kernel-releases'
+export const LEGACY_KERNEL_SOURCE = 'zhangchedan000/fingerprint-browser'
+export const DEFAULT_KERNEL_SOURCES: readonly string[] = [OFFICIAL_KERNEL_SOURCE, LEGACY_KERNEL_SOURCE]
+
+export function isOfficialKernelSource(source: string | undefined): boolean {
+  const lower = source?.toLowerCase()
+  return lower === OFFICIAL_KERNEL_SOURCE.toLowerCase() || lower === LEGACY_KERNEL_SOURCE.toLowerCase()
+}
+
+/** One key for both official repositories: a kernel installed from one is updated from the other. */
+export function kernelSourceFamily(source: string): string {
+  return isOfficialKernelSource(source) ? OFFICIAL_KERNEL_SOURCE.toLowerCase() : source.toLowerCase()
+}
+
+/** Saved lists from before the kernel repository existed get it, next to the old official one. */
+export function withOfficialKernelSource(sources: string[]): string[] {
+  const legacy = sources.findIndex((source) => source.toLowerCase() === LEGACY_KERNEL_SOURCE.toLowerCase())
+  if (legacy < 0 || sources.some((source) => source.toLowerCase() === OFFICIAL_KERNEL_SOURCE.toLowerCase())) return sources
+  return [...sources.slice(0, legacy), OFFICIAL_KERNEL_SOURCE, ...sources.slice(legacy)]
+}
 
 const NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/
 

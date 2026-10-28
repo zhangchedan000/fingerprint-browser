@@ -68,4 +68,14 @@ describe('kernel releases from a GitHub project', () => {
     expect(current.filter((row) => row.kind === 'installed')).toHaveLength(1)
     expect(olderBuilds(releases, rows).map((item) => item.sha256)).toEqual(['old156'])
   })
+  it('updates a kernel installed from the app repository with a build from the kernel repository', () => {
+    const candidate = (source: string, sha256: string, publishedAt: string): ReleaseCandidate =>
+      ({ source, tag: 't', chromium: '156.0.8078.47', publishedAt, asset: asset('k.zip'), sha256 })
+    const installed = [{ version: 'prism-156.0.8078.47', chromium: '156.0.8078.47', sha256: 'prism8', sourceRepo: 'zhangchedan000/fingerprint-browser', builtAt: '2026-10-27T00:00:00Z' }]
+    const rows = planKernelRows(installed, [
+      candidate('zhangchedan000/fingerprint-browser', 'prism8', '2026-10-27T00:00:00Z'),
+      candidate('zhangchedan000/prism-kernel-releases', 'prism9', '2026-11-05T00:00:00Z')
+    ])
+    expect(rows.map((row) => `${row.kind}:${row.release.sha256}`)).toEqual(['update:prism9'])
+  })
 })
