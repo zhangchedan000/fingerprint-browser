@@ -2,7 +2,7 @@ import { Button, Empty, Spin, Table, Tabs, type TableColumnsType } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { t } from '../../../shared/i18n'
-import { resizableHeaderComponents, useResizableColumns } from './resizable-columns'
+import { tableHeaderComponents, useTableColumns } from './table-columns'
 
 export interface ListTab {
   key: string
@@ -58,13 +58,13 @@ export function ListPage<T extends { id: string }>({
   onRowClick, activeRowId, footnote, paginate = true
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
-  const resizable = useResizableColumns(columns, scrollX)
+  const table = useTableColumns(columns, scrollX)
   const selected = new Set(selection?.ids ?? [])
   return (
     <>
       <div className="fb-toolbar">
         {toolbar}
-        {filters && <div className="fb-toolbar-filters">{filters}</div>}
+        <div className="fb-toolbar-filters">{filters}{table.settings}</div>
       </div>
       {header}
       {tabs && (
@@ -92,8 +92,9 @@ export function ListPage<T extends { id: string }>({
           <Table<T>
             rowKey="id"
             size="middle"
-            columns={resizable.columns}
-            components={resizableHeaderComponents}
+            columns={table.columns}
+            components={tableHeaderComponents}
+            tableLayout={table.tableLayout}
             dataSource={rows}
             rowClassName={(row) => [
               selected.has(row.id) || row.id === activeRowId ? 'fb-row-selected' : '',
@@ -113,7 +114,7 @@ export function ListPage<T extends { id: string }>({
               showTotal: (total) => t("共 {0} 条", total),
               hideOnSinglePage: false
             }}
-            scroll={resizable.scrollX ? { x: resizable.scrollX } : undefined}
+            scroll={table.scrollX ? { x: table.scrollX } : undefined}
             locale={{ emptyText: <Empty description={emptyText}>{emptyAction}</Empty> }}
           />
         </Spin>

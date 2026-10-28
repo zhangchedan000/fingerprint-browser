@@ -470,7 +470,7 @@ button, input, textarea { font: inherit; }
 .fb-pill.is-danger i { background: var(--fb-danger); }
 .fb-pill.is-pulse i { animation: fb-tunnel-pulse 2s ease-out infinite; }
 
-/* Column widths the user drags (resizable-columns.tsx). */
+/* Column widths, order and visibility the user sets (table-columns.tsx). */
 .fb-col-resize { position: absolute; top: 0; right: -5px; z-index: 3; width: 10px; height: 100%; cursor: col-resize; }
 .fb-col-resize::after { content: ''; position: absolute; top: 25%; left: 4px; width: 2px; height: 50%; border-radius: 1px; background: transparent; transition: background .15s; }
 th:hover > .fb-col-resize::after { background: var(--fb-line-strong); }
@@ -499,3 +499,18 @@ body.fb-col-resizing * { cursor: col-resize !important; }
 .fb-region-source.is-ip { color: var(--fb-accent-text); background: var(--fb-accent-soft); }
 .fb-ip-history { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .fb-ip-history > div { display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+th.fb-col-movable { cursor: grab; }
+th.fb-col-movable:active { cursor: grabbing; }
+th.fb-col-drop-before { box-shadow: inset 3px 0 0 var(--fb-accent); }
+th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
+.fb-table-panel .fb-col-fill { padding: 0 !important; }
+.fb-colset { width: 240px; }
+.fb-colset ul { max-height: 360px; margin: 0 -4px; padding: 0; overflow-y: auto; list-style: none; }
+.fb-colset li { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: grab; }
+.fb-colset li:hover { background: var(--fb-surface-muted); }
+.fb-colset li.is-dragging { opacity: .45; }
+.fb-colset li.drop-before { box-shadow: inset 0 2px 0 var(--fb-accent); }
+.fb-colset li.drop-after { box-shadow: inset 0 -2px 0 var(--fb-accent); }
+.fb-colset-handle { color: var(--fb-text-faint); }
+.fb-colset-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--fb-line); font-size: 12px; }
+.fb-colset-button.is-changed { color: var(--fb-accent); border-color: var(--fb-accent-soft-border); }
