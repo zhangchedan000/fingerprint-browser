@@ -5,8 +5,9 @@ import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute }
 import { safeErrorText } from './redaction'
 
 const IP_CHECK_URL = 'https://api.ipify.org?format=json'
-const GEO_CHECK_URL = 'https://ipwho.is/'
-const SECONDARY_GEO_CHECK_URL = 'https://ipapi.co/json/'
+/** A check gives up after this long: a proxy that does not answer is reported, not waited for. */
+export const PROXY_CHECK_DEADLINE_MS = 15_000
+const LOOKUP_TIMEOUT_MS = 8_000
 
 interface GeoLookupResponse {
   success?: boolean
@@ -111,32 +112,155 @@ export function parseSecondaryGeoLookup(data: SecondaryGeoLookupResponse, latenc
   }
 }
 
-export function mergeGeoLookups(primary: ProxyTestResult, secondary: ProxyTestResult): ProxyTestResult {
-  const conflicts: string[] = []
-  if (primary.ip && secondary.ip && primary.ip !== secondary.ip) {
-    conflicts.push(`出口 IP：${primary.ip} / ${secondary.ip}`)
+const finite = (value: unknown, limit: number) => {
+  const number = typeof value === 'string' ? Number(value) : value
+  return typeof number === 'number' && Number.isFinite(number) && Math.abs(number) <= limit ? number : undefined
+}
+
+/** The common shape of the other services' answers, checked the same way as the first two. */
+function geoResult(source: string, fields: {
+  ip?: string, countryCode?: string, country?: string, region?: string, city?: string, latitude?: unknown, longitude?: unknown,
+  timezone?: string, asn?: unknown, organization?: string, networkRisk?: ProxyTestResult['networkRisk']
+}, latencyMs: number): ProxyTestResult {
+  if (!fields.ip) throw new Error(`${source} 结果无效`)
+  const ipVersion = isIP(fields.ip)
+  if (ipVersion !== 4 && ipVersion !== 6) throw new Error(`${source} 返回了无效的出口地址`)
+  let timezone = fields.timezone || undefined
+  if (timezone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format()
+    } catch {
+      timezone = undefined
+    }
   }
-  if (primary.countryCode && secondary.countryCode && primary.countryCode !== secondary.countryCode) {
-    conflicts.push(`国家：${primary.countryCode} / ${secondary.countryCode}`)
+  const countryCode = fields.countryCode?.toUpperCase() || undefined
+  let country = fields.country
+  if (!country && countryCode) {
+    try { country = new Intl.DisplayNames('en', { type: 'region' }).of(countryCode) } catch { country = undefined }
   }
-  if (primary.timezone && secondary.timezone && primary.timezone !== secondary.timezone) {
-    conflicts.push(`时区：${primary.timezone} / ${secondary.timezone}`)
+  const latitude = finite(fields.latitude, 90)
+  const longitude = finite(fields.longitude, 180)
+  const asn = typeof fields.asn === 'string' ? Number(fields.asn.replace(/^AS/i, '')) : fields.asn
+  return {
+    ok: true,
+    ip: fields.ip,
+    latencyMs,
+    country,
+    countryCode,
+    latitude,
+    longitude,
+    accuracyMeters: latitude !== undefined && longitude !== undefined ? 25_000 : undefined,
+    ipVersion,
+    region: fields.region || undefined,
+    city: fields.city || undefined,
+    timezone,
+    asn: typeof asn === 'number' && Number.isFinite(asn) ? asn : undefined,
+    organization: fields.organization,
+    isp: fields.organization,
+    networkRisk: fields.networkRisk
   }
-  if (conflicts.length) {
-    const geoConflict = `GeoIP 数据源冲突（${conflicts.join('；')}）`
+}
+
+type Json = Record<string, any>
+
+/**
+ * Free services that say where the connection comes from, no key needed. Each check asks two of
+ * them, picked at random, so no one service sees every check (they limit how often one IP asks);
+ * one that fails or is rate-limited is replaced by the next.
+ */
+export const GEO_SOURCES: ReadonlyArray<{ name: string; url: string; parse: (data: Json, latencyMs: number) => ProxyTestResult }> = [
+  { name: 'ipwho.is', url: 'https://ipwho.is/', parse: (data, latencyMs) => parseGeoLookup(data as GeoLookupResponse, latencyMs) },
+  { name: 'ipapi.co', url: 'https://ipapi.co/json/', parse: (data, latencyMs) => parseSecondaryGeoLookup(data as SecondaryGeoLookupResponse, latencyMs) },
+  {
+    name: 'ipinfo.io',
+    url: 'https://ipinfo.io/json',
+    parse: (data, latencyMs) => {
+      const [latitude, longitude] = typeof data.loc === 'string' ? data.loc.split(',') : []
+      const org = typeof data.org === 'string' ? data.org : ''
+      return geoResult('ipinfo.io', {
+        ip: data.ip, countryCode: data.country, region: data.region, city: data.city, latitude, longitude,
+        timezone: data.timezone, asn: /^AS\d+/i.exec(org)?.[0], organization: org.replace(/^AS\d+\s*/i, '') || undefined
+      }, latencyMs)
+    }
+  },
+  {
+    name: 'geojs.io',
+    url: 'https://get.geojs.io/v1/ip/geo.json',
+    parse: (data, latencyMs) => geoResult('geojs.io', {
+      ip: data.ip, countryCode: data.country_code, country: data.country, region: data.region, city: data.city,
+      latitude: data.latitude, longitude: data.longitude, timezone: data.timezone, asn: data.asn, organization: data.organization_name
+    }, latencyMs)
+  },
+  {
+    name: 'ip.sb',
+    url: 'https://api.ip.sb/geoip',
+    parse: (data, latencyMs) => geoResult('ip.sb', {
+      ip: data.ip, countryCode: data.country_code, country: data.country, region: data.region, city: data.city,
+      latitude: data.latitude, longitude: data.longitude, timezone: data.timezone, asn: data.asn, organization: data.organization ?? data.isp
+    }, latencyMs)
+  },
+  {
+    name: 'ipapi.is',
+    url: 'https://api.ipapi.is/',
+    parse: (data, latencyMs) => {
+      const location: Json = data.location ?? {}
+      return geoResult('ipapi.is', {
+        ip: data.ip, countryCode: location.country_code, country: location.country, region: location.state, city: location.city,
+        latitude: location.latitude, longitude: location.longitude, timezone: location.timezone, asn: data.asn?.asn, organization: data.asn?.org,
+        networkRisk: data.is_tor ? 'tor' : data.is_vpn ? 'vpn' : data.is_proxy ? 'proxy' : data.is_datacenter ? 'hosting' : undefined
+      }, latencyMs)
+    }
+  }
+]
+
+/** A check result labelled with the service that gave it. */
+export interface GeoAnswer {
+  source: string
+  result: ProxyTestResult
+}
+
+/**
+ * Two services' answers for the same connection. Different exit IPs mean the proxy hands out a new
+ * IP per connection (a rotating proxy). Same IP, different countries: the databases disagree. Same
+ * country: agreed; a city they disagree on is left out (the country is what counts).
+ */
+export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer): ProxyTestResult {
+  const a = first.result
+  const b = second.result
+  const geoSources = [first.source, second.source]
+  const where = (result: ProxyTestResult) => [result.countryCode, result.city].filter(Boolean).join(' ')
+  if (a.ip && b.ip && a.ip !== b.ip) {
+    const geoConflict = `这个代理每个连接换一个出口 IP（轮换代理）：${a.ip}（${where(a) || '未知'}）、${b.ip}（${where(b) || '未知'}）`
     return {
-      ...primary,
+      ...a,
       degraded: true,
-      warning: `${geoConflict}；继续使用可能影响时区、语言和地理位置的一致性，启动时将要求用户确认`,
+      warning: `${geoConflict}；网站会看到 IP 在变，时区和语言也对不上。请在代理商后台改成固定会话（粘性 IP）`,
       geoConfidence: 'conflict',
-      geoSources: ['ipwho.is', 'ipapi.co'],
+      geoSources,
       geoConflict
     }
   }
+  if (a.countryCode && b.countryCode && a.countryCode !== b.countryCode) {
+    const geoConflict = `两个 IP 数据库判断的国家不同：${a.countryCode}（${first.source}）/ ${b.countryCode}（${second.source}）`
+    return {
+      ...a,
+      degraded: true,
+      warning: `${geoConflict}；时区、语言和地理位置可能对不上`,
+      geoConfidence: 'conflict',
+      geoSources,
+      geoConflict
+    }
+  }
+  const sameCity = Boolean(a.city && b.city && a.city.toLowerCase() === b.city.toLowerCase())
   return {
-    ...primary,
+    ...a,
+    countryCode: a.countryCode ?? b.countryCode,
+    country: a.country ?? b.country,
+    timezone: a.timezone ?? b.timezone,
+    networkRisk: a.networkRisk ?? b.networkRisk,
+    ...(sameCity ? {} : { city: undefined, region: undefined }),
     geoConfidence: 'consensus',
-    geoSources: ['ipwho.is', 'ipapi.co']
+    geoSources
   }
 }
 
@@ -178,64 +302,86 @@ export function classifyProxyFailure(error: unknown): NonNullable<ProxyTestResul
   return 'unknown'
 }
 
-async function lookupJson<T>(url: string, dispatcher?: ProxyAgent): Promise<T> {
+/** A service answered but not usefully (rate limit, error page): ask another one. */
+class SiteError extends Error {}
+
+async function lookupJson<T>(url: string, dispatcher: ProxyAgent | undefined, signal: AbortSignal): Promise<T> {
   const response = await request(url, {
     dispatcher,
     method: 'GET',
+    signal,
     headers: { accept: 'application/json', 'user-agent': 'Prism-Browser/0.1' },
-    headersTimeout: 12_000,
-    bodyTimeout: 12_000
+    headersTimeout: LOOKUP_TIMEOUT_MS,
+    bodyTimeout: LOOKUP_TIMEOUT_MS
   })
   if (response.statusCode !== 200) {
-    await response.body.dump()
-    throw new Error(`检测服务返回 HTTP ${response.statusCode}`)
+    await response.body.dump().catch(() => undefined)
+    throw new SiteError(`检测服务返回 HTTP ${response.statusCode}`)
   }
-  return response.body.json() as Promise<T>
+  try {
+    return await response.body.json() as T
+  } catch {
+    throw new SiteError('检测服务返回的不是 JSON')
+  }
 }
 
-async function testProxyOnce(config: ProxyConfig, direct = false): Promise<ProxyTestResult> {
+const isSiteProblem = (error: unknown) => error instanceof SiteError || /timeout|timed out|UND_ERR_(HEADERS|BODY)_TIMEOUT/i.test(errorText(error))
+
+/**
+ * Two answers from different services, picked at random; a service that fails is replaced by the
+ * next. A failure of the proxy itself (refused, reset, authentication) ends the search at once.
+ */
+export async function geoAnswers(dispatcher: ProxyAgent | undefined, signal: AbortSignal, startedAt: number, sources = GEO_SOURCES): Promise<{ answers: GeoAnswer[]; failures: string[] }> {
+  const order = [...sources].sort(() => Math.random() - 0.5)
+  const answers: GeoAnswer[] = []
+  const failures: string[] = []
+  let next = 0
+  let fatal: unknown
+  const worker = async () => {
+    while (answers.length < 2 && next < order.length && fatal === undefined && !signal.aborted) {
+      const source = order[next++]
+      try {
+        const data = await lookupJson<Json>(source.url, dispatcher, signal)
+        let result: ProxyTestResult
+        try {
+          result = source.parse(data, Date.now() - startedAt)
+        } catch (error) {
+          throw new SiteError(error instanceof Error ? error.message : String(error))
+        }
+        answers.push({ source: source.name, result })
+      } catch (error) {
+        if (signal.aborted) return
+        if (!isSiteProblem(error)) { fatal ??= error; return }
+        failures.push(`${source.name}：${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+  await Promise.all([worker(), worker()])
+  if (fatal !== undefined && !answers.length) throw fatal
+  return { answers, failures }
+}
+
+async function testProxyOnce(config: ProxyConfig, direct: boolean, signal: AbortSignal): Promise<ProxyTestResult> {
   const startedAt = Date.now()
   let localProxy: string | undefined
   let dispatcher: ProxyAgent | undefined
   try {
     localProxy = await openProxyBridge(config, {}, { direct })
     dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
-    const lookups = await Promise.allSettled([
-      lookupJson<GeoLookupResponse>(GEO_CHECK_URL, dispatcher),
-      lookupJson<SecondaryGeoLookupResponse>(SECONDARY_GEO_CHECK_URL, dispatcher)
-    ])
-    const latencyMs = Date.now() - startedAt
-    let primary: ProxyTestResult | undefined
-    let secondary: ProxyTestResult | undefined
-    let primaryError: unknown
-    let secondaryError: unknown
-    try {
-      if (lookups[0].status === 'fulfilled') primary = parseGeoLookup(lookups[0].value, latencyMs)
-      else primaryError = lookups[0].reason
-    } catch (error) {
-      primaryError = error
-    }
-    try {
-      if (lookups[1].status === 'fulfilled') secondary = parseSecondaryGeoLookup(lookups[1].value, latencyMs)
-      else secondaryError = lookups[1].reason
-    } catch (error) {
-      secondaryError = error
-    }
-    if (primary && secondary) return mergeGeoLookups(primary, secondary)
-    if (primary || secondary) {
-      const result = primary ?? secondary!
-      const source = primary ? 'ipwho.is' : 'ipapi.co'
-      const failed = primary ? secondaryError : primaryError
+    const { answers, failures } = await geoAnswers(dispatcher, signal, startedAt)
+    if (answers.length >= 2) return { ...mergeGeoLookups(answers[0], answers[1]), latencyMs: answers[0].result.latencyMs }
+    if (answers.length === 1) {
       return {
-        ...result,
+        ...answers[0].result,
         degraded: true,
-        warning: `仅 ${source} 返回有效地理信息，无法交叉确认：${failed instanceof Error ? failed.message : String(failed ?? '未知错误')}`,
+        warning: `只有 ${answers[0].source} 查到了地理信息，没能用第二个网站核对（${failures.join('；') || '其他网站没有回应'}）；IP 和国家一般没问题`,
         geoConfidence: 'single-source',
-        geoSources: [source]
+        geoSources: [answers[0].source]
       }
     }
+    if (signal.aborted) throw new Error('deadline')
     try {
-      const data = await lookupJson<{ ip?: string }>(IP_CHECK_URL, dispatcher)
+      const data = await lookupJson<{ ip?: string }>(IP_CHECK_URL, dispatcher, signal)
       const ipVersion = isIP(data.ip ?? '')
       if (!data.ip || (ipVersion !== 4 && ipVersion !== 6)) throw new Error('IP 检测结果无效')
       return {
@@ -244,14 +390,22 @@ async function testProxyOnce(config: ProxyConfig, direct = false): Promise<Proxy
         ipVersion,
         latencyMs: Date.now() - startedAt,
         degraded: true,
-        warning: `地理信息暂不可用：${[primaryError, secondaryError].map((error) => error instanceof Error ? error.message : String(error ?? '')).filter(Boolean).join('；')}`,
+        warning: `地理信息暂不可用：${failures.join('；')}`,
         geoConfidence: 'single-source',
         geoSources: []
       }
     } catch (ipError) {
-      throw new AggregateError([primaryError, secondaryError, ipError], '代理出口检测失败')
+      throw new AggregateError([...failures.map((failure) => new Error(failure)), ipError], '代理出口检测失败')
     }
   } catch (error) {
+    if (signal.aborted) {
+      return {
+        ok: false,
+        latencyMs: Date.now() - startedAt,
+        error: `代理 ${PROXY_CHECK_DEADLINE_MS / 1000} 秒内没有响应：可能已过期、被限制访问，或线路太慢`,
+        failureKind: 'timeout'
+      }
+    }
     const causes = error instanceof AggregateError ? error.errors : [error]
     const text = causes.map(errorText).join(' | ')
     return {
@@ -261,28 +415,31 @@ async function testProxyOnce(config: ProxyConfig, direct = false): Promise<Proxy
       failureKind: classifyProxyFailure(new Error(text))
     }
   } finally {
-    await dispatcher?.close().catch(() => undefined)
+    await dispatcher?.destroy().catch(() => undefined)
     await closeProxyBridge(localProxy)
   }
 }
 
-export async function testProxy(config: ProxyConfig): Promise<ProxyTestResult> {
+/**
+ * One check, finished within PROXY_CHECK_DEADLINE_MS: a proxy that does not work is reported
+ * quickly, and the user checks again when they want to (no automatic re-runs).
+ */
+export async function testProxy(config: ProxyConfig, deadlineMs = PROXY_CHECK_DEADLINE_MS): Promise<ProxyTestResult> {
+  const signal = AbortSignal.timeout(deadlineMs)
   // Every check (and so every launch) decides the route afresh.
   rememberDirectRoute(config, false)
   const via = await localProxyFor(config).catch(() => undefined)
-  const first = await testProxyOnce(config)
-  if (first.ok || first.failureKind === 'authentication') return first
+  const first = await testProxyOnce(config, false, signal)
+  if (first.ok || first.failureKind === 'authentication' || signal.aborted) return first
   // 网络加速 is the user's choice for this proxy: never fall back to this computer's own IP.
   if (via && !config.tunnel?.enabled) {
-    // The tunnel or system proxy could not reach this proxy (some nodes block other proxies' ports,
-    // and domestic proxies often refuse foreign visitors): try the computer's own network.
-    const direct = await testProxyOnce(config, true)
+    // The system proxy could not reach this proxy (domestic proxies often refuse foreign
+    // visitors): try the computer's own network in the time left.
+    const direct = await testProxyOnce(config, true, signal)
     if (direct.ok) {
       rememberDirectRoute(config, true)
-      return { ...direct, retried: true, latencyMs: first.latencyMs + direct.latencyMs }
+      return { ...direct, retried: true }
     }
   }
-  await new Promise((resolve) => setTimeout(resolve, 250))
-  const second = await testProxyOnce(config)
-  return { ...second, retried: true, latencyMs: first.latencyMs + second.latencyMs + 250 }
+  return first
 }

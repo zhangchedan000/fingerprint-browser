@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { createServer as httpServer, type Server as HttpServer } from 'node:http'
 import { createConnection, createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -49,6 +50,10 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
   const servers: Server[] = []
   let vault = ''
   let tunnel: TunnelManager | undefined
+  const listenHttp = (server: HttpServer) => new Promise<number>((done) => {
+    servers.push(server as unknown as Server)
+    server.listen(0, '127.0.0.1', () => done((server.address() as { port: number }).port))
+  })
   const listen = (server: Server) => new Promise<number>((done) => {
     servers.push(server)
     server.listen(0, '127.0.0.1', () => done((server.address() as { port: number }).port))
@@ -128,7 +133,9 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
     })
     const a = await listen(socksNode('a'))
     const b = await listen(socksNode('b'))
-    tunnel = new TunnelManager(vault, identitySecretCodec, core)
+    // Stands in for api.ipify.org: answers with the address the request came from.
+    const whoami = await listenHttp(httpServer((request, response) => response.end(JSON.stringify({ ip: request.socket.remoteAddress?.replace(/^::ffff:/, '') }))))
+    tunnel = new TunnelManager(vault, identitySecretCodec, core, undefined, undefined, undefined, `http://127.0.0.1:${whoami}/`)
     await tunnel.addSource({ name: 'T', kind: 'links', content: `proxies:\n  - {name: a, type: socks5, server: 127.0.0.1, port: ${a}, udp: false}\n  - {name: b, type: socks5, server: 127.0.0.1, port: ${b}, udp: false}\n` })
     await expect(tunnel.routeProxy({ mode: 'auto' })).rejects.toThrow('网络加速未开启')
     await tunnel.setEnabled(true)
@@ -153,6 +160,11 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
     await roundTrip(await tunnel.routeProxy({ mode: 'auto' }))
     expect(['a', 'b']).toContain(carried.pop())
     await expect(tunnel.routeProxy({ mode: 'manual', node: 'T · gone' })).rejects.toThrow('已不存在')
+    // Each node's exit IP is looked up through its own probe port and kept.
+    await tunnel.lookUpExitIps()
+    const withIps = await tunnel.status()
+    expect(withIps.nodes.map((node) => node.exitIp)).toEqual(['127.0.0.1', '127.0.0.1'])
+    expect(JSON.parse(await readFile(join(vault, 'tunnel.json'), 'utf8')).exitIps['T · b'].ip).toBe('127.0.0.1')
     await tunnel.stop()
     await expect(tunnel.routeProxy({ mode: 'manual', node: 'T · b' })).rejects.toThrow('网络加速未开启')
   }, 60_000)

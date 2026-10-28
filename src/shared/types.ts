@@ -856,6 +856,8 @@ export interface TunnelNodeInfo {
   sourceId?: string
   /** Last measured delay in ms; 0 = timed out; undefined = not measured. */
   delay?: number
+  /** The IP websites (and proxy whitelists) see through this node; unset until looked up. */
+  exitIp?: string
 }
 
 export interface TunnelSourceSummary {

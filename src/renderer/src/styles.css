@@ -492,3 +492,4 @@ body.fb-col-resizing * { cursor: col-resize !important; }
 .fb-import-route { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; margin-top: 12px; }
 .fb-import-route-label { padding-top: 5px; color: var(--fb-text-secondary); }
 .fb-accent-text { color: var(--fb-accent-text); }
+.fb-tunnel-node-meta { display: inline-flex; flex: none; align-items: center; gap: 10px; }

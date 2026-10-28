@@ -27,6 +27,9 @@ export const AUTO_TUNNEL_GROUP = 'TUNNEL-AUTO'
  */
 export const NODE_SLOT_COUNT = 16
 export const nodeSlotGroup = (index: number) => `TUNNEL-NODE-${index + 1}`
+/** Ports used only to look up each node's exit IP, a few nodes at a time. */
+export const PROBE_SLOT_COUNT = 4
+export const probeGroup = (index: number) => `TUNNEL-PROBE-${index + 1}`
 export const DELAY_TEST_URL = 'https://www.gstatic.com/generate_204'
 
 export function providerName(source: Pick<TunnelSource, 'id'>): string {
@@ -62,6 +65,8 @@ export interface MihomoConfigInput {
   autoPort: number
   /** One local port per node slot (nodeSlotGroup). */
   slotPorts: number[]
+  /** One local port per exit-IP probe (probeGroup). */
+  probePorts?: number[]
   controllerPort: number
   secret: string
   delayTestUrl?: string
@@ -95,11 +100,13 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     'proxy-groups': [
       { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: Object.keys(providers), url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },
       { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: Object.keys(providers) },
-      ...input.slotPorts.map((_, index) => ({ name: nodeSlotGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) }))
+      ...input.slotPorts.map((_, index) => ({ name: nodeSlotGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) })),
+      ...(input.probePorts ?? []).map((_, index) => ({ name: probeGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) }))
     ],
     listeners: [
       listener('auto', input.autoPort, AUTO_TUNNEL_GROUP),
-      ...input.slotPorts.map((port, index) => listener(`node-${index + 1}`, port, nodeSlotGroup(index)))
+      ...input.slotPorts.map((port, index) => listener(`node-${index + 1}`, port, nodeSlotGroup(index))),
+      ...(input.probePorts ?? []).map((port, index) => listener(`probe-${index + 1}`, port, probeGroup(index)))
     ],
     rules: [`MATCH,${TUNNEL_GROUP}`]
   }

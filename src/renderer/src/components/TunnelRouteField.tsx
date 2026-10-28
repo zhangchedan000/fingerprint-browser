@@ -49,14 +49,35 @@ export function defaultTunnelRoute(status: TunnelStatus | undefined, proxyDefaul
  * 网络加速 for one window or proxy, the same choices as Settings → 网络加速: on or off, the fastest
  * node or a fixed one, picked from the nodes added there.
  */
-export function TunnelRouteField({ value, onChange, status }: { value: TunnelRoute; onChange: (route: TunnelRoute) => void; status?: TunnelStatus }) {
+export function TunnelRouteField({ value, onChange, status, disabledReason }: {
+  value: TunnelRoute
+  onChange: (route: TunnelRoute) => void
+  status?: TunnelStatus
+  /** Shown instead of the choices when this proxy cannot use the tunnel (an HTTPS proxy). */
+  disabledReason?: string
+}) {
+  if (disabledReason) {
+    return (
+      <div className="fb-tunnel-route">
+        <div className="fb-tunnel-route-line">
+          <Switch checked={false} disabled />
+          <span className="fb-muted">{disabledReason}</span>
+        </div>
+      </div>
+    )
+  }
   const [stateClass, stateLabel] = TUNNEL_STATE_PILL[status?.state ?? 'off']
   const running = status?.state === 'running'
   const nodes = status?.nodes ?? []
   const options = nodes.map((node) => ({
     value: node.name,
     search: node.name,
-    label: <span className="fb-tunnel-node-option"><span className="fb-ellipsis" title={node.name}>{node.name}</span><DelayText delay={node.delay} /></span>
+    label: (
+      <span className="fb-tunnel-node-option">
+        <span className="fb-ellipsis" title={node.name}>{node.name}</span>
+        <span className="fb-tunnel-node-meta">{node.exitIp && <span className="fb-mono fb-muted">{node.exitIp}</span>}<DelayText delay={node.delay} /></span>
+      </span>
+    )
   }))
   // A node chosen earlier stays visible: the tunnel may be off, or the node gone after an edit.
   if (value.node && !nodes.some((node) => node.name === value.node)) {

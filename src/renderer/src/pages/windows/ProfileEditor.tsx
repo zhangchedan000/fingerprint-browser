@@ -23,7 +23,7 @@ import {
   Upload
 } from 'antd'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
 import { fingerprintVersionWarning } from '../../../../shared/fingerprint-consistency'
 import {
@@ -75,7 +75,7 @@ import { kernelName } from '../../../../shared/kernel-id'
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
 type EditorTab = 'basic' | 'proxy' | 'fingerprint'
 /** 'library' picks a proxy from the proxy library; the others type one in (it is saved into the library). */
-type ProxyMode = 'direct' | 'http' | 'https' | 'socks5' | 'library'
+type ProxyMode = 'direct' | 'http' | 'https' | 'socks5' | 'api' | 'library'
 
 interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'account' | 'proxyId'> {
   startUrlsText: string
@@ -357,6 +357,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [form] = Form.useForm<EditorValues>()
   const [tab, setTab] = useState<EditorTab>('basic')
   const [testingProxy, setTestingProxy] = useState(false)
+  // Each 检测代理 gets a number; a result that comes back after the editor was reopened (or another
+  // check started) is dropped instead of showing up, or keeping the button spinning.
+  const proxyCheckRun = useRef(0)
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
@@ -374,7 +377,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
   const libraryProxy = proxyMode === 'library' ? proxies.find((item) => item.id === proxyId) : undefined
   /** Protocol of the proxy the window will use, whether typed or picked. */
-  const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : typedProtocol
+  const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : proxyMode === 'api' ? 'http' : typedProtocol
   const sharedWith = libraryProxy ? libraryProxy.profileIds.filter((id) => id !== profile?.id).length : 0
   const tunnelStatus = useTunnelStatus()
   const watchedRoute = Form.useWatch('tunnel', { form, preserve: true }) as TunnelRoute | undefined
@@ -406,6 +409,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     form.resetFields()
     form.setFieldsValue(editorValues(profile, suggestedIndex))
     setTab('basic')
+    proxyCheckRun.current += 1
+    setTestingProxy(false)
     setProxyResult(null)
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
@@ -775,40 +780,56 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function chooseProxyMode(mode: ProxyMode): void {
     setProxyMode(mode)
     setProxyResult(null)
-    if (mode !== 'library') form.setFieldValue(['proxy', 'protocol'], mode)
+    if (mode !== 'library' && mode !== 'api') form.setFieldValue(['proxy', 'protocol'], mode)
   }
 
   /**
-   * A proxy checked here sets the window to 基于 IP 生成: country, time zone, languages, location,
-   * and with the system language following them, fonts, voices and device names. Unchecked, nothing moves.
+   * A proxy checked while creating a window sets it to 基于 IP 生成: country, time zone, languages,
+   * location, and with the system language following them, fonts, voices and device names.
+   * An existing window keeps its settings; a mismatch with the IP is only pointed out (regionMismatch).
    */
-  function followCheckedIp(result: ProxyTestResult | null): void {
+  function followCheckedIp(result: ProxyTestResult | null, run: number): void {
+    if (run !== proxyCheckRun.current) return
     setProxyResult(result)
-    if (result?.ok) patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })
+    if (result?.ok && !profile) patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })
+  }
+
+  /** API 提取 typed into the window: only the link; the proxy comes from it when saved and at every launch. */
+  function apiProxy(): ProxyConfig {
+    return { protocol: 'http', host: '', username: '', password: '', apiUrl: String(form.getFieldValue(['proxy', 'apiUrl']) ?? '').trim(), tunnel: route }
   }
 
   async function testCurrentProxy(): Promise<void> {
+    const run = ++proxyCheckRun.current
     try {
       if (proxyMode === 'library') {
         await form.validateFields(['proxyId'])
         setTestingProxy(true)
         setProxyResult(null)
         // Saved on the library proxy, so every window using it sees the result; reached the way this window will.
-        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null)
+        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run)
+        return
+      }
+      if (proxyMode === 'api') {
+        await form.validateFields([['proxy', 'apiUrl']])
+        setTestingProxy(true)
+        setProxyResult(null)
+        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id), run)
         return
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
       setProxyResult(null)
-      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id))
+      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id), run)
     } catch (error) {
+      if (run !== proxyCheckRun.current) return
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
         setProxyResult({ ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) })
       } else {
         setTab('proxy')
       }
     } finally {
-      setTestingProxy(false)
+      if (run === proxyCheckRun.current) setTestingProxy(false)
     }
   }
 
@@ -852,7 +873,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       // A picked library proxy goes by id; a typed one is saved into the library by the store.
       ...(proxyMode === 'library'
         ? { proxyId: values.proxyId, proxy: { protocol: 'direct' as const, host: '', username: '', password: '' } }
-        : { proxy: values.proxy }),
+        : proxyMode === 'api'
+          ? { proxy: apiProxy() }
+          : { proxy: values.proxy }),
       ...(proxyProtocol !== 'direct' ? { tunnel: route } : {}),
       account: values.account,
       extensionIds: values.extensionIds,
@@ -1026,7 +1049,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     <div className="fb-editor-section">
       <Row
         label={t("代理方式")}
-        hint={proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
+        hint={proxyMode === 'api'
+          ? t("保存时存入代理库（代理库里已有同一个链接时直接用那一条）；每次打开窗口都从链接取一个新代理，自动识别 SOCKS5 或 HTTP")
+          : proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
       >
         <Radio.Group
           optionType="button"
@@ -1037,6 +1062,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'http', label: 'HTTP' },
             { value: 'https', label: 'HTTPS' },
             { value: 'socks5', label: 'SOCKS5' },
+            { value: 'api', label: t("API 提取") },
             { value: 'library', label: t("从代理库选择") }
           ]}
         />
@@ -1079,7 +1105,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </>
       )}
-      {proxyMode !== 'library' && proxyProtocol !== 'direct' && (
+      {proxyMode === 'api' && (
+        <>
+          <Row label={t("API 链接")} required hint={t("白名单模式要先在服务商后台把这台电脑的 IP 加进白名单；只接受境外 IP 的服务商，打开下面的网络加速，把加速节点的 IP 加进白名单。")}>
+            <Form.Item name={['proxy', 'apiUrl']} noStyle rules={[{ required: true, message: t("请输入 API 链接") }, { pattern: /^\s*https?:\/\//i, message: t("API 链接要以 http:// 或 https:// 开头") }]}>
+              <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="https://example.com/api?num=1&format=txt" />
+            </Form.Item>
+          </Row>
+          <FieldError name={['proxy', 'apiUrl']} />
+        </>
+      )}
+      {proxyMode !== 'library' && proxyMode !== 'api' && proxyProtocol !== 'direct' && (
         <>
           <Row label={t("代理地址")} required>
             <div className="fb-host-grid">
@@ -1113,7 +1149,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Row>
         </>
       )}
-      <Row
+      {proxyMode !== 'api' && <Row
         label={t("快速粘贴")}
         hint={pasteError
           ? <Typography.Text type="danger">{pasteError}</Typography.Text>
@@ -1128,12 +1164,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           placeholder={PASTE_PLACEHOLDER}
           onChange={(event) => applyPastedProxy(event.target.value)}
         />
-      </Row>
-      {proxyProtocol !== 'direct' && route === shownRoute && (
+      </Row>}
+      {proxyProtocol !== 'direct' && (
         <Row label={t("网络加速")}>
           <TunnelRouteField
             value={route}
             status={tunnelStatus}
+            disabledReason={route === shownRoute ? undefined : t("HTTPS 代理暂不支持网络加速，可改用 HTTP 或 SOCKS5")}
             onChange={(next) => { form.setFieldValue('tunnel', next); setProxyResult(null) }}
           />
         </Row>
@@ -1152,9 +1189,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </div>
       </Row>
       {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (
-        <Alert type="warning" showIcon className="fb-editor-alert" title={t("代理地理信息存在冲突")} description={t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))} />
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={proxyResult.geoConflict?.includes('轮换代理') ? t("这个代理在轮换出口 IP") : t("代理地理信息存在冲突")}
+          description={proxyResult.geoConflict?.includes('轮换代理')
+            ? t("{0}。网站会看到 IP 在变，时区和语言也对不上；请在代理商后台改成固定会话（粘性 IP）。启动时会再次检测，并由你确认是否继续。", mt(proxyResult.geoConflict))
+            : t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))}
+        />
       )}
-      {proxyResult?.degraded && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
+      {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
+      {proxyResult?.ok && regionMismatch && (
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+          description={t("已经创建的窗口不会自动改国家、时区和语言；要和 IP 一致就点右边的按钮，或换一个那个国家的代理。")}
+          action={<Button size="small" onClick={() => patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })}>{t("改成和 IP 一致")}</Button>}
+        />
+      )}
       <Row label={t("时区和语言")}>
         <span className="fb-muted">
           {followIp

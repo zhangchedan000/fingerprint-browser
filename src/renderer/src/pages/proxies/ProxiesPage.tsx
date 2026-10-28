@@ -8,6 +8,7 @@ import { humanError, relativeTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { proxyAddress, proxyLabel } from '../../components/proxy'
 import { StatCards } from '../../components/StatCards'
+import { useTunnelStatus } from '../../components/TunnelRouteField'
 import { useWorkspace } from '../../data/workspace'
 import { AssignWindowsModal, type AssignMode } from './AssignWindowsModal'
 import { ProxyFormModal } from './ProxyFormModal'
@@ -28,6 +29,8 @@ const ALL = '__all__'
 /** Proxy library (design: Proxy.dc.html). Windows refer to these proxies by id. */
 export function ProxiesPage() {
   const ws = useWorkspace()
+  const tunnelStatus = useTunnelStatus()
+  const nodeIps = new Map((tunnelStatus?.nodes ?? []).flatMap((node) => node.exitIp ? [[node.name, node.exitIp] as const] : []))
   const { proxies, profiles, notify, locale } = ws
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState(ALL)
@@ -192,13 +195,15 @@ export function ProxiesPage() {
     {
       title: t("类型"),
       dataIndex: 'protocol',
-      width: 110,
+      width: 160,
       render: (protocol: string, proxy) => (
         <div className="fb-two-line">
           <span>{proxy.apiUrl ? `API · ${protocol.toUpperCase()}` : protocol.toUpperCase()}</span>
           {proxy.tunnel?.enabled && (
-            <small className="fb-ellipsis fb-accent-text" title={proxy.tunnel.mode === 'manual' ? proxy.tunnel.node : undefined}>
-              {t("加速")} · {proxy.tunnel.mode === 'manual' ? proxy.tunnel.node : t("自动")}
+            <small className="fb-ellipsis fb-accent-text" title={proxy.tunnel.mode === 'manual' ? [proxy.tunnel.node, nodeIps.get(proxy.tunnel.node ?? '')].filter(Boolean).join(' · ') : undefined}>
+              {t("加速")} · {proxy.tunnel.mode === 'manual'
+                ? [proxy.tunnel.node, nodeIps.get(proxy.tunnel.node ?? '')].filter(Boolean).join(' · ')
+                : t("自动")}
             </small>
           )}
         </div>

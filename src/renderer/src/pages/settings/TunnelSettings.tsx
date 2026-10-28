@@ -1,5 +1,5 @@
 import { CheckOutlined, CloseOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { Alert, Button, Input, Modal, Radio, Space, Switch, Table, type TableColumnsType } from 'antd'
+import { Alert, Button, Input, Modal, Radio, Space, Switch, Table, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { TunnelNodeInfo, TunnelStatus } from '../../../../shared/types'
@@ -92,6 +92,14 @@ export function TunnelSettings() {
   const running = status?.state === 'running'
   const columns: TableColumnsType<TunnelNodeInfo> = [
     { title: t("节点"), dataIndex: 'name', render: (value: string) => <span className="fb-ellipsis" title={value}>{value}</span> },
+    {
+      title: t("出口 IP"),
+      dataIndex: 'exitIp',
+      width: 170,
+      render: (value?: string) => value
+        ? <Typography.Text className="fb-mono" copyable={{ text: value, tooltips: [t("复制"), t("已复制")] }}>{value}</Typography.Text>
+        : <span className="fb-muted">—</span>
+    },
     { title: t("类型"), dataIndex: 'type', width: 110 },
     { title: t("延迟"), dataIndex: 'delay', width: 100, render: (value?: number) => <DelayText delay={value} /> },
     {
@@ -155,7 +163,7 @@ export function TunnelSettings() {
       {running && (
         <section className="fb-tunnel-card fb-tunnel-nodes">
           <div className="fb-tunnel-actions">
-            <span className="fb-muted">{t("这里选的是默认节点：新窗口和新代理先用它；每个窗口还可以在自己的代理设置里另选节点。")}</span>
+            <span className="fb-muted">{t("这里选的是默认节点：新窗口和新代理先用它；每个窗口还可以在自己的代理设置里另选节点。出口 IP 是经过这个节点时网站看到的 IP，代理商要加白名单时填它；测速时会重新查一次。")}</span>
             <Button size="small" loading={busy === 'test'} disabled={Boolean(busy)} onClick={() => void run('test', () => window.browserApi.tunnel.test())}>{t("测速")}</Button>
             {status.sources.some((source) => source.kind === 'subscription') && (
               <Button size="small" loading={busy === 'refresh'} disabled={Boolean(busy)} onClick={() => void run('refresh', () => window.browserApi.tunnel.refresh())}>{t("更新订阅")}</Button>

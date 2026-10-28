@@ -52,14 +52,25 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
+  /**
+   * A window given an API link (API 提取) uses the library's proxy with that link, or a new one
+   * filled in from the link once (the window then takes a fresh proxy at every launch).
+   */
+  const withApiProxy = async (draft: ProfileDraft): Promise<ProfileDraft> => {
+    if (!draft || draft.proxyId || !draft.proxy?.apiUrl) return draft
+    const apiUrl = validProxyApiUrl(draft.proxy.apiUrl)
+    const known = profiles.listProxies().find((proxy) => proxy.apiUrl === apiUrl)
+    if (known) return { ...draft, proxyId: known.id, proxy: { protocol: 'direct', host: '', username: '', password: '' } }
+    return { ...draft, proxy: { ...await resolveApiProxy(apiUrl, draft.tunnel), apiUrl } }
+  }
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
-    const profile = publicProfile(await profiles.create(draft))
+    const profile = publicProfile(await profiles.create(await withApiProxy(draft)))
     team.scheduleSync()
     return profile
   })
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
-    const profile = publicProfile(await profiles.update(id, draft))
+    const profile = publicProfile(await profiles.update(id, await withApiProxy(draft)))
     await team.afterLocalEdit(id)
     return profile
   })
@@ -210,6 +221,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       const { protocol, host, port, username, password, apiUrl } = profiles.getProxy(draft.proxyId)
       // An API proxy is checked with a fresh one, as a launch would get.
       proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password }
+    } else if (draft.proxy?.apiUrl) {
+      proxy = { ...await resolveApiProxy(validProxyApiUrl(draft.proxy.apiUrl), route) }
     } else {
       const { tunnel: _default, ...typed } = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
       proxy = typed

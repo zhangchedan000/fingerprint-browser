@@ -1,5 +1,5 @@
 import { Form, Input, InputNumber, Modal, Radio, Typography } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import type { ProxyDraft, ProxyRecordView, ProxyTestResult, TunnelRoute } from '../../../../shared/types'
@@ -24,6 +24,9 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const [pasteError, setPasteError] = useState('')
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
   const [result, setResult] = useState<ProxyTestResult | null>(null)
+  // A check that finishes after the dialog was closed and opened again is dropped.
+  const checkRun = useRef(0)
+  const showResult = (run: number, next: ProxyTestResult) => { if (run === checkRun.current) setResult(next) }
   const passwordStored = Form.useWatch('passwordStored', { form, preserve: true }) === true
   const password = Form.useWatch('password', form) ?? ''
   const protocol = Form.useWatch('protocol', form) ?? 'socks5'
@@ -47,6 +50,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     setPaste('')
     setPasteError('')
     setPasted(null)
+    checkRun.current += 1
     setResult(null)
   }, [open, proxy, form])
 
@@ -145,23 +149,26 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
         <Form.Item name="note" label={t("备注")}>
           <Input maxLength={200} placeholder={t("例如：住宅 IP、BM 专用")} />
         </Form.Item>
-        {(apiMode || protocol !== 'https') && (
-          <Form.Item label={t("网络加速")} extra={t("检测这个代理时按这里连接；把它分配给窗口时，窗口先用这个设置，之后可在窗口里单独修改")}>
-            <TunnelRouteField value={shownRoute} status={tunnelStatus} onChange={(next) => { setChosenRoute(next); setResult(null) }} />
-          </Form.Item>
-        )}
+        <Form.Item label={t("网络加速")} extra={t("检测这个代理时按这里连接；把它分配给窗口时，窗口先用这个设置，之后可在窗口里单独修改")}>
+          <TunnelRouteField
+            value={shownRoute}
+            status={tunnelStatus}
+            disabledReason={route === shownRoute ? undefined : t("HTTPS 代理暂不支持网络加速，可改用 HTTP 或 SOCKS5")}
+            onChange={(next) => { setChosenRoute(next); setResult(null) }}
+          />
+        </Form.Item>
         <ProxyTestButton
           result={result}
           onTest={async () => {
+            const run = ++checkRun.current
             if (apiMode) {
               await form.validateFields(['apiUrl'])
-              setResult(await window.browserApi.proxy.test({ ...apiDraft(), password: '' }, undefined, proxy?.id))
+              showResult(run, await window.browserApi.proxy.test({ ...apiDraft(), password: '' }, undefined, proxy?.id))
               return
             }
             const values = await form.validateFields(['host', 'port'])
             const draft = { ...form.getFieldsValue(true), ...values, tunnel: route } as ProxyDraft
-            const tested = await window.browserApi.proxy.test({ ...draft, password: draft.password ?? '' }, undefined, proxy?.id)
-            setResult(tested)
+            showResult(run, await window.browserApi.proxy.test({ ...draft, password: draft.password ?? '' }, undefined, proxy?.id))
           }}
         />
       </Form>

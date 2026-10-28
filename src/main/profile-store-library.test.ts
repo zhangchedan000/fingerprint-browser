@@ -279,4 +279,14 @@ describe('assigning extensions', () => {
     await writeFile(join(path, 'profiles.json'), JSON.stringify(file))
     expect((await open(path)).get(b.id).tunnel).toBeUndefined()
   })
+
+  it('keeps one library proxy per API link for windows given the link directly', async () => {
+    const store = await open()
+    const apiUrl = 'https://white.example.com/api?num=1'
+    const [a] = await store.createMany([draft('A', { proxy: { protocol: 'socks5', host: '203.0.113.20', port: 31002, username: '', password: '', apiUrl } })])
+    const [b] = await store.createMany([draft('B', { proxy: { protocol: 'http', host: '203.0.113.21', port: 31003, username: '', password: '', apiUrl } })])
+    expect(store.get(a.id).proxyId).toBe(store.get(b.id).proxyId)
+    expect(store.getProxy(store.get(a.id).proxyId).apiUrl).toBe(apiUrl)
+    expect(store.listProxies()).toHaveLength(1)
+  })
 })

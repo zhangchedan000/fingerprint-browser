@@ -1,12 +1,19 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { createServer } from 'node:net'
+import { createServer, isIP } from 'node:net'
 import { join } from 'node:path'
 import type { TunnelNodeInfo, TunnelRoute, TunnelStatus } from '../shared/types'
 import type { LocalProxy } from './proxy-bridge'
+import { ProxyAgent, request } from 'undici'
 import type { SecretCodec } from './secret-codec'
-import { AUTO_TUNNEL_GROUP, DELAY_TEST_URL, NODE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, providerName, validateTunnelSource, type TunnelSource } from './tunnel-config'
+import {
+  AUTO_TUNNEL_GROUP, DELAY_TEST_URL, NODE_SLOT_COUNT, PROBE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, probeGroup, providerName,
+  validateTunnelSource, type TunnelSource
+} from './tunnel-config'
+
+/** Answers {"ip": "…"} with the address the request came from. */
+export const EXIT_IP_URL = 'https://api.ipify.org?format=json'
 
 interface Logger {
   info(message: string, detail?: unknown): void
@@ -18,6 +25,8 @@ interface StoredTunnel {
   enabled: boolean
   selected?: string
   sources: TunnelSource[]
+  /** Each node's exit IP, as last looked up (kept across restarts; shown next to the node). */
+  exitIps?: Record<string, { ip: string; checkedAt: string }>
 }
 
 const EMPTY: StoredTunnel = { schemaVersion: 1, enabled: false, sources: [] }
@@ -44,6 +53,8 @@ export class TunnelManager {
   private mixedPort = 0
   private autoPort = 0
   private slotPorts: number[] = []
+  private probePorts: number[] = []
+  private probing?: Promise<void>
   /** The node each slot (nodeSlotGroup) carries; kept across restarts and set again on start. */
   private slots: string[] = []
   private slotting: Promise<unknown> = Promise.resolve()
@@ -59,7 +70,8 @@ export class TunnelManager {
     private readonly binary: string,
     private readonly logger?: Logger,
     private readonly onChanged: (status: TunnelStatus) => void = () => undefined,
-    private readonly delayTestUrl = DELAY_TEST_URL
+    private readonly delayTestUrl = DELAY_TEST_URL,
+    private readonly exitIpUrl = EXIT_IP_URL
   ) {}
 
   private get file(): string {
@@ -212,7 +224,46 @@ export class TunnelManager {
     if (this.state !== 'running') throw new Error('加速通道未运行')
     const result = await this.api('GET', `/group/${encodeURIComponent(AUTO_TUNNEL_GROUP)}/delay?url=${encodeURIComponent(this.delayTestUrl)}&timeout=5000`) as Record<string, number>
     for (const node of await this.nodes()) this.delays.set(node.name, result[node.name] ?? 0)
+    void this.lookUpExitIps().catch((error) => this.logger?.error('查询节点出口 IP 失败', error))
     return this.notify()
+  }
+
+  /**
+   * Looks up the IP each node goes out from (what proxy whitelists need), a few nodes at a time
+   * through the probe ports. Runs after start and after 测速; one run at a time.
+   */
+  lookUpExitIps(): Promise<void> {
+    this.probing ??= this.probeAll().finally(() => { this.probing = undefined })
+    return this.probing
+  }
+
+  private async probeAll(): Promise<void> {
+    if (this.state !== 'running') return
+    const nodes = await this.groupNames().catch(() => [] as string[])
+    const found: Record<string, { ip: string; checkedAt: string }> = {}
+    let next = 0
+    await Promise.all(this.probePorts.map(async (port, index) => {
+      while (next < nodes.length && this.state === 'running') {
+        const node = nodes[next++]
+        try {
+          await this.api('PUT', `/proxies/${encodeURIComponent(probeGroup(index))}`, { name: node })
+          const agent = new ProxyAgent(`http://127.0.0.1:${port}`)
+          try {
+            const response = await request(this.exitIpUrl, { dispatcher: agent, headersTimeout: 8000, bodyTimeout: 8000, signal: AbortSignal.timeout(10_000) })
+            const data = await response.body.json() as { ip?: unknown }
+            if (response.statusCode === 200 && typeof data.ip === 'string' && isIP(data.ip)) found[node] = { ip: data.ip, checkedAt: new Date().toISOString() }
+          } finally {
+            await agent.destroy().catch(() => undefined)
+          }
+        } catch {
+          // A node that does not answer keeps the IP it had.
+        }
+      }
+    }))
+    if (!Object.keys(found).length || this.state !== 'running') return
+    const kept = Object.fromEntries(Object.entries(this.stored.exitIps ?? {}).filter(([name]) => nodes.includes(name)))
+    await this.save({ ...this.stored, exitIps: { ...kept, ...found } })
+    void this.notify()
   }
 
   /** Downloads every subscription again. */
@@ -259,10 +310,12 @@ export class TunnelManager {
       this.autoPort = await freePort()
       this.slotPorts = []
       for (let index = 0; index < NODE_SLOT_COUNT; index++) this.slotPorts.push(await freePort())
+      this.probePorts = []
+      for (let index = 0; index < PROBE_SLOT_COUNT; index++) this.probePorts.push(await freePort())
       const controllerPort = await freePort()
       this.secret = randomBytes(16).toString('hex')
       this.controller = `http://127.0.0.1:${controllerPort}`
-      const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
+      const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, probePorts: this.probePorts, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
       await writeFile(join(this.runtimeDir, 'config.yaml'), JSON.stringify(config, null, 2), { mode: 0o600 })
 
       let output = ''
@@ -302,6 +355,7 @@ export class TunnelManager {
       this.state = 'running'
       this.restarts = 0
       this.logger?.info('加速通道已启动', { nodes: names.length, selected })
+      void this.lookUpExitIps().catch((error) => this.logger?.error('查询节点出口 IP 失败', error))
     } catch (error) {
       this.logger?.error('加速通道启动失败', error)
       await this.stop()
@@ -335,7 +389,8 @@ export class TunnelManager {
     }
     return (proxies[TUNNEL_GROUP]?.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP).map((name) => ({
       name, type: descriptions[name]?.type ?? '', sourceId: owners.get(name),
-      delay: descriptions[name]?.history?.at(-1)?.delay ?? this.delays.get(name)
+      delay: descriptions[name]?.history?.at(-1)?.delay ?? this.delays.get(name),
+      exitIp: this.stored.exitIps?.[name]?.ip
     }))
   }
 

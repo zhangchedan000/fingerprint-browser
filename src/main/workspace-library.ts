@@ -69,7 +69,8 @@ export class WorkspaceLibrary {
   ensureProxy(input: ProxyConfig, now: string, check?: ProxyCheckSummary): string {
     const config = validateProxyConfig(input)
     if (config.protocol === 'direct') return ''
-    const existing = this.findProxy(config, config.passwordStored === true)
+    // An API proxy is the same one by its extraction link, whatever proxy it gave this time.
+    const existing = config.apiUrl ? this.findApiProxy(config.apiUrl) : this.findProxy(config, config.passwordStored === true)
     if (existing) {
       if (check && (!existing.check || existing.check.checkedAt < check.checkedAt)) existing.check = check
       return existing.id
@@ -85,6 +86,7 @@ export class WorkspaceLibrary {
       createdAt: now,
       updatedAt: now,
       ...(check ? { check } : {}),
+      ...(config.apiUrl ? { apiUrl: config.apiUrl } : {}),
       // A proxy typed into a window starts with that window's 网络加速 as its default.
       ...(config.tunnel ? { tunnel: config.tunnel } : {})
     }
