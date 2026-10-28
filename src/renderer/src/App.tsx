@@ -6,7 +6,10 @@ import { LoginGate } from './components/LoginGate'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
 import { useTeamSyncNotices } from './data/team-sync'
+import { useScrollMemory } from './components/scroll-memory'
 import { pageDefinition, type PageKey, type PageParams } from './pages/registry'
+
+const pageBody = () => document.querySelector<HTMLElement>('.fb-content')
 
 /** The app shell: side menu, top bar and the current page, all driven by pages/registry. */
 function Shell() {
@@ -17,6 +20,8 @@ function Shell() {
   const Page = page.page
 
   useTeamSyncNotices()
+  // Every page opens where it was left, until the app is restarted.
+  useScrollMemory(pageBody, `page:${active}:${JSON.stringify(params ?? {})}`)
 
   function navigate(key: PageKey, next?: PageParams): void {
     const target = pageDefinition(key)

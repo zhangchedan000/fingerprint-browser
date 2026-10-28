@@ -68,12 +68,30 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(store.get(a.id).proxy.host).toBe('198.51.100.7')
     expect(store.get(b.id).proxy).toMatchObject({ host: '198.51.100.7', password: 'new' })
 
+    // A check is the window's own: B, on the same proxy, is not checked by it; the proxy page shows it.
     await store.setProxyCheck(a.id, check('198.51.100.7'))
-    expect(store.get(b.id).proxyCheck?.ip).toBe('198.51.100.7')
+    expect(store.get(a.id).proxyCheck?.ip).toBe('198.51.100.7')
+    expect(store.get(b.id).proxyCheck).toBeUndefined()
+    expect(store.getProxy(a.proxyId).check?.ip).toBe('198.51.100.7')
 
     await store.updateGroup(a.groupId, { name: 'G2' })
     expect(store.get(b.id).group).toBe('G2')
     expect(changed).toContain(b.id)
+  })
+
+  it('gives a window its library proxy\'s last check once, only when no other window uses the proxy', async () => {
+    const path = await vault()
+    const store = await open(path)
+    const [alone] = await store.createMany([draft('Alone', { proxy: PROXY })])
+    const shared = { ...PROXY, host: '203.0.113.50' }
+    const [b, c] = await store.createMany([draft('B', { proxy: shared }), draft('C', { proxy: shared })])
+    // As versions before 0.5.20 left them: checks on the library proxies only.
+    await store.setLibraryProxyCheck(alone.proxyId, check('203.0.113.9'))
+    await store.setLibraryProxyCheck(b.proxyId, check('203.0.113.50'))
+    const reopened = await open(path)
+    expect(reopened.get(alone.id).proxyCheck?.ip).toBe('203.0.113.9')
+    expect(reopened.get(b.id).proxyCheck).toBeUndefined()
+    expect(reopened.get(c.id).proxyCheck).toBeUndefined()
   })
 
   it('assigns windows to a proxy or group through one call', async () => {
@@ -173,7 +191,8 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(store.listProxies()).toHaveLength(1)
     expect(a.proxyId).toBe(b.proxyId)
     expect(a.proxy.password).toBe('secret')
-    expect(a.proxyCheck?.ip).toBe('203.0.113.10')
+    expect(a.proxyCheck?.ip).toBe('203.0.113.9')
+    expect(b.proxyCheck?.ip).toBe('203.0.113.10')
     expect(store.listGroups().map((group) => group.name)).toEqual(['美区'])
     expect(c).toMatchObject({ proxyId: '', groupId: '', proxyCheck: { ip: '192.0.2.1' } })
     expect((await readdir(path)).some((name) => name === 'profiles.v11.before-upgrade.json')).toBe(true)
@@ -251,23 +270,23 @@ describe('assigning extensions', () => {
     await expect(store.assignMany([a.id], { extensionId: 'bad' })).rejects.toThrow('扩展')
   })
 
-  it('keeps 网络加速 per window: own choice, proxy default on assignment, none for older windows', async () => {
+  it('keeps 网络加速 per window: own choice, off until turned on, none for older windows', async () => {
     const path = await vault()
     const store = await open(path)
     const us = { enabled: true, mode: 'manual' as const, node: '手动节点 · US-vless' }
     const proxy = await store.createProxy({ ...PROXY, note: '', tunnel: us })
     const [a, b, old] = await store.createMany([draft('A', { proxyId: proxy.id }), draft('B', { proxyId: proxy.id, tunnel: { enabled: false, mode: 'auto' } }), draft('Old')])
-    // A takes the proxy's default; B keeps its own; the window's route is what connections use.
-    expect(store.get(a.id).proxy.tunnel).toEqual(us)
+    // A starts with it off (not the proxy's default); B keeps its own; the window's route is what connections use.
+    expect(store.get(a.id).proxy.tunnel).toEqual({ enabled: false, mode: 'auto' })
     expect(store.get(b.id).proxy.tunnel).toEqual({ enabled: false, mode: 'auto' })
     // Changing one window does not touch the other or the proxy's default.
     await store.update(a.id, { ...draft('A', { proxyId: proxy.id }), tunnel: { enabled: true, mode: 'auto' } })
     expect(store.get(a.id).tunnel).toEqual({ enabled: true, mode: 'auto' })
     expect(store.get(b.id).tunnel).toEqual({ enabled: false, mode: 'auto' })
     expect(store.getProxy(proxy.id).tunnel).toEqual(us)
-    // A window given the proxy later starts from its default; a direct window has none.
+    // A window given the proxy later starts with it off; a direct window has none.
     await store.assignMany([old.id], { proxyId: proxy.id })
-    expect(store.get(old.id).tunnel).toEqual(us)
+    expect(store.get(old.id).tunnel).toEqual({ enabled: false, mode: 'auto' })
     await store.assignMany([old.id], { proxyId: '' })
     expect(store.get(old.id).tunnel).toBeUndefined()
     expect(store.get(old.id).proxy.tunnel).toBeUndefined()

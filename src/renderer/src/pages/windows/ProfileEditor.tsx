@@ -3,6 +3,7 @@ import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../
 import { FontPackDownload } from '../../components/FontPackDownload'
 import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
+import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import {
   Alert,
   AutoComplete,
@@ -77,6 +78,10 @@ import { kernelName } from '../../../../shared/kernel-id'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
 type EditorTab = 'basic' | 'proxy' | 'fingerprint'
+
+/** The tab each window's editor was left on (this run of the app); a new window starts on 基础设置. */
+const lastTabs = new Map<string, EditorTab>()
+const editorBody = () => document.querySelector<HTMLElement>('.fb-editor .ant-drawer-body')
 /** 'library' picks a proxy from the proxy library; the others type one in (it is saved into the library). */
 type ProxyMode = 'direct' | 'http' | 'https' | 'socks5' | 'api' | 'library'
 
@@ -383,6 +388,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
   const [form] = Form.useForm<EditorValues>()
   const [tab, setTab] = useState<EditorTab>('basic')
+  // Each tab of each window keeps how far down it was scrolled.
+  useScrollMemory(editorBody, open ? `editor:${profile?.id ?? 'new'}:${tab}` : undefined)
   const [testingProxy, setTestingProxy] = useState(false)
   // Each 检测代理 gets a number; a result that comes back after the editor was reopened (or another
   // check started) is dropped instead of showing up, or keeping the button spinning.
@@ -416,7 +423,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const tunnelStatus = useTunnelStatus()
   const watchedRoute = Form.useWatch('tunnel', { form, preserve: true }) as TunnelRoute | undefined
   /** The window's 网络加速: its own, else its proxy's default (older proxies: what the old rule did). */
-  const shownRoute = watchedRoute ?? (proxyMode === 'library'
+  // A new window starts with it off, whatever proxy is picked; windows from before 0.5.9 keep the old rule.
+  const shownRoute = watchedRoute ?? (profile && proxyMode === 'library'
     ? defaultTunnelRoute(tunnelStatus, libraryProxy?.tunnel, libraryProxy ? libraryProxy.check?.countryCode ?? '' : undefined)
     : defaultTunnelRoute(tunnelStatus))
   // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
@@ -446,7 +454,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     form.resetFields()
     const values = openedValues(profile, suggestedIndex)
     form.setFieldsValue(values)
-    setTab('basic')
+    // Back where this window's editor was left: its tab, and (useScrollMemory) how far down.
+    setTab(profile ? lastTabs.get(profile.id) ?? 'basic' : 'basic')
+    if (!profile) forgetScroll('editor:new:')
     proxyCheckRun.current += 1
     setTestingProxy(false)
     setProxyResult(profile?.proxyCheck ?? null)
@@ -522,11 +532,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }, [fp.platform, kernelGpus])
   /** The country was filled in from a checked proxy IP (基于 IP 生成) rather than picked (手动选择). */
   const fromIp = fp.regionSource === 'ip'
-  const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
+  const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : undefined)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
-  // The exit country the proxy was last seen in, against the country picked by hand.
-  const lastCheck = proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck
+  // The exit country this window's last check saw (shown as its result), against the country picked by hand.
+  const lastCheck = proxyResult?.ok ? proxyResult : undefined
   const exitCountry = lastCheck?.countryCode
   // A rotating proxy or databases that disagree say nothing reliable about the country (its own warning shows).
   const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
@@ -841,18 +851,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /**
    * A proxy typed, pasted or picked: nothing is checked until 检测代理 is clicked (the proxy, its
    * 网络加速 or a whitelist may still be being set up). The last result stays, marked as older.
+   * A library proxy brings no result: one checked in another window or on the proxy page is not this window's.
    */
   function onFormChange(changed: Partial<EditorValues>): void {
     if (!('proxy' in changed) && !('proxyId' in changed)) return
-    const picked = 'proxyId' in changed ? proxies.find((item) => item.id === changed.proxyId) : undefined
-    if (picked?.check) {
-      // A library proxy comes with its own last check; a new window takes its country right away.
+    if ('proxyId' in changed) {
       proxyCheckRun.current += 1
       setTestingProxy(false)
-      setProxyResult(picked.check)
-      setProxyCheckedAt(picked.check.checkedAt)
+      // The window's own result when it is back on its saved proxy; none for another one.
+      const own = profile && changed.proxyId === profile.proxyId ? profile.proxyCheck ?? null : null
+      setProxyResult(own)
+      setProxyCheckedAt(own?.checkedAt)
       setProxyEdited(false)
-      if (!profile && picked.check.ok) fixToIp(picked.check)
       return
     }
     setProxyEdited(true)
@@ -907,8 +917,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       if (proxyMode === 'library') {
         await form.validateFields(['proxyId'])
         setTestingProxy(true)
-        // Saved on the library proxy, so every window using it sees the result; reached the way this window will.
-        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run, fill)
+        const picked = proxies.find((item) => item.id === form.getFieldValue('proxyId'))
+        // The result is this window's (saved with it); reached the way this window will, through its 网络加速.
+        followCheckedIp(picked && !picked.apiUrl
+          ? await window.browserApi.proxy.test({ ...picked, tunnel: route }, profile?.id, picked.id)
+          : (await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run, fill)
         return
       }
       if (proxyMode === 'api') {
@@ -1224,10 +1237,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 className="fb-wide-select"
                 placeholder={t("搜索地址或备注")}
                 optionFilterProp="search"
-                onChange={() => {
-                  // Another proxy: start from its 网络加速 default.
-                  form.setFieldValue('tunnel', undefined)
-                }}
                 options={proxies.map((item) => ({
                   value: item.id,
                   search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
@@ -2001,7 +2010,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Tabs
           activeKey={tab}
-          onChange={(key) => setTab(key as EditorTab)}
+          onChange={(key) => {
+            if (profile) lastTabs.set(profile.id, key as EditorTab)
+            setTab(key as EditorTab)
+          }}
           items={[
             { key: 'basic', label: t("基础设置"), children: basic, forceRender: true },
             { key: 'proxy', label: t("代理设置"), children: proxy, forceRender: true },

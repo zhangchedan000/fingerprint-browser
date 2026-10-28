@@ -715,10 +715,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     if (!draftLink) {
       draftChecks.set(proxyKey(proxy), { password: proxy.password, check, at: Date.now() })
-      // The window's own proxy as saved: the result is the window's at once.
+      const same = (saved: ProxyConfig) => sameProxyIdentity(saved, proxy) && saved.password === proxy.password
+      // The window's own proxy as saved (typed, or picked from the library): the result is the window's at once.
       const window = profileId ? profiles.get(profileId) : undefined
-      if (window && !window.apiProxy && !proxyId && sameProxyIdentity(window.proxy, proxy) && window.proxy.password === proxy.password) {
+      const own = window && !window.apiProxy && (proxyId ? window.proxyId === proxyId : !window.proxyId) && same(window.proxy)
+      if (own) {
         await profiles.setProxyCheck(window.id, check).catch(() => undefined)
+      } else if (proxyId && same(profiles.getProxy(proxyId))) {
+        // A library proxy checked in a new window: its status on the proxy page; the window gets it once saved.
+        await profiles.setLibraryProxyCheck(proxyId, check).catch(() => undefined)
       }
     }
     const shown = draftLink ? { ...result, apiAddress: `${config.host}:${config.port}`, ...(place ? { apiAddressPlace: place } : {}) } : result

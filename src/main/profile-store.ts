@@ -91,6 +91,8 @@ function safeTunnelRoute(value: unknown): TunnelRoute | undefined {
   }
 }
 
+/** 网络加速 of a window that was never given one. */
+const TUNNEL_OFF: TunnelRoute = { enabled: false, mode: 'auto' }
 const API_HISTORY_LIMIT = 50
 
 const text = (value: unknown, max = 200): string | undefined => typeof value === 'string' && value ? value.slice(0, max) : undefined
@@ -250,8 +252,24 @@ export class ProfileStore {
       await this.ensureProfileDirectories(profile.id)
     }
     this.moveApiProxiesIntoWindows()
+    this.adoptLibraryChecks()
     this.fixSavedFingerprints()
     await this.persist()
+  }
+
+  /**
+   * Checks belong to the window since 0.5.20; before, a library proxy's last check showed in every
+   * window using it. A window that is the proxy's only user takes that check as its own once (it
+   * came from this window or the proxy page); a shared proxy's windows start unchecked.
+   */
+  private adoptLibraryChecks(): void {
+    const users = new Map<string, number>()
+    for (const stored of this.profiles.values()) if (stored.proxyId) users.set(stored.proxyId, (users.get(stored.proxyId) ?? 0) + 1)
+    for (const [id, stored] of this.profiles) {
+      if (!stored.proxyId || stored.directCheck || users.get(stored.proxyId) !== 1) continue
+      const check = this.library.proxies.get(stored.proxyId)?.check
+      if (check) this.profiles.set(id, { ...stored, directCheck: { ...check } })
+    }
   }
 
   /**
@@ -382,9 +400,8 @@ export class ProfileStore {
       ids.add(stored.id)
       const legacyCheck = legacy ? safeProxyCheck(stored.proxyCheck) : undefined
       const resolvedProxyId = legacy ? library.ensureProxy(draft.proxy, now, legacyCheck) : proxyId
-      const directCheck = legacy
-        ? (resolvedProxyId ? undefined : legacyCheck)
-        : (proxyId ? undefined : safeProxyCheck(stored.directCheck))
+      // Each window keeps its own last check, also when its proxy now comes from the library.
+      const directCheck = legacy ? legacyCheck : safeProxyCheck(stored.directCheck)
       const { proxy: _proxy, group, ...fields } = draft
       result.push({
         ...fields,
@@ -492,7 +509,8 @@ export class ProfileStore {
       ...fields,
       group: this.library.groupName(stored.groupId),
       proxy: config ? withWindowRoute(config, stored.tunnel) : { ...DIRECT },
-      proxyCheck: stored.proxyId ? record?.check : directCheck
+      // The window's own last check; a library proxy's check (from the proxy page or another window) is not it.
+      proxyCheck: directCheck
     }
     if (stored.proxyId && !record) profile.proxyMissing = true
     if (!profile.proxyCheck) delete profile.proxyCheck
@@ -627,12 +645,15 @@ export class ProfileStore {
    * A window's 网络加速: the one it was given, else (same proxy as before) the one it had, else the
    * default of the library proxy it now uses. A direct window has none.
    */
+  /**
+   * A window's 网络加速: what it was given, else what it had. A new window, or one given its first
+   * proxy, has it off until it is turned on (never a library proxy's default).
+   */
   private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile, api = false): TunnelRoute | undefined {
-    if (api) return draft.tunnel ?? current?.tunnel
-    if (!proxyId) return undefined
+    if (!api && !proxyId) return undefined
     if (draft.tunnel) return draft.tunnel
-    if (current && current.proxyId === proxyId) return current.tunnel
-    return this.library.proxies.get(proxyId)?.tunnel
+    if (current && (api ? current.apiProxy : current.proxyId === proxyId)) return current.tunnel
+    return current?.tunnel ?? { ...TUNNEL_OFF }
   }
 
   /** Runs a change that may add library records; on failure the libraries are put back. */
@@ -755,7 +776,8 @@ export class ProfileStore {
         updatedAt: now,
         status: current.status
       }
-      if (proxyId || current.proxyId) delete profile.directCheck
+      // A check describes the proxy it ran on: another proxy starts unchecked.
+      if (proxyId !== current.proxyId) delete profile.directCheck
       if (route) profile.tunnel = route
       else delete profile.tunnel
       // The same link keeps its last proxy and IP history; a new link starts afresh.
@@ -844,8 +866,8 @@ export class ProfileStore {
         profile.proxyId = proxyId
         delete profile.directCheck
         delete profile.apiProxy
-        // A window given another proxy starts with that proxy's 网络加速 default.
-        const route = this.windowTunnel({}, proxyId)
+        // A window given another proxy keeps its 网络加速 (off when it never had one).
+        const route = this.windowTunnel({}, proxyId, current.apiProxy ? undefined : current)
         if (route) profile.tunnel = route
         else delete profile.tunnel
       }
@@ -1262,8 +1284,12 @@ export class ProfileStore {
   async setProxyCheck(id: string, check: ProxyCheckSummary, baselineIp?: string): Promise<BrowserProfile> {
     const current = this.stored(id)
     if (current.proxyId) {
+      // The window's own result; the library proxy's status (proxy page) follows its latest check too.
       await this.setLibraryProxyCheck(current.proxyId, check, baselineIp, id)
-      return this.get(id)
+      const profile: StoredProfile = { ...this.stored(id), directCheck: nextProxyCheck(check, current.directCheck, baselineIp) }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
     }
     if (current.apiProxy) {
       // A new proxy from the link is expected: no "exit changed" against the last one; its IP goes into the history.
