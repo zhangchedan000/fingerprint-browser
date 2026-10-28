@@ -16,3 +16,19 @@ export function checkedSettingsKey(fp: FingerprintConfig, kernelVersion: string 
     disabledSpoofing: [...disabledSpoofing].sort(), kernelVersion: kernelVersion ?? '', proxyKey
   })
 }
+
+/**
+ * Whether a check's Canvas, AudioContext and ClientRects values still hold: they come from the
+ * seed, the GPU, the kernel and whether each is spoofed, not from the country, languages or proxy.
+ */
+export function noiseStillMatches(checkedSettings: string, fp: Pick<FingerprintConfig, 'seed' | 'gpu' | 'disabledSpoofing'>, kernelVersion: string | null | undefined): boolean {
+  try {
+    const saved = JSON.parse(checkedSettings) as { seed?: number; gpu?: string; disabledSpoofing?: string[]; kernelVersion?: string }
+    return saved.seed === fp.seed
+      && (saved.gpu ?? '') === (fp.gpu ?? '')
+      && (saved.kernelVersion ?? '') === (kernelVersion ?? '')
+      && JSON.stringify([...(saved.disabledSpoofing ?? [])].sort()) === JSON.stringify([...fp.disabledSpoofing].sort())
+  } catch {
+    return false
+  }
+}

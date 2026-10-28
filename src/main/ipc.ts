@@ -55,6 +55,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
     const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id))
+    checkNewWindow(profile.id, draft)
     team.scheduleSync()
     return profile
   })
@@ -213,7 +214,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       // An API proxy is checked with a fresh one, as a launch would get.
       proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password }
     } else if (draft.proxy?.apiUrl) {
-      proxy = { ...await resolveApiProxy(validProxyApiUrl(draft.proxy.apiUrl), route) }
+      const link = validProxyApiUrl(draft.proxy.apiUrl)
+      // A saved API window is checked on the proxy it keeps; a new link takes one.
+      if (existing?.apiProxy?.url === link && existing.apiProxy.endpoint) {
+        const { apiUrl: _link, tunnel: _route, ...kept } = existing.proxy
+        proxy = kept
+      } else {
+        proxy = { ...await resolveApiProxy(link, route) }
+      }
     } else {
       const { tunnel: _default, ...typed } = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
       proxy = typed
@@ -273,7 +281,20 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     profiles.get(id)
     return readFile(deepCheckFile(id), 'utf8').then((text) => JSON.parse(text) as DeepCheckRecord).catch(() => null)
   })
-  ipcMain.handle('profiles:check-fingerprint', async (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> => {
+  ipcMain.handle('profiles:check-fingerprint', (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string) => runFingerprintCheck(draft, profileId, settingsKey))
+  /**
+   * A new window is checked once in the background, so its editor shows the values sites read
+   * (Canvas, AudioContext, ClientRects) without a click. Nothing is shown when it cannot run.
+   */
+  function checkNewWindow(id: string, draft: ProfileDraft): void {
+    const saved = profiles.get(id)
+    // An API window without a proxy yet would use one up from its link: its first launch takes it.
+    if (saved.apiProxy && !saved.apiProxy.endpoint) return
+    void runFingerprintCheck({ ...draft, proxyId: saved.proxyId || undefined }, id).catch((error) => {
+      logger.info('新窗口的指纹检测没有完成', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    })
+  }
+  async function runFingerprintCheck(draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> {
     const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
     const observed = await observeFingerprint(runOptions)
     const windows = profiles.list()
@@ -303,7 +324,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (profileId) await fingerprintChecks.set(profileId, report)
     logger.info('指纹检测完成', { profileId, problems: report.items.filter((item) => item.status === 'bad').length })
     return report
-  })
+  }
   ipcMain.handle('profiles:open-data-folder', async (_event, id: string) => {
     profiles.get(id)
     await profiles.assertProfileDataIdentity(id)

@@ -43,7 +43,7 @@ import { matchedHardware, matchedScreen } from '../../../../shared/hardware-matc
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, mediaLocaleFor } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
-import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
+import { checkedSettingsKey, checkProxyKey, noiseStillMatches } from '../../../../shared/fingerprint-check-key'
 import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, followingLocales, fixedIdentityForCheck, localeForCountry, savedFingerprint } from '../../../../shared/network-identity'
 import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
@@ -297,6 +297,9 @@ function TextWithShuffle({ value, onChange, onShuffle, label }: { value: string;
 }
 
 /** A line that only explains what happens; there is nothing to choose. */
+/** Rows whose check results only depend on the seed, GPU, kernel and their own switch. */
+const NOISE_ROWS = new Set<FingerprintCheckRow>(['canvas', 'audio', 'clientrects'])
+
 function Fixed({ children }: { children: ReactNode }) {
   return <span className="fb-fp-fixed">{children}</span>
 }
@@ -473,13 +476,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     checkProxyKey(proxyMode === 'library' ? proxyId : undefined, typedProxy ?? { protocol: 'direct', host: '' })
   )
   const checkStale = Boolean(checkReport && checkReport.checkedSettings !== currentSettingsKey)
+  // Canvas, AudioContext and ClientRects only change with the seed, GPU, kernel or their own switch.
+  const noiseCurrent = Boolean(checkReport && noiseStillMatches(checkReport.checkedSettings, fp, kernelVersion || engine?.version))
   useEffect(() => {
     if (!recheck || checking) return
     setRecheck(false)
     void runCheck()
   }, [recheck, checking, currentSettingsKey])
   const checkFor = (...rows: FingerprintCheckRow[]) => checkReport
-    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={checkStale} onFix={applyFix} />
+    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} onFix={applyFix} />
     : undefined
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
   const gpu = effectiveGpu(fp, windowKernelVersion)
@@ -590,7 +595,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   /** The value a site sees, as the last check measured it; never a made-up stand-in. */
   function measured(surface: NoiseSurface): string | undefined {
-    return checkReport && !checkStale ? checkReport.observed[surface][0] : undefined
+    return checkReport && noiseCurrent ? checkReport.observed[surface][0] : undefined
   }
 
   function shownNoise(surface: NoiseSurface): string {
