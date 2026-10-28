@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { createServer, isIP } from 'node:net'
+import { connect, createServer, isIP } from 'node:net'
 import { join } from 'node:path'
 import type { TunnelNodeInfo, TunnelRoute, TunnelStatus } from '../shared/types'
 import type { LocalProxy } from './proxy-bridge'
@@ -43,6 +43,17 @@ async function freePort(): Promise<number> {
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** True once something accepts connections on this local port. */
+function accepting(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect(port, '127.0.0.1')
+    const done = (ok: boolean) => { socket.destroy(); resolve(ok) }
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+    socket.setTimeout(500, () => done(false))
+  })
+}
 
 /** Runs the tunnel core (mihomo) with the user's nodes and answers which local port carries traffic. */
 export class TunnelManager {
@@ -343,6 +354,14 @@ export class TunnelManager {
       }
       const names = (await this.groupNames())
       if (!names.length) throw new Error('没有可用节点：请检查节点链接或订阅是否正确')
+      // The controller answers before the inbound ports listen; a window must not find them closed.
+      for (const port of [this.mixedPort, this.autoPort, ...this.slotPorts]) {
+        for (let attempt = 0; !await accepting(port); attempt++) {
+          if (child.exitCode !== null) throw new Error(`加速通道启动失败：${lastLine(output) || `code=${child.exitCode}`}`)
+          if (attempt > 50) throw new Error('加速通道的本地端口没有打开')
+          await delay(100)
+        }
+      }
       if (this.stored.selected && !names.includes(this.stored.selected)) throw new Error('固定节点已不存在，请切换自动选择或编辑节点来源')
       const selected = this.stored.selected ?? AUTO_TUNNEL_GROUP
       await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name: selected })
