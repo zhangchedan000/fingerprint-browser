@@ -119,16 +119,16 @@ button, input, textarea { font: inherit; }
 .engine-alert .ant-alert-description { color: var(--fb-text-muted); font-size: 12.5px; }
 .fb-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
 .fb-toolbar-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; }
-.group-filter { width: 170px; }
-.search-input { width: 260px; }
+.group-filter { width: 150px; }
+.search-input { width: 220px; }
 .fb-tabs .ant-tabs-nav { margin-bottom: 12px; }
 .fb-attention { color: var(--fb-danger); }
-.fb-batch-bar {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-bottom: 12px; padding: 4px 14px;
-  border: 1px solid var(--fb-accent-soft-border); border-radius: 6px; background: var(--fb-accent-soft); font-size: 13px;
-}
-.fb-batch-bar > span { margin-right: 6px; }
-.fb-batch-clear { margin-left: auto; color: var(--fb-text-muted) !important; }
+.fb-batch-group { display: flex; align-items: center; gap: 8px; padding-left: 12px; border-left: 1px solid var(--fb-line); }
+.fb-batch-count { display: inline-block; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; color: var(--fb-on-accent); background: var(--fb-accent); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+.fb-button-caret { margin-left: 6px; font-size: 10px; }
+/* Room for the count from the start, so ticking rows never moves the toolbar. */
+.fb-batch-group .fb-batch-menu { min-width: 132px; }
+.fb-batch-group .ant-btn:disabled { border-color: var(--fb-line); background: transparent; }
 .fb-table-panel { overflow: hidden; border: 1px solid var(--fb-line); border-radius: 12px; background: var(--fb-surface); box-shadow: 0 1px 3px var(--fb-shadow); }
 .fb-table-panel .ant-table-thead > tr > th { color: var(--fb-text-muted); background: var(--fb-surface-muted); font-size: 12.5px; font-weight: 500; }
 .fb-table-panel .ant-table-tbody > tr > td { padding-top: 11px; padding-bottom: 11px; }
@@ -269,12 +269,13 @@ button, input, textarea { font: inherit; }
 
 /* Summary cards (design: Proxy.dc.html) */
 .fb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 14px; }
-.fb-stat { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--fb-line); border-radius: 12px; background: var(--fb-surface); box-shadow: 0 1px 3px var(--fb-shadow); }
+.fb-stat { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--fb-line); border-radius: 12px; background: var(--fb-surface); box-shadow: 0 1px 3px var(--fb-shadow); }
 .fb-stat span { color: var(--fb-text-muted); font-size: 13px; }
 .fb-stat strong { color: var(--fb-text); font-size: 24px; font-weight: 600; line-height: 1.1; }
 .fb-stat strong.is-success { color: var(--fb-success); }
 .fb-stat strong.is-danger { color: var(--fb-danger); }
 .fb-stat strong.is-warning { color: var(--fb-warning); }
+.fb-stat-action { position: absolute; top: 10px; right: 8px; }
 .fb-two-line { display: flex; flex-direction: column; min-width: 0; }
 .fb-two-line small { overflow: hidden; color: var(--fb-text-faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .fb-good { color: var(--fb-success); }
@@ -285,7 +286,7 @@ button, input, textarea { font: inherit; }
 .fb-badge.is-ok { color: var(--fb-success); background: var(--fb-success-soft); }
 .fb-badge.is-bad { color: var(--fb-danger); background: var(--fb-danger-soft); }
 .fb-badge.is-unknown { color: var(--fb-warning); background: var(--fb-warning-soft); }
-.fb-filter-select { width: 130px; }
+.fb-filter-select { width: 120px; }
 
 /* Window picker and assign dialog */
 .fb-assign-modes { margin-bottom: 14px; }
@@ -478,6 +479,8 @@ button, input, textarea { font: inherit; }
 
 /* Column widths, order and visibility the user sets (table-columns.tsx). */
 .fb-col-resize { position: absolute; top: 0; right: -5px; z-index: 3; width: 10px; height: 100%; cursor: col-resize; }
+/* The last column's handle stays inside the table, or the table always scrolls by 5px. */
+th:last-child > .fb-col-resize { right: 0; }
 .fb-col-resize::after { content: ''; position: absolute; top: 25%; left: 4px; width: 2px; height: 50%; border-radius: 1px; background: transparent; transition: background .15s; }
 th:hover > .fb-col-resize::after { background: var(--fb-line-strong); }
 .fb-col-resize:hover::after, .fb-col-resizing .fb-col-resize:hover::after { background: var(--fb-accent); }

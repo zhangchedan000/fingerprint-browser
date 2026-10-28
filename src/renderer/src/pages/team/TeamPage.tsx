@@ -1,9 +1,9 @@
-import { CloudDownloadOutlined, DatabaseOutlined, KeyOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, UserAddOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Form, Input, Modal, Radio, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
+import { CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined, DownloadOutlined, KeyOutlined, LogoutOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, UnlockOutlined, UserAddOutlined, UserSwitchOutlined } from '@ant-design/icons'
+import { Button, Descriptions, Dropdown, Form, Input, Modal, Radio, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
-import { dateTime, formatBytes } from '../../components/format'
+import { formatBytes, shortDateTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { StatusPill } from '../../components/StatusPill'
 import { useWindowLauncher } from '../../data/window-actions'
@@ -624,7 +624,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       dataIndex: 'createdAt',
       width: 130,
       sorter: (first, second) => first.createdAt.localeCompare(second.createdAt),
-      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{dateTime(createdAt, getLocale())}</span>
+      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{shortDateTime(createdAt, getLocale())}</span>
     },
     { title: t("创建人"), key: 'owner', width: 110, render: (_value, row) => <span className="fb-muted">{ownerLabel(row)}</span> },
     ...(owner ? [{
@@ -662,7 +662,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("操作"),
       key: 'actions',
-      width: owner ? 210 : 130,
+      width: owner ? 170 : 130,
       align: 'right',
       render: (_value, row) => {
         const running = localStatus(row) === 'running' || localStatus(row) === 'starting'
@@ -677,8 +677,21 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
                 )
               : <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} onClick={() => void addHere(row)}>{t("添加到本机")}</Button>}
             {owner && <Button size="small" type="link" autoInsertSpace={false} onClick={() => setAssigning(row)}>{t("分配")}</Button>}
-            {owner && row.lock && <Button size="small" type="link" autoInsertSpace={false} onClick={() => void forceUnlock(row)}>{t("强制释放")}</Button>}
-            {owner && <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => removeFromCloud(row)}>{t("删除云端")}</Button>}
+            {owner && (
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    { key: 'unlock', icon: <UnlockOutlined />, label: t("强制释放"), disabled: !row.lock },
+                    { type: 'divider' },
+                    { key: 'remove', icon: <DeleteOutlined />, danger: true, label: t("删除云端") }
+                  ],
+                  onClick: ({ key }) => key === 'unlock' ? void forceUnlock(row) : removeFromCloud(row)
+                }}
+              >
+                <Button size="small" type="text" icon={<MoreOutlined />} aria-label={t("更多操作")} />
+              </Dropdown>
+            )}
           </Space>
         )
       }
@@ -698,22 +711,29 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
           ids: selectedIds,
           onChange: setSelectedIds,
           label: (count) => t("已选 {0} 个云端窗口", count),
-          actions: (
-            <>
-              {owner && <Button size="small" type="link" disabled={Boolean(busy)} loading={busy === 'assign'} onClick={() => setBatchAssigning(true)}>{t("批量分配")}</Button>}
-              <Button size="small" type="link" disabled={Boolean(busy) || !notHere.length} loading={busy === 'add'}
-                onClick={() => void runMany('add', notHere, (profile) => window.browserApi.team.addToComputer(profile.id), t("已添加到本机"))}>
-                {notHere.length && notHere.length < selected.length ? t("添加到本机（{0} 个）", notHere.length) : t("添加到本机")}
-              </Button>
-              {owner && (
-                <Button size="small" type="link" disabled={Boolean(busy) || !locked.length} loading={busy === 'unlock'}
-                  onClick={() => void runMany('unlock', locked, (profile) => window.browserApi.team.forceUnlock(profile.id), t("已释放"))}>
-                  {locked.length && locked.length < selected.length ? t("强制释放（{0} 个）", locked.length) : t("强制释放")}
-                </Button>
-              )}
-              {owner && <Button size="small" type="link" danger disabled={Boolean(busy)} loading={busy === 'remove'} onClick={removeManyFromCloud}>{t("删除云端")}</Button>}
-            </>
-          )
+          hint: t("先勾选窗口"),
+          buttons: [
+            ...(owner ? [{ key: 'assign', label: t("批量分配"), icon: <UserSwitchOutlined />, disabled: Boolean(busy), loading: busy === 'assign', onClick: () => setBatchAssigning(true) }] : []),
+            {
+              key: 'add',
+              label: notHere.length && notHere.length < selected.length ? t("添加到本机（{0} 个）", notHere.length) : t("添加到本机"),
+              icon: <DownloadOutlined />,
+              disabled: Boolean(busy) || !notHere.length,
+              loading: busy === 'add',
+              onClick: () => void runMany('add', notHere, (profile) => window.browserApi.team.addToComputer(profile.id), t("已添加到本机"))
+            }
+          ],
+          menu: owner ? [
+            {
+              key: 'unlock',
+              label: locked.length && locked.length < selected.length ? t("强制释放（{0} 个）", locked.length) : t("强制释放"),
+              icon: <UnlockOutlined />,
+              disabled: Boolean(busy) || !locked.length,
+              loading: busy === 'unlock',
+              onClick: () => void runMany('unlock', locked, (profile) => window.browserApi.team.forceUnlock(profile.id), t("已释放"))
+            },
+            { key: 'remove', label: t("删除云端"), icon: <DeleteOutlined />, danger: true, disabled: Boolean(busy), loading: busy === 'remove', onClick: removeManyFromCloud }
+          ] : undefined
         }}
         columns={columns}
         rows={profiles}

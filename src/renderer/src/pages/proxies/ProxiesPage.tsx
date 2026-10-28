@@ -1,5 +1,5 @@
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Input, Modal, Select, Space, Tooltip, type TableColumnsType } from 'antd'
+import { ApiOutlined, AppstoreAddOutlined, DeleteOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tooltip, type TableColumnsType } from 'antd'
 import { useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { ProxyDraft, ProxyRecordView } from '../../../../shared/types'
@@ -183,7 +183,7 @@ export function ProxiesPage() {
     {
       title: t("代理地址"),
       key: 'address',
-      width: 210,
+      width: 190,
       sorter: (a, b) => proxyAddress(a).localeCompare(proxyAddress(b), undefined, { numeric: true }),
       render: (_value, proxy) => (
         <div className="fb-two-line">
@@ -195,7 +195,7 @@ export function ProxiesPage() {
     {
       title: t("类型"),
       dataIndex: 'protocol',
-      width: 160,
+      width: 110,
       render: (protocol: string, proxy) => (
         <div className="fb-two-line">
           <span>{proxy.apiUrl ? `API · ${protocol.toUpperCase()}` : protocol.toUpperCase()}</span>
@@ -212,21 +212,25 @@ export function ProxiesPage() {
     {
       title: t("出口 IP / 地区"),
       key: 'exit',
-      width: 190,
+      width: 180,
       render: (_value, proxy) => (
-        <div className="fb-proxy-cell">
-          <div>
-            <span className={`fb-cc${proxy.check?.ok && proxy.check.countryCode ? '' : ' muted'}`}>{proxy.check?.ok && proxy.check.countryCode ? proxy.check.countryCode : '—'}</span>
-            <span className="fb-mono">{proxy.check?.ok && proxy.check.ip ? proxy.check.ip : '—'}</span>
-          </div>
-          <small className="fb-ellipsis">{proxy.check?.ok ? [proxy.check.country, proxy.check.city].filter(Boolean).join(' · ') || '—' : '—'}</small>
-        </div>
+        proxy.check?.ok && proxy.check.ip
+          ? (
+              <div className="fb-proxy-cell">
+                <div>
+                  {proxy.check.countryCode && <span className="fb-cc">{proxy.check.countryCode}</span>}
+                  <span className="fb-mono">{proxy.check.ip}</span>
+                </div>
+                <small className="fb-ellipsis">{[proxy.check.country, proxy.check.city].filter(Boolean).join(' · ') || '—'}</small>
+              </div>
+            )
+          : <span className="fb-muted">—</span>
       )
     },
     {
       title: t("延迟"),
       key: 'latency',
-      width: 90,
+      width: 80,
       sorter: (a, b) => (a.check?.ok ? a.check.latencyMs : Infinity) - (b.check?.ok ? b.check.latencyMs : Infinity),
       render: (_value, proxy) => {
         if (!proxy.check?.ok) return <span className="fb-muted">—</span>
@@ -247,7 +251,7 @@ export function ProxiesPage() {
     {
       title: t("绑定窗口"),
       key: 'windows',
-      width: 160,
+      width: 140,
       sorter: (a, b) => a.profileIds.length - b.profileIds.length,
       render: (_value, proxy) => proxy.profileIds.length
         ? (
@@ -265,21 +269,32 @@ export function ProxiesPage() {
     {
       title: t("最后检测"),
       key: 'checked',
-      width: 110,
+      width: 100,
       render: (_value, proxy) => <span className="fb-muted">{relativeTime(proxy.check?.checkedAt, locale, t("从未"))}</span>
     },
     {
       title: t("操作"),
       key: 'actions',
-      width: 230,
+      width: 150,
       fixed: 'right',
       align: 'right',
       render: (_value, proxy) => (
         <Space size={2}>
-          <Button size="small" onClick={() => setAssign({ proxies: [proxy], mode: 'single' })}>{t("分配窗口")}</Button>
           <Button size="small" type="link" autoInsertSpace={false} loading={checking.has(proxy.id)} onClick={() => void check([proxy.id])}>{t("检测")}</Button>
           <Button size="small" type="link" autoInsertSpace={false} onClick={() => { setEditing(proxy); setFormOpen(true) }}>{t("编辑")}</Button>
-          <Button size="small" type="link" danger autoInsertSpace={false} onClick={() => confirmRemove(proxy)}>{t("删除")}</Button>
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'assign', icon: <AppstoreAddOutlined />, label: t("分配到窗口") },
+                { type: 'divider' },
+                { key: 'remove', icon: <DeleteOutlined />, danger: true, label: t("删除") }
+              ],
+              onClick: ({ key }) => key === 'assign' ? setAssign({ proxies: [proxy], mode: 'single' }) : confirmRemove(proxy)
+            }}
+          >
+            <Button size="small" type="text" icon={<MoreOutlined />} aria-label={t("更多操作")} />
+          </Dropdown>
         </Space>
       )
     }
@@ -293,19 +308,27 @@ export function ProxiesPage() {
           <StatCards stats={[
             { label: t("代理总数"), value: stats.total },
             { label: t("可用"), value: stats.ok, tone: 'success' },
-            { label: t("失效"), value: stats.bad, tone: 'danger' },
-            { label: t("未检测"), value: stats.unknown, tone: 'warning' }
+            {
+              label: t("失效"),
+              value: stats.bad,
+              tone: 'danger',
+              action: stats.bad > 0 && <Button size="small" type="link" danger onClick={removeFailed}>{t("删除失效代理")}</Button>
+            },
+            {
+              label: t("未检测"),
+              value: stats.unknown,
+              tone: 'warning',
+              action: stats.unknown > 0 && (
+                <Button size="small" type="link" loading={checking.size > 0} onClick={() => void check(proxies.filter((proxy) => proxyState(proxy) === 'unknown').map((proxy) => proxy.id))}>{t("检测这些")}</Button>
+              )
+            }
           ]} />
         )}
         toolbar={(
           <>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(undefined); setFormOpen(true) }}>{t("添加代理")}</Button>
             <Button onClick={() => setImportOpen(true)}>{t("批量导入")}</Button>
-            <Tooltip title={selected.length ? undefined : t("先勾选要分配的代理")}>
-              <Button disabled={!selected.length} onClick={() => setAssign({ proxies: selected, mode: 'batch' })}>{t("批量分配到窗口")}</Button>
-            </Tooltip>
-            <Button disabled={!proxies.length} loading={checking.size > 0} onClick={() => void check(proxies.map((proxy) => proxy.id))}>{t("全部检测")}</Button>
-            <Button danger disabled={!stats.bad} onClick={removeFailed}>{t("删除失效代理")}</Button>
+            <Button icon={<ApiOutlined />} disabled={!proxies.length} loading={checking.size > 0} onClick={() => void check(proxies.map((proxy) => proxy.id))}>{t("全部检测")}</Button>
           </>
         )}
         filters={(
@@ -331,17 +354,16 @@ export function ProxiesPage() {
           ids: selectedIds,
           onChange: setSelectedIds,
           label: (count) => t("已选 {0} 个代理", count),
-          actions: (
-            <>
-              <Button size="small" type="link" onClick={() => setAssign({ proxies: selected, mode: selected.length === 1 ? 'single' : 'batch' })}>{t("分配到窗口")}</Button>
-              <Button size="small" type="link" loading={checking.size > 0} onClick={() => void check(selectedIds)}>{t("检测")}</Button>
-            </>
-          )
+          hint: t("先勾选代理"),
+          buttons: [
+            { key: 'assign', label: t("分配到窗口"), icon: <AppstoreAddOutlined />, onClick: () => setAssign({ proxies: selected, mode: selected.length === 1 ? 'single' : 'batch' }) },
+            { key: 'check', label: t("检测所选"), icon: <ApiOutlined />, loading: checking.size > 0, onClick: () => void check(selectedIds) }
+          ]
         }}
         columns={columns}
         rows={visible}
         loading={ws.loading}
-        scrollX={1180}
+        scrollX="content"
         emptyText={proxies.length ? t("没有符合条件的代理") : t("代理库还是空的")}
         emptyAction={!proxies.length && <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(undefined); setFormOpen(true) }}>{t("添加第一个代理")}</Button>}
       />

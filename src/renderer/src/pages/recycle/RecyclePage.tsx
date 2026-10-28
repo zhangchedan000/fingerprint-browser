@@ -145,7 +145,6 @@ export function RecyclePage() {
     <ListPage<TrashRow>
       toolbar={(
         <>
-          <Button type="primary" icon={<UndoOutlined />} disabled={!selectedIds.length} loading={busy === 'restore'} onClick={() => void restore(selectedIds)}>{t("恢复所选")}</Button>
           <Button danger icon={<DeleteOutlined />} disabled={!items.length} onClick={confirmEmpty}>{t("清空回收站")}</Button>
         </>
       )}
@@ -169,7 +168,8 @@ export function RecyclePage() {
         ids: selectedIds,
         onChange: setSelectedIds,
         label: (count) => t("已选 {0} 个窗口", count),
-        actions: <Button size="small" type="link" onClick={() => void restore(selectedIds)}>{t("恢复")}</Button>
+        hint: t("先勾选窗口"),
+        buttons: [{ key: 'restore', label: t("恢复所选"), icon: <UndoOutlined />, loading: busy === 'restore', onClick: () => void restore(selectedIds) }]
       }}
       columns={columns}
       rows={items.map((item) => ({ ...item, id: item.trashId }))}

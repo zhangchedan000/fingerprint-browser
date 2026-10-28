@@ -32,6 +32,15 @@ export function dateTime(iso: string | undefined, locale: string): string {
   return new Date(time).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+/** Like dateTime, without the year when it is this year (lists, where width counts). */
+export function shortDateTime(iso: string | undefined, locale: string): string {
+  const time = iso ? Date.parse(iso) : NaN
+  if (Number.isNaN(time)) return '—'
+  const date = new Date(time)
+  if (date.getFullYear() !== new Date().getFullYear()) return dateTime(iso, locale)
+  return date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 export function relativeTime(iso: string | undefined, locale: string, never = t("从未打开")): string {
   if (!iso) return never
   const time = Date.parse(iso)

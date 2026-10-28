@@ -2478,5 +2478,10 @@
   "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "O proxy do link troca o IP de saída ({0}); nenhum outro foi extraído da API (este link dá proxies rotativos, extrair mais só gastaria extrações). Os sites verão o IP mudar; mude para sessão fixa (sticky) no painel do provedor. Iniciar mesmo assim?",
   "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "{0} IPs novos tirados da API e ainda não está certo: {1}. O fuso e os idiomas da janela não mudam; os sites podem notar a diferença. Iniciar mesmo assim?",
   "两个 IP 数据库对代理的国家判断不一致（{0}）": "Duas bases de IP discordam sobre o país do proxy ({0})",
-  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "O IP do proxy está em {0} ({1}); o país da janela é {2}"
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "O IP do proxy está em {0} ({1}); o país da janela é {2}",
+  "先勾选窗口": "Marque as janelas primeiro",
+  "先勾选代理": "Marque os proxies primeiro",
+  "共 {0} 条 · 已选 {1}": "{0} no total · {1} selecionados",
+  "检测所选": "Verificar selecionados",
+  "检测这些": "Verificar"
 }

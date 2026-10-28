@@ -2,7 +2,6 @@ import { PoweroffOutlined } from '@ant-design/icons'
 import { Button, Layout, Space } from 'antd'
 import { useState } from 'react'
 import { t } from '../../shared/i18n'
-import { LanguageSelector } from './components/LanguageSelector'
 import { LoginGate } from './components/LoginGate'
 import { Sidebar } from './components/Sidebar'
 import { useWorkspace, WorkspaceProvider } from './data/workspace'
@@ -35,7 +34,6 @@ function Shell() {
           <h1>{page.label()}</h1>
           {page.subtitle && <span className="fb-muted">{page.subtitle(ws)}</span>}
           <Space className="fb-topbar-actions">
-            <LanguageSelector />
             {running > 0 && (
               <Button danger icon={<PoweroffOutlined />} onClick={() => void window.browserApi.profiles.closeAll()}>{t("全部关闭")}</Button>
             )}

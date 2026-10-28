@@ -1,4 +1,5 @@
-import { Button, Empty, Spin, Table, Tabs, type TableColumnsType } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
+import { Button, Dropdown, Empty, Spin, Table, Tabs, Tooltip, type TableColumnsType } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { t } from '../../../shared/i18n'
@@ -12,13 +13,29 @@ export interface ListTab {
   tone?: 'danger'
 }
 
+/** Something done to every ticked row. */
+export interface BatchAction {
+  key: string
+  label: ReactNode
+  icon?: ReactNode
+  danger?: boolean
+  /** Not possible for the rows ticked now (it is always off while none are). */
+  disabled?: boolean
+  loading?: boolean
+  onClick: () => void
+}
+
 export interface ListSelection {
   ids: string[]
   onChange: (ids: string[]) => void
   /** "已选 3 个窗口" — each page names its own records. */
   label: (count: number) => string
-  /** Buttons shown in the batch bar while something is selected. */
-  actions: ReactNode
+  /** The batch actions used most: buttons always in the toolbar, greyed until rows are ticked. */
+  buttons?: BatchAction[]
+  /** The others, in the 批量操作 menu beside them. */
+  menu?: BatchAction[]
+  /** Said on the greyed buttons, e.g. "先勾选窗口". */
+  hint: string
 }
 
 export interface ListPageProps<T extends { id: string }> {
@@ -64,6 +81,7 @@ export function ListPage<T extends { id: string }>({
     <>
       <div className="fb-toolbar">
         {toolbar}
+        {selection && <BatchActions selection={selection} />}
         <div className="fb-toolbar-filters">{filters}{table.settings}</div>
       </div>
       {header}
@@ -79,13 +97,6 @@ export function ListPage<T extends { id: string }>({
               : <>{tab.label}{tab.count !== undefined && <> <span className="fb-muted">{tab.count}</span></>}</>
           }))}
         />
-      )}
-      {selection && selection.ids.length > 0 && (
-        <div className="fb-batch-bar" role="toolbar" aria-label={t("批量操作")}>
-          <span>{selection.label(selection.ids.length)}</span>
-          {selection.actions}
-          <Button size="small" type="link" className="fb-batch-clear" onClick={() => selection.onChange([])}>{t("取消选择")}</Button>
-        </div>
       )}
       <section className="fb-table-panel">
         <Spin spinning={Boolean(loading)}>
@@ -111,7 +122,7 @@ export function ListPage<T extends { id: string }>({
               showSizeChanger: true,
               pageSizeOptions: [10, 20, 50, 100],
               onShowSizeChange: (_current, size) => setPageSize(size),
-              showTotal: (total) => t("共 {0} 条", total),
+              showTotal: (total) => selection?.ids.length ? t("共 {0} 条 · 已选 {1}", total, selection.ids.length) : t("共 {0} 条", total),
               hideOnSinglePage: false
             }}
             scroll={table.scrollX ? { x: table.scrollX } : scrollX === 'content' ? { x: 'max-content' } : undefined}
@@ -121,5 +132,49 @@ export function ListPage<T extends { id: string }>({
       </section>
       {footnote && <p className="fb-footnote">{footnote}</p>}
     </>
+  )
+}
+
+/**
+ * Batch actions in a fixed place in the toolbar: always shown, greyed while no row is ticked, so
+ * nothing appears or moves when rows are ticked. The count of ticked rows rides on the menu button.
+ */
+function BatchActions({ selection }: { selection: ListSelection }) {
+  const count = selection.ids.length
+  const none = count === 0
+  const badge = count ? <span className="fb-batch-count">{count}</span> : null
+  const menu = selection.menu ?? []
+  const buttons = selection.buttons ?? []
+  if (!buttons.length && !menu.length) return null
+  return (
+    <div className="fb-batch-group" role="group" aria-label={t("批量操作")}>
+      {buttons.map((action, index) => (
+        <Tooltip key={action.key} title={none ? selection.hint : undefined}>
+          <Button icon={action.icon} danger={action.danger} disabled={none || action.disabled} loading={action.loading} onClick={action.onClick}>
+            {action.label}{!menu.length && index === 0 && badge}
+          </Button>
+        </Tooltip>
+      ))}
+      {menu.length > 0 && (
+        <Tooltip title={none ? selection.hint : undefined}>
+          <Dropdown
+            disabled={none}
+            trigger={['click']}
+            menu={{
+              items: [
+                { type: 'group', label: selection.label(count), children: menu.map((action) => ({ key: action.key, icon: action.icon, danger: action.danger, disabled: action.disabled || action.loading, label: action.label })) },
+                { type: 'divider' },
+                { key: '__clear', label: t("取消选择") }
+              ],
+              onClick: ({ key }) => key === '__clear' ? selection.onChange([]) : menu.find((action) => action.key === key)?.onClick()
+            }}
+          >
+            <Button className="fb-batch-menu" disabled={none} loading={menu.some((action) => action.loading)}>
+              {t("批量操作")}{badge}<DownOutlined className="fb-button-caret" />
+            </Button>
+          </Dropdown>
+        </Tooltip>
+      )}
+    </div>
   )
 }

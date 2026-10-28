@@ -2478,5 +2478,10 @@
   "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "Bağlantının proxy'si çıkış IP'sini döndürüyor ({0}); API'den yenisi alınmadı (bu bağlantı dönen proxy verir, yenisini almak sadece hakkı tüketir). Siteler IP'nin değiştiğini görür; sağlayıcı panelinde sabit (sticky) oturuma geçin. Yine de başlatılsın mı?",
   "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "API'den {0} yeni IP alındı, hâlâ uymuyor: {1}. Pencerenin saat dilimi ve dilleri değişmez; siteler uyumsuzluğu fark edebilir. Yine de başlatılsın mı?",
   "两个 IP 数据库对代理的国家判断不一致（{0}）": "İki IP veritabanı proxy'nin ülkesinde anlaşmıyor ({0})",
-  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "Proxy IP'si {0} konumunda ({1}); pencerenin ülkesi {2}"
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "Proxy IP'si {0} konumunda ({1}); pencerenin ülkesi {2}",
+  "先勾选窗口": "Önce pencereleri seçin",
+  "先勾选代理": "Önce proxy'leri seçin",
+  "共 {0} 条 · 已选 {1}": "Toplam {0} · {1} seçili",
+  "检测所选": "Seçilenleri kontrol et",
+  "检测这些": "Kontrol et"
 }

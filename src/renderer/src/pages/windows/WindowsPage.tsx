@@ -1,14 +1,19 @@
 import {
   ApiOutlined,
+  CaretRightOutlined,
   CopyOutlined,
   DatabaseOutlined,
   DeleteOutlined,
+  DeploymentUnitOutlined,
   DownloadOutlined,
-  DownOutlined,
   EditOutlined,
+  EllipsisOutlined,
+  FolderOutlined,
   GlobalOutlined,
+  LinkOutlined,
   MoreOutlined,
   PlusOutlined,
+  PoweroffOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   StarFilled,
@@ -21,7 +26,7 @@ import { useMemo, useState } from 'react'
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, ProfileDraft, StorageOverview } from '../../../../shared/types'
 import { AssignModal } from '../../components/AssignModal'
-import { ACTIVE_STATUSES, dateTime, formatBytes, humanError, isEditable, relativeTime } from '../../components/format'
+import { ACTIVE_STATUSES, formatBytes, shortDateTime, humanError, isEditable, relativeTime } from '../../components/format'
 import { ListPage, type ListTab } from '../../components/ListPage'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
@@ -452,7 +457,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     {
       title: t("窗口名称"),
       dataIndex: 'name',
-      width: 200,
+      width: 180,
       sorter: profileTableSorters.environment,
       render: (_value, profile) => (
         <div className="fb-name-cell">
@@ -481,21 +486,21 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     {
       title: t("分组"),
       dataIndex: 'group',
-      width: 120,
+      width: 100,
       sorter: profileTableSorters.classification,
       render: (group: string) => <span className={`fb-group${group ? '' : ' empty'}`}>{group || t("未分组")}</span>
     },
     {
       title: t("代理 IP"),
       dataIndex: 'proxy',
-      width: 180,
+      width: 170,
       sorter: profileTableSorters.proxy,
       render: (_value, profile) => <ProxyCell proxy={profile.proxy} check={profile.proxyCheck} missing={profile.proxyMissing} />
     },
     {
       title: t("系统 / 内核"),
       key: 'kernel',
-      width: 150,
+      width: 130,
       sorter: (first, second) => (first.kernelVersion || '').localeCompare(second.kernelVersion || '', undefined, { numeric: true }),
       render: (_value, profile) => (
         <div className="fb-kernel-cell">
@@ -509,28 +514,28 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     {
       title: t("备注"),
       dataIndex: 'note',
-      width: 120,
+      width: 100,
       ellipsis: { showTitle: true },
       render: (note: string) => note ? note : <span className="fb-muted">—</span>
     },
     {
       title: t("创建时间"),
       dataIndex: 'createdAt',
-      width: 130,
+      width: 110,
       sorter: (first, second) => first.createdAt.localeCompare(second.createdAt),
-      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{dateTime(createdAt, getLocale())}</span>
+      render: (createdAt: string) => <span className="fb-muted fb-nowrap">{shortDateTime(createdAt, getLocale())}</span>
     },
     {
       title: t("最后打开"),
       dataIndex: 'lastOpenedAt',
-      width: 110,
+      width: 90,
       sorter: (first, second) => (first.lastOpenedAt ?? '').localeCompare(second.lastOpenedAt ?? ''),
       render: (value: string | undefined) => <span className="fb-muted">{relativeTime(value, locale)}</span>
     },
     {
       title: t("操作"),
       key: 'actions',
-      width: 168,
+      width: 150,
       fixed: 'right',
       align: 'right',
       render: (_value, profile) => {
@@ -621,24 +626,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
             >
               <Button icon={<UploadOutlined />} loading={importing}>{t("批量导入")}</Button>
             </Dropdown>
-            <Tooltip title={selectedIds.length ? undefined : t("先勾选要打开的窗口")}>
-              <Button icon={<GlobalOutlined />} loading={batchBusy} disabled={!canLaunchSelection} onClick={() => void runBatch('launch')}>{t("批量打开")}</Button>
-            </Tooltip>
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [
-                  { key: 'export-workspace', icon: <DownloadOutlined />, label: t("迁移全部环境") },
-                  { key: 'storage', icon: <DatabaseOutlined />, label: storage ? t("本地数据 {0}", formatBytes(storage.totalBytes)) : t("统计本地数据") }
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'export-workspace') migration.start('export')
-                  if (key === 'storage') void refreshStorageOverview()
-                }
-              }}
-            >
-              <Button>{t("更多操作")} <DownOutlined /></Button>
-            </Dropdown>
           </>
         )}
         filters={(
@@ -655,6 +642,21 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
               onChange={(event) => setQuery(event.target.value)}
               className="search-input"
             />
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [
+                  { key: 'export-workspace', icon: <DownloadOutlined />, label: t("迁移全部环境") },
+                  { key: 'storage', icon: <DatabaseOutlined />, label: storage ? t("本地数据 {0}", formatBytes(storage.totalBytes)) : t("统计本地数据") }
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'export-workspace') migration.start('export')
+                  if (key === 'storage') void refreshStorageOverview()
+                }
+              }}
+            >
+              <Tooltip title={t("更多操作")}><Button icon={<EllipsisOutlined />} aria-label={t("更多操作")} /></Tooltip>
+            </Dropdown>
           </>
         )}
         tabs={tabs}
@@ -664,23 +666,24 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
           ids: selectedIds,
           onChange: setSelectedIds,
           label: (count) => t("已选 {0} 个窗口", count),
-          actions: (
-            <>
-              <Button size="small" type="link" loading={batchBusy} disabled={!canLaunchSelection} onClick={() => void runBatch('launch')}>{t("打开")}</Button>
-              <Button size="small" type="link" loading={batchBusy} onClick={() => void runBatch('close')}>{t("关闭")}</Button>
-              <Button size="small" type="link" disabled={batchBusy} onClick={() => setAssigning('group')}>{t("移动分组")}</Button>
-              <Button size="small" type="link" disabled={batchBusy} onClick={() => setAssigning('proxy')}>{t("批量设置代理")}</Button>
-              <Button size="small" type="link" disabled={batchBusy} onClick={() => setApiLinkOpen(true)}>{t("设置 API 链接")}</Button>
-              <Button size="small" type="link" disabled={batchBusy} icon={<ApiOutlined />} onClick={() => void runProxyChecks(selectedIds)}>{t("检测代理")}</Button>
-              <Button size="small" type="link" disabled={batchBusy} onClick={() => setKernelSwitchOpen(true)}>{t("切换内核")}</Button>
-              <Button size="small" type="link" danger disabled={batchBusy} icon={<DeleteOutlined />} onClick={confirmBatchRemove}>{t("删除")}</Button>
-            </>
-          )
+          hint: t("先勾选窗口"),
+          buttons: [
+            { key: 'launch', label: t("打开"), icon: <CaretRightOutlined />, loading: batchBusy, disabled: !canLaunchSelection, onClick: () => void runBatch('launch') },
+            { key: 'close', label: t("关闭"), icon: <PoweroffOutlined />, disabled: batchBusy, onClick: () => void runBatch('close') }
+          ],
+          menu: [
+            { key: 'group', label: t("移动分组"), icon: <FolderOutlined />, disabled: batchBusy, onClick: () => setAssigning('group') },
+            { key: 'proxy', label: t("批量设置代理"), icon: <GlobalOutlined />, disabled: batchBusy, onClick: () => setAssigning('proxy') },
+            { key: 'api', label: t("设置 API 链接"), icon: <LinkOutlined />, disabled: batchBusy, onClick: () => setApiLinkOpen(true) },
+            { key: 'check', label: t("检测代理"), icon: <ApiOutlined />, disabled: batchBusy, onClick: () => void runProxyChecks(selectedIds) },
+            { key: 'kernel', label: t("切换内核"), icon: <DeploymentUnitOutlined />, disabled: batchBusy, onClick: () => setKernelSwitchOpen(true) },
+            { key: 'remove', label: t("删除"), icon: <DeleteOutlined />, danger: true, disabled: batchBusy, onClick: confirmBatchRemove }
+          ]
         }}
         columns={columns}
         rows={visibleProfiles}
         loading={ws.loading}
-        scrollX={1160}
+        scrollX="content"
         emptyText={profiles.length ? t("没有符合条件的窗口") : t("还没有浏览器窗口")}
         emptyAction={!profiles.length && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建第一个窗口")}</Button>}
       />
