@@ -742,7 +742,7 @@ export interface BrowserApi {
     close: (id: string) => Promise<BrowserProfileView>
     closeAll: () => Promise<void>
     /** API 提取 windows: the proxy they have while it works; refresh takes a new one (换一个 IP). */
-    testProxy: (id: string, refresh?: boolean) => Promise<BrowserProfileView>
+    testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => Promise<BrowserProfileView>
     /** API 提取 for these windows: each keeps the link itself (closed windows only). */
     setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>

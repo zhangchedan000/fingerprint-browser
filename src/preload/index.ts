@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { DeepSiteResult } from '../shared/deep-check'
 import type { TeamSyncEvent } from '../shared/team'
 import type { FontPackProgress } from '../shared/windows-font-packs'
-import type { AppUpdateProgress, BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
+import type { AppUpdateProgress, BrowserApi, BrowserProfileView, KernelInstallProgress, RelocateProgress, TunnelRoute, TunnelStatus, ProfileBatchClassification, ProfileDraft, ProfileLaunchOptions } from '../shared/types'
 
 const api: BrowserApi = {
   uiLanguage: {
@@ -87,7 +87,7 @@ const api: BrowserApi = {
     openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => ipcRenderer.invoke('profiles:open-url', id, url, options),
     close: (id: string) => ipcRenderer.invoke('profiles:close', id),
     closeAll: () => ipcRenderer.invoke('profiles:close-all'),
-    testProxy: (id: string, refresh?: boolean) => ipcRenderer.invoke('profiles:test-proxy', id, refresh),
+    testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => ipcRenderer.invoke('profiles:test-proxy', id, refresh, route),
     setApiUrl: (ids: string[], url: string) => ipcRenderer.invoke('profiles:set-api-url', ids, url),
     diagnose: (id: string) => ipcRenderer.invoke('profiles:diagnose', id),
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),

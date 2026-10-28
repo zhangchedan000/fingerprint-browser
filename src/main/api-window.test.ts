@@ -115,3 +115,18 @@ describe('API 提取 windows keep their proxy while it works', () => {
     expect(reopened.get(id).apiProxy?.endpoint).not.toHaveProperty('password')
   })
 })
+
+describe('API 提取 windows never end on a dead proxy when one worked', () => {
+  it('puts the working proxy (in another country) back when the new ones all fail', async () => {
+    const { store, id } = await apiWindow()
+    const api = provider([
+      { port: 31001, ip: '187.189.167.137', countryCode: 'MX' },
+      { port: 31002, ip: '203.0.113.2', countryCode: 'US', ok: false },
+      { port: 31003, ip: '203.0.113.3', countryCode: 'US', ok: false }
+    ])
+    await apiProxyFor(store, id, api.tester, {}, api.fetchProxy)
+    const outcome = await apiProxyFor(store, id, api.tester, { region: 'US', attempts: 2 }, api.fetchProxy)
+    expect(outcome).toMatchObject({ mismatch: true, check: { ok: true, countryCode: 'MX' } })
+    expect(store.get(id).proxy).toMatchObject({ port: 31001, password: 'pw31001' })
+  })
+})

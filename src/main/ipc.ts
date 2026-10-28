@@ -508,9 +508,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     for (const profile of changed) await team.afterLocalEdit(profile.id)
     return changed.map(publicProfile)
   })
-  ipcMain.handle('profiles:test-proxy', async (_event, id: string, refresh?: boolean) => {
-    // API 提取: the proxy the window has while it works (a new one when it does not, or on 换一个 IP).
-    if (profiles.get(id).apiProxy) return publicProfile((await apiProxyFor(profiles, id, (config) => testProxy(config), { refresh: refresh === true })).profile)
+  ipcMain.handle('profiles:test-proxy', async (_event, id: string, refresh?: boolean, routeInput?: unknown) => {
+    // API 提取: the proxy the window has while it works (a new one when it does not, or on 换一个 IP),
+    // reached through the 网络加速 shown in the editor when one is given.
+    if (profiles.get(id).apiProxy) {
+      const route = routeInput === undefined ? undefined : validTunnelRoute(routeInput)
+      const tester = (config: ProxyConfig) => testProxy(route ? { ...config, tunnel: route } : config)
+      const fetchProxy = (url: string, saved: ProxyConfig['tunnel']) => resolveApiProxy(url, route ?? saved)
+      return publicProfile((await apiProxyFor(profiles, id, tester, { refresh: refresh === true }, fetchProxy)).profile)
+    }
     const testedProfile = profiles.get(id)
     const result = await testProxy(testedProfile.proxy)
     const current = profiles.get(id)
@@ -647,6 +653,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
    * gets it when saved, so it starts on the IP that was checked instead of taking another one.
    */
   const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; check: ProxyCheckSummary; at: number }>()
+  const draftTurns = new Map<string, number>()
+  let draftTurn = 0
   async function adoptDraftApiProxy(id: string): Promise<BrowserProfile> {
     const profile = profiles.get(id)
     const url = profile.apiProxy && !profile.apiProxy.endpoint ? profile.apiProxy.url : undefined
@@ -663,12 +671,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return { ...draft, ...endpoint, passwordStored: false }
   }
   ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string) => {
+    // The newest check of a link is the one the editor shows: only its proxy is kept for saving.
+    const draftLink = (input as ProxyConfig | undefined)?.apiUrl ? validProxyApiUrl((input as ProxyConfig).apiUrl!) : undefined
+    const turn = ++draftTurn
+    if (draftLink) draftTurns.set(draftLink, turn)
     const config = await resolveDraft(input as ProxyConfig)
     const validated = validateProxyConfig(config)
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
     const proxy = proxyForTest(validated, saved)
     const result = await testProxy(proxy)
-    if (config.apiUrl && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
+    if (draftLink && draftTurns.get(draftLink) === turn && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
       draftApiProxies.set(validProxyApiUrl(config.apiUrl), {
         endpoint: { protocol: config.protocol, host: config.host, port: config.port, username: config.username, password: config.password },
         check: { ...result, checkedAt: new Date().toISOString() },

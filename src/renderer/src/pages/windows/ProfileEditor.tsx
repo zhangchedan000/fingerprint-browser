@@ -901,6 +901,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   async function testCurrentProxy(fill = false, refresh = false): Promise<void> {
+    // A check started by hand replaces the automatic one still waiting (an API link is taken once).
+    clearTimeout(autoCheckTimer.current)
     const run = ++proxyCheckRun.current
     try {
       if (proxyMode === 'library') {
@@ -917,7 +919,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         setProxyResult(null)
         if (savedApiLink()) {
           // Its current proxy while it works (a new one when it does not, or on 换一个 IP); saved with its history.
-          const view = await window.browserApi.profiles.testProxy(profile!.id, refresh)
+          const view = await window.browserApi.profiles.testProxy(profile!.id, refresh, route)
           if (run === proxyCheckRun.current) setApiView(view)
           followCheckedIp(view.proxyCheck ?? null, run, fill)
           return

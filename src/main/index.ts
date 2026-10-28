@@ -191,8 +191,14 @@ app.whenReady().then(async () => {
     (input, init) => net.fetch(input as string, init)
   )
   // A window from another computer opens here as it is: its kernel, 网络加速 and font pack are fetched.
+  // Windows needing the same missing kernel wait for one download.
+  const kernelInstalls = new Map<string, Promise<void>>()
   launcher.setPrerequisites({
-    installKernel: async (version) => { await kernels.install(version) },
+    installKernel: (version) => {
+      const pending = kernelInstalls.get(version) ?? kernels.install(version).then(() => undefined).finally(() => kernelInstalls.delete(version))
+      kernelInstalls.set(version, pending)
+      return pending
+    },
     ensureTunnel: (route) => activeTunnel.ensureRunning(route),
     ensureFonts: async (uiLocale) => {
       const script = windowsFontScript(uiLocale)

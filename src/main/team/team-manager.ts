@@ -146,6 +146,16 @@ export class TeamManager {
     }
   }
 
+  /**
+   * This computer's config of a window, when it may go up: the account may change it and the
+   * cloud still has the version this computer last took (nothing newer would be overwritten).
+   */
+  private async configToPush(id: string, link: TeamLink): Promise<ReturnType<TeamManager['cloudConfig']> | undefined> {
+    if (this.isReadOnly(link)) return undefined
+    const remote = await this.requireApi().getProfile(link.teamId)
+    return remote.config_rev === link.configRev ? this.cloudConfig(this.profiles.get(id)) : undefined
+  }
+
   /** What came with a cloud config beside the window itself (cloudConfig): nodes and the API proxy. */
   private async applyCloudExtras(id: string, config: unknown): Promise<void> {
     const extras = (config && typeof config === 'object' ? config : {}) as { tunnelSources?: unknown; apiState?: unknown }
@@ -160,7 +170,9 @@ export class TeamManager {
   /** Windows this version wrote values into on first start: their cloud copies get the same values. */
   private async pushRewritten(): Promise<void> {
     for (const id of this.profiles.takeRewrittenOnLoad()) {
-      if (!this.file.links[id]) continue
+      const link = this.file.links[id]
+      // A config changed elsewhere since this computer took it is newer: it comes down at the next launch.
+      if (!link || !await this.configToPush(id, link).catch(() => undefined)) continue
       await this.afterLocalEdit(id).catch((error) => {
         this.logger?.error('固定后的窗口配置没有同步到云端', { profileId: id, error: error instanceof Error ? error.message : String(error) })
       })
@@ -774,11 +786,12 @@ export class TeamManager {
     this.onSync({ profileId: id, phase: 'pushing' })
     const packed = await this.packLocal(id)
     try {
-      // The config goes up too (an API window may be on a new proxy now), when this account may change it.
-      const fields = this.isReadOnly(link) ? {} : { config: this.cloudConfig(this.profiles.get(id)) }
-      const record = await api.saveProfile(link.teamId, fields, { ...packed, rev: link.dataRev + 1 })
+      // The config goes up too (an API window may be on a new proxy now), when this account may change
+      // it and nobody changed it in the cloud since this computer took it: a newer one is never replaced.
+      const config = await this.configToPush(id, link)
+      const record = await api.saveProfile(link.teamId, config ? { config } : {}, { ...packed, rev: link.dataRev + 1 })
       link.dataRev = record.data_rev
-      if (!this.isReadOnly(link)) link.configRev = record.config_rev
+      if (config) link.configRev = record.config_rev
       link.pendingUpload = false
       await this.save()
       this.logger?.info('团队窗口登录态已上传', { profileId: id, rev: record.data_rev, bytes: packed.size })

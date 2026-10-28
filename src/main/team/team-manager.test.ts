@@ -237,6 +237,31 @@ describe('TeamManager', () => {
     expect(server.locks.has(shared.id)).toBe(false)
   })
 
+  it('never overwrites a config changed elsewhere while the window was open here', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    const local = await a.profiles.create({ ...defaultProfileDraft(), name: '原名字' })
+    await a.team.sync()
+    await b.team.sync()
+    const copyId = b.team.links()[0].profileId
+    await b.team.beforeLaunch(copyId)
+    // Edited on A while B has it open.
+    await a.profiles.update(local.id, { ...a.profiles.get(local.id), name: 'A 改的名字' })
+    await a.team.afterLocalEdit(local.id)
+    b.jars.set(copyId, [cookie('from-b')])
+    await b.team.afterExit(copyId)
+    const record = [...server.records.values()][0]
+    expect((record.config as { name: string }).name).toBe('A 改的名字')
+    expect(record.data_rev).toBeGreaterThan(0)
+    // B takes A's change at its next open.
+    await b.team.beforeLaunch(copyId)
+    expect(b.profiles.get(copyId).name).toBe('A 改的名字')
+    await b.team.launchFailed(copyId)
+  })
+
   it('opens no window at all until signed in, and stays locked while the server is unreachable', async () => {
     const server = fakeServer()
     const owner = await computer(server)

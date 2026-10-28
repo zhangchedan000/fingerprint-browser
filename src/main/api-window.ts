@@ -41,11 +41,18 @@ export async function apiProxyFor(
   let profile = profiles.get(id)
   if (!profile.apiProxy) throw new Error('这个窗口没有使用 API 提取')
   let last: { profile: BrowserProfile; check: ProxyTestResult } | undefined
+  // The last proxy that worked (in another country), put back when none of the new ones works.
+  let working: { endpoint: ApiProxyEndpoint; check: ProxyTestResult } | undefined
+  const remember = (check: ProxyTestResult) => {
+    const { protocol, host, port, username, password } = profile.proxy
+    if (check.ok && (protocol === 'http' || protocol === 'socks5') && port) working = { endpoint: { protocol, host, port, username, password }, check }
+  }
   if (!options.refresh && profile.apiProxy.endpoint) {
     const check = await tester(profile.proxy)
     profile = await save(check)
     if (fits(check)) return { profile, check, fetched: 0, mismatch: false }
     last = { profile, check }
+    remember(check)
   }
   let fetched = 0
   let fetchError: unknown
@@ -63,6 +70,12 @@ export async function apiProxyFor(
     profile = await save(check)
     if (fits(check)) return { profile, check, fetched, mismatch: false }
     last = { profile, check }
+    remember(check)
+  }
+  if (!last?.check.ok && working) {
+    profile = await profiles.setWindowApiEndpoint(id, working.endpoint)
+    profile = await save(working.check)
+    return { profile, check: working.check, fetched, mismatch: true }
   }
   if (!last) throw fetchError instanceof Error ? fetchError : new Error(String(fetchError))
   return { ...last, fetched, mismatch: last.check.ok }

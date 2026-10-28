@@ -680,6 +680,8 @@ export class ProfileStore {
       throw new Error('请先关闭浏览器环境再修改配置')
     }
     const draft = validateProfileDraft(input)
+    // The kernel a window following the default runs, for the GPU its 自动 media devices go with (as the editor shows).
+    const defaultKernel = draft.kernelVersion ? undefined : await this.defaultKernel?.().catch(() => undefined)
     const keepAccountPassword = !draft.account.password
       && draft.account.passwordStored === true
       && sameAccountIdentity(draft.account, current.account)
@@ -693,7 +695,7 @@ export class ProfileStore {
         ...current,
         ...fields,
         fingerprint: savedFingerprint(fields.fingerprint, proxyId === current.proxyId ? this.resolve(current).proxyCheck : undefined, {
-          gpuModel: effectiveGpu(fields.fingerprint, fields.kernelVersion)?.model
+          gpuModel: effectiveGpu(fields.fingerprint, fields.kernelVersion || defaultKernel)?.model
         }),
         proxyId,
         groupId: this.library.ensureGroup(group, now),
