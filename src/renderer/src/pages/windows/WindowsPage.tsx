@@ -744,7 +744,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         onCancel={() => { setApiLinkOpen(false); setApiLink('') }}
       >
         <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} value={apiLink} placeholder="https://example.com/api?num=1&format=txt" onChange={(event) => setApiLink(event.target.value)} />
-        <p className="fb-muted fb-assign-extra">{t("这些窗口都改用这个 API 链接（API 提取），每次打开各自取一个新代理；链接没变的窗口保留原来的 IP 记录。运行中的窗口需要先关闭。")}</p>
+        <p className="fb-muted fb-assign-extra">{t("这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。")}</p>
       </Modal>
       <KernelSwitchModal
         open={kernelSwitchOpen}
