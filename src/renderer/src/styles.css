@@ -205,6 +205,12 @@ button, input, textarea { font: inherit; }
 .fb-form-control:has(> .ant-switch) { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .fb-form-control:has(> .ant-switch) .fb-form-hint { flex-basis: 100%; }
 .fb-editor-alert { margin: -4px 0 0 124px; }
+/* One or two lines: small icon, the text at body size, the action on the same line. */
+.fb-editor-alert.ant-alert { align-items: center; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; line-height: 1.5; }
+.fb-editor-alert.ant-alert .ant-alert-icon { margin-inline-end: 8px; font-size: 14px; }
+.fb-editor-alert.ant-alert .ant-alert-action { margin-inline-start: 10px; }
+/* A value chosen on its own that does not fit the rest: under its row, yellow, not blocking. */
+.fb-row-warning { display: block; margin-top: 4px; color: var(--fb-warning); font-size: 12px; }
 .fb-more { margin-left: -16px; }
 .fb-more .ant-collapse-content-box { display: flex; flex-direction: column; gap: 14px; padding-left: 16px !important; }
 .fb-fp-intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 8px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-size: 13px; }

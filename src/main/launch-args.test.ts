@@ -138,11 +138,12 @@ describe('launch arguments', () => {
     expect(small).toContain('--fingerprint-screen-height=1440')
   })
 
-  it('passes media devices to Prism kernels only; names and voices follow --lang', () => {
+  it('passes media devices and the kept voice and device-name languages to Prism kernels only', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const chosen = buildLaunchArgs(profile({ mediaDevices: '2,1,1', mediaLocale: 'de-de', voicesLocale: 'zh-hk' }), prism)
     expect(chosen).toContain('--fingerprint-media-devices=2,1,1')
-    expect(chosen.some((arg) => arg.startsWith('--fingerprint-media-locale') || arg.startsWith('--fingerprint-voices-locale'))).toBe(false)
+    expect(chosen).toContain('--fingerprint-media-locale=de-de')
+    expect(chosen).toContain('--fingerprint-voices-locale=zh-hk')
     const auto = buildLaunchArgs(profile(), prism)
     expect(auto.some((arg) => /^--fingerprint-media-devices=[0-3],[0-3],[0-3]$/.test(arg))).toBe(true)
     expect(auto.some((arg) => arg.startsWith('--fingerprint-voices-locale'))).toBe(false)

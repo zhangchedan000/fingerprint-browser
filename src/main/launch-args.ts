@@ -173,9 +173,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {
-    // Prism 4+: media devices (patch 014). Their names and the speech voices (patch 012) follow --lang.
+    // Prism 4+: media devices (patch 014). Their names and the speech voices (patch 012) follow --lang
+    // unless the window keeps its own (written in when saved, chosen in 语音 / 媒体设备名).
     const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0, effectiveGpu(fp, options.engineVersion)?.model)
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
+    if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
+    if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
   }
   if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
     // 替换 on prism7+ with a proxy that relays UDP: WebRTC really goes through the proxy.

@@ -470,7 +470,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     expect(profiles.get(profile.id).status).toBe('closed')
   })
 
-  it('requires confirmation for conflicting GeoIP data and launches after explicit approval', async () => {
+  it('asks before launching on an IP the databases disagree about, then keeps the window\'s own values', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
     temporaryPaths.push(vault)
     const profiles = new ProfileStore(vault)
@@ -514,13 +514,14 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     controller.startPending()
     await expect(approvedLaunch).resolves.toMatchObject({ status: 'running' })
     expect(controller.children).toHaveLength(1)
-    expect(controller.arguments[0]).toContain('--fingerprint-language=ja')
-    expect(controller.arguments[0]).toContain('--timezone=Asia/Tokyo')
-    expect(controller.arguments[0]).toContain('--fingerprint-location=35.68,139.76,25000')
+    // Saved with the default United States values; an unclear IP changes nothing.
+    expect(controller.arguments[0]).toContain('--fingerprint-language=en-US')
+    expect(controller.arguments[0]).toContain('--timezone=America/New_York')
+    expect(controller.arguments[0].some((arg) => arg.startsWith('--fingerprint-location'))).toBe(false)
     await launcher.close(profile.id)
   })
 
-  it('keeps the country, time zone and language of the first launch, and only asks when a later IP is elsewhere', async () => {
+  it('keeps the values a window was saved with, and only asks when its IP is elsewhere', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
     temporaryPaths.push(vault)
     const profiles = new ProfileStore(vault)
@@ -530,8 +531,11 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
-    draft.fingerprint.networkIdentityMode = 'proxy'
-    draft.fingerprint.proxyExitPolicy = 'block'
+    // Filled in from a check of a Mexican IP before it was saved.
+    Object.assign(draft.fingerprint, {
+      networkIdentityMode: 'manual', region: 'MX', regionSource: 'ip', timezone: 'America/Mexico_City', language: 'es-419',
+      acceptLanguages: 'es-419,es', location: { latitude: 19.43, longitude: -99.13 }, proxyExitPolicy: 'block'
+    })
     const profile = await profiles.create(draft)
     const controller = new FakeSpawnController()
     let exit = { ip: '187.190.19.106', countryCode: 'MX', timezone: 'America/Mexico_City', latitude: 19.43, longitude: -99.13 }
@@ -542,10 +546,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await waitUntil(() => controller.children.length === 1)
     controller.startPending()
     await first
-    expect(profiles.get(profile.id).fingerprint).toMatchObject({
-      networkIdentityMode: 'manual', region: 'MX', regionSource: 'ip', timezone: 'America/Mexico_City', language: 'es-419',
-      location: { latitude: 19.43, longitude: -99.13 }
-    })
+    expect(controller.arguments[0]).toContain('--timezone=America/Mexico_City')
     await launcher.close(profile.id)
 
     // The next IP is in Spain: nothing changes; the launch asks first.

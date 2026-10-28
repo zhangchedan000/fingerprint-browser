@@ -10,6 +10,7 @@ import type {
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
+import { savedFingerprint } from '../shared/network-identity'
 import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
 import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
@@ -212,7 +213,19 @@ export class ProfileStore {
       await this.ensureProfileDirectories(profile.id)
     }
     this.moveApiProxiesIntoWindows()
+    this.fixSavedFingerprints()
     await this.persist()
+  }
+
+  /**
+   * Windows saved before every value was written in: one that still followed its IP keeps the values
+   * of its last check, and the languages that followed are written in (savedFingerprint).
+   */
+  private fixSavedFingerprints(): void {
+    for (const [id, stored] of this.profiles) {
+      const fingerprint = savedFingerprint(stored.fingerprint, this.resolve(stored).proxyCheck)
+      if (JSON.stringify(fingerprint) !== JSON.stringify(stored.fingerprint)) this.profiles.set(id, { ...stored, fingerprint })
+    }
   }
 
   storageHealth(): ProfileStoreHealth {
@@ -586,10 +599,11 @@ export class ProfileStore {
           proxyId,
           groupId: this.library.ensureGroup(group, now),
           account: privateAccount(draft.account),
-          fingerprint: {
+          // A saved window keeps its values: nothing follows an IP or a table from here on.
+          fingerprint: savedFingerprint({
             ...draft.fingerprint,
             seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
-          },
+          }),
           createdAt: now,
           updatedAt: now,
           favorite: false,
@@ -628,6 +642,7 @@ export class ProfileStore {
       const profile: StoredProfile = {
         ...current,
         ...fields,
+        fingerprint: savedFingerprint(fields.fingerprint, proxyId === current.proxyId ? this.resolve(current).proxyCheck : undefined),
         proxyId,
         groupId: this.library.ensureGroup(group, now),
         account: privateAccount({

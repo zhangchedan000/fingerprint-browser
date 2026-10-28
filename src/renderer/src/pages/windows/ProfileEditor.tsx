@@ -19,6 +19,7 @@ import {
   Switch,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   Upload
 } from 'antd'
@@ -40,10 +41,10 @@ import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
-import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
+import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, mediaLocaleFor } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
-import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, fixedIdentityForCheck, localeForCountry } from '../../../../shared/network-identity'
+import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, followingLocales, fixedIdentityForCheck, localeForCountry, savedFingerprint } from '../../../../shared/network-identity'
 import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
@@ -164,6 +165,16 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     cookieText: '',
     fingerprint: editableFingerprint({ ...draft.fingerprint, disabledSpoofing: [...draft.fingerprint.disabledSpoofing] })
   }
+}
+
+/**
+ * What the editor starts from. A saved window shows the values it keeps (one that still followed
+ * its IP: those of its last check), with the languages that equal what they follow shown as 跟随….
+ */
+function openedValues(profile: BrowserProfileView | undefined, suggestedIndex: number): EditorValues {
+  const values = editorValues(profile, suggestedIndex)
+  if (profile) values.fingerprint = followingLocales(savedFingerprint(values.fingerprint, profile.proxyCheck))
+  return values
 }
 
 /** A different item from `list` than `current` (or any item when there is no other). */
@@ -394,25 +405,22 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const cookieText = Form.useWatch('cookieText', { form, preserve: true }) ?? ''
   const kernelVersion = Form.useWatch('kernelVersion', { form, preserve: true }) ?? ''
   const windowMode = Form.useWatch(['window', 'mode'], { form, preserve: true }) ?? 'auto'
-  const initialFingerprint = useMemo(() => editorValues(profile, suggestedIndex).fingerprint, [profile, suggestedIndex])
+  const initialFingerprint = useMemo(() => openedValues(profile, suggestedIndex).fingerprint, [profile, suggestedIndex])
   const watchedFingerprint = Form.useWatch('fingerprint', { form, preserve: true }) as Partial<FingerprintConfig> | undefined
   // `preserve` makes the watch report the whole fingerprint, not just the few keys that have a
   // Form.Item; without it clicks looked dead and a partial object crashed the drawer. Gaps (the
   // render between resetFields and setFieldsValue) are filled from the window being edited.
   const fp: FingerprintConfig = { ...initialFingerprint }
+  // A key set to undefined (a value back to 跟随…) counts too; only missing keys are filled in.
   for (const [key, value] of Object.entries(watchedFingerprint ?? {})) {
-    if (value !== undefined) (fp as unknown as Record<string, unknown>)[key] = value
+    if (value === undefined) delete (fp as unknown as Record<string, unknown>)[key]
+    else (fp as unknown as Record<string, unknown>)[key] = value
   }
 
   useEffect(() => {
     if (!open) return
     form.resetFields()
-    const values = editorValues(profile, suggestedIndex)
-    // A window from before 0.5.12 that followed its IP shows (and saves) the values that IP gives, kept from now on.
-    if (profile?.lastOpenedAt && values.fingerprint.networkIdentityMode === 'proxy') {
-      const fixed = fixedIdentityForCheck(values.fingerprint, profile.proxyCheck)
-      if (fixed) values.fingerprint = { ...values.fingerprint, ...fixed }
-    }
+    const values = openedValues(profile, suggestedIndex)
     form.setFieldsValue(values)
     setTab('basic')
     proxyCheckRun.current += 1
@@ -423,7 +431,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setPasted(null)
     setPasteError('')
     setProxyMode(profile?.apiProxy ? 'api' : profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
-    const initial = editorValues(profile, suggestedIndex).fingerprint
+    const initial = values.fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !isChoice(initial.screenWidth, initial.screenHeight)))
     setCheckReport(null)
@@ -482,23 +490,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }))
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
   }, [fp.platform, kernelGpus])
-  const followIp = fp.networkIdentityMode === 'proxy'
-  /** The country comes from the proxy's IP (shown as 基于 IP 生成), kept once the window has been opened. */
-  const fromIp = followIp || fp.regionSource === 'ip'
-  /**
-   * A window not opened yet still follows its IP (基于 IP 生成 links); from its first launch the
-   * values are kept, and a different IP is only pointed out.
-   */
-  const locked = Boolean(profile?.lastOpenedAt)
+  /** The country was filled in from a checked proxy IP (基于 IP 生成) rather than picked (手动选择). */
+  const fromIp = fp.regionSource === 'ip'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
   // The exit country the proxy was last seen in, against the country picked by hand.
   const lastCheck = proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck
-  /** The country the IP is in, while the window follows it. */
-  const ipCountry = followIp ? regions.find((entry) => entry.code === lastCheck?.countryCode?.toUpperCase())?.code : undefined
   const exitCountry = lastCheck?.countryCode
-  const regionMismatch = !followIp && fp.region && exitCountry && proxyProtocol !== 'direct' && exitCountry.toUpperCase() !== fp.region
+  // A rotating proxy or databases that disagree say nothing reliable about the country (its own warning shows).
+  const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
     ? { ip: exitCountry.toUpperCase(), window: fp.region }
     : undefined
   // Windows only has its own zones: the picked country's first, then the rest as Windows lists them.
@@ -518,9 +519,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function chooseRegion(value: string): void {
     if (value === 'ip') {
-      // Before the first launch it keeps following the IP; afterwards it is filled in once from the last check.
-      if (!locked) patchFingerprint({ networkIdentityMode: 'proxy', regionSource: undefined, uiLocale: undefined })
-      else void chooseByIp()
+      // Filled in once from the last check (or a new one); kept from then on.
+      void chooseByIp()
       return
     }
     if (value === 'custom') { patchFingerprint({ networkIdentityMode: 'manual' }); return }
@@ -534,6 +534,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       language: item.locale.language,
       acceptLanguages: item.locale.acceptLanguages,
       uiLocale: undefined,
+      voicesLocale: undefined,
+      mediaLocale: undefined,
       timezone: item.zone
     })
   }
@@ -795,6 +797,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       })
       setProxyResult(null)
       setPasteError('')
+      scheduleProxyCheck()
     } catch (error) {
       setPasteError(mt(error instanceof Error ? error.message : String(error)))
     }
@@ -804,7 +807,37 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyMode(mode)
     setProxyResult(null)
     if (mode !== 'library' && mode !== 'api') form.setFieldValue(['proxy', 'protocol'], mode)
+    scheduleProxyCheck()
   }
+
+  /** A proxy typed, pasted, picked from the library or its 网络加速 changed: checked a second later. */
+  function onFormChange(changed: Partial<EditorValues>): void {
+    if (!('proxy' in changed) && !('proxyId' in changed)) return
+    setProxyResult(null)
+    // A new window takes the country of a library proxy's last check right away; the new check follows.
+    const picked = 'proxyId' in changed ? proxies.find((item) => item.id === changed.proxyId) : undefined
+    if (!profile && picked?.check?.ok) fixToIp(picked.check)
+    scheduleProxyCheck()
+  }
+
+  // 填完就检测: no 检测代理 click needed. The timer calls the latest render's check, which sees the
+  // proxy mode and 网络加速 as they are by then.
+  const autoCheckTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const autoCheck = useRef<() => void>(() => undefined)
+  autoCheck.current = () => {
+    const proxy = (form.getFieldValue('proxy') ?? {}) as ProxyConfig
+    const filled = proxyMode === 'library'
+      ? Boolean(form.getFieldValue('proxyId'))
+      : proxyMode === 'api'
+        ? /^\s*https?:\/\/\S+/i.test(String(proxy.apiUrl ?? ''))
+        : proxyMode !== 'direct' && Boolean(String(proxy.host ?? '').trim()) && Number(proxy.port) > 0
+    if (filled) void testCurrentProxy()
+  }
+  function scheduleProxyCheck(): void {
+    clearTimeout(autoCheckTimer.current)
+    autoCheckTimer.current = setTimeout(() => autoCheck.current(), 1000)
+  }
+  useEffect(() => () => clearTimeout(autoCheckTimer.current), [open])
 
   /**
    * A proxy checked while creating a window fills in its country, time zone and languages from that
@@ -815,9 +848,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function followCheckedIp(result: ProxyTestResult | null, run: number, fill = false): void {
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
-    if (fill) fixToIp(result)
-    // A new window follows the IP it was checked with (基于 IP 生成), as before.
-    else if (!profile && result?.ok) patchFingerprint({ networkIdentityMode: 'proxy', regionSource: undefined, uiLocale: undefined })
+    // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
+    if (fill || !profile) fixToIp(result)
   }
 
   /**
@@ -827,11 +859,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function fixToIp(result: ProxyTestResult | null | undefined): boolean {
     const fixed = fixedIdentityForCheck(form.getFieldValue('fingerprint') as FingerprintConfig, result ?? undefined, { followUiLocale: true })
     if (!fixed) return false
-    patchFingerprint(fixed)
+    // Everything under the country follows it again (voices and device names through the system language).
+    patchFingerprint({ ...fixed, voicesLocale: undefined, mediaLocale: undefined })
     return true
   }
 
-  /** 基于 IP 生成 on a window that has been opened: the last check's IP, or a new check when there is none yet. */
+  /** 基于 IP 生成 picked by hand: the last check's IP, or a new check when there is none yet. */
   async function chooseByIp(): Promise<void> {
     if (fixToIp(lastCheck)) return
     await testCurrentProxy(true)
@@ -1143,8 +1176,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               type="warning"
               showIcon
               className="fb-editor-alert"
-              title={t("这个代理已被另外 {0} 个窗口使用", sharedWith)}
-              description={t("多个窗口共用同一个出口 IP，可能被平台判定为关联账号。")}
+              title={t("这个代理已被另外 {0} 个窗口使用，共用出口 IP 可能被判定为关联账号", sharedWith)}
             />
           )}
         </>
@@ -1229,7 +1261,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             value={route}
             status={tunnelStatus}
             disabledReason={route === shownRoute ? undefined : t("HTTPS 代理暂不支持网络加速，可改用 HTTP 或 SOCKS5")}
-            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyResult(null) }}
+            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyResult(null); scheduleProxyCheck() }}
           />
         </Row>
       )}
@@ -1251,10 +1283,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           type="warning"
           showIcon
           className="fb-editor-alert"
-          title={proxyResult.geoConflict?.includes('轮换代理') ? t("这个代理在轮换出口 IP") : t("代理地理信息存在冲突")}
-          description={proxyResult.geoConflict?.includes('轮换代理')
-            ? t("{0}。网站会看到 IP 在变，时区和语言也对不上；请在代理商后台改成固定会话（粘性 IP）。启动时会再次检测，并由你确认是否继续。", mt(proxyResult.geoConflict))
-            : t("{0}。继续使用可能影响指纹一致性；启动时会再次检测，并由用户确认是否继续。", mt(proxyResult.geoConflict))}
+          title={proxyResult.geoConflict?.includes('轮换代理')
+            ? t("{0}；不会按它配置国家和语言，请在代理商后台改成固定会话（粘性 IP）", mt(proxyResult.geoConflict))
+            : t("{0}；不会按它配置国家和语言，启动时会再检测并由你确认", mt(proxyResult.geoConflict))}
         />
       )}
       {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
@@ -1263,20 +1294,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           type="warning"
           showIcon
           className="fb-editor-alert"
-          title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
-          description={t("已经创建的窗口不会自动改国家、时区和语言；要和 IP 一致就点右边的按钮，或换一个那个国家的代理。")}
-          action={<Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button>}
+          title={t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+          action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
         />
       )}
       <Row label={t("时区和语言")}>
         <span className="fb-muted">
-          {followIp
-            ? proxyProtocol === 'direct'
-              ? t("基于 IP 生成；直连时没有代理 IP，先用指纹里的时区和语言")
-              : t("基于 IP 生成：{0} · {1}", networkIdentity.language, networkIdentity.timezone)
-            : fromIp
-              ? t("基于 IP 生成（已固定）：{0} · {1} · {2}", regionName(fp.region!), fp.language, fp.timezone)
-              : t("按地区「{0}」：{1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
+          {fromIp && fp.region
+            ? t("基于 IP 生成：{0} · {1} · {2}", regionName(fp.region), fp.language, fp.timezone)
+            : t("手动选择：{0} · {1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
         </span>
         <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
       </Row>
@@ -1336,6 +1362,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // prism7+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
   const windowUiLocale = fp.uiLocale ?? autoUiLocale
   const fontScript = windowsFontScript(windowUiLocale)
+  const autoVoicesLocale = voiceLocaleForLanguage(windowUiLocale)
+  const autoMediaLocale = mediaLocaleFor(windowUiLocale)
+  const voicesLabel = (locale: string) => `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
+  // A value picked on its own that does not fit the country: pointed out, not stopped.
+  const countryZones = fp.platform === 'windows' && fp.region ? countryWindowsZones(fp.region, getLocale()) : []
+  const timezoneMismatch = countryZones.length > 0 && !countryZones.some((zone) => zone.iana === fp.timezone)
+  const countryLocale = localeForCountry(fp.region)
+  const languageMismatch = countryLocale && fp.language
+    && !samePrimary(fp.language, countryLocale.language)
+    && fp.language.split('-')[1]?.toUpperCase() !== fp.region
+    ? { expected: countryLocale.language }
+    : undefined
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -1361,7 +1399,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </Form.Item>
       </Row>
       {kernelVersion && !pinnedKernel && (
-        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用", kernelName(kernelVersion))} description={t("安装该版本后才能启动此环境，或者改回自动跟随。")} />
+        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用，安装该版本后才能启动，或改回自动跟随", kernelName(kernelVersion))} />
       )}
       <Row label={t("浏览器品牌")}>
         <Select
@@ -1396,7 +1434,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <span title={userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}>{userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}</span>
         </div>
       </Row>
-      {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(versionWarning)} description={t("建议留空并自动匹配当前内核。")} />}
+      {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={`${mt(versionWarning)} · ${t("建议留空并自动匹配当前内核。")}`} />}
       </section>
 
       <section className="fb-fp-card">
@@ -1407,9 +1445,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("国家/地区")}
         hint={fromIp
-          ? locked
-            ? t("按代理 IP 所在国家生成，窗口打开过后已固定；IP 变了只提醒，不自动改")
-            : t("按代理 IP 所在国家，自动配好下面几项；第一次打开窗口后固定")
+          ? profile
+            ? t("按代理 IP 所在国家生成，已固定；IP 变了只提醒，不自动改")
+            : t("按检测到的代理 IP 配好下面几项；保存后固定，以后 IP 变了只提醒")
           : t("这台电脑在哪个国家；选了它，下面几项自动配好，也能单独改")}
       >
         <div className="fb-region-line">
@@ -1417,11 +1455,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             showSearch
             optionFilterProp="label"
             className="fb-fp-select fb-fp-select-wide"
-            value={followIp ? ipCountry ?? 'ip' : fp.region ?? 'custom'}
+            value={fp.region ?? 'custom'}
             onChange={chooseRegion}
             options={[
               { value: 'ip', label: t("基于 IP 生成") },
-              ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
+              ...(!fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
               ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
             ]}
             aria-label={t("国家/地区")}
@@ -1434,19 +1472,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           type="warning"
           showIcon
           className="fb-editor-alert"
-          title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
-          description={t("时区、语言和 IP 所在国家不一致，网站可能发现。可以点右边的按钮改成和 IP 一致（改完固定，不会随 IP 再变），或换一个那个国家的代理。")}
-          action={<Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button>}
+          title={t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+          action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
         />
       )}
       <Row label={t("时区")} check={checkFor('timezone')} hint={t("这台 Windows 的系统时区，网页里的时间按它显示")}>
-        {followIp
-          ? <Fixed>{fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone}</Fixed>
-          : (
-            <Form.Item name={['fingerprint', 'timezone']} noStyle>
-              <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
-            </Form.Item>
-          )}
+        <Form.Item name={['fingerprint', 'timezone']} noStyle>
+          <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
+        </Form.Item>
+        {timezoneMismatch && <span className="fb-row-warning">{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</span>}
       </Row>
       <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，Chrome 菜单也是它；字体、语音、设备名都跟着它")}>
         <Select
@@ -1454,7 +1488,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           optionFilterProp="label"
           className="fb-fp-select fb-fp-select-wide"
           value={fp.uiLocale ?? 'auto'}
-          onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value })}
+          // Voices and device names follow the system language again.
+          onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value, voicesLocale: undefined, mediaLocale: undefined })}
           options={[
             { value: 'auto', label: t("跟随浏览器语言 · {0}", `${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
             ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
@@ -1463,31 +1498,32 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
-        {followIp
-          ? <Fixed>{networkIdentity.language}</Fixed>
-          : (
-            <Select
-              showSearch
-              optionFilterProp="label"
-              className="fb-fp-select fb-fp-select-wide"
-              value={fp.language}
-              onChange={(language: string) => {
-                const item = LANGUAGES.find((entry) => entry.language === language)
-                if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages })
-              }}
-              options={languageOptions}
-              optionRender={(option) => (
-                <span className="fb-language-option">
-                  <span>{option.label}</span>
-                  {option.data.voices && <Tag bordered={false} color="blue">{t("微软语音")}</Tag>}
-                  {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
-                </span>
-              )}
-              aria-label={t("浏览器语言")}
-            />
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select fb-fp-select-wide"
+          value={fp.language}
+          onChange={(language: string) => {
+            const item = LANGUAGES.find((entry) => entry.language === language)
+            // The system language, voices and device names follow it again.
+            if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages, uiLocale: undefined, voicesLocale: undefined, mediaLocale: undefined })
+          }}
+          // The country's own language is marked, so it can be picked back after a change.
+          options={languageOptions.map((option) => option.value === countryLocale?.language && fp.region
+            ? { ...option, label: `${option.label} · ${t("{0}默认", regionName(fp.region))}` }
+            : option)}
+          optionRender={(option) => (
+            <span className="fb-language-option">
+              <span>{option.label}</span>
+              {option.data.voices && <Tag bordered={false} color="blue">{t("微软语音")}</Tag>}
+              {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
+            </span>
           )}
+          aria-label={t("浏览器语言")}
+        />
+        {languageMismatch && <span className="fb-row-warning">{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</span>}
       </Row>
-      <Row label={t("地理位置")} hint={followIp || fp.location ? t("经纬度按代理 IP 的位置{0}", networkIdentity.latitude !== undefined ? `：${networkIdentity.latitude.toFixed(2)}, ${networkIdentity.longitude!.toFixed(2)}` : '') : undefined}>
+      <Row label={t("地理位置")} hint={fp.location ? t("经纬度按代理 IP 的位置{0}", networkIdentity.latitude !== undefined ? `：${networkIdentity.latitude.toFixed(2)}, ${networkIdentity.longitude!.toFixed(2)}` : '') : undefined}>
         <Select
           className="fb-fp-select fb-fp-select-wide"
           value={fp.geolocationPermission ?? 'ask'}
@@ -1539,12 +1575,35 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
       )}
 
-      <Row label={t("随系统语言")}>
-        <span className="fb-muted">
-          {t("语音：{0}", WINDOWS_VOICE_LOCALES.find((item) => item.locale === voiceLocaleForLanguage(windowUiLocale))?.voices.join(', ') ?? '—')}
-          {' · '}
-          {t("媒体设备名：{0}", ownLanguageName(windowUiLocale))}
-        </span>
+      <Row label={t("语音")} hint={t("网页读到的 Windows 语音（朗读用的声音），默认是系统语言的那几个")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select fb-fp-select-wide"
+          value={fp.voicesLocale ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
+          options={[
+            { value: 'auto', label: t("跟随系统语言 · {0}", voicesLabel(autoVoicesLocale)) },
+            ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: voicesLabel(item.locale) }))
+          ]}
+          aria-label={t("语音")}
+        />
+        {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <span className="fb-row-warning">{t("真实 Windows 的语音一般和系统语言一致")}</span>}
+      </Row>
+      <Row label={t("媒体设备名")} hint={t("网站拿到麦克风或摄像头权限后看到的设备名语言，比如「扬声器」还是「Speakers」")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select fb-fp-select-wide"
+          value={fp.mediaLocale ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
+          options={[
+            { value: 'auto', label: t("跟随系统语言 · {0}", `${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
+            ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
+          ]}
+          aria-label={t("媒体设备名")}
+        />
+        {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <span className="fb-row-warning">{t("真实 Windows 的设备名和系统语言一致")}</span>}
       </Row>
       </section>
 
@@ -1802,7 +1861,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Form
         form={form}
         requiredMark={false}
-        onValuesChange={(changed) => { if ('proxy' in changed) setProxyResult(null) }}
+        onValuesChange={onFormChange}
       >
         <Tabs
           activeKey={tab}

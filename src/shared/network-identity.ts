@@ -1,6 +1,8 @@
 import type { FingerprintConfig, ProxyTestResult } from './types'
 import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
 import { windowsReportedZone } from './windows-time-zones'
+import { voiceLocaleForLanguage } from './windows-voices'
+import { mediaLocaleFor } from './media-devices'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -130,6 +132,45 @@ export function fixedIdentityForCheck(
       ? { latitude: check.latitude, longitude: check.longitude, ...(check.accuracyMeters ? { accuracyMeters: check.accuracyMeters } : {}) }
       : undefined
   }
+}
+
+/**
+ * A saved window's fingerprint, with nothing left to work out at launch. A window that still
+ * followed its proxy's IP keeps the values of its last check (基于 IP 生成), or else the ones it
+ * had (手动选择); the system language, speech voices and device-name language that followed the
+ * language are written in, so a later version of these tables cannot change a saved window.
+ */
+export function savedFingerprint(fingerprint: FingerprintConfig, check?: ProxyTestResult): FingerprintConfig {
+  const next: FingerprintConfig = { ...fingerprint }
+  if (next.networkIdentityMode === 'proxy') {
+    const fixed = fixedIdentityForCheck(next, check)
+    Object.assign(next, fixed ?? { networkIdentityMode: 'manual' })
+    if (!fixed) delete next.regionSource
+  }
+  for (const key of Object.keys(next) as Array<keyof FingerprintConfig>) {
+    if (next[key] === undefined) delete next[key]
+  }
+  const uiLocale = next.uiLocale ?? chromeUiLocaleFor(next.language)
+  return {
+    ...next,
+    uiLocale,
+    voicesLocale: next.voicesLocale ?? voiceLocaleForLanguage(uiLocale),
+    mediaLocale: next.mediaLocale ?? mediaLocaleFor(uiLocale)
+  }
+}
+
+/**
+ * The editor's view of a saved fingerprint: values equal to what they would follow show as
+ * following (跟随…), so changing the language moves them along; they are written in again on save.
+ */
+export function followingLocales(fingerprint: FingerprintConfig): FingerprintConfig {
+  const next: FingerprintConfig = { ...fingerprint }
+  const followedUi = chromeUiLocaleFor(next.language)
+  if (next.uiLocale === followedUi) delete next.uiLocale
+  const uiLocale = next.uiLocale ?? followedUi
+  if (next.voicesLocale === voiceLocaleForLanguage(uiLocale)) delete next.voicesLocale
+  if (next.mediaLocale === mediaLocaleFor(uiLocale)) delete next.mediaLocale
+  return next
 }
 
 export function geoConflictConfirmationMessage(errorText: string): string | undefined {

@@ -321,4 +321,29 @@ describe('assigning extensions', () => {
       proxyCheck: { ip: '203.0.113.30' }
     })
   })
+
+  it('keeps a saved window\'s values: one that followed its IP takes its last check, the languages are written in', async () => {
+    const path = await vault()
+    const store = await open(path)
+    const following = draft('A')
+    following.fingerprint = { ...following.fingerprint, networkIdentityMode: 'proxy' }
+    const [a, b] = await store.createMany([following, draft('B')])
+    // Saved without a check: the values it had, chosen by hand.
+    expect(a.fingerprint).toMatchObject({ networkIdentityMode: 'manual', region: 'US', language: 'en-US', uiLocale: 'en-US', voicesLocale: 'en-us', mediaLocale: 'en-us' })
+    expect(a.fingerprint.regionSource).toBeUndefined()
+    // A window from before this version that still follows its IP, with a check of a Mexican IP.
+    const file = JSON.parse(await readFile(join(path, 'profiles.json'), 'utf8'))
+    const stored = file.profiles.find((profile: { id: string }) => profile.id === b.id)
+    stored.fingerprint = { ...stored.fingerprint, networkIdentityMode: 'proxy' }
+    delete stored.fingerprint.uiLocale
+    delete stored.fingerprint.voicesLocale
+    delete stored.fingerprint.mediaLocale
+    stored.directCheck = { ...check('187.190.19.106'), countryCode: 'MX', timezone: 'America/Mexico_City', latitude: 19.43, longitude: -99.13, geoConfidence: 'consensus' }
+    await writeFile(join(path, 'profiles.json'), JSON.stringify(file))
+    const reopened = await open(path)
+    expect(reopened.get(b.id).fingerprint).toMatchObject({
+      networkIdentityMode: 'manual', region: 'MX', regionSource: 'ip', timezone: 'America/Mexico_City', language: 'es-419',
+      uiLocale: 'es-419', voicesLocale: 'es-mx', mediaLocale: 'es-es', location: { latitude: 19.43, longitude: -99.13 }
+    })
+  })
 })

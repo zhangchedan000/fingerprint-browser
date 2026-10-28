@@ -54,3 +54,16 @@ export function effectiveMediaDevices(choice: string | undefined, seed: number, 
   if (choice && SET.test(choice)) return choice
   return autoMediaDevices(seed, gpuModel)
 }
+
+/**
+ * The device-name language the kernel picks for an interface language when none is given
+ * (patch 014, FingerprintEndpointNamesFor): the same locale, else the first of its language, else
+ * en-us. Hong Kong and Macau run Traditional Chinese Windows.
+ */
+export function mediaLocaleFor(uiLocale: string): string {
+  let lang = uiLocale.trim().toLowerCase().replace('_', '-')
+  if (lang.startsWith('zh-hk') || lang.startsWith('zh-mo') || lang.includes('hant')) lang = 'zh-tw'
+  if (MEDIA_LOCALES.includes(lang)) return lang
+  const primary = lang.split('-')[0]
+  return MEDIA_LOCALES.find((locale) => locale.split('-')[0] === primary) ?? 'en-us'
+}

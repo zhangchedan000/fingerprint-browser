@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Opens the window editor of the real app for each kind of window (manual country, 基于 IP 生成,
- * API 提取, a window that has been opened) and goes through its tabs, failing when the page goes
+ * API 提取, one saved while it still followed its IP) and goes through its tabs, failing when the page goes
  * blank or throws. Catches render errors that type checks cannot (a value used before it exists).
  *
  *   npm run build && node tools/app-e2e/editor-smoke.mjs        (on Linux: xvfb-run -a node …)
@@ -27,10 +27,15 @@ try {
   const kinds = {
     manual: draft('手动国家', 101, 'https://example.com/'),
     ip: { ...draft('基于 IP', 102, 'https://example.com/'), proxy: { protocol: 'socks5', host: '203.0.113.5', port: 1080, username: '', password: '' } },
-    api: { ...draft('API 窗口', 103, 'https://example.com/'), proxy: { protocol: 'http', host: '', username: '', password: '', apiUrl: 'https://api.example.com/get?num=1' } }
+    api: { ...draft('API 窗口', 103, 'https://example.com/'), proxy: { protocol: 'http', host: '', username: '', password: '', apiUrl: 'https://api.example.com/get?num=1' } },
+    // Saved while it still followed its IP and never checked: kept with the values it had (手动选择).
+    following: { ...draft('跟随未检测', 104, 'https://example.com/'), proxy: { protocol: 'socks5', host: '203.0.113.6', port: 1080, username: '', password: '' } }
   }
-  kinds.ip.fingerprint = { ...kinds.ip.fingerprint, networkIdentityMode: 'proxy' }
-  kinds.api.fingerprint = { ...kinds.api.fingerprint, networkIdentityMode: 'proxy', region: 'SG', regionSource: 'ip' }
+  // Filled in from a checked IP (基于 IP 生成), as a new window is when its proxy is checked.
+  const fromIp = (region, timezone, language, acceptLanguages) => ({ networkIdentityMode: 'manual', region, regionSource: 'ip', timezone, language, acceptLanguages })
+  kinds.ip.fingerprint = { ...kinds.ip.fingerprint, ...fromIp('MX', 'America/Mexico_City', 'es-419', 'es-419,es') }
+  kinds.api.fingerprint = { ...kinds.api.fingerprint, ...fromIp('SG', 'Asia/Singapore', 'en-SG', 'en-SG,en') }
+  kinds.following.fingerprint = { ...kinds.following.fingerprint, networkIdentityMode: 'proxy' }
   for (const [kind, value] of Object.entries(kinds)) {
     await run(`window.browserApi.profiles.create(${JSON.stringify(value)}).then(() => true)`).catch((error) => failures.push(`create ${kind}: ${error.message}`))
   }
@@ -72,7 +77,7 @@ try {
       const text = await run(`document.querySelector('.ant-drawer-open')?.innerText ?? ''`)
       if (tab === '指纹设置' && !text.includes('国家/地区')) failures.push(`${name}: no 国家/地区 row in the fingerprint tab`)
       // The label after the country says how it was chosen.
-      const label = name === kinds.manual.name ? '手动选择' : name === kinds.ip.name || name === kinds.api.name ? '基于 IP 生成' : undefined
+      const label = name === kinds.manual.name || name === kinds.following.name ? '手动选择' : name === kinds.ip.name || name === kinds.api.name ? '基于 IP 生成' : undefined
       if (tab === '指纹设置' && label && !text.includes(label)) failures.push(`${name}: the country is not labelled ${label}`)
       if (tab === '指纹设置' && process.env.SMOKE_SCREENSHOTS) {
         await run(`[...document.querySelectorAll('.ant-drawer-open .fb-form-label')].find((node) => node.innerText.startsWith('国家/地区'))?.scrollIntoView({ block: 'center' }), true`)
@@ -80,6 +85,11 @@ try {
         const shot = await instance.client.send('Page.captureScreenshot', { format: 'png' })
         const { writeFile } = await import('node:fs/promises')
         await writeFile(join(process.env.SMOKE_SCREENSHOTS, `${name}.png`), Buffer.from(shot.data, 'base64'))
+        // The rows that follow the country, further down.
+        await run(`[...document.querySelectorAll('.ant-drawer-open .fb-form-label')].find((node) => node.innerText.startsWith('地理位置'))?.scrollIntoView({ block: 'start' }), true`)
+        await delay(300)
+        const lower = await instance.client.send('Page.captureScreenshot', { format: 'png' })
+        await writeFile(join(process.env.SMOKE_SCREENSHOTS, `${name}-2.png`), Buffer.from(lower.data, 'base64'))
       }
     }
     await clickText('取消', `document.querySelector('.ant-drawer-open') ?? document`)
