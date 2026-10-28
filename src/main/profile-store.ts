@@ -9,7 +9,7 @@ import type {
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
-import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
+import { effectiveGpu, refreshSeededGpuIdentity } from '../shared/hardware-profiles'
 import { savedFingerprint } from '../shared/network-identity'
 import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
@@ -229,7 +229,10 @@ export class ProfileStore {
    */
   private fixSavedFingerprints(): void {
     for (const [id, stored] of this.profiles) {
-      const fingerprint = savedFingerprint(stored.fingerprint, this.resolve(stored).proxyCheck)
+      const fingerprint = savedFingerprint(stored.fingerprint, this.resolve(stored).proxyCheck, {
+        gpuModel: effectiveGpu(stored.fingerprint, stored.kernelVersion)?.model,
+        legacy: true
+      })
       if (JSON.stringify(fingerprint) !== JSON.stringify(stored.fingerprint)) this.profiles.set(id, { ...stored, fingerprint })
     }
   }
@@ -617,7 +620,7 @@ export class ProfileStore {
           fingerprint: savedFingerprint({
             ...draft.fingerprint,
             seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
-          }),
+          }, undefined, { gpuModel: effectiveGpu(draft.fingerprint, fields.kernelVersion || defaultKernel)?.model }),
           createdAt: now,
           updatedAt: now,
           favorite: false,
@@ -656,7 +659,9 @@ export class ProfileStore {
       const profile: StoredProfile = {
         ...current,
         ...fields,
-        fingerprint: savedFingerprint(fields.fingerprint, proxyId === current.proxyId ? this.resolve(current).proxyCheck : undefined),
+        fingerprint: savedFingerprint(fields.fingerprint, proxyId === current.proxyId ? this.resolve(current).proxyCheck : undefined, {
+          gpuModel: effectiveGpu(fields.fingerprint, fields.kernelVersion)?.model
+        }),
         proxyId,
         groupId: this.library.ensureGroup(group, now),
         account: privateAccount({

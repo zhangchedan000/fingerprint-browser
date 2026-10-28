@@ -1,3 +1,4 @@
+import { gpuTier, type GpuTier } from './hardware-match'
 /**
  * The microphones, speakers and cameras a window lists (Prism patch 014). Pages without
  * permission only see which kinds exist; with permission they see names built from the Windows
@@ -14,8 +15,42 @@ export const MEDIA_LOCALES: readonly string[] = [
   'sv-se', 'th-th', 'tr-tr', 'uk-ua', 'zh-cn', 'zh-tw'
 ]
 
-/** Sets offered besides auto and the real devices: microphones, speakers, cameras. */
-export const MEDIA_PRESETS: readonly string[] = ['1,2,0', '1,2,1', '1,1,0', '1,1,1', '2,1,1', '2,2,1']
+/**
+ * What a desktop has plugged in, and the set the kernel lists for it (microphones, audio outputs,
+ * cameras). Speakers are the onboard sound (Realtek); a USB headset brings a microphone and
+ * headphones; a webcam brings a camera and its own microphone.
+ */
+export interface MediaSetup {
+  set: string
+  microphones: number
+  speakers: number
+  headphones: number
+  cameras: number
+  /** What is plugged in, in a few words. */
+  kind: 'speakers' | 'headset' | 'speakers-headset' | 'speakers-webcam' | 'speakers-headset-webcam'
+}
+
+export const MEDIA_SETUPS: readonly MediaSetup[] = [
+  { set: '0,1,0', microphones: 0, speakers: 1, headphones: 0, cameras: 0, kind: 'speakers' },
+  { set: '1,1,0', microphones: 1, speakers: 0, headphones: 1, cameras: 0, kind: 'headset' },
+  { set: '1,2,0', microphones: 1, speakers: 1, headphones: 1, cameras: 0, kind: 'speakers-headset' },
+  { set: '1,1,1', microphones: 1, speakers: 1, headphones: 0, cameras: 1, kind: 'speakers-webcam' },
+  { set: '2,2,1', microphones: 2, speakers: 1, headphones: 1, cameras: 1, kind: 'speakers-headset-webcam' }
+]
+
+/** Sets offered besides auto and the real devices. */
+export const MEDIA_PRESETS: readonly string[] = MEDIA_SETUPS.map((setup) => setup.set)
+
+/**
+ * The setups a desktop with this card usually has (a judgement, not survey data): entry cards in
+ * everyday computers, speakers or a headset; gaming cards a USB headset; the top cards a webcam too.
+ */
+const SETUPS_BY_TIER: Record<GpuTier, string[]> = {
+  entry: ['0,1,0', '1,1,0'],
+  mid: ['1,1,0', '1,2,0'],
+  high: ['1,2,0', '1,1,1'],
+  top: ['1,2,0', '2,2,1']
+}
 
 const SET = /^[0-3],[0-3],[0-3]$/
 
@@ -28,17 +63,32 @@ export function isLaptopGpu(gpuModel: string | undefined): boolean {
   return /\b(Laptop|Max-Q|Mobile)\b/i.test(gpuModel ?? '')
 }
 
-/**
- * A usual set for this seed and GPU. A desktop: one microphone (the headset's), speakers plus
- * headphones, a webcam now and then. A laptop: its built-in microphone, speakers and webcam.
- */
-export function autoMediaDevices(seed: number, gpuModel?: string): string {
+function seededRandom(seed: number): () => number {
   let state = (seed ^ 0x9e3779b9) >>> 0
-  const next = () => {
+  return () => {
     state = Math.imul(state ^ (state >>> 15), 0x2c1b3c6d) >>> 0
     state = Math.imul(state ^ (state >>> 12), 0x297a2d39) >>> 0
     return ((state ^ (state >>> 15)) >>> 0) / 4294967296
   }
+}
+
+/**
+ * The setup for this seed and GPU: one of the usual ones for the card's tier. A laptop: its
+ * built-in microphone, speakers and webcam. Saved windows keep the set they were saved with.
+ */
+export function autoMediaDevices(seed: number, gpuModel?: string): string {
+  const next = seededRandom(seed)
+  if (isLaptopGpu(gpuModel)) return '1,1,1'
+  const choices = SETUPS_BY_TIER[gpuTier(gpuModel ?? '')]
+  return choices[Math.floor(next() * choices.length)]
+}
+
+/**
+ * The rule before 0.5.16, for windows saved then without a set of their own: written in once with
+ * the set they have always had, so an update does not change them.
+ */
+export function legacyAutoMediaDevices(seed: number, gpuModel?: string): string {
+  const next = seededRandom(seed)
   if (isLaptopGpu(gpuModel)) {
     const speakers = next() < 0.7 ? 1 : 2
     return `1,${speakers},1`

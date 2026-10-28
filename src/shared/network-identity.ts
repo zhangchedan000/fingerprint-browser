@@ -2,7 +2,7 @@ import type { FingerprintConfig, ProxyTestResult } from './types'
 import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
 import { windowsReportedZone } from './windows-time-zones'
 import { voiceLocaleForLanguage } from './windows-voices'
-import { mediaLocaleFor } from './media-devices'
+import { autoMediaDevices, legacyAutoMediaDevices, mediaLocaleFor } from './media-devices'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -140,7 +140,11 @@ export function fixedIdentityForCheck(
  * had (手动选择); the system language, speech voices and device-name language that followed the
  * language are written in, so a later version of these tables cannot change a saved window.
  */
-export function savedFingerprint(fingerprint: FingerprintConfig, check?: ProxyTestResult): FingerprintConfig {
+export function savedFingerprint(
+  fingerprint: FingerprintConfig,
+  check?: ProxyTestResult,
+  options: { gpuModel?: string; legacy?: boolean } = {}
+): FingerprintConfig {
   const next: FingerprintConfig = { ...fingerprint }
   if (next.networkIdentityMode === 'proxy') {
     const fixed = fixedIdentityForCheck(next, check)
@@ -155,16 +159,19 @@ export function savedFingerprint(fingerprint: FingerprintConfig, check?: ProxyTe
     ...next,
     uiLocale,
     voicesLocale: next.voicesLocale ?? voiceLocaleForLanguage(uiLocale),
-    mediaLocale: next.mediaLocale ?? mediaLocaleFor(uiLocale)
+    mediaLocale: next.mediaLocale ?? mediaLocaleFor(uiLocale),
+    // The devices that went with its GPU (windows saved before this rule: the set they always had).
+    mediaDevices: next.mediaDevices ?? (options.legacy ? legacyAutoMediaDevices : autoMediaDevices)(next.seed >>> 0, options.gpuModel)
   }
 }
 
 /**
  * The editor's view of a saved fingerprint: values equal to what they would follow show as
- * following (跟随…), so changing the language moves them along; they are written in again on save.
+ * following (跟随… / 自动), so changing the language or GPU moves them along; written in again on save.
  */
-export function followingLocales(fingerprint: FingerprintConfig): FingerprintConfig {
+export function followingLocales(fingerprint: FingerprintConfig, gpuModel?: string): FingerprintConfig {
   const next: FingerprintConfig = { ...fingerprint }
+  if (next.mediaDevices === autoMediaDevices(next.seed >>> 0, gpuModel)) delete next.mediaDevices
   const followedUi = chromeUiLocaleFor(next.language)
   if (next.uiLocale === followedUi) delete next.uiLocale
   const uiLocale = next.uiLocale ?? followedUi

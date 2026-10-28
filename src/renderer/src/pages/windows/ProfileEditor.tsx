@@ -39,9 +39,9 @@ import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../sh
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
-import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
+import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
-import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, mediaLocaleFor } from '../../../../shared/media-devices'
+import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey, noiseStillMatches } from '../../../../shared/fingerprint-check-key'
 import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, followingLocales, fixedIdentityForCheck, localeForCountry, savedFingerprint } from '../../../../shared/network-identity'
@@ -173,7 +173,10 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
  */
 function openedValues(profile: BrowserProfileView | undefined, suggestedIndex: number): EditorValues {
   const values = editorValues(profile, suggestedIndex)
-  if (profile) values.fingerprint = followingLocales(savedFingerprint(values.fingerprint, profile.proxyCheck))
+  if (profile) {
+    const gpuModel = effectiveGpu(values.fingerprint, profile.kernelVersion)?.model
+    values.fingerprint = followingLocales(savedFingerprint(values.fingerprint, profile.proxyCheck, { gpuModel }), gpuModel)
+  }
   return values
 }
 
@@ -297,6 +300,14 @@ function TextWithShuffle({ value, onChange, onShuffle, label }: { value: string;
 }
 
 /** A line that only explains what happens; there is nothing to choose. */
+const MEDIA_KIND_LABELS: Record<MediaSetup['kind'], string> = {
+  speakers: '只接音箱',
+  headset: '只有 USB 耳麦',
+  'speakers-headset': '音箱 + USB 耳麦',
+  'speakers-webcam': '音箱 + 摄像头',
+  'speakers-headset-webcam': '音箱 + USB 耳麦 + 摄像头'
+}
+
 /** Rows whose check results only depend on the seed, GPU, kernel and their own switch. */
 const NOISE_ROWS = new Set<FingerprintCheckRow>(['canvas', 'audio', 'clientrects'])
 
@@ -1360,12 +1371,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   /** The language the window launches with, for "follow the language" labels. */
   const shownLanguage = effectiveNetworkIdentity(fp, profile?.proxyCheck, { allowGeoConflict: true }).language
+  /** Every kind with its count, and what is plugged in. */
   const mediaLabel = (set: string) => {
-    const [microphones, speakers, cameras] = set.split(',').map(Number)
-    // Patch 014 names a second audio output "Headphones", so two outputs read as speakers + headphones.
-    if (speakers === 1) return t("{0} 麦克风 · 扬声器 · {1} 摄像头", microphones, cameras)
-    if (speakers === 2) return t("{0} 麦克风 · 扬声器 + 耳机 · {1} 摄像头", microphones, cameras)
-    return t("{0} 麦克风 · {1} 扬声器 · {2} 摄像头", microphones, speakers, cameras)
+    const setup = MEDIA_SETUPS.find((item) => item.set === set)
+    if (setup) {
+      return t("麦克风 {0} · 扬声器 {1} · 耳机 {2} · 摄像头 {3}（{4}）", setup.microphones, setup.speakers, setup.headphones, setup.cameras, t(MEDIA_KIND_LABELS[setup.kind]))
+    }
+    // A set chosen before these setups (kept as it was saved).
+    const [microphones, outputs, cameras] = set.split(',').map(Number)
+    return t("麦克风 {0} · 音频输出 {1} · 摄像头 {2}", microphones, outputs, cameras)
   }
   const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen(), windowScreen)
   const screenValue = fp.screenSource === 'host' || (shownScreen.width !== fp.screenWidth || shownScreen.height !== fp.screenHeight)
@@ -1373,6 +1387,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     : screenCustom || !isChoice(fp.screenWidth, fp.screenHeight)
       ? 'custom'
       : `${fp.screenWidth}x${fp.screenHeight}`
+  // The resolution a site sees, as the monitor's own pixels, against what desktops with this card have.
+  const screenPhysical = { width: Math.round(shownScreen.width * hostScale()), height: Math.round(shownScreen.height * hostScale()) }
+  const screenOdd = Boolean(gpu?.model && !gpuReal && !screenSuitsGpu(gpu.model, screenPhysical))
   const coreOptions = [...new Set([...CORE_OPTIONS, fp.hardwareConcurrency])].sort((a, b) => a - b)
   const gpuValue = gpuReal ? 'real' : shownGpuKey ?? 'kernel'
   const gpuSelectOptions = [
@@ -1713,10 +1730,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               onShuffle={shuffleScreen}
               options={[
                 { value: 'host', label: t("本机真实") },
-                ...screenChoices(floor, hostScale()).map(({ width, height, physical }) => ({
-                  value: `${width}x${height}`,
-                  label: screenLabel(width, height, physical)
-                })),
+                // The sizes desktops with this card usually have come first, marked 常见.
+                ...screenChoices(floor, hostScale())
+                  .map(({ width, height, physical }) => ({ width, height, physical, usual: Boolean(gpu?.model && !gpuReal && screenSuitsGpu(gpu.model, physical)) }))
+                  .sort((a, b) => Number(b.usual) - Number(a.usual))
+                  .map(({ width, height, physical, usual }) => ({
+                    value: `${width}x${height}`,
+                    label: usual ? `${screenLabel(width, height, physical)} · ${t("常见")}` : screenLabel(width, height, physical)
+                  })),
                 { value: 'custom', label: screenValue === 'custom' && !screenCustom ? `${fp.screenWidth} × ${fp.screenHeight}` : t("自定义") }
               ]}
             />
@@ -1727,20 +1748,23 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               </>
             )}
           </Space>
+          {screenOdd && <span className="fb-row-warning">{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</span>}
         </Row>
       ) : (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
           <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
         </Row>
       )}
-      <Row label={t("媒体设备")} hint={t("网站未授权时只能看到有哪几种设备；授权后看到的设备名按系统语言的 Windows 名称生成")}>
+      <Row label={t("媒体设备")} hint={t("自动：按显卡档次配一套台式机常见的设备，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备")}>
         <Select
-          className="fb-fp-select"
+          className="fb-fp-select fb-fp-select-wide"
           value={fp.mediaDevices ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
           options={[
             { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
             ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
+            // A set saved before these setups stays selectable as it is.
+            ...(fp.mediaDevices && fp.mediaDevices !== 'real' && !MEDIA_PRESETS.includes(fp.mediaDevices) ? [{ value: fp.mediaDevices, label: mediaLabel(fp.mediaDevices) }] : []),
             { value: 'real', label: t("本机真实") }
           ]}
         />

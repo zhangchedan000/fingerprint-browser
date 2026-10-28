@@ -104,3 +104,8 @@ export function matchedScreen(gpuModel: string, floor: ScreenSize | undefined, r
   const last = choices[choices.length - 1]
   return { width: last.width, height: last.height }
 }
+
+/** Whether a desktop with this card usually has a screen of this physical size (the table above). */
+export function screenSuitsGpu(gpuModel: string, physical: ScreenSize): boolean {
+  return (SCREENS[gpuTier(gpuModel)][`${physical.width}x${physical.height}`] ?? 0) > 0
+}
