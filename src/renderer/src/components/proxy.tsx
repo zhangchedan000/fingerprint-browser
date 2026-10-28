@@ -31,11 +31,11 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
     <div className="fb-proxy-cell">
       <div>
         <span className={`fb-cc${check?.ok && check.countryCode ? '' : ' muted'}`}>{check?.ok && check.countryCode ? check.countryCode : '—'}</span>
-        <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxyAddress(proxy)}</span>
+        <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxy.apiUrl && !proxy.host ? t("API 提取") : proxyAddress(proxy)}</span>
       </div>
       <div className="fb-proxy-meta">
         <small className="fb-ellipsis" title={check?.ok ? [check.country, check.region, check.city].filter(Boolean).join(' · ') : undefined}>
-          {proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
+          {proxy.apiUrl ? t("API · 上次 IP") : proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
         </small>
         {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
         {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}

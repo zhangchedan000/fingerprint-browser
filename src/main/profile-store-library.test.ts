@@ -280,13 +280,45 @@ describe('assigning extensions', () => {
     expect((await open(path)).get(b.id).tunnel).toBeUndefined()
   })
 
-  it('keeps one library proxy per API link for windows given the link directly', async () => {
-    const store = await open()
+  it('keeps an API link on the window, with its last proxy and IP history, never in the library', async () => {
+    const path = await vault()
+    const store = await open(path)
     const apiUrl = 'https://white.example.com/api?num=1'
-    const [a] = await store.createMany([draft('A', { proxy: { protocol: 'socks5', host: '203.0.113.20', port: 31002, username: '', password: '', apiUrl } })])
-    const [b] = await store.createMany([draft('B', { proxy: { protocol: 'http', host: '203.0.113.21', port: 31003, username: '', password: '', apiUrl } })])
-    expect(store.get(a.id).proxyId).toBe(store.get(b.id).proxyId)
-    expect(store.getProxy(store.get(a.id).proxyId).apiUrl).toBe(apiUrl)
-    expect(store.listProxies()).toHaveLength(1)
+    const [a] = await store.createMany([draft('A', { proxy: { protocol: 'http', host: '', username: '', password: '', apiUrl } })])
+    expect(store.listProxies()).toHaveLength(0)
+    expect(store.get(a.id)).toMatchObject({ proxyId: '', apiProxy: { url: apiUrl }, proxy: { apiUrl, host: '' } })
+    await store.setWindowApiEndpoint(a.id, { protocol: 'socks5', host: '203.0.113.20', port: 31002, username: 'u', password: 'p' })
+    expect(store.get(a.id).proxy).toMatchObject({ protocol: 'socks5', host: '203.0.113.20', port: 31002, password: 'p' })
+    // Every launch's IP goes into the history, newest first; a new IP is not an "exit change".
+    await store.setProxyCheck(a.id, { ...check('198.51.100.1', '2026-10-28T01:00:00.000Z'), countryCode: 'SG' })
+    await store.setProxyCheck(a.id, { ...check('198.51.100.2', '2026-10-28T02:00:00.000Z'), countryCode: 'SG' })
+    expect(store.get(a.id).apiProxy?.history?.map((entry) => entry.ip)).toEqual(['198.51.100.2', '198.51.100.1'])
+    expect(store.get(a.id).proxyCheck?.exitChanged).toBeFalsy()
+    // Saved without the password; the same link keeps the history when the window is edited.
+    expect(await readFile(join(path, 'profiles.json'), 'utf8')).not.toContain('"password": "p"')
+    await store.update(a.id, draft('A', { proxy: { protocol: 'http', host: '', username: '', password: '', apiUrl } }))
+    expect(store.get(a.id).apiProxy?.history).toHaveLength(2)
+    // A library proxy given to the window replaces the link.
+    const fixed = await store.createProxy({ ...PROXY, note: '' })
+    await store.assignMany([a.id], { proxyId: fixed.id })
+    expect(store.get(a.id).apiProxy).toBeUndefined()
+  })
+
+  it('moves API proxies of the library into the windows that use them', async () => {
+    const path = await vault()
+    const store = await open(path)
+    const [a] = await store.createMany([draft('A')])
+    // An API proxy as 0.5.4–0.5.11 kept it in the library.
+    const file = JSON.parse(await readFile(join(path, 'profiles.json'), 'utf8'))
+    file.proxies.push({ id: 'api-1', protocol: 'socks5', host: '203.0.113.30', port: 31003, username: '', password: '', note: '', createdAt: file.profiles[0].createdAt, updatedAt: file.profiles[0].createdAt, apiUrl: 'https://white.example.com/api?region=SG', check: check('203.0.113.30') })
+    file.profiles.find((profile: { id: string }) => profile.id === a.id).proxyId = 'api-1'
+    await writeFile(join(path, 'profiles.json'), JSON.stringify(file))
+    const reopened = await open(path)
+    expect(reopened.listProxies()).toHaveLength(0)
+    expect(reopened.get(a.id)).toMatchObject({
+      proxyId: '',
+      apiProxy: { url: 'https://white.example.com/api?region=SG', endpoint: { host: '203.0.113.30', port: 31003 } },
+      proxyCheck: { ip: '203.0.113.30' }
+    })
   })
 })

@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
-  BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
-  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy
+  ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
+  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy, WindowApiProxy
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
@@ -90,6 +90,25 @@ function safeTunnelRoute(value: unknown): TunnelRoute | undefined {
   }
 }
 
+const API_HISTORY_LIMIT = 50
+
+/** A saved API 提取 of a window, or none when it is unreadable. */
+function safeApiProxy(value: unknown): WindowApiProxy | undefined {
+  const api = value as Partial<WindowApiProxy> | undefined
+  if (!api || typeof api !== 'object' || typeof api.url !== 'string') return undefined
+  let url: string
+  try { url = validProxyApiUrl(api.url) } catch { return undefined }
+  const endpoint = api.endpoint && typeof api.endpoint === 'object'
+    && (api.endpoint.protocol === 'http' || api.endpoint.protocol === 'socks5')
+    && typeof api.endpoint.host === 'string' && Number.isInteger(api.endpoint.port)
+    ? { protocol: api.endpoint.protocol, host: api.endpoint.host, port: api.endpoint.port, username: typeof api.endpoint.username === 'string' ? api.endpoint.username : '' }
+    : undefined
+  const history = Array.isArray(api.history)
+    ? api.history.filter((entry): entry is ApiIpRecord => Boolean(entry) && typeof entry.ip === 'string' && typeof entry.at === 'string').slice(0, API_HISTORY_LIMIT)
+    : []
+  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}) }
+}
+
 /** The proxy as a window uses it: the window's own 网络加速, never the library proxy's default. */
 function withWindowRoute(config: ProxyConfig, tunnel: TunnelRoute | undefined): ProxyConfig {
   const { tunnel: _default, ...rest } = config
@@ -116,6 +135,8 @@ export class ProfileStore {
   readonly backupPath: string
   readonly previousBackupPath: string
   private profiles = new Map<string, StoredProfile>()
+  /** Passwords of the proxies API links gave this session (not written to disk; the next launch fetches anew). */
+  private apiPasswords = new Map<string, string>()
   private library = new WorkspaceLibrary()
   private nextSerialNumber = 1
   private writeQueue: Promise<void> = Promise.resolve()
@@ -190,6 +211,7 @@ export class ProfileStore {
       this.profiles.set(profile.id, profile)
       await this.ensureProfileDirectories(profile.id)
     }
+    this.moveApiProxiesIntoWindows()
     await this.persist()
   }
 
@@ -256,7 +278,7 @@ export class ProfileStore {
         startupMode: stored.startupMode,
         kernelVersion: typeof stored.kernelVersion === 'string' ? stored.kernelVersion : '',
         window: stored.window ?? defaultProfileWindow(),
-        tunnel: proxyId ? safeTunnelRoute(stored.tunnel) : undefined,
+        tunnel: proxyId || stored.apiProxy ? safeTunnelRoute(stored.tunnel) : undefined,
         // A reference to a missing proxy is kept (and blocks launching); validate it as direct.
         proxy: legacy ? { ...stored.proxy!, password: this.secrets.decode(stored.proxy!.password) } : library.proxyConfig(proxyId) ?? DIRECT,
         account: stored.account && typeof stored.account === 'object'
@@ -289,6 +311,7 @@ export class ProfileStore {
         updatedAt: stored.updatedAt,
         lastOpenedAt: typeof stored.lastOpenedAt === 'string' ? stored.lastOpenedAt : undefined,
         ...(directCheck ? { directCheck } : {}),
+        ...(!resolvedProxyId && safeApiProxy(stored.apiProxy) ? { apiProxy: safeApiProxy(stored.apiProxy) } : {}),
         favorite: stored.favorite === true,
         status: 'closed',
         lastError: undefined
@@ -377,7 +400,7 @@ export class ProfileStore {
   private resolve(stored: StoredProfile): BrowserProfile {
     const { directCheck, ...fields } = stored
     const record = stored.proxyId ? this.library.proxies.get(stored.proxyId) : undefined
-    const config = stored.proxyId ? this.library.proxyConfig(stored.proxyId) : undefined
+    const config = stored.proxyId ? this.library.proxyConfig(stored.proxyId) : stored.apiProxy ? this.apiProxyConfig(stored) : undefined
     const profile: BrowserProfile = {
       ...fields,
       group: this.library.groupName(stored.groupId),
@@ -387,6 +410,75 @@ export class ProfileStore {
     if (stored.proxyId && !record) profile.proxyMissing = true
     if (!profile.proxyCheck) delete profile.proxyCheck
     return profile
+  }
+
+  /** A window's API 提取 as a proxy: the link, and the last proxy it gave (nothing yet: an empty host). */
+  private apiProxyConfig(stored: StoredProfile): ProxyConfig {
+    const { url, endpoint } = stored.apiProxy!
+    return {
+      protocol: endpoint?.protocol ?? 'http',
+      host: endpoint?.host ?? '',
+      ...(endpoint ? { port: endpoint.port } : {}),
+      username: endpoint?.username ?? '',
+      password: this.apiPasswords.get(stored.id) ?? '',
+      apiUrl: url
+    }
+  }
+
+  /** Gives windows an API link (API 提取) instead of their proxy; the same link keeps a window's history. */
+  async setApiUrlMany(idsInput: string[], urlInput: unknown): Promise<BrowserProfile[]> {
+    const url = validProxyApiUrl(typeof urlInput === 'string' ? urlInput : '')
+    const ids = this.selection(idsInput)
+    const running = ids.map((id) => this.stored(id)).find((profile) => !isEditable(profile))
+    if (running) throw new Error(`环境“${running.name}”正在运行，请先关闭再更换代理`)
+    const now = new Date().toISOString()
+    for (const id of ids) {
+      const current = this.stored(id)
+      const same = current.apiProxy?.url === url
+      const profile: StoredProfile = { ...current, proxyId: '', apiProxy: same ? current.apiProxy! : { url }, updatedAt: now }
+      if (!same) delete profile.directCheck
+      this.profiles.set(id, profile)
+    }
+    await this.persist()
+    return ids.map((id) => this.get(id))
+  }
+
+  /** The proxy an API link gave a window for this launch. */
+  async setWindowApiEndpoint(id: string, endpoint: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; password: string }): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    if (!current.apiProxy) throw new Error('这个窗口没有使用 API 提取')
+    const { password, ...shown } = endpoint
+    if (password) this.apiPasswords.set(id, password)
+    else this.apiPasswords.delete(id)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: shown } }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /**
+   * Windows that used an API proxy from the library (before 0.5.12) keep its link themselves; the
+   * library entry, which only ever showed the last short-lived IP, is then removed.
+   */
+  private moveApiProxiesIntoWindows(): boolean {
+    const apiRecords = this.library.listProxies().filter((record) => record.apiUrl)
+    if (!apiRecords.length) return false
+    for (const [id, stored] of this.profiles) {
+      const record = apiRecords.find((item) => item.id === stored.proxyId)
+      if (!record) continue
+      const endpoint = record.host && record.port && (record.protocol === 'http' || record.protocol === 'socks5')
+        ? { protocol: record.protocol, host: record.host, port: record.port, username: record.username }
+        : undefined
+      this.profiles.set(id, {
+        ...stored,
+        proxyId: '',
+        apiProxy: { url: record.apiUrl!, ...(endpoint ? { endpoint } : {}) },
+        ...(stored.tunnel || record.tunnel ? { tunnel: stored.tunnel ?? record.tunnel } : {}),
+        ...(record.check ? { directCheck: record.check } : {})
+      })
+    }
+    for (const record of apiRecords) this.library.deleteProxy(record.id)
+    return true
   }
 
   private stored(id: string): StoredProfile {
@@ -410,6 +502,7 @@ export class ProfileStore {
    * a typed proxy is looked up in the library and added when it is new. '' is direct.
    */
   private referenceProxy(input: ProfileDraft, proxy: ProxyConfig, now: string, currentProxyId = ''): string {
+    if (proxy.apiUrl && !input.proxyId) return ''
     if (typeof input.proxyId === 'string' && input.proxyId) {
       if (!this.library.proxies.has(input.proxyId)) throw new Error('所选代理已不在代理库中，请重新选择')
       return input.proxyId
@@ -424,7 +517,8 @@ export class ProfileStore {
    * A window's 网络加速: the one it was given, else (same proxy as before) the one it had, else the
    * default of the library proxy it now uses. A direct window has none.
    */
-  private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile): TunnelRoute | undefined {
+  private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile, api = false): TunnelRoute | undefined {
+    if (api) return draft.tunnel ?? current?.tunnel
     if (!proxyId) return undefined
     if (draft.tunnel) return draft.tunnel
     if (current && current.proxyId === proxyId) return current.tunnel
@@ -480,10 +574,12 @@ export class ProfileStore {
         const id = randomUUID()
         const { proxy, group, tunnel, ...fields } = draft
         const proxyId = this.referenceProxy(inputs[index], tunnel ? { ...proxy, tunnel } : proxy, now)
-        const route = this.windowTunnel(draft, proxyId)
+        const api = !proxyId && proxy.apiUrl ? { url: proxy.apiUrl } : undefined
+        const route = this.windowTunnel(draft, proxyId, undefined, Boolean(api))
         return {
           ...fields,
           ...(route ? { tunnel: route } : {}),
+          ...(api ? { apiProxy: api } : {}),
           kernelVersion: fields.kernelVersion || defaultKernel || '',
           id,
           serialNumber: this.nextSerialNumber + index,
@@ -527,7 +623,8 @@ export class ProfileStore {
       const now = new Date().toISOString()
       const { proxy, group, tunnel, ...fields } = draft
       const proxyId = this.referenceProxy(input, tunnel ? { ...proxy, tunnel } : proxy, now, current.proxyId)
-      const route = this.windowTunnel(draft, proxyId, current)
+      const apiUrl = !proxyId ? proxy.apiUrl : undefined
+      const route = this.windowTunnel(draft, proxyId, current, Boolean(apiUrl))
       const profile: StoredProfile = {
         ...current,
         ...fields,
@@ -545,6 +642,10 @@ export class ProfileStore {
       if (proxyId || current.proxyId) delete profile.directCheck
       if (route) profile.tunnel = route
       else delete profile.tunnel
+      // The same link keeps its last proxy and IP history; a new link starts afresh.
+      if (apiUrl) profile.apiProxy = current.apiProxy?.url === apiUrl ? current.apiProxy : { url: apiUrl }
+      else delete profile.apiProxy
+      if (apiUrl && current.apiProxy?.url !== apiUrl) delete profile.directCheck
       this.profiles.set(id, profile)
       await this.persist()
       return this.resolve(profile)
@@ -623,9 +724,10 @@ export class ProfileStore {
       const current = this.stored(id)
       const profile: StoredProfile = { ...current, updatedAt: now }
       if (groupId !== undefined) profile.groupId = groupId
-      if (proxyId !== undefined && proxyId !== current.proxyId) {
+      if (proxyId !== undefined && (proxyId !== current.proxyId || current.apiProxy)) {
         profile.proxyId = proxyId
         delete profile.directCheck
+        delete profile.apiProxy
         // A window given another proxy starts with that proxy's 网络加速 default.
         const route = this.windowTunnel({}, proxyId)
         if (route) profile.tunnel = route
@@ -957,9 +1059,12 @@ export class ProfileStore {
       const savedProxy = saved.proxy && typeof saved.proxy === 'object'
         ? privateProxyConfig({ ...saved.proxy, password: this.secrets.decode(typeof saved.proxy.password === 'string' ? saved.proxy.password : '') })
         : DIRECT
-      const proxyId = typeof saved.proxyId === 'string' && this.library.proxies.has(saved.proxyId)
-        ? saved.proxyId
-        : this.library.ensureProxy(savedProxy, now)
+      // An API 提取 window keeps its link itself; it never goes into the library.
+      const proxyId = safeApiProxy(saved.apiProxy)
+        ? ''
+        : typeof saved.proxyId === 'string' && this.library.proxies.has(saved.proxyId)
+          ? saved.proxyId
+          : this.library.ensureProxy(savedProxy, now)
       // Back into its group; a group deleted meanwhile is not brought back (the window goes to Ungrouped).
       // Windows deleted before groups had ids find their group by name.
       const groupId = typeof saved.groupId === 'string'
@@ -981,7 +1086,8 @@ export class ProfileStore {
           webrtcPolicy: safeWebRtcPolicy(saved.fingerprint?.webrtcPolicy)
         },
         window: saved.window ?? defaultProfileWindow(),
-        tunnel: proxyId ? safeTunnelRoute(saved.tunnel) : undefined,
+        tunnel: proxyId || safeApiProxy(saved.apiProxy) ? safeTunnelRoute(saved.tunnel) : undefined,
+        apiProxy: proxyId ? undefined : safeApiProxy(saved.apiProxy),
         favorite: saved.favorite === true,
         account: saved.account && typeof saved.account === 'object'
           ? privateAccount(validatePlatformAccount({
@@ -1043,6 +1149,21 @@ export class ProfileStore {
       await this.setLibraryProxyCheck(current.proxyId, check, baselineIp, id)
       return this.get(id)
     }
+    if (current.apiProxy) {
+      // Every launch takes a new IP: no "exit changed" against the last one; the IP goes into the history.
+      const entry: ApiIpRecord | undefined = check.ok && check.ip
+        ? { at: check.checkedAt, ip: check.ip, ...(current.apiProxy.endpoint ? { port: current.apiProxy.endpoint.port } : {}), ...(check.countryCode ? { countryCode: check.countryCode } : {}), ...(check.city ? { city: check.city } : {}) }
+        : undefined
+      const history = entry ? [entry, ...(current.apiProxy.history ?? [])].slice(0, API_HISTORY_LIMIT) : current.apiProxy.history
+      const profile: StoredProfile = {
+        ...current,
+        directCheck: nextProxyCheck(check, undefined),
+        apiProxy: { ...current.apiProxy, ...(history?.length ? { history } : {}) }
+      }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
+    }
     const profile: StoredProfile = { ...current, directCheck: nextProxyCheck(check, current.directCheck, baselineIp) }
     this.profiles.set(id, profile)
     await this.persist()
@@ -1061,14 +1182,16 @@ export class ProfileStore {
   }
 
   /**
-   * Writes the identity a window got from its IP into the window, once (a window from before the
-   * values were kept, at its first launch). Not an edit: works while the window is starting.
+   * Writes values a window worked out at launch (from its IP, from this computer) into the window
+   * so later launches use the same ones. Not an edit: works while the window is starting.
+   * A key given as undefined is removed.
    */
-  async fixNetworkIdentity(id: string, patch: Partial<FingerprintConfig>): Promise<BrowserProfile> {
+  async lockFingerprint(id: string, patch: Partial<FingerprintConfig>): Promise<BrowserProfile> {
     const current = this.stored(id)
-    const fingerprint = { ...current.fingerprint, ...patch }
-    if (!patch.location) delete fingerprint.location
-    if (!patch.uiLocale) delete fingerprint.uiLocale
+    const fingerprint = { ...current.fingerprint, ...patch } as FingerprintConfig
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete (fingerprint as unknown as Record<string, unknown>)[key]
+    }
     const profile: StoredProfile = { ...current, fingerprint, updatedAt: new Date().toISOString() }
     this.profiles.set(id, profile)
     await this.persist()

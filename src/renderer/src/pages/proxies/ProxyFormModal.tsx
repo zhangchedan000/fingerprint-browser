@@ -98,14 +98,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       width={560}
     >
       <Form form={form} layout="vertical">
-        <Form.Item label={t("方式")}>
-          <Radio.Group
-            optionType="button"
-            value={apiMode ? 'api' : 'fixed'}
-            onChange={(event) => { setApiMode(event.target.value === 'api'); setResult(null) }}
-            options={[{ value: 'fixed', label: t("固定代理") }, { value: 'api', label: t("API 提取") }]}
-          />
-        </Form.Item>
+        {/* API 提取 lives on the window itself (窗口 → 代理设置 → API 提取), not in the library. */}
         {apiMode ? (
           <Form.Item
             name="apiUrl"

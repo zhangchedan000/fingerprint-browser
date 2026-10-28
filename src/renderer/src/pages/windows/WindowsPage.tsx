@@ -67,6 +67,9 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [assigning, setAssigning] = useState<'group' | 'proxy' | null>(null)
   const [batchTags, setBatchTags] = useState('')
   const [kernelSwitchOpen, setKernelSwitchOpen] = useState(false)
+  // Batch API 提取: one link given to every selected window (each keeps it itself).
+  const [apiLinkOpen, setApiLinkOpen] = useState(false)
+  const [apiLink, setApiLink] = useState('')
   const [batchImportOpen, setBatchImportOpen] = useState(false)
   const [batchResult, setBatchResult] = useState<BatchOperationResult>()
   const [dataProfile, setDataProfile] = useState<BrowserProfileView | undefined>()
@@ -321,6 +324,23 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       ws.upsertProfiles(changed)
       setAssigning(null)
       setBatchTags('')
+      setSelectedIds([])
+      notify.success(t("已更新 {0} 个环境", changed.length))
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  async function applyApiLink(): Promise<void> {
+    const ids = [...selectedIds]
+    setBatchBusy(true)
+    try {
+      const changed = await window.browserApi.profiles.setApiUrl(ids, apiLink.trim())
+      ws.upsertProfiles(changed)
+      setApiLinkOpen(false)
+      setApiLink('')
       setSelectedIds([])
       notify.success(t("已更新 {0} 个环境", changed.length))
     } catch (error) {
@@ -650,6 +670,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
               <Button size="small" type="link" loading={batchBusy} onClick={() => void runBatch('close')}>{t("关闭")}</Button>
               <Button size="small" type="link" disabled={batchBusy} onClick={() => setAssigning('group')}>{t("移动分组")}</Button>
               <Button size="small" type="link" disabled={batchBusy} onClick={() => setAssigning('proxy')}>{t("批量设置代理")}</Button>
+              <Button size="small" type="link" disabled={batchBusy} onClick={() => setApiLinkOpen(true)}>{t("设置 API 链接")}</Button>
               <Button size="small" type="link" disabled={batchBusy} icon={<ApiOutlined />} onClick={() => void runProxyChecks(selectedIds)}>{t("检测代理")}</Button>
               <Button size="small" type="link" disabled={batchBusy} onClick={() => setKernelSwitchOpen(true)}>{t("切换内核")}</Button>
               <Button size="small" type="link" danger disabled={batchBusy} icon={<DeleteOutlined />} onClick={confirmBatchRemove}>{t("删除")}</Button>
@@ -712,6 +733,19 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         onSubmit={applyAssignment}
         onClose={() => setAssigning(null)}
       />
+      <Modal
+        open={apiLinkOpen}
+        title={t("为 {0} 个窗口设置 API 链接", selectedIds.length)}
+        okText={t("保存")}
+        cancelText={t("取消")}
+        confirmLoading={batchBusy}
+        okButtonProps={{ disabled: !/^\s*https?:\/\//i.test(apiLink) }}
+        onOk={() => void applyApiLink()}
+        onCancel={() => { setApiLinkOpen(false); setApiLink('') }}
+      >
+        <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} value={apiLink} placeholder="https://example.com/api?num=1&format=txt" onChange={(event) => setApiLink(event.target.value)} />
+        <p className="fb-muted fb-assign-extra">{t("这些窗口都改用这个 API 链接（API 提取），每次打开各自取一个新代理；链接没变的窗口保留原来的 IP 记录。运行中的窗口需要先关闭。")}</p>
+      </Modal>
       <KernelSwitchModal
         open={kernelSwitchOpen}
         count={selectedIds.length}

@@ -51,6 +51,26 @@ export interface TunnelRoute {
   node?: string
 }
 
+/** One IP an API proxy (API 提取) gave a window, as checked at that launch. */
+export interface ApiIpRecord {
+  at: string
+  ip: string
+  port?: number
+  countryCode?: string
+  city?: string
+}
+
+/**
+ * API 提取 kept on the window itself (not in the proxy library: every launch takes a new proxy).
+ * endpoint is the last proxy the link gave (its password is kept only in memory).
+ */
+export interface WindowApiProxy {
+  url: string
+  endpoint?: { protocol: 'http' | 'socks5'; host: string; port: number; username: string }
+  /** Newest first, at most 50. */
+  history?: ApiIpRecord[]
+}
+
 export interface ProxyConfig {
   protocol: ProxyProtocol
   host: string
@@ -241,6 +261,8 @@ export interface BrowserProfile {
   proxyMissing?: boolean
   /** This window's 网络加速 (also copied into proxy.tunnel when the window is read). */
   tunnel?: TunnelRoute
+  /** API 提取 on this window (then proxyId is '' and proxy is filled in from it). */
+  apiProxy?: WindowApiProxy
   account: PlatformAccount
   fingerprint: FingerprintConfig
   createdAt: string
@@ -719,6 +741,8 @@ export interface BrowserApi {
     close: (id: string) => Promise<BrowserProfileView>
     closeAll: () => Promise<void>
     testProxy: (id: string) => Promise<BrowserProfileView>
+    /** API 提取 for these windows: each keeps the link itself (closed windows only). */
+    setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     /** Text of a launch log listed in the crash history. */

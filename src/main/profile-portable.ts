@@ -31,6 +31,8 @@ export function portableDraft(profile: BrowserProfile, options: PortableDraftOpt
     proxy: strip
       ? { protocol: profile.proxy.protocol, host: profile.proxy.host, port: profile.proxy.port, username: profile.proxy.username, password: '' }
       : { protocol: profile.proxy.protocol, host: profile.proxy.host, port: profile.proxy.port, username: profile.proxy.username, password: profile.proxy.password },
+    // An API 提取 window carries its link (the proxy itself is fetched at launch).
+    ...(profile.apiProxy ? { proxy: { protocol: profile.proxy.protocol, host: '', username: '', password: '', apiUrl: profile.apiProxy.url } } : {}),
     ...(profile.tunnel ? { tunnel: { ...profile.tunnel } } : {}),
     account: {
       platform: profile.account.platform,

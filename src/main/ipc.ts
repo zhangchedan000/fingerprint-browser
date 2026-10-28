@@ -52,25 +52,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
-  /**
-   * A window given an API link (API 提取) uses the library's proxy with that link, or a new one
-   * filled in from the link once (the window then takes a fresh proxy at every launch).
-   */
-  const withApiProxy = async (draft: ProfileDraft): Promise<ProfileDraft> => {
-    if (!draft || draft.proxyId || !draft.proxy?.apiUrl) return draft
-    const apiUrl = validProxyApiUrl(draft.proxy.apiUrl)
-    const known = profiles.listProxies().find((proxy) => proxy.apiUrl === apiUrl)
-    if (known) return { ...draft, proxyId: known.id, proxy: { protocol: 'direct', host: '', username: '', password: '' } }
-    return { ...draft, proxy: { ...await resolveApiProxy(apiUrl, draft.tunnel), apiUrl } }
-  }
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
-    const profile = publicProfile(await profiles.create(await withApiProxy(draft)))
+    const profile = publicProfile(await profiles.create(draft))
     team.scheduleSync()
     return profile
   })
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
-    const profile = publicProfile(await profiles.update(id, await withApiProxy(draft)))
+    const profile = publicProfile(await profiles.update(id, draft))
     await team.afterLocalEdit(id)
     return profile
   })
@@ -491,7 +480,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:close', (_event, id: string) => launcher.close(id).then(publicProfile))
   ipcMain.handle('profiles:close-all', () => launcher.closeAll())
+  ipcMain.handle('profiles:set-api-url', async (_event, ids: string[], url: string) => {
+    const changed = await profiles.setApiUrlMany(ids, url)
+    for (const profile of changed) await team.afterLocalEdit(profile.id)
+    return changed.map(publicProfile)
+  })
   ipcMain.handle('profiles:test-proxy', async (_event, id: string) => {
+    const apiWindow = profiles.get(id)
+    // API 提取: check a fresh proxy from the link, as a launch would get.
+    if (apiWindow.apiProxy) await profiles.setWindowApiEndpoint(id, await resolveApiProxy(apiWindow.apiProxy.url, apiWindow.proxy.tunnel))
     const testedProfile = profiles.get(id)
     const result = await testProxy(testedProfile.proxy)
     const current = profiles.get(id)

@@ -1,4 +1,3 @@
-import { CheckOutlined } from '@ant-design/icons'
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { FontPackDownload } from '../../components/FontPackDownload'
@@ -410,7 +409,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     form.resetFields()
     const values = editorValues(profile, suggestedIndex)
     // A window from before 0.5.12 that followed its IP shows (and saves) the values that IP gives, kept from now on.
-    if (profile && values.fingerprint.networkIdentityMode === 'proxy') {
+    if (profile?.lastOpenedAt && values.fingerprint.networkIdentityMode === 'proxy') {
       const fixed = fixedIdentityForCheck(values.fingerprint, profile.proxyCheck)
       if (fixed) values.fingerprint = { ...values.fingerprint, ...fixed }
     }
@@ -423,7 +422,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setPasteText('')
     setPasted(null)
     setPasteError('')
-    setProxyMode(profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
+    setProxyMode(profile?.apiProxy ? 'api' : profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
     const initial = editorValues(profile, suggestedIndex).fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !isChoice(initial.screenWidth, initial.screenHeight)))
@@ -484,11 +483,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
   }, [fp.platform, kernelGpus])
   const followIp = fp.networkIdentityMode === 'proxy'
-  /** The country was picked from the proxy's IP and is kept (the 基于 IP 生成 button shows as chosen). */
-  const fromIp = !followIp && fp.regionSource === 'ip'
+  /** The country comes from the proxy's IP (shown as 基于 IP 生成), kept once the window has been opened. */
+  const fromIp = followIp || fp.regionSource === 'ip'
+  /**
+   * A window not opened yet still follows its IP (基于 IP 生成 links); from its first launch the
+   * values are kept, and a different IP is only pointed out.
+   */
+  const locked = Boolean(profile?.lastOpenedAt)
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
+  /** The country the IP is in, while the window follows it. */
+  const ipCountry = followIp ? regions.find((entry) => entry.code === lastCheck?.countryCode?.toUpperCase())?.code : undefined
   // The exit country the proxy was last seen in, against the country picked by hand.
   const lastCheck = proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck
   const exitCountry = lastCheck?.countryCode
@@ -511,7 +517,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }, [fp.platform, fp.region, fp.timezone])
 
   function chooseRegion(value: string): void {
-    if (value === 'ip') { patchFingerprint({ networkIdentityMode: 'proxy' }); return }
+    if (value === 'ip') {
+      // Before the first launch it keeps following the IP; afterwards it is filled in once from the last check.
+      if (!locked) patchFingerprint({ networkIdentityMode: 'proxy', regionSource: undefined, uiLocale: undefined })
+      else void chooseByIp()
+      return
+    }
     if (value === 'custom') { patchFingerprint({ networkIdentityMode: 'manual' }); return }
     const item = regions.find((entry) => entry.code === value)
     if (!item) return
@@ -804,7 +815,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function followCheckedIp(result: ProxyTestResult | null, run: number, fill = false): void {
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
-    if (!profile || fill) fixToIp(result)
+    if (fill) fixToIp(result)
+    // A new window follows the IP it was checked with (基于 IP 生成), as before.
+    else if (!profile && result?.ok) patchFingerprint({ networkIdentityMode: 'proxy', regionSource: undefined, uiLocale: undefined })
   }
 
   /**
@@ -818,7 +831,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return true
   }
 
-  /** The 基于 IP 生成 button: the last check's IP, or a new check when there is none yet. */
+  /** 基于 IP 生成 on a window that has been opened: the last check's IP, or a new check when there is none yet. */
   async function chooseByIp(): Promise<void> {
     if (fixToIp(lastCheck)) return
     await testCurrentProxy(true)
@@ -909,7 +922,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       ...(proxyProtocol !== 'direct' ? { tunnel: route } : {}),
       account: values.account,
       extensionIds: values.extensionIds,
-      fingerprint: values.fingerprint
+      // Device name and MAC are kept as the values shown, not worked out again from the seed.
+      fingerprint: { ...values.fingerprint, deviceName: shownDeviceName, macAddress: shownMacAddress }
     }
   }
 
@@ -1080,7 +1094,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("代理方式")}
         hint={proxyMode === 'api'
-          ? t("保存时存入代理库（代理库里已有同一个链接时直接用那一条）；每次打开窗口都从链接取一个新代理，自动识别 SOCKS5 或 HTTP")
+          ? t("链接只保存在这个窗口里，不进代理库；每次打开窗口都从链接取一个新代理，自动识别 SOCKS5 或 HTTP，并记下用过的 IP")
           : proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
       >
         <Radio.Group
@@ -1143,6 +1157,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           </Row>
           <FieldError name={['proxy', 'apiUrl']} />
+          {profile?.apiProxy?.history?.length ? (
+            <Row label={t("IP 使用记录")} hint={t("每次打开窗口从链接取到的 IP，最近的在上面")}>
+              <div className="fb-ip-history">
+                {profile.apiProxy.history.slice(0, 10).map((entry) => (
+                  <div key={`${entry.at}-${entry.ip}`}>
+                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')}</span>
+                    <span className="fb-mono">{entry.ip}{entry.port ? `:${entry.port}` : ''}</span>
+                    <span className="fb-muted">{[entry.countryCode, entry.city].filter(Boolean).join(' ')}</span>
+                  </div>
+                ))}
+                {profile.apiProxy.history.length > 10 && <span className="fb-muted">{t("共 {0} 条，只显示最近 10 条", profile.apiProxy.history.length)}</span>}
+              </div>
+            </Row>
+          ) : null}
         </>
       )}
       {proxyMode !== 'library' && proxyMode !== 'api' && proxyProtocol !== 'direct' && (
@@ -1379,34 +1407,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("国家/地区")}
         hint={fromIp
-          ? t("按代理 IP 所在国家选的，下面三项已配好并固定；以后 IP 变了也不会自动改")
-          : followIp
-            ? t("打开窗口时按代理 IP 选好国家，然后固定")
-            : t("这台电脑在哪个国家；选了它，下面三项自动配好，也能单独改")}
+          ? locked
+            ? t("按代理 IP 所在国家生成，窗口打开过后已固定；IP 变了只提醒，不自动改")
+            : t("按代理 IP 所在国家，自动配好下面几项；第一次打开窗口后固定")
+          : t("这台电脑在哪个国家；选了它，下面几项自动配好，也能单独改")}
       >
         <div className="fb-region-line">
           <Select
             showSearch
             optionFilterProp="label"
             className="fb-fp-select fb-fp-select-wide"
-            value={followIp ? undefined : fp.region ?? 'custom'}
-            placeholder={t("打开窗口时按 IP 选")}
+            value={followIp ? ipCountry ?? 'ip' : fp.region ?? 'custom'}
             onChange={chooseRegion}
             options={[
+              { value: 'ip', label: t("基于 IP 生成") },
               ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
               ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
             ]}
             aria-label={t("国家/地区")}
           />
-          <Button
-            type={fromIp || followIp ? 'primary' : 'default'}
-            ghost={fromIp || followIp}
-            icon={fromIp || followIp ? <CheckOutlined /> : undefined}
-            disabled={proxyProtocol === 'direct'}
-            loading={testingProxy}
-            title={proxyProtocol === 'direct' ? t("直连没有代理 IP") : undefined}
-            onClick={() => void chooseByIp()}
-          >{t("基于 IP 生成")}</Button>
+          <span className={`fb-region-source${fromIp ? ' is-ip' : ''}`}>{fromIp ? t("基于 IP 生成") : t("手动选择")}</span>
         </div>
       </Row>
       {regionMismatch && (
@@ -1421,7 +1441,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row label={t("时区")} check={checkFor('timezone')} hint={t("这台 Windows 的系统时区，网页里的时间按它显示")}>
         {followIp
-          ? <Fixed>{t("基于 IP · {0}", fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone)}</Fixed>
+          ? <Fixed>{fp.platform === 'windows' ? windowsZoneLabel(networkIdentity.timezone, getLocale()) : networkIdentity.timezone}</Fixed>
           : (
             <Form.Item name={['fingerprint', 'timezone']} noStyle>
               <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
@@ -1444,7 +1464,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         {followIp
-          ? <Fixed>{t("基于 IP · {0}", networkIdentity.language)}</Fixed>
+          ? <Fixed>{networkIdentity.language}</Fixed>
           : (
             <Select
               showSearch
@@ -1467,7 +1487,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             />
           )}
       </Row>
-      <Row label={t("地理位置")} hint={followIp ? t("基于 IP 生成经纬度") : undefined}>
+      <Row label={t("地理位置")} hint={followIp || fp.location ? t("经纬度按代理 IP 的位置{0}", networkIdentity.latitude !== undefined ? `：${networkIdentity.latitude.toFixed(2)}, ${networkIdentity.longitude!.toFixed(2)}` : '') : undefined}>
         <Select
           className="fb-fp-select fb-fp-select-wide"
           value={fp.geolocationPermission ?? 'ask'}

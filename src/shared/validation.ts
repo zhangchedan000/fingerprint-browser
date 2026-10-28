@@ -309,8 +309,11 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   if (input.apiUrl !== undefined && input.apiUrl !== '') proxy.apiUrl = validProxyApiUrl(input.apiUrl)
   if (input.tunnel !== undefined) proxy.tunnel = validTunnelRoute(input.tunnel)
   if (proxy.protocol === 'direct') {
+    if (proxy.apiUrl) throw new Error('API 提取的代理类型无效')
     return { protocol: 'direct', host: '', username: '', password: '' }
   }
+  // API 提取: only the link; the proxy comes from it at launch.
+  if (proxy.apiUrl && !proxy.host) return { protocol: proxy.protocol, host: '', username: '', password: '', apiUrl: proxy.apiUrl, ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {}) }
   if (!proxy.host) throw new Error('代理地址不能为空')
   if (proxy.host.length > 255) throw new Error('代理地址不能超过 255 个字符')
   if (/[/?#@\s]/.test(proxy.host) || proxy.host.includes('://')) {

@@ -519,4 +519,49 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     expect(controller.arguments[0]).toContain('--fingerprint-location=35.68,139.76,25000')
     await launcher.close(profile.id)
   })
+
+  it('keeps the country, time zone and language of the first launch, and only asks when a later IP is elsewhere', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    const draft = defaultProfileDraft()
+    draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
+    draft.fingerprint.networkIdentityMode = 'proxy'
+    draft.fingerprint.proxyExitPolicy = 'block'
+    const profile = await profiles.create(draft)
+    const controller = new FakeSpawnController()
+    let exit = { ip: '187.190.19.106', countryCode: 'MX', timezone: 'America/Mexico_City', latitude: 19.43, longitude: -99.13 }
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]),
+      async () => ({ ok: true, latencyMs: 1, geoConfidence: 'consensus', ...exit }), 3, controller.spawn)
+
+    const first = launcher.launch(profile.id)
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await first
+    expect(profiles.get(profile.id).fingerprint).toMatchObject({
+      networkIdentityMode: 'manual', region: 'MX', regionSource: 'ip', timezone: 'America/Mexico_City', language: 'es-419',
+      location: { latitude: 19.43, longitude: -99.13 }
+    })
+    await launcher.close(profile.id)
+
+    // The next IP is in Spain: nothing changes; the launch asks first.
+    exit = { ip: '185.45.165.6', countryCode: 'ES', timezone: 'Europe/Madrid', latitude: 40.4, longitude: -3.7 }
+    // A fixed proxy's new IP is stopped by 出口变化 first; checked again, it becomes the known exit.
+    await expect(launcher.launch(profile.id)).rejects.toThrow('代理出口已从 187.190.19.106 变为 185.45.165.6')
+    await profiles.setProxyCheck(profile.id, { ok: true, latencyMs: 1, checkedAt: new Date().toISOString(), ...exit })
+    await expect(launcher.launch(profile.id)).rejects.toThrow('窗口的国家是 MX')
+    expect(profiles.get(profile.id).fingerprint).toMatchObject({ region: 'MX', timezone: 'America/Mexico_City' })
+    const approved = launcher.launch(profile.id, { allowGeoConflict: true })
+    await waitUntil(() => controller.children.length === 2)
+    controller.startPending()
+    await approved
+    expect(controller.arguments[1]).toContain('--timezone=America/Mexico_City')
+    expect(controller.arguments[1]).toContain('--fingerprint-location=19.43,-99.13,25000')
+    expect(profiles.get(profile.id).fingerprint.region).toBe('MX')
+    await launcher.close(profile.id)
+  })
 })

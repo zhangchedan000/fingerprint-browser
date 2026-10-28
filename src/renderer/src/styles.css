@@ -494,3 +494,7 @@ body.fb-col-resizing * { cursor: col-resize !important; }
 .fb-accent-text { color: var(--fb-accent-text); }
 .fb-tunnel-node-meta { display: inline-flex; flex: none; align-items: center; gap: 10px; }
 .fb-region-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fb-region-source { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 12px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-size: 12px; white-space: nowrap; }
+.fb-region-source.is-ip { color: var(--fb-accent-text); background: var(--fb-accent-soft); }
+.fb-ip-history { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.fb-ip-history > div { display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }

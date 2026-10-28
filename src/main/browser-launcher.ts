@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserCrashRecord, BrowserProfile, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
+import type { BrowserCrashRecord, BrowserProfile, FingerprintConfig, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
 import { locateBrowserForProfile } from './browser-locator'
 import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
@@ -258,23 +258,16 @@ export class BrowserLauncher {
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
-    if (profile.proxy.apiUrl && profile.proxyId) {
+    if (profile.proxy.apiUrl) {
       // API 提取: a fresh proxy from the provider for this launch.
       const endpoint = await resolveApiProxy(profile.proxy.apiUrl, profile.proxy.tunnel)
-      await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint)
-      profile = this.profiles.get(id)
+      profile = profile.apiProxy
+        ? await this.profiles.setWindowApiEndpoint(id, endpoint)
+        : (await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint), this.profiles.get(id))
       this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
-    if (profile.fingerprint.networkIdentityMode === 'proxy') {
-      // A window from before 0.5.12 that followed its IP keeps what that IP gives now, from here on.
-      const fixed = fixedIdentityForCheck(profile.fingerprint, profile.proxyCheck, { allowGeoConflict: options.allowGeoConflict === true })
-      if (fixed) {
-        profile = await this.profiles.fixNetworkIdentity(id, fixed)
-        this.onChanged(profile)
-        this.logger?.info('窗口的国家、时区和语言已按当前 IP 固定', { profileId: id, region: fixed.region, timezone: fixed.timezone })
-      }
-    }
+    profile = await this.lockOnLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
     if (selectedHardware?.hostMatched && selectedHardware.platform !== hostHardware.platform) {
@@ -922,6 +915,29 @@ export class BrowserLauncher {
     throw new Error('环境数据目录正被其他浏览器进程占用，请先结束遗留进程')
   }
 
+  /**
+   * The first launch keeps what it worked out: the country, time zone, languages and location of
+   * the IP (基于 IP 生成), and this computer's screen and core count (跟随本机). Later launches,
+   * on this computer or another, use the same values; a different IP is only pointed out.
+   */
+  private async lockOnLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+    const fp = profile.fingerprint
+    const patch: Partial<FingerprintConfig> = {}
+    if (fp.networkIdentityMode === 'proxy') Object.assign(patch, fixedIdentityForCheck(fp, profile.proxyCheck, { allowGeoConflict }) ?? {})
+    const screen = this.hostScreen()
+    if (fp.screenSource === 'host' && screen?.width && screen.height) {
+      Object.assign(patch, { screenSource: undefined, screenWidth: screen.width, screenHeight: screen.height })
+    }
+    if (fp.coresSource === 'host') {
+      Object.assign(patch, { coresSource: undefined, hardwareConcurrency: hostHardwareSnapshot().hardwareConcurrency })
+    }
+    if (!Object.keys(patch).length) return profile
+    const locked = await this.profiles.lockFingerprint(profile.id, patch)
+    this.onChanged(locked)
+    this.logger?.info('窗口第一次打开，指纹值已固定', { profileId: profile.id, region: patch.region, timezone: patch.timezone, screen: patch.screenWidth && `${patch.screenWidth}×${patch.screenHeight}`, cores: patch.hardwareConcurrency })
+    return locked
+  }
+
   private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const result = await this.proxyTester(profile.proxy)
     const current = this.profiles.get(profile.id)
@@ -946,6 +962,16 @@ export class BrowserLauncher {
     }
     if (updated.proxyCheck?.exitChanged) {
       this.logger?.error('代理出口 IP 已变化但策略允许继续', { profileId: profile.id })
+    }
+    // A window keeps its country; an IP somewhere else is pointed out (and, with 阻止启动, confirmed), never followed.
+    const fp = updated.fingerprint
+    const ipCountry = updated.proxyCheck?.ok ? updated.proxyCheck.countryCode?.toUpperCase() : undefined
+    if (fp.networkIdentityMode !== 'proxy' && fp.region && ipCountry && ipCountry !== fp.region.toUpperCase()) {
+      const where = `代理 IP 在 ${ipCountry}（${updated.proxyCheck!.ip}），窗口的国家是 ${fp.region.toUpperCase()}`
+      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) {
+        throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。可以在编辑窗口里点「改成和 IP 一致」，或换一个这个国家的代理。是否仍要启动？`)
+      }
+      this.logger?.error('代理 IP 的国家和窗口的国家不一致', { profileId: profile.id, ipCountry, region: fp.region })
     }
     return updated
   }
