@@ -1,4 +1,5 @@
 import { gpuTier, type GpuTier } from './hardware-match'
+import { closestLocale } from './locale-match'
 /**
  * The microphones, speakers and cameras a window lists (Prism patch 014). Pages without
  * permission only see which kinds exist; with permission they see names built from the Windows
@@ -106,11 +107,21 @@ export function effectiveMediaDevices(choice: string | undefined, seed: number, 
 }
 
 /**
- * The device-name language the kernel picks for an interface language when none is given
- * (patch 014, FingerprintEndpointNamesFor): the same locale, else the first of its language, else
- * en-us. Hong Kong and Macau run Traditional Chinese Windows.
+ * The device-name language a system language comes with: its own, else its most likely country's
+ * (es-419 → es-mx, fr → fr-fr), else en-us. Hong Kong and Macau run Traditional Chinese Windows.
+ * Written into a window when it is saved, so the kernel's own fallback is not used.
  */
 export function mediaLocaleFor(uiLocale: string): string {
+  let lang = uiLocale.trim().toLowerCase().replace('_', '-')
+  if (lang.startsWith('zh-hk') || lang.startsWith('zh-mo') || lang.includes('hant')) lang = 'zh-tw'
+  return closestLocale(lang, MEDIA_LOCALES) ?? 'en-us'
+}
+
+/**
+ * The kernel's own pick when no device-name language is passed (patch 014, FingerprintEndpointNamesFor):
+ * what windows saved before 0.5.16 always had. Written into them once, unchanged.
+ */
+export function kernelMediaLocaleFor(uiLocale: string): string {
   let lang = uiLocale.trim().toLowerCase().replace('_', '-')
   if (lang.startsWith('zh-hk') || lang.startsWith('zh-mo') || lang.includes('hant')) lang = 'zh-tw'
   if (MEDIA_LOCALES.includes(lang)) return lang

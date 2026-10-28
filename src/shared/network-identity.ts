@@ -1,8 +1,8 @@
 import type { FingerprintConfig, ProxyTestResult } from './types'
 import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
 import { windowsReportedZone } from './windows-time-zones'
-import { voiceLocaleForLanguage } from './windows-voices'
-import { autoMediaDevices, legacyAutoMediaDevices, mediaLocaleFor } from './media-devices'
+import { kernelVoiceLocaleFor, voiceLocaleForLanguage } from './windows-voices'
+import { autoMediaDevices, kernelMediaLocaleFor, legacyAutoMediaDevices, mediaLocaleFor } from './media-devices'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -158,8 +158,9 @@ export function savedFingerprint(
   return {
     ...next,
     uiLocale,
-    voicesLocale: next.voicesLocale ?? voiceLocaleForLanguage(uiLocale),
-    mediaLocale: next.mediaLocale ?? mediaLocaleFor(uiLocale),
+    // Windows saved before these were written keep what the kernel gave them; new ones get the country's own.
+    voicesLocale: next.voicesLocale ?? (options.legacy ? kernelVoiceLocaleFor : voiceLocaleForLanguage)(uiLocale),
+    mediaLocale: next.mediaLocale ?? (options.legacy ? kernelMediaLocaleFor : mediaLocaleFor)(uiLocale),
     // The devices that went with its GPU (windows saved before this rule: the set they always had).
     mediaDevices: next.mediaDevices ?? (options.legacy ? legacyAutoMediaDevices : autoMediaDevices)(next.seed >>> 0, options.gpuModel)
   }

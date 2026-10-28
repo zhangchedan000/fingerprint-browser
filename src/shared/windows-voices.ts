@@ -1,3 +1,4 @@
+import { closestLocale } from './locale-match'
 /**
  * The Windows voices the Prism kernel can list for a window (patch 012, names from the Windows
  * language packs). A window lists its language's voices unless it picks another locale here.
@@ -56,8 +57,23 @@ export const WINDOWS_VOICE_LOCALES: readonly WindowsVoiceLocale[] = [
   { locale: 'zh-tw', voices: ['Hanhan', 'Yating', 'Zhiwei'] },
 ]
 
-/** The voice locale the kernel picks for a display language (mirrors WindowsVoiceLocaleFor). */
+/**
+ * The Windows voices a system language comes with: its own locale, else the one for its most likely
+ * country (fr → fr-fr, not fr-ca). Written into a window when it is saved.
+ */
 export function voiceLocaleForLanguage(language: string): string {
+  const lang = language.trim().toLowerCase().replace('_', '-')
+  if (!WINDOWS_VOICE_LOCALES.some((item) => item.locale === lang) && (lang.startsWith('zh-hk') || lang.startsWith('zh-mo') || lang.includes('hant'))) {
+    return lang.startsWith('zh-tw') ? 'zh-tw' : 'zh-hk'
+  }
+  return closestLocale(lang, WINDOWS_VOICE_LOCALES.map((item) => item.locale)) ?? 'en-us'
+}
+
+/**
+ * The kernel's own pick when no voice locale is passed (WindowsVoiceLocaleFor): what windows saved
+ * before 0.5.16 always had. Written into them once, unchanged.
+ */
+export function kernelVoiceLocaleFor(language: string): string {
   const lang = language.trim().toLowerCase().replace('_', '-')
   if (WINDOWS_VOICE_LOCALES.some((item) => item.locale === lang)) return lang
   if (lang.startsWith('es-')) return 'es-mx'
