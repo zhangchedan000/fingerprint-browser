@@ -111,8 +111,12 @@ export interface FingerprintConfig {
   language: string
   acceptLanguages: string
   timezone: string
-  /** Country (ISO 3166) the language and time zone were picked for, by hand. Unset on older profiles. */
+  /** Country (ISO 3166) the language and time zone were picked for. Unset on older profiles. */
   region?: string
+  /** 'ip': the country was picked from the proxy's IP (基于 IP 生成); the values are kept all the same. */
+  regionSource?: 'ip'
+  /** Where the browser says it is (geolocation), fixed from the IP the window was set up for. */
+  location?: { latitude: number; longitude: number; accuracyMeters?: number }
   webrtcPolicy: WebRtcPolicy
   networkIdentityMode: NetworkIdentityMode
   proxyExitPolicy: ProxyExitPolicy

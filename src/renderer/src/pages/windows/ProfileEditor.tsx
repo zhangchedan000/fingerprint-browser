@@ -1,3 +1,4 @@
+import { CheckOutlined } from '@ant-design/icons'
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { FontPackDownload } from '../../components/FontPackDownload'
@@ -43,8 +44,8 @@ import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../share
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
-import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, localeForCountry } from '../../../../shared/network-identity'
-import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsReportedZone, windowsZoneLabel } from '../../../../shared/windows-time-zones'
+import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, fixedIdentityForCheck, localeForCountry } from '../../../../shared/network-identity'
+import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
@@ -407,7 +408,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   useEffect(() => {
     if (!open) return
     form.resetFields()
-    form.setFieldsValue(editorValues(profile, suggestedIndex))
+    const values = editorValues(profile, suggestedIndex)
+    // A window from before 0.5.12 that followed its IP shows (and saves) the values that IP gives, kept from now on.
+    if (profile && values.fingerprint.networkIdentityMode === 'proxy') {
+      const fixed = fixedIdentityForCheck(values.fingerprint, profile.proxyCheck)
+      if (fixed) values.fingerprint = { ...values.fingerprint, ...fixed }
+    }
+    form.setFieldsValue(values)
     setTab('basic')
     proxyCheckRun.current += 1
     setTestingProxy(false)
@@ -477,6 +484,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
   }, [fp.platform, kernelGpus])
   const followIp = fp.networkIdentityMode === 'proxy'
+  /** The country was picked from the proxy's IP and is kept (the 基于 IP 生成 button shows as chosen). */
+  const fromIp = !followIp && fp.regionSource === 'ip'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
@@ -509,6 +518,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     patchFingerprint({
       networkIdentityMode: 'manual',
       region: item.code,
+      regionSource: undefined,
+      location: undefined,
       language: item.locale.language,
       acceptLanguages: item.locale.acceptLanguages,
       uiLocale: undefined,
@@ -790,29 +801,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    * a later IP, often another one for API and rotating proxies, does not change the window.
    * An existing window keeps its settings; a mismatch with the IP is only pointed out (regionMismatch).
    */
-  function followCheckedIp(result: ProxyTestResult | null, run: number): void {
+  function followCheckedIp(result: ProxyTestResult | null, run: number, fill = false): void {
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
-    if (!profile) fixToIp(result)
+    if (!profile || fill) fixToIp(result)
   }
 
-  /** Fills in the country, time zone and languages of a checked IP and keeps them (they are not re-read at launch). */
-  function fixToIp(result: ProxyTestResult | null | undefined): void {
-    if (!result?.ok || result.geoConfidence === 'conflict' || !result.countryCode) return
-    const region = regions.find((entry) => entry.code === result.countryCode!.toUpperCase())
-    if (!region) return
-    const current = form.getFieldValue('fingerprint') as FingerprintConfig
-    const zone = result.timezone
-      ? (current.platform === 'windows' ? windowsReportedZone(result.timezone, region.code) : result.timezone)
-      : undefined
-    patchFingerprint({
-      networkIdentityMode: 'manual',
-      region: region.code,
-      language: region.locale.language,
-      acceptLanguages: region.locale.acceptLanguages,
-      uiLocale: undefined,
-      timezone: zone ?? region.zone
-    })
+  /**
+   * 基于 IP 生成: picks the checked IP's country and fills in its time zone, languages and location.
+   * The values are kept; a later IP does not change them. False when the check cannot say.
+   */
+  function fixToIp(result: ProxyTestResult | null | undefined): boolean {
+    const fixed = fixedIdentityForCheck(form.getFieldValue('fingerprint') as FingerprintConfig, result ?? undefined, { followUiLocale: true })
+    if (!fixed) return false
+    patchFingerprint(fixed)
+    return true
+  }
+
+  /** The 基于 IP 生成 button: the last check's IP, or a new check when there is none yet. */
+  async function chooseByIp(): Promise<void> {
+    if (fixToIp(lastCheck)) return
+    await testCurrentProxy(true)
   }
 
   /** API 提取 typed into the window: only the link; the proxy comes from it when saved and at every launch. */
@@ -820,7 +829,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return { protocol: 'http', host: '', username: '', password: '', apiUrl: String(form.getFieldValue(['proxy', 'apiUrl']) ?? '').trim(), tunnel: route }
   }
 
-  async function testCurrentProxy(): Promise<void> {
+  async function testCurrentProxy(fill = false): Promise<void> {
     const run = ++proxyCheckRun.current
     try {
       if (proxyMode === 'library') {
@@ -828,20 +837,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         setTestingProxy(true)
         setProxyResult(null)
         // Saved on the library proxy, so every window using it sees the result; reached the way this window will.
-        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run)
+        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run, fill)
         return
       }
       if (proxyMode === 'api') {
         await form.validateFields([['proxy', 'apiUrl']])
         setTestingProxy(true)
         setProxyResult(null)
-        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id), run)
+        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id), run, fill)
         return
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
       setProxyResult(null)
-      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id), run)
+      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id), run, fill)
     } catch (error) {
       if (run !== proxyCheckRun.current) return
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
@@ -917,7 +926,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   function applyFix(item: FingerprintCheckItem): void {
-    if (item.fix === 'follow-ip') patchFingerprint({ networkIdentityMode: 'proxy' })
+    if (item.fix === 'follow-ip') fixToIp(lastCheck)
     else if (item.fix === 'webrtc-replace') patchFingerprint({ webrtcPolicy: 'proxy_only' })
     else if (item.fix === 'reseed') reseedNoise()
     else if (item.fix === 'shuffle-gpu') shuffleGpu()
@@ -1237,7 +1246,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ? proxyProtocol === 'direct'
               ? t("基于 IP 生成；直连时没有代理 IP，先用指纹里的时区和语言")
               : t("基于 IP 生成：{0} · {1}", networkIdentity.language, networkIdentity.timezone)
-            : t("按地区「{0}」：{1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
+            : fromIp
+              ? t("基于 IP 生成（已固定）：{0} · {1} · {2}", regionName(fp.region!), fp.language, fp.timezone)
+              : t("按地区「{0}」：{1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
         </span>
         <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
       </Row>
@@ -1365,20 +1376,38 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("国家与语言")}</h3>
           <span className="fb-fp-card-sub">{t("以下随国家/地区自动配套，也可以单独修改")}</span>
         </div>
-      <Row label={t("国家/地区")} hint={followIp ? t("按代理 IP 所在国家，自动配好下面三项") : t("这台电脑在哪个国家；选了它，下面三项自动配好，也能单独改")}>
-        <Select
-          showSearch
-          optionFilterProp="label"
-          className="fb-fp-select fb-fp-select-wide"
-          value={followIp ? 'ip' : fp.region ?? 'custom'}
-          onChange={chooseRegion}
-          options={[
-            { value: 'ip', label: t("基于 IP 生成") },
-            ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
-            ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
-          ]}
-          aria-label={t("国家/地区")}
-        />
+      <Row
+        label={t("国家/地区")}
+        hint={fromIp
+          ? t("按代理 IP 所在国家选的，下面三项已配好并固定；以后 IP 变了也不会自动改")
+          : followIp
+            ? t("打开窗口时按代理 IP 选好国家，然后固定")
+            : t("这台电脑在哪个国家；选了它，下面三项自动配好，也能单独改")}
+      >
+        <div className="fb-region-line">
+          <Select
+            showSearch
+            optionFilterProp="label"
+            className="fb-fp-select fb-fp-select-wide"
+            value={followIp ? undefined : fp.region ?? 'custom'}
+            placeholder={t("打开窗口时按 IP 选")}
+            onChange={chooseRegion}
+            options={[
+              ...(!followIp && !fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
+              ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
+            ]}
+            aria-label={t("国家/地区")}
+          />
+          <Button
+            type={fromIp || followIp ? 'primary' : 'default'}
+            ghost={fromIp || followIp}
+            icon={fromIp || followIp ? <CheckOutlined /> : undefined}
+            disabled={proxyProtocol === 'direct'}
+            loading={testingProxy}
+            title={proxyProtocol === 'direct' ? t("直连没有代理 IP") : undefined}
+            onClick={() => void chooseByIp()}
+          >{t("基于 IP 生成")}</Button>
+        </div>
       </Row>
       {regionMismatch && (
         <Alert

@@ -80,6 +80,11 @@ export function effectiveNetworkIdentity(
     acceptLanguages: fingerprint.acceptLanguages,
     uiLocale: fingerprint.uiLocale ?? chromeUiLocaleFor(fingerprint.language),
     timezone: fingerprint.timezone,
+    ...(fingerprint.location ? {
+      latitude: fingerprint.location.latitude,
+      longitude: fingerprint.location.longitude,
+      accuracyMeters: fingerprint.location.accuracyMeters
+    } : {}),
     source: 'manual'
   }
   if (fingerprint.networkIdentityMode !== 'proxy' || !hasCompleteProxyIdentity(check, options)) return fallback
@@ -94,6 +99,36 @@ export function effectiveNetworkIdentity(
     longitude: check.longitude,
     accuracyMeters: check.accuracyMeters,
     source: 'proxy'
+  }
+}
+
+/**
+ * The values a window keeps for a checked IP: its country, the time zone and languages for it and
+ * its location. Once written into the window they stay; a later IP does not change them.
+ * Undefined when the check cannot say (failed, conflicting, or a country without a known language).
+ */
+export function fixedIdentityForCheck(
+  fingerprint: Pick<FingerprintConfig, 'platform' | 'uiLocale'>,
+  check: ProxyTestResult | undefined,
+  options: NetworkIdentityOptions & { followUiLocale?: boolean } = {}
+): Partial<FingerprintConfig> | undefined {
+  if (!check?.ok || !check.countryCode || !check.timezone || (check.geoConfidence === 'conflict' && !options.allowGeoConflict)) return undefined
+  const countryCode = check.countryCode.toUpperCase()
+  const locale = localeForCountry(countryCode)
+  if (!locale) return undefined
+  const timezone = (fingerprint.platform === 'windows' ? windowsReportedZone(check.timezone, countryCode) : undefined) ?? check.timezone
+  return {
+    networkIdentityMode: 'manual',
+    region: countryCode,
+    regionSource: 'ip',
+    language: locale.language,
+    acceptLanguages: locale.acceptLanguages,
+    // The system language follows the browser language unless the window chose its own.
+    uiLocale: options.followUiLocale ? undefined : fingerprint.uiLocale,
+    timezone,
+    location: check.latitude !== undefined && check.longitude !== undefined
+      ? { latitude: check.latitude, longitude: check.longitude, ...(check.accuracyMeters ? { accuracyMeters: check.accuracyMeters } : {}) }
+      : undefined
   }
 }
 

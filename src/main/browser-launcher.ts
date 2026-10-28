@@ -19,7 +19,7 @@ import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-prof
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, testProxy } from './proxy-tester'
-import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
@@ -266,6 +266,15 @@ export class BrowserLauncher {
       this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
     }
     if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
+    if (profile.fingerprint.networkIdentityMode === 'proxy') {
+      // A window from before 0.5.12 that followed its IP keeps what that IP gives now, from here on.
+      const fixed = fixedIdentityForCheck(profile.fingerprint, profile.proxyCheck, { allowGeoConflict: options.allowGeoConflict === true })
+      if (fixed) {
+        profile = await this.profiles.fixNetworkIdentity(id, fixed)
+        this.onChanged(profile)
+        this.logger?.info('窗口的国家、时区和语言已按当前 IP 固定', { profileId: id, region: fixed.region, timezone: fixed.timezone })
+      }
+    }
     const hostHardware = hostHardwareSnapshot()
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
     if (selectedHardware?.hostMatched && selectedHardware.platform !== hostHardware.platform) {

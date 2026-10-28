@@ -7,7 +7,7 @@ import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
 import { DEVICE_MEMORY_CHOICES } from './types'
-import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, TunnelRoute, WebRtcPolicy } from './types'
+import type { FingerprintConfig, FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, TunnelRoute, WebRtcPolicy } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -249,7 +249,9 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
       ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {}),
       ...(rawFp.uiLocale ? { uiLocale: rawFp.uiLocale } : {}),
-      ...(rawFp.region ? { region: rawFp.region } : {})
+      ...(rawFp.region ? { region: rawFp.region } : {}),
+      ...(rawFp.region && rawFp.regionSource === 'ip' ? { regionSource: 'ip' as const } : {}),
+      ...(validLocation(rawFp.location) ? { location: validLocation(rawFp.location) } : {})
     }
   }
 }
@@ -264,6 +266,15 @@ export function validProxyApiUrl(input: unknown): string {
   } catch {
     throw new Error('代理 API 链接要以 http:// 或 https:// 开头')
   }
+}
+
+/** A fixed geolocation, or none when it is not a real place. */
+function validLocation(value: unknown): FingerprintConfig['location'] | undefined {
+  const location = value as FingerprintConfig['location']
+  if (!location || typeof location !== 'object') return undefined
+  const { latitude, longitude, accuracyMeters } = location
+  if (typeof latitude !== 'number' || typeof longitude !== 'number' || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return undefined
+  return { latitude, longitude, ...(typeof accuracyMeters === 'number' && accuracyMeters > 0 && accuracyMeters < 1_000_000 ? { accuracyMeters } : {}) }
 }
 
 /** A window's (or a library proxy's default) 网络加速 setting. */

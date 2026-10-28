@@ -5,7 +5,7 @@ import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from
 import { dirname, join } from 'node:path'
 import type {
   BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
-  ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy
+  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
@@ -1058,6 +1058,21 @@ export class ProfileStore {
     await this.persist()
     this.notify(this.list().filter((profile) => profile.proxyId === proxyId && profile.id !== sourceProfileId).map((profile) => profile.id))
     return { ...next }
+  }
+
+  /**
+   * Writes the identity a window got from its IP into the window, once (a window from before the
+   * values were kept, at its first launch). Not an edit: works while the window is starting.
+   */
+  async fixNetworkIdentity(id: string, patch: Partial<FingerprintConfig>): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const fingerprint = { ...current.fingerprint, ...patch }
+    if (!patch.location) delete fingerprint.location
+    if (!patch.uiLocale) delete fingerprint.uiLocale
+    const profile: StoredProfile = { ...current, fingerprint, updatedAt: new Date().toISOString() }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
   }
 
   async setFavorite(id: string, favorite: boolean): Promise<BrowserProfile> {
