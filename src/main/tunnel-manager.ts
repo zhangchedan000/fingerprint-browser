@@ -477,12 +477,22 @@ export class TunnelManager {
     return text ? JSON.parse(text) : {}
   }
 
+  /**
+   * One write at a time: a background save (node exit IPs) and a choice made meanwhile share the
+   * temporary file. The new state counts at once, so a save that follows builds on it.
+   */
+  private saving: Promise<void> = Promise.resolve()
+
   private async save(next: StoredTunnel): Promise<void> {
-    await mkdir(this.vaultPath, { recursive: true })
-    const temporary = `${this.file}.tmp`
-    await writeFile(temporary, JSON.stringify(next, null, 2), { mode: 0o600 })
-    await rename(temporary, this.file)
     this.stored = next
+    const write = this.saving.catch(() => undefined).then(async () => {
+      await mkdir(this.vaultPath, { recursive: true })
+      const temporary = `${this.file}.tmp`
+      await writeFile(temporary, JSON.stringify(next, null, 2), { mode: 0o600 })
+      await rename(temporary, this.file)
+    })
+    this.saving = write
+    await write
   }
 
   private async notify(): Promise<TunnelStatus> {
