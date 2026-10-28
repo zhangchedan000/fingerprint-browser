@@ -1,5 +1,5 @@
 import { CloudDownloadOutlined, DatabaseOutlined, KeyOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, UserAddOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
+import { Button, Descriptions, Form, Input, Modal, Radio, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
@@ -8,6 +8,7 @@ import { ListPage } from '../../components/ListPage'
 import { StatusPill } from '../../components/StatusPill'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
+import { batchAssignees, type BatchAssignMode } from './batch-assign'
 import type { PageProps } from '../registry'
 
 const ACTIONS: Record<string, string> = {
@@ -389,6 +390,63 @@ function AssignModal({ profile, members, open, onClose, onSaved }: { profile?: T
   )
 }
 
+/** Owner: assigns several cloud windows at once. */
+function BatchAssignModal({ profiles, members, open, onClose, onSave }: {
+  profiles: TeamProfileView[]
+  members: TeamUser[]
+  open: boolean
+  onClose: () => void
+  onSave: (picked: string[], mode: BatchAssignMode) => Promise<void>
+}) {
+  const [picked, setPicked] = useState<string[]>([])
+  const [mode, setMode] = useState<BatchAssignMode>('add')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (open) { setPicked([]); setMode('add') } }, [open])
+  async function save(): Promise<void> {
+    setBusy(true)
+    try {
+      await onSave(picked, mode)
+      onClose()
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal
+      open={open}
+      title={t("分配 {0} 个云端窗口", profiles.length)}
+      okText={t("保存")}
+      cancelText={t("取消")}
+      confirmLoading={busy}
+      okButtonProps={{ disabled: mode !== 'set' && !picked.length }}
+      onOk={() => void save()}
+      onCancel={onClose}
+    >
+      <div className="fb-stack">
+        <Radio.Group
+          optionType="button"
+          value={mode}
+          onChange={(event) => setMode(event.target.value)}
+          options={[
+            { value: 'add', label: t("加上这些成员") },
+            { value: 'set', label: t("只给这些成员") },
+            { value: 'remove', label: t("收回这些成员") }
+          ]}
+        />
+        <MemberSelect members={members} value={picked} onChange={setPicked} />
+        <p className="fb-muted fb-team-hint">
+          {mode === 'add'
+            ? t("已经分配的成员保留，再加上选中的成员。")
+            : mode === 'set'
+              ? t("每个窗口都改成只分配给选中的成员；不选任何人就是全部收回。")
+              : t("从这些窗口收回选中的成员，其他成员不变。")}
+          {mode !== 'add' && ` ${t("收回后对方再也打不开这个窗口；正在使用的会在关闭时上传登录态。")}`}
+        </p>
+      </div>
+    </Modal>
+  )
+}
+
 function MemberSelect({ members, value, onChange }: { members: TeamUser[]; value: string[]; onChange: (ids: string[]) => void }) {
   return (
     <Select
@@ -420,6 +478,11 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   const me = status.user?.id
   const [assigning, setAssigning] = useState<TeamProfileView>()
   const [busy, setBusy] = useState<string>()
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [batchAssigning, setBatchAssigning] = useState(false)
+  // A refresh drops windows that are gone from the selection.
+  useEffect(() => setSelectedIds((ids) => ids.filter((id) => profiles.some((profile) => profile.id === id))), [profiles])
+  const selected = profiles.filter((profile) => selectedIds.includes(profile.id))
   const memberNames = useMemo(() => new Map(members.map((member) => [member.id, displayName(member)])), [members])
 
   async function syncNow(): Promise<void> {
@@ -498,6 +561,50 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       ws.fail(error)
     }
   }
+
+  /** Runs one action per window, one after another, and says how it went. */
+  async function runMany(key: string, rows: TeamProfileView[], action: (profile: TeamProfileView) => Promise<unknown>, done: string): Promise<void> {
+    setBusy(key)
+    const failures: string[] = []
+    for (const profile of rows) {
+      try {
+        await action(profile)
+      } catch (error) {
+        failures.push(`${profile.name}：${error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') : String(error)}`)
+      }
+    }
+    await ws.reloadProfiles().catch(() => undefined)
+    reload()
+    setBusy(undefined)
+    if (failures.length) ws.fail(new Error(t("{0}：成功 {1} 个，失败 {2} 个。{3}", done, rows.length - failures.length, failures.length, failures.slice(0, 3).join('；'))))
+    else ws.notify.success(t("{0}：{1} 个", done, rows.length))
+  }
+
+  async function assignMany(picked: string[], mode: BatchAssignMode): Promise<void> {
+    await runMany('assign', selected, (profile) => window.browserApi.team.updateProfile(profile.id, { assignees: batchAssignees(profile.assignees, picked, mode) }), t("已分配"))
+  }
+
+  function removeManyFromCloud(): void {
+    const rows = selected
+    const names = rows.slice(0, 8).map((profile) => profile.name).join('、') + (rows.length > 8 ? t(" 等 {0} 个", rows.length) : '')
+    Modal.confirm({
+      title: t("删除 {0} 个云端窗口？", rows.length),
+      content: <>
+        <p>{names}</p>
+        <p>{t("云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。")}</p>
+      </>,
+      okText: t("删除"),
+      okButtonProps: { danger: true },
+      cancelText: t("取消"),
+      onOk: async () => {
+        await runMany('remove', rows, (profile) => window.browserApi.team.unshare(profile.id), t("已删除云端窗口"))
+        setSelectedIds([])
+      }
+    })
+  }
+
+  const notHere = selected.filter((profile) => !profile.localId)
+  const locked = selected.filter((profile) => profile.lock)
 
   const localStatus = (profile: TeamProfileView) => ws.profiles.find((item) => item.id === profile.localId)?.status
   const ownerLabel = (profile: TeamProfileView) => profile.ownerId === me
@@ -587,6 +694,27 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
             <Button icon={<ReloadOutlined />} onClick={reload}>{t("刷新")}</Button>
           </>
         )}
+        selection={{
+          ids: selectedIds,
+          onChange: setSelectedIds,
+          label: (count) => t("已选 {0} 个云端窗口", count),
+          actions: (
+            <>
+              {owner && <Button size="small" type="link" disabled={Boolean(busy)} loading={busy === 'assign'} onClick={() => setBatchAssigning(true)}>{t("批量分配")}</Button>}
+              <Button size="small" type="link" disabled={Boolean(busy) || !notHere.length} loading={busy === 'add'}
+                onClick={() => void runMany('add', notHere, (profile) => window.browserApi.team.addToComputer(profile.id), t("已添加到本机"))}>
+                {notHere.length && notHere.length < selected.length ? t("添加到本机（{0} 个）", notHere.length) : t("添加到本机")}
+              </Button>
+              {owner && (
+                <Button size="small" type="link" disabled={Boolean(busy) || !locked.length} loading={busy === 'unlock'}
+                  onClick={() => void runMany('unlock', locked, (profile) => window.browserApi.team.forceUnlock(profile.id), t("已释放"))}>
+                  {locked.length && locked.length < selected.length ? t("强制释放（{0} 个）", locked.length) : t("强制释放")}
+                </Button>
+              )}
+              {owner && <Button size="small" type="link" danger disabled={Boolean(busy)} loading={busy === 'remove'} onClick={removeManyFromCloud}>{t("删除云端")}</Button>}
+            </>
+          )
+        }}
         columns={columns}
         rows={profiles}
         loading={loading}
@@ -597,6 +725,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
           : t("你自己建的窗口和分配给你的窗口都在这里。分配给你的窗口不能修改或导出。")}
       />
       <AssignModal open={Boolean(assigning)} profile={assigning} members={members} onClose={() => setAssigning(undefined)} onSaved={reload} />
+      <BatchAssignModal open={batchAssigning} profiles={selected} members={members} onClose={() => setBatchAssigning(false)} onSave={assignMany} />
     </>
   )
 }

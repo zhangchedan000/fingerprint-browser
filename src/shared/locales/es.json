@@ -2336,5 +2336,22 @@
   "已经过网络加速，仍然连不上这个代理；请换一个加速节点，或检查代理是否可用": "Ni a través del túnel de red se llega a este proxy; prueba otro nodo o comprueba que el proxy funciona",
   "网络加速设置无效": "Ajuste del túnel de red no válido",
   "请选择加速节点": "Elige un nodo del túnel",
-  "加速节点名称过长": "El nombre del nodo es demasiado largo"
+  "加速节点名称过长": "El nombre del nodo es demasiado largo",
+  "分配 {0} 个云端窗口": "Asignar {0} ventanas en la nube",
+  "加上这些成员": "Añadir estos miembros",
+  "只给这些成员": "Solo estos miembros",
+  "收回这些成员": "Retirar a estos miembros",
+  "已经分配的成员保留，再加上选中的成员。": "Los miembros ya asignados se mantienen y se añaden los elegidos.",
+  "每个窗口都改成只分配给选中的成员；不选任何人就是全部收回。": "Cada ventana queda asignada solo a los miembros elegidos; si no eliges a nadie, se retiran todos.",
+  "从这些窗口收回选中的成员，其他成员不变。": "Los miembros elegidos pierden estas ventanas; los demás no cambian.",
+  "{0}：成功 {1} 个，失败 {2} 个。{3}": "{0}: {1} correctas, {2} fallidas. {3}",
+  "{0}：{1} 个": "{0}: {1}",
+  "已分配": "Asignadas",
+  " 等 {0} 个": " y más ({0} en total)",
+  "删除 {0} 个云端窗口？": "¿Eliminar {0} ventanas en la nube?",
+  "已删除云端窗口": "Ventanas en la nube eliminadas",
+  "已选 {0} 个云端窗口": "{0} ventanas en la nube seleccionadas",
+  "批量分配": "Asignar",
+  "添加到本机（{0} 个）": "Añadir a este equipo ({0})",
+  "强制释放（{0} 个）": "Forzar liberación ({0})"
 }

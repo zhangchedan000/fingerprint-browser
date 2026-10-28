@@ -2336,5 +2336,22 @@
   "已经过网络加速，仍然连不上这个代理；请换一个加速节点，或检查代理是否可用": "Đã qua tăng tốc mạng mà vẫn không kết nối được proxy này; hãy đổi nút tăng tốc hoặc kiểm tra proxy còn dùng được không",
   "网络加速设置无效": "Cài đặt tăng tốc mạng không hợp lệ",
   "请选择加速节点": "Vui lòng chọn nút tăng tốc",
-  "加速节点名称过长": "Tên nút tăng tốc quá dài"
+  "加速节点名称过长": "Tên nút tăng tốc quá dài",
+  "分配 {0} 个云端窗口": "Phân công {0} cửa sổ đám mây",
+  "加上这些成员": "Thêm các thành viên này",
+  "只给这些成员": "Chỉ các thành viên này",
+  "收回这些成员": "Thu hồi từ các thành viên này",
+  "已经分配的成员保留，再加上选中的成员。": "Thành viên đã được phân công vẫn giữ, thêm các thành viên đã chọn.",
+  "每个窗口都改成只分配给选中的成员；不选任何人就是全部收回。": "Mỗi cửa sổ chỉ phân công cho các thành viên đã chọn; không chọn ai là thu hồi tất cả.",
+  "从这些窗口收回选中的成员，其他成员不变。": "Thu hồi các cửa sổ này từ thành viên đã chọn; thành viên khác giữ nguyên.",
+  "{0}：成功 {1} 个，失败 {2} 个。{3}": "{0}: thành công {1}, thất bại {2}. {3}",
+  "{0}：{1} 个": "{0}: {1}",
+  "已分配": "Đã phân công",
+  " 等 {0} 个": " và các cửa sổ khác (tổng {0})",
+  "删除 {0} 个云端窗口？": "Xóa {0} cửa sổ đám mây?",
+  "已删除云端窗口": "Đã xóa cửa sổ đám mây",
+  "已选 {0} 个云端窗口": "Đã chọn {0} cửa sổ đám mây",
+  "批量分配": "Phân công",
+  "添加到本机（{0} 个）": "Thêm vào máy này ({0})",
+  "强制释放（{0} 个）": "Buộc giải phóng ({0})"
 }
