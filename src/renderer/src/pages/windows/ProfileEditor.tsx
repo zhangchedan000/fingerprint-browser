@@ -4,6 +4,7 @@ import { FontPackDownload } from '../../components/FontPackDownload'
 import { effectiveScreen, kernelSpoofsScreen, randomScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
+import { fittingCountryZone, ipZoneFix, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
 import {
   Alert,
   AutoComplete,
@@ -1061,10 +1062,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    * depend on what was measured (new noise, real values) only while the result is current.
    */
   function fixOf(item: FingerprintCheckItem, stale: boolean): QuickFix | undefined {
-    // Results saved before 0.5.21 offered the whole country for a time zone: the IP's time zone alone now.
-    const timezone = item.fix === 'set-timezone' || (item.fix === 'follow-ip' && item.row === 'timezone')
-      ? item.fixValue ?? lastCheck?.timezone
+    // Results saved before 0.5.21 offered the whole country for a time zone: the IP's time zone alone now,
+    // as Chrome on this system reports it (an IP in Detroit is America/New_York on Windows).
+    const ipZone = item.fix === 'set-timezone' || (item.fix === 'follow-ip' && item.row === 'timezone')
+      ? item.fixValue ?? (lastCheck?.ok ? lastCheck.timezone : undefined)
       : undefined
+    const timezone = ipZone ? ipZoneFix(ipZone, lastCheck?.countryCode ?? fp.region, fp.platform) : undefined
     if (timezone) return fp.timezone === timezone ? undefined : { label: t("改成 {0}", timezone), apply: () => patchFingerprint({ timezone }) }
     switch (item.fix) {
       case 'follow-ip': return lastCheck?.ok ? { label: t("改为跟随 IP"), apply: () => fixToIp(lastCheck) } : undefined
@@ -1554,13 +1557,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const countryZones = fp.platform === 'windows' && fp.region ? countryWindowsZones(fp.region, getLocale()) : []
   const timezoneMismatch = countryZones.length > 0 && !countryZones.some((zone) => zone.iana === fp.timezone)
   const countryLocale = localeForCountry(fp.region)
-  const languageMismatch = countryLocale && fp.language
-    && !samePrimary(fp.language, countryLocale.language)
-    && fp.language.split('-')[1]?.toUpperCase() !== fp.region
+  const languageMismatch = countryLocale && fp.language && fp.region && !languageFitsCountry(fp.language, fp.region)
     ? { expected: countryLocale.language }
     : undefined
-  // The fix for each: the IP's own zone when it is in this country, else the country's first; the country's language.
-  const fittingZone = countryZones.find((zone) => zone.iana === lastCheck?.timezone)?.iana ?? countryZones[0]?.iana
+  // The fix for each (shared/quick-fix): the IP's zone when the IP is in this country, else the usual one there; the country's language.
+  const fittingZone = timezoneMismatch && fp.region ? fittingCountryZone(fp.region, lastCheck?.ok ? lastCheck.timezone : undefined) : undefined
   const timezoneFix: QuickFix | undefined = timezoneMismatch && fittingZone
     ? { label: t("改成 {0}", fittingZone), apply: () => patchFingerprint({ timezone: fittingZone }) }
     : undefined
@@ -1569,7 +1570,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     : undefined
   const followSystemLanguage = (key: 'voicesLocale' | 'mediaLocale'): QuickFix => ({ label: t("改成跟随系统语言"), apply: () => patchFingerprint({ [key]: undefined }) })
   // A size desktops with this card usually have (the first 常见 one in the list).
-  const usualScreen = screenOdd ? screenChoices(floor, hostScale()).find((choice) => screenSuitsGpu(gpu!.model, choice.physical)) : undefined
+  const usualScreen = screenOdd ? usualScreenFor(gpu!.model, screenChoices(floor, hostScale())) : undefined
   const screenFix: QuickFix | undefined = usualScreen
     ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
     : undefined

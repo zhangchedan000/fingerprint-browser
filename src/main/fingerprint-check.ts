@@ -1,4 +1,5 @@
 import { kernelChromiumVersion } from '../shared/kernel-id'
+import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -192,8 +193,11 @@ export function evaluateFingerprint(input: {
   // Time zone and language against the settings and the proxy's location.
   if (observed.timezone !== expected.timezone) {
     add({ row: 'timezone', status: 'bad', message: `页面时区 ${observed.timezone} 与设置的 ${expected.timezone} 不一致` })
-  } else if (proxy?.ok && proxy.timezone && observed.timezone !== proxy.timezone) {
-    add({ row: 'timezone', status: 'bad', message: `时区 ${observed.timezone} 与代理 IP 所在地时区 ${proxy.timezone} 不一致`, fix: 'set-timezone', fixValue: proxy.timezone })
+  } else if (proxy?.ok && proxy.timezone && observed.timezone !== ipZoneOnComputer(proxy.timezone, proxy.countryCode, fp.platform)) {
+    // Compared as Chrome on this system reports the IP's zone (Detroit and New York are one Windows zone).
+    const ipZone = ipZoneOnComputer(proxy.timezone, proxy.countryCode, fp.platform)
+    const fixValue = ipZoneFix(proxy.timezone, proxy.countryCode, fp.platform)
+    add({ row: 'timezone', status: 'bad', message: `时区 ${observed.timezone} 与代理 IP 所在地时区 ${ipZone} 不一致`, ...(fixValue ? { fix: 'set-timezone', fixValue } : {}) })
   } else if (proxy?.ok && proxy.timezone) {
     add({ row: 'timezone', status: 'ok', message: `时区 ${observed.timezone}，与代理 IP 所在地一致` })
   } else {

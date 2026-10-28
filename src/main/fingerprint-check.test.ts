@@ -67,6 +67,13 @@ describe('fingerprint check verdicts', () => {
     expect(item).toMatchObject({ status: 'bad', fix: 'set-timezone', fixValue: 'Europe/London' })
   })
 
+  it('takes an IP database zone as Chrome on Windows reports it: Detroit is New York there', () => {
+    const [same] = row(check({ fingerprint: { platform: 'windows' }, proxy: { ...proxy, timezone: 'America/Detroit', countryCode: 'US' } }), 'timezone')
+    expect(same.status).toBe('ok')
+    const [other] = row(check({ fingerprint: { platform: 'windows' }, proxy: { ...proxy, timezone: 'America/Indiana/Knox', countryCode: 'US' } }), 'timezone')
+    expect(other).toMatchObject({ status: 'bad', fix: 'set-timezone', fixValue: 'America/Chicago' })
+  })
+
   it('flags a WebRTC address other than the proxy exit', () => {
     const [item] = row(check({ observed: { webrtcIps: ['198.51.100.23', '203.0.113.9', 'abc.local'] } }), 'webrtc')
     expect(item).toMatchObject({ status: 'bad', fix: 'webrtc-replace' })
