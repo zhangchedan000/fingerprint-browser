@@ -493,10 +493,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
-  /** The country the IP is in, while the window follows it. */
-  const ipCountry = followIp ? regions.find((entry) => entry.code === lastCheck?.countryCode?.toUpperCase())?.code : undefined
   // The exit country the proxy was last seen in, against the country picked by hand.
   const lastCheck = proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck
+  /** The country the IP is in, while the window follows it. */
+  const ipCountry = followIp ? regions.find((entry) => entry.code === lastCheck?.countryCode?.toUpperCase())?.code : undefined
   const exitCountry = lastCheck?.countryCode
   const regionMismatch = !followIp && fp.region && exitCountry && proxyProtocol !== 'direct' && exitCountry.toUpperCase() !== fp.region
     ? { ip: exitCountry.toUpperCase(), window: fp.region }

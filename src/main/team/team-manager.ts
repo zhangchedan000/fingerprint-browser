@@ -227,6 +227,10 @@ export class TeamManager {
 
   async status(): Promise<TeamStatus> {
     await this.restoring
+    // App checks (tools/app-e2e) run the UI without a team server: a signed-in user, offline.
+    if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_TEAM_OFFLINE === '1' && !this.user) {
+      return { server: DEFAULT_TEAM_SERVER, user: { id: 'e2e', username: 'e2e', name: 'E2E', role: 'owner', disabled: false, created: '' }, offline: 'app check without a team server' }
+    }
     return { server: this.file.server || DEFAULT_TEAM_SERVER, user: this.user, offline: this.offline }
   }
 
