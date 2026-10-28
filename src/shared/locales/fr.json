@@ -2462,5 +2462,21 @@
   "音箱 + USB 耳麦": "Haut-parleurs + casque USB",
   "音箱 + 摄像头": "Haut-parleurs + webcam",
   "音箱 + USB 耳麦 + 摄像头": "Haut-parleurs + casque USB + webcam",
-  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Ces fenêtres utilisent toutes ce lien API (extraction) ; chacune prend un proxy et le garde jusqu’à ce qu’il ne fonctionne plus. Les fenêtres dont le lien ne change pas gardent leur proxy et leur historique d’IP. Fermez d’abord les fenêtres ouvertes."
+  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Ces fenêtres utilisent toutes ce lien API (extraction) ; chacune prend un proxy et le garde jusqu’à ce qu’il ne fonctionne plus. Les fenêtres dont le lien ne change pas gardent leur proxy et leur historique d’IP. Fermez d’abord les fenêtres ouvertes.",
+  "代理已修改，未重新检测": "Proxy modifié, pas encore revérifié",
+  "失败：{0}": "Échec : {0}",
+  "展开全部 {0} 条": "Afficher les {0}",
+  "打开窗口": "Ouverture de la fenêtre",
+  "提取 {0} → 出口 {1}": "Extrait {0} → sortie {1}",
+  "提取地址": "Adresse extraite",
+  "新提取": "nouvelle",
+  "检测于 {0}": "Vérifié {0}",
+  "检测记录": "Journal des vérifications",
+  "每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP": "Chaque extraction et vérification est notée (50 dernières), échecs compris, et synchronisée dans le cloud. L'adresse extraite est le serveur du fournisseur ; les sites voient l'IP de sortie",
+  "轮换 IP": "IP tournante",
+  "API 给的代理 {0} 拒绝了连接：{1}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）": "Le proxy de l'API, {0}, a refusé la connexion : {1}. Probablement la liste blanche d'IP : ajoutez l'IP publique de cet ordinateur à la liste blanche du fournisseur (avec l'accélération, l'IP du nœud)",
+  "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "Le proxy du lien change d'IP de sortie ({0}) ; aucun autre n'a été extrait de l'API (ce lien donne des proxys tournants, en extraire d'autres ne ferait qu'user les extractions). Les sites verront l'IP changer ; passez en session fixe (sticky) chez le fournisseur. Lancer quand même ?",
+  "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "{0} nouvelles IP prises de l'API, toujours pas bon : {1}. Le fuseau et les langues de la fenêtre ne changent pas ; les sites peuvent remarquer l'écart. Lancer quand même ?",
+  "两个 IP 数据库对代理的国家判断不一致（{0}）": "Deux bases d'IP ne s'accordent pas sur le pays du proxy ({0})",
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "L'IP du proxy est en {0} ({1}) ; le pays de la fenêtre est {2}"
 }

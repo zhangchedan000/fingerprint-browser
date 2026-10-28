@@ -36,6 +36,7 @@ export function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {
       ? check.geoSources.filter((source): source is string => typeof source === 'string').slice(0, 5)
       : undefined,
     geoConflict: typeof check.geoConflict === 'string' ? check.geoConflict.slice(0, 500) : undefined,
+    rotating: check.rotating === true ? true : undefined,
     failureKind: ['authentication', 'timeout', 'connection', 'unknown'].includes(check.failureKind ?? '') ? check.failureKind : undefined,
     retried: check.retried === true,
     exitChanged: check.exitChanged === true,

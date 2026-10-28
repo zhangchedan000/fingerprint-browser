@@ -2462,5 +2462,21 @@
   "音箱 + USB 耳麦": "Alto-falantes + headset USB",
   "音箱 + 摄像头": "Alto-falantes + webcam",
   "音箱 + USB 耳麦 + 摄像头": "Alto-falantes + headset USB + webcam",
-  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Estas janelas passam a usar este link de API (extração); cada uma pega um proxy e o mantém até ele parar de funcionar. Janelas com o mesmo link mantêm o proxy e o histórico de IP. Feche antes as janelas em execução."
+  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Estas janelas passam a usar este link de API (extração); cada uma pega um proxy e o mantém até ele parar de funcionar. Janelas com o mesmo link mantêm o proxy e o histórico de IP. Feche antes as janelas em execução.",
+  "代理已修改，未重新检测": "Proxy alterado, ainda não verificado de novo",
+  "失败：{0}": "Falhou: {0}",
+  "展开全部 {0} 条": "Mostrar todos os {0}",
+  "打开窗口": "Ao abrir a janela",
+  "提取 {0} → 出口 {1}": "Extraído {0} → saída {1}",
+  "提取地址": "Endereço extraído",
+  "新提取": "nova",
+  "检测于 {0}": "Verificado {0}",
+  "检测记录": "Registro de verificações",
+  "每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP": "Cada extração e verificação é registrada (últimas 50), inclusive falhas, e sincronizada na nuvem. O endereço extraído é o servidor do provedor; os sites veem o IP de saída",
+  "轮换 IP": "IP rotativo",
+  "API 给的代理 {0} 拒绝了连接：{1}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）": "O proxy da API, {0}, recusou a conexão: {1}. Provavelmente a lista branca de IP: adicione o IP público deste computador à lista branca do provedor (com a aceleração ligada, o IP do nó)",
+  "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "O proxy do link troca o IP de saída ({0}); nenhum outro foi extraído da API (este link dá proxies rotativos, extrair mais só gastaria extrações). Os sites verão o IP mudar; mude para sessão fixa (sticky) no painel do provedor. Iniciar mesmo assim?",
+  "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "{0} IPs novos tirados da API e ainda não está certo: {1}. O fuso e os idiomas da janela não mudam; os sites podem notar a diferença. Iniciar mesmo assim?",
+  "两个 IP 数据库对代理的国家判断不一致（{0}）": "Duas bases de IP discordam sobre o país do proxy ({0})",
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "O IP do proxy está em {0} ({1}); o país da janela é {2}"
 }

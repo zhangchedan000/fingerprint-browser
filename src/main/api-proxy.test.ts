@@ -36,7 +36,7 @@ describe('extraction API proxies', () => {
     expect(proxyRefusal(Buffer.from('HTTP/1.1 407 Proxy Authentication Required\r\n\r\n'))).toBe('HTTP/1.1 407 Proxy Authentication Required')
     expect(proxyRefusal(Buffer.from('HTTP/1.1 200 Connection established\r\n\r\n'))).toBeUndefined()
     const port = await listen(() => refused)
-    await expect(detectProxyProtocol({ host: '127.0.0.1', port, username: '', password: '' })).rejects.toThrow('拒绝了连接：msg: forbidden ip=223.88.164.164 not supported')
+    await expect(detectProxyProtocol({ host: '127.0.0.1', port, username: '', password: '' })).rejects.toThrow('拒绝了连接：msg: forbidden ip=223.88.164.164 not supported。多半是 IP 白名单没加')
   })
 
   it('asks through 网络加速 when the window uses it, and never directly when that is off', async () => {

@@ -505,6 +505,11 @@ body.fb-col-resizing * { cursor: col-resize !important; }
 .fb-region-source.is-ip { color: var(--fb-accent-text); background: var(--fb-accent-soft); }
 .fb-ip-history { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .fb-ip-history > div { display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.fb-api-log { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.fb-api-log > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.fb-api-log .fb-link-start { align-self: flex-start; height: auto; padding: 0; font-size: 12px; }
+.fb-danger-text { color: var(--fb-danger); }
+.fb-result-stale { color: var(--fb-warning-strong); }
 .fb-api-current { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 13px; }
 th.fb-col-movable { cursor: grab; }
 th.fb-col-movable:active { cursor: grabbing; }

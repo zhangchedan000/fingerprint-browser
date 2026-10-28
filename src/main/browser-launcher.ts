@@ -19,7 +19,7 @@ import { safeErrorText } from './redaction'
 import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-profiles'
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
-import { classifyProxyFailure, testProxy } from './proxy-tester'
+import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
@@ -984,19 +984,32 @@ export class BrowserLauncher {
 
   /**
    * An API window's proxy for this launch: its current one while it works and is in the window's
-   * country; otherwise up to 3 new ones from the link. Still elsewhere (or rotating): asked first.
+   * country; otherwise up to 3 new ones from the link. Still elsewhere, or rotating (then no new
+   * ones are taken): asked first.
    */
   private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const region = profile.fingerprint.region?.toUpperCase()
-    const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, { region: allowGeoConflict ? undefined : region, attempts: 3 })
-      .catch((error: unknown) => { throw new Error(`${error instanceof Error ? error.message : String(error)}${WHITELIST_HINT}`) })
+    const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, {
+      region: allowGeoConflict ? undefined : region,
+      attempts: 3,
+      trigger: 'launch',
+      // Where the link's server is, for the check log (not in tests with their own tester).
+      locate: this.proxyTester === testProxy ? locateServer : undefined
+    })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(message.includes('白名单') ? message : `${message}${WHITELIST_HINT}`)
+      })
     this.onChanged(outcome.profile)
     const { check } = outcome
     this.logger?.info('API 提取的代理', { profileId: profile.id, ip: check.ip, country: check.countryCode, newProxies: outcome.fetched })
     if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
+    if (outcome.mismatch && check.rotating) {
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？`)
+    }
     if (outcome.mismatch) {
       const where = check.geoConfidence === 'conflict'
-        ? `链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}）`
+        ? `两个 IP 数据库对代理的国家判断不一致（${check.geoConflict ?? check.ip}）`
         : `代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 从 API 换了 ${outcome.fetched} 次 IP 还是不对：${where}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？`)
     }

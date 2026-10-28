@@ -618,7 +618,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       sorter: (first, second) => (first.serialNumber ?? 0) - (second.serialNumber ?? 0),
       render: (serial?: number) => <span className="fb-muted">{serial ?? '—'}</span>
     },
-    { title: t("窗口"), dataIndex: 'name', width: 220, render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
+    { title: t("窗口"), dataIndex: 'name', width: 180, render: (value: string, row) => <><strong>{value}</strong>{row.note && <div className="fb-muted fb-ellipsis">{row.note}</div>}</> },
     {
       title: t("创建时间"),
       dataIndex: 'createdAt',
@@ -630,7 +630,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     ...(owner ? [{
       title: t("分配给"),
       key: 'assignees',
-      width: 180,
+      width: 140,
       render: (_value: unknown, row: TeamProfileView) => row.assignees.length
         ? row.assignees.map((id) => <Tag key={id}>{memberNames.get(id) ?? id}</Tag>)
         : <span className="fb-muted">{t("未分配")}</span>
@@ -638,7 +638,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("使用情况"),
       key: 'lock',
-      width: 170,
+      width: 130,
       render: (_value, row) => row.lock
         ? <Tooltip title={row.lock.device ? t("设备：{0}", row.lock.device) : undefined}><span><StatusPill tone="warning" pulse>{t("{0} 正在使用", row.lock.holderName)}</StatusPill></span></Tooltip>
         : <StatusPill>{t("空闲")}</StatusPill>
@@ -654,7 +654,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("本机"),
       key: 'local',
-      width: 110,
+      width: 130,
       render: (_value, row) => row.localId
         ? <StatusPill tone="success">{t("已在本机")}</StatusPill>
         : <StatusPill>{row.removedHere ? t("已从本机删除") : t("未添加")}</StatusPill>
@@ -662,7 +662,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     {
       title: t("操作"),
       key: 'actions',
-      width: owner ? 300 : 150,
+      width: owner ? 210 : 130,
       align: 'right',
       render: (_value, row) => {
         const running = localStatus(row) === 'running' || localStatus(row) === 'starting'
@@ -718,7 +718,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
         columns={columns}
         rows={profiles}
         loading={loading}
-        scrollX={owner ? 1420 : 1100}
+        scrollX="content"
         emptyText={owner ? t("还没有云端窗口") : t("还没有你的窗口")}
         footnote={owner
           ? t("所有窗口都自动存到云端：新建后上传配置，关闭时上传登录状态，换电脑登录后自动出现。同一个窗口同一时间只能一个人打开。")

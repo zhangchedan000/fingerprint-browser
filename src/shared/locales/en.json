@@ -2462,5 +2462,21 @@
   "音箱 + USB 耳麦": "Speakers + USB headset",
   "音箱 + 摄像头": "Speakers + webcam",
   "音箱 + USB 耳麦 + 摄像头": "Speakers + USB headset + webcam",
-  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "These windows all use this API link (extraction API); each takes a proxy and keeps it until it stops working. Windows whose link is unchanged keep their proxy and IP history. Close running windows first."
+  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "These windows all use this API link (extraction API); each takes a proxy and keeps it until it stops working. Windows whose link is unchanged keep their proxy and IP history. Close running windows first.",
+  "代理已修改，未重新检测": "Proxy changed, not checked again",
+  "失败：{0}": "Failed: {0}",
+  "展开全部 {0} 条": "Show all {0}",
+  "打开窗口": "Opening the window",
+  "提取 {0} → 出口 {1}": "Extracted {0} → exit {1}",
+  "提取地址": "Extracted address",
+  "新提取": "new",
+  "检测于 {0}": "Checked {0}",
+  "检测记录": "Check log",
+  "每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP": "Every extraction and check is logged (last 50), failures too, and synced to the cloud. The extracted address is the provider's server; websites see the exit IP",
+  "轮换 IP": "Rotating IP",
+  "API 给的代理 {0} 拒绝了连接：{1}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）": "The proxy from the API, {0}, refused the connection: {1}. Most likely the IP whitelist: add this computer's public IP to the provider's whitelist (with acceleration on, the node's IP)",
+  "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "The link's proxy rotates its exit IP ({0}); no more were taken from the API (this link gives rotating ones, more would only use up extractions). Websites will see the IP change; switch to a fixed (sticky) session in the provider's dashboard. Launch anyway?",
+  "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "Took {0} new IPs from the API and still not right: {1}. The window's time zone and languages are not changed; websites may notice the mismatch. Launch anyway?",
+  "两个 IP 数据库对代理的国家判断不一致（{0}）": "Two IP databases disagree on the proxy's country ({0})",
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "The proxy IP is in {0} ({1}); the window's country is {2}"
 }

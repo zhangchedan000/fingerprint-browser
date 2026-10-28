@@ -1,6 +1,7 @@
 import { ProxyAgent, request } from 'undici'
+import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import type { ProxyConfig, ProxyTestResult } from '../shared/types'
+import type { ProxyConfig, ProxyTestResult, ServerPlace } from '../shared/types'
 import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute } from './proxy-bridge'
 import { safeErrorText } from './redaction'
 
@@ -213,6 +214,42 @@ export const GEO_SOURCES: ReadonlyArray<{ name: string; url: string; parse: (dat
   }
 ]
 
+/** The same services asked about a given IP instead of the asker's own. */
+const PLACE_URLS: Record<string, (ip: string) => string> = {
+  'ipwho.is': (ip) => `https://ipwho.is/${ip}`,
+  'ipapi.co': (ip) => `https://ipapi.co/${ip}/json/`,
+  'ipinfo.io': (ip) => `https://ipinfo.io/${ip}/json`,
+  'geojs.io': (ip) => `https://get.geojs.io/v1/ip/geo/${ip}.json`,
+  'ip.sb': (ip) => `https://api.ip.sb/geoip/${ip}`,
+  'ipapi.is': (ip) => `https://api.ipapi.is/?q=${ip}`
+}
+const places = new Map<string, ServerPlace>()
+
+/**
+ * Where a proxy server is (the address an API link gave, not the exit IP websites see): asked
+ * from this computer, one service after another until one answers; remembered per address.
+ */
+export async function locateServer(host: string): Promise<ServerPlace | undefined> {
+  const ip = isIP(host) ? host : await lookup(host).then((found) => found.address, () => undefined)
+  if (!ip) return undefined
+  const known = places.get(ip)
+  if (known) return known
+  const signal = AbortSignal.timeout(12_000)
+  for (const source of [...GEO_SOURCES].sort(() => Math.random() - 0.5)) {
+    if (signal.aborted) return undefined
+    try {
+      const result = source.parse(await lookupJson<Json>(PLACE_URLS[source.name](ip), undefined, signal), 0)
+      if (!result.countryCode) continue
+      const place: ServerPlace = { countryCode: result.countryCode.toUpperCase(), ...(result.city ? { city: result.city } : {}) }
+      places.set(ip, place)
+      return place
+    } catch {
+      // The next service.
+    }
+  }
+  return undefined
+}
+
 /** A check result labelled with the service that gave it. */
 export interface GeoAnswer {
   source: string
@@ -237,7 +274,8 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer): ProxyTestR
       warning: `${geoConflict}；网站会看到 IP 在变，时区和语言也对不上。请在代理商后台改成固定会话（粘性 IP）`,
       geoConfidence: 'conflict',
       geoSources,
-      geoConflict
+      geoConflict,
+      rotating: true
     }
   }
   if (a.countryCode && b.countryCode && a.countryCode !== b.countryCode) {

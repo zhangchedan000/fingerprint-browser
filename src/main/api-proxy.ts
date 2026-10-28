@@ -107,7 +107,9 @@ export async function detectProxyProtocol(endpoint: Omit<ApiProxyEndpoint, 'prot
   const http = await firstAnswer(endpoint.host, endpoint.port, Buffer.from(`CONNECT www.google.com:443 HTTP/1.1\r\nHost: www.google.com:443\r\n${auth}\r\n`), route).catch(() => undefined)
   if (http && /^HTTP\/1\.[01] /.test(http.toString('latin1')) && !proxyRefusal(http)) return 'http'
   const refusal = proxyRefusal(socks) ?? proxyRefusal(http)
-  if (refusal) throw new Error(`API 给的代理 ${endpoint.host}:${endpoint.port} 拒绝了连接：${refusal}`)
+  // A refusal that is not about the account is the provider turning this computer's IP away.
+  if (refusal && /\b407\b|auth/i.test(refusal)) throw new Error(`API 给的代理 ${endpoint.host}:${endpoint.port} 拒绝了连接：${refusal}`)
+  if (refusal) throw new Error(`API 给的代理 ${endpoint.host}:${endpoint.port} 拒绝了连接：${refusal}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）`)
   throw new Error(`API 给的代理 ${endpoint.host}:${endpoint.port} 既不是 SOCKS5 也不是 HTTP 代理`)
 }
 

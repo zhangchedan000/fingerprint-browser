@@ -119,7 +119,7 @@ export class TeamManager {
 
   /**
    * A window's cloud config, with what makes it work the same on another computer: the node
-   * sources of its 网络加速 and, for API 提取, the proxy it is on and its IP history.
+   * sources of its 网络加速 and, for API 提取, the proxy it is on, its IP history and check log.
    */
   private cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string } } {
     const sources = this.tunnelSources?.(profile.tunnel) ?? []
@@ -130,6 +130,7 @@ export class TeamManager {
         apiState: {
           ...(profile.apiProxy.endpoint ? { endpoint: { ...profile.apiProxy.endpoint, password: profile.proxy.password } } : {}),
           ...(profile.apiProxy.history ? { history: profile.apiProxy.history } : {}),
+          ...(profile.apiProxy.log ? { log: profile.apiProxy.log } : {}),
           ...(profile.proxyCheck ? { check: profile.proxyCheck } : {})
         }
       } : {})

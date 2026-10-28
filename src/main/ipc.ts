@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft } from '../shared/types'
+import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ServerPlace } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
@@ -15,11 +15,11 @@ import { mergeKernelCatalog } from './kernel-catalog'
 import type { BrowserLauncher } from './browser-launcher'
 import type { AssignPatch, ProfileStore } from './profile-store'
 import { validPreferences, type SettingsStore } from './settings-store'
-import { testProxy } from './proxy-tester'
+import { locateServer, testProxy } from './proxy-tester'
 import { localProxyFor } from './proxy-bridge'
 import { proxySupportsUdp } from './webrtc-relay'
 import { validateProfileDraft, validateProxyConfig, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
-import { apiProxyFor } from './api-window'
+import { apiCheckRecord, apiProxyFor } from './api-window'
 import { resolveApiProxy, type ApiProxyEndpoint } from './api-proxy'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
@@ -515,7 +515,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       const route = routeInput === undefined ? undefined : validTunnelRoute(routeInput)
       const tester = (config: ProxyConfig) => testProxy(route ? { ...config, tunnel: route } : config)
       const fetchProxy = (url: string, saved: ProxyConfig['tunnel']) => resolveApiProxy(url, route ?? saved)
-      return publicProfile((await apiProxyFor(profiles, id, tester, { refresh: refresh === true }, fetchProxy)).profile)
+      return publicProfile((await apiProxyFor(profiles, id, tester, { refresh: refresh === true, locate: locateServer }, fetchProxy)).profile)
     }
     const testedProfile = profiles.get(id)
     const result = await testProxy(testedProfile.proxy)
@@ -652,17 +652,35 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
    * The proxy a link gave when it was checked in the editor (a new window, or a new link): the window
    * gets it when saved, so it starts on the IP that was checked instead of taking another one.
    */
-  const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; check: ProxyCheckSummary; at: number }>()
+  const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; place?: ServerPlace; check: ProxyCheckSummary; at: number }>()
   const draftTurns = new Map<string, number>()
   let draftTurn = 0
+  /** What checking a link in the editor found, for the window's check log once saved. */
+  const draftApiLogs = new Map<string, ApiCheckRecord[]>()
+  const noteDraftApiCheck = (url: string, entry: ApiCheckRecord) => draftApiLogs.set(url, [...(draftApiLogs.get(url) ?? []), entry].slice(-50))
+  /**
+   * A proxy checked in the editor before the window was saved (a new window, or a changed proxy):
+   * the result is the window's once it is saved with that proxy, and stays shown until checked again.
+   */
+  const draftChecks = new Map<string, { password: string; check: ProxyCheckSummary; at: number }>()
+  const proxyKey = (proxy: ProxyConfig) => [proxy.protocol, proxy.host.trim(), proxy.port ?? '', proxy.username].join('|')
   async function adoptDraftApiProxy(id: string): Promise<BrowserProfile> {
-    const profile = profiles.get(id)
-    const url = profile.apiProxy && !profile.apiProxy.endpoint ? profile.apiProxy.url : undefined
-    const kept = url ? draftApiProxies.get(url) : undefined
-    if (!url || !kept) return profile
+    let profile = profiles.get(id)
+    if (!profile.apiProxy) {
+      const kept = draftChecks.get(proxyKey(profile.proxy))
+      if (!kept || kept.password !== profile.proxy.password || Date.now() - kept.at > 30 * 60_000) return profile
+      draftChecks.delete(proxyKey(profile.proxy))
+      return profiles.setProxyCheck(id, kept.check)
+    }
+    const url = profile.apiProxy.url
+    const log = draftApiLogs.get(url)
+    draftApiLogs.delete(url)
+    if (log?.length) profile = await profiles.noteApiCheck(id, ...log)
+    const kept = !profile.apiProxy?.endpoint ? draftApiProxies.get(url) : undefined
+    if (!kept) return profile
     draftApiProxies.delete(url)
     if (Date.now() - kept.at > 30 * 60_000) return profile
-    await profiles.setWindowApiEndpoint(id, kept.endpoint)
+    await profiles.setWindowApiEndpoint(id, kept.endpoint, kept.place)
     return profiles.setProxyCheck(id, kept.check)
   }
   const resolveDraft = async <T extends ProxyDraft | ProxyConfig>(draft: T): Promise<T> => {
@@ -675,23 +693,40 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const draftLink = (input as ProxyConfig | undefined)?.apiUrl ? validProxyApiUrl((input as ProxyConfig).apiUrl!) : undefined
     const turn = ++draftTurn
     if (draftLink) draftTurns.set(draftLink, turn)
-    const config = await resolveDraft(input as ProxyConfig)
+    const config = await resolveDraft(input as ProxyConfig).catch((error: unknown) => {
+      if (draftLink) noteDraftApiCheck(draftLink, apiCheckRecord('check', undefined, undefined, true, { error: error instanceof Error ? error.message : String(error) }))
+      throw error
+    })
     const validated = validateProxyConfig(config)
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
     const proxy = proxyForTest(validated, saved)
-    const result = await testProxy(proxy)
-    if (draftLink && draftTurns.get(draftLink) === turn && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
-      draftApiProxies.set(validProxyApiUrl(config.apiUrl), {
-        endpoint: { protocol: config.protocol, host: config.host, port: config.port, username: config.username, password: config.password },
-        check: { ...result, checkedAt: new Date().toISOString() },
-        at: Date.now()
-      })
+    const [result, place] = await Promise.all([testProxy(proxy), draftLink ? locateServer(config.host).catch(() => undefined) : undefined])
+    const check: ProxyCheckSummary = { ...result, checkedAt: new Date().toISOString() }
+    if (draftLink && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
+      noteDraftApiCheck(draftLink, apiCheckRecord('check', config as ApiProxyEndpoint, place, true, result))
+      if (draftTurns.get(draftLink) === turn) {
+        draftApiProxies.set(draftLink, {
+          endpoint: { protocol: config.protocol, host: config.host, port: config.port, username: config.username, password: config.password },
+          ...(place ? { place } : {}),
+          check,
+          at: Date.now()
+        })
+      }
     }
+    if (!draftLink) {
+      draftChecks.set(proxyKey(proxy), { password: proxy.password, check, at: Date.now() })
+      // The window's own proxy as saved: the result is the window's at once.
+      const window = profileId ? profiles.get(profileId) : undefined
+      if (window && !window.apiProxy && !proxyId && sameProxyIdentity(window.proxy, proxy) && window.proxy.password === proxy.password) {
+        await profiles.setProxyCheck(window.id, check).catch(() => undefined)
+      }
+    }
+    const shown = draftLink ? { ...result, apiAddress: `${config.host}:${config.port}`, ...(place ? { apiAddressPlace: place } : {}) } : result
     // WebRTC through the proxy needs UDP; only a proxy reached directly can carry it (webrtc-relay.ts).
     if (result.ok && proxy.protocol === 'socks5' && !await localProxyFor(proxy).catch(() => undefined)) {
-      return { ...result, udp: await proxySupportsUdp(proxy) }
+      return { ...shown, udp: await proxySupportsUdp(proxy) }
     }
-    return result
+    return shown
   })
   // Proxy and group libraries: windows refer to these records by id.
   const proxyView = (id: string) => publicProxyRecord(profiles.getProxy(id), profiles.list())

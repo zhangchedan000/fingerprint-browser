@@ -24,7 +24,7 @@ async function open(path: string): Promise<ProfileStore> {
 }
 
 /** A provider handing out the given proxies in turn, and a check that places each port's exit. */
-function provider(exits: Array<{ port: number; ip: string; countryCode: string; ok?: boolean }>) {
+function provider(exits: Array<{ port: number; ip: string; countryCode: string; ok?: boolean; rotating?: boolean }>) {
   const fetched: number[] = []
   let next = 0
   const fetchProxy = async (): Promise<ApiProxyEndpoint> => {
@@ -39,7 +39,9 @@ function provider(exits: Array<{ port: number; ip: string; countryCode: string; 
     const exit = exits.find((item) => item.port === config.port)
     return exit?.ok === false || !exit
       ? { ok: false, latencyMs: 0, error: '连接超时' }
-      : { ok: true, latencyMs: 10, ip: exit.ip, countryCode: exit.countryCode, geoConfidence: 'consensus' }
+      : exit.rotating
+        ? { ok: true, latencyMs: 10, ip: exit.ip, countryCode: exit.countryCode, geoConfidence: 'conflict', rotating: true, geoConflict: '轮换代理' }
+        : { ok: true, latencyMs: 10, ip: exit.ip, countryCode: exit.countryCode, geoConfidence: 'consensus' }
   }
   return { fetchProxy, tester, fetched, tested }
 }
@@ -128,5 +130,45 @@ describe('API 提取 windows never end on a dead proxy when one worked', () => {
     const outcome = await apiProxyFor(store, id, api.tester, { region: 'US', attempts: 2 }, api.fetchProxy)
     expect(outcome).toMatchObject({ mismatch: true, check: { ok: true, countryCode: 'MX' } })
     expect(store.get(id).proxy).toMatchObject({ port: 31001, password: 'pw31001' })
+  })
+})
+
+describe('API 提取 windows log every extraction and check', () => {
+  it('does not take more proxies when the link gives a rotating one', async () => {
+    const { store, id } = await apiWindow()
+    const api = provider([
+      { port: 31001, ip: '78.179.144.99', countryCode: 'TR', rotating: true },
+      { port: 31002, ip: '203.0.113.2', countryCode: 'US' }
+    ])
+    const outcome = await apiProxyFor(store, id, api.tester, { region: 'US', attempts: 3, trigger: 'launch' }, api.fetchProxy)
+    expect(outcome).toMatchObject({ fetched: 1, mismatch: true, check: { rotating: true } })
+    expect(api.fetched).toEqual([31001])
+    // The kept proxy still rotates at the next launch: checked, nothing taken.
+    const again = await apiProxyFor(store, id, api.tester, { region: 'US', attempts: 3, trigger: 'launch' }, api.fetchProxy)
+    expect(again).toMatchObject({ fetched: 0, mismatch: true })
+    expect(api.fetched).toEqual([31001])
+    expect(store.get(id).apiProxy?.log?.map((entry) => [entry.trigger, entry.fetched ?? false, entry.rotating ?? false])).toEqual([
+      ['launch', false, true],
+      ['launch', true, true]
+    ])
+  })
+
+  it('keeps where the address the link gave is, and failures too, newest first', async () => {
+    const { path, store, id } = await apiWindow()
+    const api = provider([{ port: 31001, ip: '203.0.113.1', countryCode: 'US' }])
+    const located: string[] = []
+    const locate = async (host: string) => { located.push(host); return { countryCode: 'US', city: 'Los Angeles' } }
+    await apiProxyFor(store, id, api.tester, { locate }, api.fetchProxy)
+    await expect(apiProxyFor(store, id, api.tester, { refresh: true, locate }, api.fetchProxy)).rejects.toThrow('提取次数已用完')
+    const log = store.get(id).apiProxy?.log ?? []
+    expect(log[0]).toMatchObject({ trigger: 'refresh', fetched: true, ok: false, error: '提取次数已用完' })
+    expect(log[1]).toMatchObject({ trigger: 'check', fetched: true, ok: true, address: '198.51.100.1:31001', addressPlace: { countryCode: 'US', city: 'Los Angeles' }, ip: '203.0.113.1', countryCode: 'US' })
+    expect(store.get(id).apiProxy?.endpoint?.place).toEqual({ countryCode: 'US', city: 'Los Angeles' })
+    // Checking the kept proxy again does not look its server up again.
+    await apiProxyFor(store, id, api.tester, { locate }, api.fetchProxy)
+    expect(located).toEqual(['198.51.100.1'])
+    const reopened = await open(path)
+    expect(reopened.get(id).apiProxy?.log).toHaveLength(3)
+    expect(reopened.get(id).apiProxy?.endpoint?.place).toEqual({ countryCode: 'US', city: 'Los Angeles' })
   })
 })

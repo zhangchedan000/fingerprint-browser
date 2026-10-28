@@ -60,6 +60,31 @@ export interface ApiIpRecord {
   city?: string
 }
 
+/** Where a proxy server itself is (not its exit IP, which is what websites see). */
+export interface ServerPlace {
+  countryCode?: string
+  city?: string
+}
+
+/** One extraction or check of an API window's proxy (检测代理, 换一个 IP or opening the window). */
+export interface ApiCheckRecord {
+  at: string
+  trigger: 'check' | 'refresh' | 'launch'
+  /** The address the link gave (host:port), and where that server is. */
+  address?: string
+  addressPlace?: ServerPlace
+  /** Taken from the link this time; otherwise the kept proxy was checked again. */
+  fetched?: boolean
+  ok: boolean
+  /** The exit IP websites see, and its country. */
+  ip?: string
+  countryCode?: string
+  city?: string
+  /** A new exit IP for every connection. */
+  rotating?: boolean
+  error?: string
+}
+
 /**
  * API 提取 kept on the window itself (not in the proxy library). The proxy the link gave stays in use
  * while it works; a new one is taken when it stops working, or on 换一个 IP.
@@ -67,9 +92,11 @@ export interface ApiIpRecord {
 export interface WindowApiProxy {
   url: string
   /** The proxy the link gave last, used while it still works (its password is kept encrypted, apart). */
-  endpoint?: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; fetchedAt?: string }
+  endpoint?: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; fetchedAt?: string; place?: ServerPlace }
   /** Newest first, at most 50. */
   history?: ApiIpRecord[]
+  /** Every extraction and check, newest first, at most 50. */
+  log?: ApiCheckRecord[]
 }
 
 export interface ProxyConfig {
@@ -463,6 +490,11 @@ export interface ProxyTestResult {
   geoConfidence?: 'consensus' | 'single-source' | 'conflict'
   geoSources?: string[]
   geoConflict?: string
+  /** The two lookups saw different exit IPs: the proxy gives a new one for every connection. */
+  rotating?: boolean
+  /** API 提取 checked in the editor: the address the link gave, and where that server is (not kept with the check). */
+  apiAddress?: string
+  apiAddressPlace?: ServerPlace
   failureKind?: 'authentication' | 'timeout' | 'connection' | 'unknown'
   retried?: boolean
   exitChanged?: boolean

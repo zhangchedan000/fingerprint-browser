@@ -2462,5 +2462,21 @@
   "音箱 + USB 耳麦": "Altavoces + auriculares USB",
   "音箱 + 摄像头": "Altavoces + cámara web",
   "音箱 + USB 耳麦 + 摄像头": "Altavoces + auriculares USB + cámara web",
-  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Estas ventanas usarán este enlace API (extracción); cada una toma un proxy y lo mantiene hasta que deja de funcionar. Las ventanas con el mismo enlace conservan su proxy y su historial de IP. Cierra antes las ventanas en ejecución."
+  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Estas ventanas usarán este enlace API (extracción); cada una toma un proxy y lo mantiene hasta que deja de funcionar. Las ventanas con el mismo enlace conservan su proxy y su historial de IP. Cierra antes las ventanas en ejecución.",
+  "代理已修改，未重新检测": "Proxy modificado, sin volver a comprobar",
+  "失败：{0}": "Error: {0}",
+  "展开全部 {0} 条": "Mostrar las {0}",
+  "打开窗口": "Al abrir la ventana",
+  "提取 {0} → 出口 {1}": "Extraída {0} → salida {1}",
+  "提取地址": "Dirección extraída",
+  "新提取": "nueva",
+  "检测于 {0}": "Comprobado {0}",
+  "检测记录": "Registro de comprobaciones",
+  "每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP": "Cada extracción y comprobación queda registrada (últimas 50), también los fallos, y se sincroniza con la nube. La dirección extraída es el servidor del proveedor; los sitios ven la IP de salida",
+  "轮换 IP": "IP rotativa",
+  "API 给的代理 {0} 拒绝了连接：{1}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）": "El proxy de la API, {0}, rechazó la conexión: {1}. Lo más probable es la lista blanca de IP: añade la IP pública de este equipo a la lista blanca del proveedor (con la aceleración activada, la IP del nodo)",
+  "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "El proxy del enlace rota su IP de salida ({0}); no se extrajeron más de la API (este enlace da proxies rotativos y extraer más solo gastaría extracciones). Los sitios verán cambiar la IP; cambia a sesión fija (sticky) en el panel del proveedor. ¿Iniciar de todos modos?",
+  "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "Se tomaron {0} IP nuevas de la API y sigue sin cuadrar: {1}. La zona horaria y los idiomas de la ventana no cambian; los sitios pueden notar la diferencia. ¿Iniciar de todos modos?",
+  "两个 IP 数据库对代理的国家判断不一致（{0}）": "Dos bases de datos de IP no coinciden en el país del proxy ({0})",
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "La IP del proxy está en {0} ({1}); el país de la ventana es {2}"
 }

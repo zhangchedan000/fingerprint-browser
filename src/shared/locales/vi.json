@@ -2462,5 +2462,21 @@
   "音箱 + USB 耳麦": "Loa + tai nghe USB",
   "音箱 + 摄像头": "Loa + webcam",
   "音箱 + USB 耳麦 + 摄像头": "Loa + tai nghe USB + webcam",
-  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Các cửa sổ này đều dùng liên kết API này (lấy qua API); mỗi cửa sổ lấy một proxy và dùng đến khi nó hỏng mới đổi. Cửa sổ có liên kết không đổi giữ nguyên proxy và lịch sử IP. Hãy đóng các cửa sổ đang chạy trước."
+  "这些窗口都改用这个 API 链接（API 提取），各自取一个代理，一直用到不能用了才换；链接没变的窗口保留原来的代理和 IP 记录。运行中的窗口需要先关闭。": "Các cửa sổ này đều dùng liên kết API này (lấy qua API); mỗi cửa sổ lấy một proxy và dùng đến khi nó hỏng mới đổi. Cửa sổ có liên kết không đổi giữ nguyên proxy và lịch sử IP. Hãy đóng các cửa sổ đang chạy trước.",
+  "代理已修改，未重新检测": "Đã đổi proxy, chưa kiểm tra lại",
+  "失败：{0}": "Thất bại: {0}",
+  "展开全部 {0} 条": "Hiện tất cả {0} mục",
+  "打开窗口": "Mở cửa sổ",
+  "提取 {0} → 出口 {1}": "Đã lấy {0} → lối ra {1}",
+  "提取地址": "Địa chỉ đã lấy",
+  "新提取": "mới lấy",
+  "检测于 {0}": "Kiểm tra lúc {0}",
+  "检测记录": "Nhật ký kiểm tra",
+  "每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP": "Mỗi lần lấy và kiểm tra đều được ghi (50 lần gần nhất), kể cả thất bại, và đồng bộ lên đám mây. Địa chỉ đã lấy là máy chủ của nhà cung cấp; trang web thấy IP lối ra",
+  "轮换 IP": "IP xoay vòng",
+  "API 给的代理 {0} 拒绝了连接：{1}。多半是 IP 白名单没加：请把这台电脑的公网 IP 加到服务商白名单（开着网络加速时，是加速节点的 IP）": "Proxy từ API {0} từ chối kết nối: {1}. Nhiều khả năng do danh sách trắng IP: thêm IP công cộng của máy này vào danh sách trắng của nhà cung cấp (khi bật tăng tốc là IP của nút)",
+  "链接给的代理在轮换出口 IP（{0}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？": "Proxy của liên kết xoay IP lối ra ({0}); không lấy thêm từ API (liên kết này chỉ cho proxy xoay vòng, lấy thêm chỉ tốn lượt). Trang web sẽ thấy IP thay đổi; hãy chuyển sang phiên cố định (sticky) trong bảng điều khiển nhà cung cấp. Vẫn khởi động?",
+  "从 API 换了 {0} 次 IP 还是不对：{1}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？": "Đã lấy {0} IP mới từ API mà vẫn không đúng: {1}. Múi giờ và ngôn ngữ của cửa sổ không đổi; trang web có thể nhận ra. Vẫn khởi động?",
+  "两个 IP 数据库对代理的国家判断不一致（{0}）": "Hai cơ sở dữ liệu IP không thống nhất quốc gia của proxy ({0})",
+  "代理 IP 在 {0}（{1}），窗口的国家是 {2}": "IP proxy ở {0} ({1}); quốc gia của cửa sổ là {2}"
 }

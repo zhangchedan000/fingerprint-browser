@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
-  ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
-  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy, WindowApiProxy
+  ApiCheckRecord, ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
+  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, ServerPlace, TunnelRoute, WebRtcPolicy, WindowApiProxy
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
@@ -93,6 +93,35 @@ function safeTunnelRoute(value: unknown): TunnelRoute | undefined {
 
 const API_HISTORY_LIMIT = 50
 
+const text = (value: unknown, max = 200): string | undefined => typeof value === 'string' && value ? value.slice(0, max) : undefined
+
+/** Where a proxy server is, as saved; nothing when unreadable. */
+function safeServerPlace(value: unknown): ServerPlace | undefined {
+  const place = value as ServerPlace | undefined
+  if (!place || typeof place !== 'object') return undefined
+  const countryCode = text(place.countryCode, 2)
+  const city = text(place.city, 100)
+  return countryCode || city ? { ...(countryCode ? { countryCode } : {}), ...(city ? { city } : {}) } : undefined
+}
+
+/** One saved entry of an API window's check log; nothing when unreadable. */
+export function safeApiCheckRecord(value: unknown): ApiCheckRecord | undefined {
+  const entry = value as Partial<ApiCheckRecord> | undefined
+  if (!entry || typeof entry !== 'object' || typeof entry.at !== 'string' || typeof entry.ok !== 'boolean') return undefined
+  if (entry.trigger !== 'check' && entry.trigger !== 'refresh' && entry.trigger !== 'launch') return undefined
+  const addressPlace = safeServerPlace(entry.addressPlace)
+  const record: ApiCheckRecord = { at: entry.at, trigger: entry.trigger, ok: entry.ok }
+  if (text(entry.address)) record.address = text(entry.address)
+  if (addressPlace) record.addressPlace = addressPlace
+  if (entry.fetched === true) record.fetched = true
+  if (text(entry.ip, 64)) record.ip = text(entry.ip, 64)
+  if (text(entry.countryCode, 2)) record.countryCode = text(entry.countryCode, 2)
+  if (text(entry.city, 100)) record.city = text(entry.city, 100)
+  if (entry.rotating === true) record.rotating = true
+  if (text(entry.error, 500)) record.error = text(entry.error, 500)
+  return record
+}
+
 /** A saved API 提取 of a window, or none when it is unreadable. */
 function safeApiProxy(value: unknown): WindowApiProxy | undefined {
   const api = value as Partial<WindowApiProxy> | undefined
@@ -107,13 +136,15 @@ function safeApiProxy(value: unknown): WindowApiProxy | undefined {
         host: api.endpoint.host,
         port: api.endpoint.port,
         username: typeof api.endpoint.username === 'string' ? api.endpoint.username : '',
-        ...(typeof api.endpoint.fetchedAt === 'string' ? { fetchedAt: api.endpoint.fetchedAt } : {})
+        ...(typeof api.endpoint.fetchedAt === 'string' ? { fetchedAt: api.endpoint.fetchedAt } : {}),
+        ...(safeServerPlace(api.endpoint.place) ? { place: safeServerPlace(api.endpoint.place) } : {})
       }
     : undefined
   const history = Array.isArray(api.history)
     ? api.history.filter((entry): entry is ApiIpRecord => Boolean(entry) && typeof entry.ip === 'string' && typeof entry.at === 'string').slice(0, API_HISTORY_LIMIT)
     : []
-  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}) }
+  const log = Array.isArray(api.log) ? api.log.map(safeApiCheckRecord).filter((entry): entry is ApiCheckRecord => Boolean(entry)).slice(0, API_HISTORY_LIMIT) : []
+  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}), ...(log.length ? { log } : {}) }
 }
 
 /** The proxy as a window uses it: the window's own 网络加速, never the library proxy's default. */
@@ -256,8 +287,8 @@ export class ProfileStore {
    */
   async restoreApiState(id: string, input: unknown): Promise<BrowserProfile> {
     const current = this.stored(id)
-    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; check?: unknown } | undefined
-    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history })
+    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; log?: unknown; check?: unknown } | undefined
+    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history, log: state?.log })
     if (!current.apiProxy || !api) return this.resolve(current)
     const check = safeProxyCheck(state?.check)
     const password = typeof state?.endpoint?.password === 'string' ? state.endpoint.password : ''
@@ -507,13 +538,29 @@ export class ProfileStore {
   }
 
   /** A new proxy from a window's API link: used from now on, while it works. */
-  async setWindowApiEndpoint(id: string, endpoint: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; password: string }): Promise<BrowserProfile> {
+  async setWindowApiEndpoint(
+    id: string,
+    endpoint: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; password: string },
+    place?: ServerPlace,
+    fetchedAt = new Date().toISOString()
+  ): Promise<BrowserProfile> {
     const current = this.stored(id)
     if (!current.apiProxy) throw new Error('这个窗口没有使用 API 提取')
     const { password, ...shown } = endpoint
     if (password) this.apiPasswords.set(id, password)
     else this.apiPasswords.delete(id)
-    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: { ...shown, fetchedAt: new Date().toISOString() } } }
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: { ...shown, fetchedAt, ...(place ? { place } : {}) } } }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /** Notes an extraction or check of an API window's proxy in its log (newest first, at most 50). */
+  async noteApiCheck(id: string, ...entries: ApiCheckRecord[]): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    if (!current.apiProxy || !entries.length) return this.resolve(current)
+    const log = [...[...entries].reverse(), ...(current.apiProxy.log ?? [])].slice(0, API_HISTORY_LIMIT)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, log } }
     this.profiles.set(id, profile)
     await this.persist()
     return this.resolve(profile)

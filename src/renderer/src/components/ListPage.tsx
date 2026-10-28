@@ -38,8 +38,8 @@ export interface ListPageProps<T extends { id: string }> {
   /** What an empty list says; emptyAction is offered only when nothing exists at all. */
   emptyText: string
   emptyAction?: ReactNode
-  /** Width the table scrolls at. */
-  scrollX?: number
+  /** Width the table scrolls at; 'content': as wide as its columns need, scrolling only when the page is narrower. */
+  scrollX?: number | 'content'
   /** Clicking a row selects it for a detail panel. */
   onRowClick?: (row: T) => void
   activeRowId?: string
@@ -58,7 +58,7 @@ export function ListPage<T extends { id: string }>({
   onRowClick, activeRowId, footnote, paginate = true
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
-  const table = useTableColumns(columns, scrollX)
+  const table = useTableColumns(columns, scrollX === 'content' ? undefined : scrollX)
   const selected = new Set(selection?.ids ?? [])
   return (
     <>
@@ -114,7 +114,7 @@ export function ListPage<T extends { id: string }>({
               showTotal: (total) => t("共 {0} 条", total),
               hideOnSinglePage: false
             }}
-            scroll={table.scrollX ? { x: table.scrollX } : undefined}
+            scroll={table.scrollX ? { x: table.scrollX } : scrollX === 'content' ? { x: 'max-content' } : undefined}
             locale={{ emptyText: <Empty description={emptyText}>{emptyAction}</Empty> }}
           />
         </Spin>

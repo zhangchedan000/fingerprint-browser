@@ -50,6 +50,7 @@ import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedPro
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
 import type {
+  ApiCheckRecord,
   BrowserExtension,
   BrowserPlatform,
   BrowserProfileView,
@@ -65,6 +66,7 @@ import type {
   ProxyRecordView,
   ProxyConfig,
   ProxyTestResult,
+  ServerPlace,
   TunnelRoute
 } from '../../../../shared/types'
 import { DEVICE_MEMORY_CHOICES, type DeviceMemoryGb } from '../../../../shared/types'
@@ -385,7 +387,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // Each 检测代理 gets a number; a result that comes back after the editor was reopened (or another
   // check started) is dropped instead of showing up, or keeping the button spinning.
   const proxyCheckRun = useRef(0)
+  // The last check's result stays shown, also when the editor is opened again, until 检测代理 is
+  // clicked again; a proxy changed since is marked, not cleared.
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
+  const [proxyCheckedAt, setProxyCheckedAt] = useState<string>()
+  const [proxyEdited, setProxyEdited] = useState(false)
+  const [showApiLog, setShowApiLog] = useState(false)
   // An API window as its last check left it (its current proxy and IP history).
   const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
   const [pasteText, setPasteText] = useState('')
@@ -442,7 +449,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setTab('basic')
     proxyCheckRun.current += 1
     setTestingProxy(false)
-    setProxyResult(null)
+    setProxyResult(profile?.proxyCheck ?? null)
+    setProxyCheckedAt(profile?.proxyCheck?.checkedAt)
+    setProxyEdited(false)
+    setShowApiLog(false)
     setApiView(profile)
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
@@ -815,9 +825,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         password: parsed.password,
         passwordStored: false
       })
-      setProxyResult(null)
+      setProxyEdited(true)
       setPasteError('')
-      scheduleProxyCheck()
     } catch (error) {
       setPasteError(mt(error instanceof Error ? error.message : String(error)))
     }
@@ -825,39 +834,29 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function chooseProxyMode(mode: ProxyMode): void {
     setProxyMode(mode)
-    setProxyResult(null)
+    setProxyEdited(true)
     if (mode !== 'library' && mode !== 'api') form.setFieldValue(['proxy', 'protocol'], mode)
-    scheduleProxyCheck()
   }
 
-  /** A proxy typed, pasted, picked from the library or its 网络加速 changed: checked a second later. */
+  /**
+   * A proxy typed, pasted or picked: nothing is checked until 检测代理 is clicked (the proxy, its
+   * 网络加速 or a whitelist may still be being set up). The last result stays, marked as older.
+   */
   function onFormChange(changed: Partial<EditorValues>): void {
     if (!('proxy' in changed) && !('proxyId' in changed)) return
-    setProxyResult(null)
-    // A new window takes the country of a library proxy's last check right away; the new check follows.
     const picked = 'proxyId' in changed ? proxies.find((item) => item.id === changed.proxyId) : undefined
-    if (!profile && picked?.check?.ok) fixToIp(picked.check)
-    scheduleProxyCheck()
+    if (picked?.check) {
+      // A library proxy comes with its own last check; a new window takes its country right away.
+      proxyCheckRun.current += 1
+      setTestingProxy(false)
+      setProxyResult(picked.check)
+      setProxyCheckedAt(picked.check.checkedAt)
+      setProxyEdited(false)
+      if (!profile && picked.check.ok) fixToIp(picked.check)
+      return
+    }
+    setProxyEdited(true)
   }
-
-  // 填完就检测: no 检测代理 click needed. The timer calls the latest render's check, which sees the
-  // proxy mode and 网络加速 as they are by then.
-  const autoCheckTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const autoCheck = useRef<() => void>(() => undefined)
-  autoCheck.current = () => {
-    const proxy = (form.getFieldValue('proxy') ?? {}) as ProxyConfig
-    const filled = proxyMode === 'library'
-      ? Boolean(form.getFieldValue('proxyId'))
-      : proxyMode === 'api'
-        ? /^\s*https?:\/\/\S+/i.test(String(proxy.apiUrl ?? ''))
-        : proxyMode !== 'direct' && Boolean(String(proxy.host ?? '').trim()) && Number(proxy.port) > 0
-    if (filled) void testCurrentProxy()
-  }
-  function scheduleProxyCheck(): void {
-    clearTimeout(autoCheckTimer.current)
-    autoCheckTimer.current = setTimeout(() => autoCheck.current(), 1000)
-  }
-  useEffect(() => () => clearTimeout(autoCheckTimer.current), [open])
 
   /**
    * A proxy checked while creating a window fills in its country, time zone and languages from that
@@ -868,6 +867,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function followCheckedIp(result: ProxyTestResult | null, run: number, fill = false): void {
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
+    setProxyCheckedAt(new Date().toISOString())
+    setProxyEdited(false)
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
     if (fill || !profile) fixToIp(result)
   }
@@ -901,14 +902,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   async function testCurrentProxy(fill = false, refresh = false): Promise<void> {
-    // A check started by hand replaces the automatic one still waiting (an API link is taken once).
-    clearTimeout(autoCheckTimer.current)
     const run = ++proxyCheckRun.current
     try {
       if (proxyMode === 'library') {
         await form.validateFields(['proxyId'])
         setTestingProxy(true)
-        setProxyResult(null)
         // Saved on the library proxy, so every window using it sees the result; reached the way this window will.
         followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null, run, fill)
         return
@@ -916,7 +914,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       if (proxyMode === 'api') {
         await form.validateFields([['proxy', 'apiUrl']])
         setTestingProxy(true)
-        setProxyResult(null)
         if (savedApiLink()) {
           // Its current proxy while it works (a new one when it does not, or on 换一个 IP); saved with its history.
           const view = await window.browserApi.profiles.testProxy(profile!.id, refresh, route)
@@ -930,12 +927,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
-      setProxyResult(null)
       followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id), run, fill)
     } catch (error) {
       if (run !== proxyCheckRun.current) return
+      if (proxyMode === 'api' && profile && savedApiLink()) {
+        void window.browserApi.profiles.list().then((all) => {
+          const fresh = all.find((item) => item.id === profile.id)
+          if (fresh && run === proxyCheckRun.current) setApiView(fresh)
+        }).catch(() => undefined)
+      }
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
         setProxyResult({ ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) })
+        setProxyCheckedAt(new Date().toISOString())
+        setProxyEdited(false)
       } else {
         setTab('proxy')
       }
@@ -1157,6 +1161,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     </div>
   )
 
+  const placeText = (place?: ServerPlace) => [place?.countryCode, place?.city].filter(Boolean).join(' ')
+  // API 提取: the address the link gave (the provider's server) beside the exit IP websites see.
+  const keptEndpoint = proxyMode === 'api' && apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url ? apiView.apiProxy.endpoint : undefined
+  const resultAddress = proxyMode !== 'api' ? undefined
+    : proxyResult?.apiAddress ? { address: proxyResult.apiAddress, place: proxyResult.apiAddressPlace }
+      : keptEndpoint ? { address: `${keptEndpoint.host}:${keptEndpoint.port}`, place: keptEndpoint.place } : undefined
+  const resultNote = [
+    proxyCheckedAt ? t("检测于 {0}", relativeTime(proxyCheckedAt, getLocale(), '')) : '',
+    proxyEdited ? t("代理已修改，未重新检测") : ''
+  ].filter(Boolean).join(' · ')
+  const apiTriggerLabels: Record<ApiCheckRecord['trigger'], string> = { check: t("检测代理"), refresh: t("换一个 IP"), launch: t("打开窗口") }
+  const apiLog = keptEndpoint || (apiView?.apiProxy && apiUrlTyped === apiView.apiProxy.url) ? apiView?.apiProxy?.log ?? [] : []
+
   const proxy = (
     <div className="fb-editor-section">
       <Row
@@ -1193,7 +1210,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 placeholder={t("搜索地址或备注")}
                 optionFilterProp="search"
                 onChange={() => {
-                  setProxyResult(null)
                   // Another proxy: start from its 网络加速 default.
                   form.setFieldValue('tunnel', undefined)
                 }}
@@ -1229,7 +1245,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               <span className="fb-api-current">
                 <span className="fb-mono">{apiView.proxyCheck?.ok && apiView.proxyCheck.ip ? apiView.proxyCheck.ip : t("未检测")}</span>
                 {apiView.proxyCheck?.ok && <span className="fb-muted">{[apiView.proxyCheck.countryCode, apiView.proxyCheck.city].filter(Boolean).join(' ')}</span>}
-                <span className="fb-muted fb-mono">{apiView.apiProxy.endpoint.protocol.toUpperCase()} {apiView.apiProxy.endpoint.host}:{apiView.apiProxy.endpoint.port}</span>
+                <span className="fb-muted">
+                  {t("提取地址")} <span className="fb-mono">{apiView.apiProxy.endpoint.protocol.toUpperCase()} {apiView.apiProxy.endpoint.host}:{apiView.apiProxy.endpoint.port}</span>
+                  {placeText(apiView.apiProxy.endpoint.place) && `（${placeText(apiView.apiProxy.endpoint.place)}）`}
+                </span>
                 {apiView.apiProxy.endpoint.fetchedAt && <span className="fb-muted">{t("取于 {0}", relativeTime(apiView.apiProxy.endpoint.fetchedAt, getLocale(), ''))}</span>}
               </span>
             </Row>
@@ -1248,6 +1267,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               </div>
             </Row>
           ) : null}
+          {apiLog.length > 0 && (
+            <Row label={t("检测记录")} hint={t("每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP")}>
+              <div className="fb-api-log">
+                {apiLog.slice(0, showApiLog ? apiLog.length : 5).map((entry) => (
+                  <div key={`${entry.at}-${entry.address ?? ''}-${entry.trigger}`}>
+                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')} · {apiTriggerLabels[entry.trigger]}{entry.fetched ? ` · ${t("新提取")}` : ''}</span>
+                    {entry.address && <span className="fb-mono">{entry.address}</span>}
+                    {placeText(entry.addressPlace) && <span className="fb-muted">{placeText(entry.addressPlace)}</span>}
+                    {entry.ok
+                      ? <span>→ <span className="fb-mono">{entry.ip}</span> <span className="fb-muted">{[entry.countryCode, entry.city].filter(Boolean).join(' ')}</span>{entry.rotating && <Tag color="warning" className="fb-inline-tag">{t("轮换 IP")}</Tag>}</span>
+                      : <span className="fb-danger-text">{t("失败：{0}", mt(entry.error))}</span>}
+                  </div>
+                ))}
+                {apiLog.length > 5 && (
+                  <Button size="small" type="link" className="fb-link-start" onClick={() => setShowApiLog(!showApiLog)}>
+                    {showApiLog ? t("收起") : t("展开全部 {0} 条", apiLog.length)}
+                  </Button>
+                )}
+              </div>
+            </Row>
+          )}
         </>
       )}
       {proxyMode !== 'library' && proxyMode !== 'api' && proxyProtocol !== 'direct' && (
@@ -1306,7 +1346,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             value={route}
             status={tunnelStatus}
             disabledReason={route === shownRoute ? undefined : t("HTTPS 代理暂不支持网络加速，可改用 HTTP 或 SOCKS5")}
-            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyResult(null); scheduleProxyCheck() }}
+            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyEdited(true) }}
           />
         </Row>
       )}
@@ -1320,12 +1360,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
           {proxyResult?.ok && (
             <span className={`fb-proxy-result ${proxyResult.geoConfidence === 'conflict' ? 'warn' : 'ok'}`}>
-              {t("连接正常")} · {proxyResult.ip} · {[proxyResult.country, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
+              {t("连接正常")} · {resultAddress
+                ? t("提取 {0} → 出口 {1}", `${resultAddress.address}${placeText(resultAddress.place) ? `（${placeText(resultAddress.place)}）` : ''}`, proxyResult.ip)
+                : proxyResult.ip} · {[proxyResult.country ?? proxyResult.countryCode, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
               {proxyResult.udp !== undefined && ` · ${proxyResult.udp ? t("支持 UDP") : t("不支持 UDP")}`}
               {proxyResult.networkRisk && <Tag color="warning" className="fb-inline-tag">{riskLabels[proxyResult.networkRisk]}</Tag>}
             </span>
           )}
-          {proxyResult && !proxyResult.ok && <span className="fb-proxy-result bad">{t("连接失败：{0}", mt(proxyResult.error))}{proxyMode !== 'library' ? ` · ${t("请确认代理类型（HTTP / SOCKS5）是否选对")}` : ''}</span>}
+          {proxyResult && !proxyResult.ok && (
+            <span className="fb-proxy-result bad">
+              {t("连接失败：{0}", mt(proxyResult.error))}
+              {proxyMode !== 'library' && proxyMode !== 'api' && !proxyResult.error?.includes('白名单') ? ` · ${t("请确认代理类型（HTTP / SOCKS5）是否选对")}` : ''}
+            </span>
+          )}
+          {proxyResult && resultNote && <span className={`fb-muted${proxyEdited ? ' fb-result-stale' : ''}`}>{resultNote}</span>}
         </div>
       </Row>
       {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (
@@ -1339,7 +1387,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       )}
       {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
-      {proxyResult?.ok && regionMismatch && (
+      {proxyResult?.ok && !proxyEdited && regionMismatch && (
         <Alert
           type="warning"
           showIcon
