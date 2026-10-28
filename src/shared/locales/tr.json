@@ -2483,5 +2483,8 @@
   "先勾选代理": "Önce proxy'leri seçin",
   "共 {0} 条 · 已选 {1}": "Toplam {0} · {1} seçili",
   "检测所选": "Seçilenleri kontrol et",
-  "检测这些": "Kontrol et"
+  "检测这些": "Kontrol et",
+  "基本信息": "Temel bilgiler",
+  "登录状态与备注": "Oturum ve notlar",
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Henüz eklenti yok. Bir Chrome eklentisini klasöre açın, içe aktarın, sonra bir pencerede etkinleştirin."
 }

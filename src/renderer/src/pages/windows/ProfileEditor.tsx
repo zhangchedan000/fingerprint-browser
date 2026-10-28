@@ -1025,6 +1025,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   const basic = (
     <div className="fb-editor-section">
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("基本信息")}</h3>
+        </div>
       <Row label={t("窗口名称")} required>
         <Form.Item name="name" noStyle rules={[{ required: true, message: t("请输入环境名称") }]}>
           <Input placeholder={t("例如：TK-美区-01")} maxLength={60} />
@@ -1076,6 +1080,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </div>
       </Row>
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("登录状态与备注")}</h3>
+        </div>
       <Row
         label={t("Cookie")}
         hint={running
@@ -1110,6 +1120,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} maxLength={500} placeholder={t("选填")} />
         </Form.Item>
       </Row>
+      </section>
       <Collapse
         ghost
         className="fb-more"
@@ -1176,6 +1187,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   const proxy = (
     <div className="fb-editor-section">
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("代理")}</h3>
+        </div>
       <Row
         label={t("代理方式")}
         hint={proxyMode === 'api'
@@ -1396,6 +1411,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
         />
       )}
+      </section>
+
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("网络身份")}</h3>
+        </div>
       <Row label={t("时区和语言")}>
         <span className="fb-muted">
           {fromIp && fp.region
@@ -1416,6 +1437,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           />
         </Row>
       )}
+      </section>
     </div>
   )
 

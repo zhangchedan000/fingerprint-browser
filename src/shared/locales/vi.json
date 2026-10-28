@@ -2483,5 +2483,8 @@
   "先勾选代理": "Hãy chọn proxy trước",
   "共 {0} 条 · 已选 {1}": "Tổng {0} · đã chọn {1}",
   "检测所选": "Kiểm tra mục đã chọn",
-  "检测这些": "Kiểm tra"
+  "检测这些": "Kiểm tra",
+  "基本信息": "Thông tin cơ bản",
+  "登录状态与备注": "Trạng thái đăng nhập và ghi chú",
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Chưa có tiện ích nào. Giải nén tiện ích Chrome thành thư mục, nhập vào rồi bật trong cửa sổ."
 }

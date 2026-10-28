@@ -2483,5 +2483,8 @@
   "先勾选代理": "Tick proxies first",
   "共 {0} 条 · 已选 {1}": "{0} total · {1} selected",
   "检测所选": "Check selected",
-  "检测这些": "Check them"
+  "检测这些": "Check them",
+  "基本信息": "Basics",
+  "登录状态与备注": "Sign-in state and notes",
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "No extensions yet. Unpack a Chrome extension into a folder, import it, then turn it on in a window."
 }

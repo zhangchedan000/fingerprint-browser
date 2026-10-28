@@ -25,6 +25,8 @@ export interface ThemeTokens {
   line: string
   lineSoft: string
   lineStrong: string
+  /** Borders of inputs, selects and plain buttons: visible, but lighter than lineStrong. */
+  controlBorder: string
 
   text: string
   textSecondary: string
@@ -81,6 +83,7 @@ const LIGHT: Omit<ThemeTokens, 'accent' | 'accentSoft' | 'accentSoftBorder' | 'a
   line: '#e6e9f0',
   lineSoft: '#edf0f4',
   lineStrong: '#b9c3d6',
+  controlBorder: '#d5dbe6',
   text: '#1d2433',
   textSecondary: '#3c4560',
   textMuted: '#5d6782',
@@ -119,6 +122,7 @@ const DARK: typeof LIGHT = {
   line: '#2a3248',
   lineSoft: '#242c41',
   lineStrong: '#3d4763',
+  controlBorder: '#353e57',
   text: '#e6e9f2',
   textSecondary: '#c3c9d8',
   textMuted: '#9aa3ba',

@@ -2483,5 +2483,8 @@
   "先勾选代理": "Marque os proxies primeiro",
   "共 {0} 条 · 已选 {1}": "{0} no total · {1} selecionados",
   "检测所选": "Verificar selecionados",
-  "检测这些": "Verificar"
+  "检测这些": "Verificar",
+  "基本信息": "Informações básicas",
+  "登录状态与备注": "Login e notas",
+  "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Ainda não há extensões. Descompacte uma extensão do Chrome numa pasta, importe-a e ative-a numa janela."
 }

@@ -13,7 +13,7 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
   if (missing) {
     return (
       <div className="fb-proxy-cell">
-        <div><span className="fb-cc muted">—</span><span>{t("代理已删除")}</span></div>
+        <div><span>{t("代理已删除")}</span></div>
         <small className="fb-proxy-bad">{t("请重新选择代理")}</small>
       </div>
     )
@@ -21,7 +21,7 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
   if (proxy.protocol === 'direct') {
     return (
       <div className="fb-proxy-cell">
-        <div><span className="fb-cc muted">—</span><span>{t("直连")}</span></div>
+        <div><span>{t("直连")}</span></div>
         <small>{t("本机网络")}</small>
       </div>
     )
@@ -30,7 +30,7 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
   return (
     <div className="fb-proxy-cell">
       <div>
-        <span className={`fb-cc${check?.ok && check.countryCode ? '' : ' muted'}`}>{check?.ok && check.countryCode ? check.countryCode : '—'}</span>
+        {check?.ok && check.countryCode && <span className="fb-cc">{check.countryCode}</span>}
         <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxy.apiUrl && !proxy.host ? t("API 提取") : proxyAddress(proxy)}</span>
       </div>
       <div className="fb-proxy-meta">

@@ -39,14 +39,20 @@ export function antdTheme(tokens: ThemeTokens, mode: ThemeChoice['mode']): Theme
       colorWarning: tokens.warningStrong,
       borderRadius: 8,
       borderRadiusLG: 12,
-      colorBorder: tokens.lineStrong,
+      colorBorder: tokens.controlBorder,
+      colorTextPlaceholder: tokens.textFaint,
+      colorTextDescription: tokens.textMuted,
       fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     },
     components: {
-      Button: { controlHeight: 38 },
-      Input: { controlHeight: 38 },
-      Select: { controlHeight: 38 },
-      Table: { headerBg: tokens.surfaceMuted, headerColor: tokens.textMuted, rowHoverBg: tokens.surfaceMuted, headerSplitColor: 'transparent' },
+      // 36 px: roomy enough to click, without the toolbar looking heavy.
+      Button: { controlHeight: 36, fontWeight: 500, primaryShadow: 'none', defaultShadow: 'none', dangerShadow: 'none' },
+      Input: { controlHeight: 36 },
+      InputNumber: { controlHeight: 36 },
+      Select: { controlHeight: 36 },
+      Table: { headerBg: tokens.surfaceMuted, headerColor: tokens.textMuted, rowHoverBg: tokens.surfaceMuted, rowSelectedBg: tokens.accentSoft, rowSelectedHoverBg: tokens.accentSoft, headerSplitColor: 'transparent', borderColor: tokens.lineSoft },
+      Dropdown: { paddingBlock: 7 },
+      Drawer: { footerPaddingBlock: 12, footerPaddingInline: 24 },
       Tabs: { horizontalItemGutter: 28 },
       Card: { headerFontSize: 15 }
     }

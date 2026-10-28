@@ -126,7 +126,7 @@ export function ListPage<T extends { id: string }>({
               hideOnSinglePage: false
             }}
             scroll={table.scrollX ? { x: table.scrollX } : scrollX === 'content' ? { x: 'max-content' } : undefined}
-            locale={{ emptyText: <Empty description={emptyText}>{emptyAction}</Empty> }}
+            locale={{ emptyText: <Empty className="fb-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText}>{emptyAction}</Empty> }}
           />
         </Spin>
       </section>

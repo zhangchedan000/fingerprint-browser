@@ -141,7 +141,11 @@ export function ExtensionsPage() {
                 })}
               </div>
             )
-          : <Empty className="fb-card" description={t("还没有导入扩展")} />}
+          : (
+              <Empty className="fb-card fb-empty" image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。")}>
+                <Button type="primary" icon={<FolderAddOutlined />} loading={importing} onClick={() => void importDirectory()}>{t("导入扩展文件夹")}</Button>
+              </Empty>
+            )}
       </Spin>
       <PickWindowsModal
         open={Boolean(assigning)}
