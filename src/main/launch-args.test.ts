@@ -62,6 +62,40 @@ describe('launch arguments', () => {
     expect(args).toContain('--fingerprint-platform-version=10.0.0')
   })
 
+  it('tells Prism kernels what the chosen card does with AV1', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const av1 = (gpu: string) => buildLaunchArgs(profile({ ...WINDOWS, gpu }), prism).filter((arg) => arg.startsWith('--fingerprint-gpu-av1'))
+    expect(av1('NVIDIA GeForce RTX 2060|0x00001E89')).toEqual(['--fingerprint-gpu-av1=none'])
+    expect(av1('NVIDIA GeForce RTX 3080 Ti|0x00002208')).toEqual(['--fingerprint-gpu-av1=decode'])
+    expect(av1('NVIDIA GeForce RTX 4080|0x00002704')).toEqual(['--fingerprint-gpu-av1=encode'])
+    expect(av1('NVIDIA GeForce RTX 5090|0x00002B85')).toEqual(['--fingerprint-gpu-av1=encode'])
+    // The real card (GPU set to real): the computer's own codecs.
+    const real = buildLaunchArgs(profile({ ...WINDOWS, gpu: 'NVIDIA GeForce RTX 2060|0x00001E89', disabledSpoofing: ['gpu'] }), prism)
+    expect(real.some((arg) => arg.startsWith('--fingerprint-gpu-av1'))).toBe(false)
+  })
+
+  it('passes the keyboard layout of a Windows in the window\'s language', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const layout = (language: string) => {
+      const arg = buildLaunchArgs(profile({ language }), prism).find((entry) => entry.startsWith('--fingerprint-keyboard-layout='))
+      if (!arg) return undefined
+      const text = Buffer.from(arg.slice('--fingerprint-keyboard-layout='.length), 'base64').toString('utf8')
+      return Object.fromEntries(text.trim().split('\n').map((line) => line.split('\t')))
+    }
+    const german = layout('de-DE')
+    expect(german?.KeyY).toBe('z')
+    expect(german?.KeyZ).toBe('y')
+    expect(german?.Semicolon).toBe('ö')
+    expect(Object.keys(german ?? {})).toHaveLength(48)
+    expect(layout('fr-FR')?.KeyQ).toBe('a')
+    expect(layout('en-GB')?.Backslash).toBe('#')
+    // Russian Windows also lists the US keyboard, the first one that types a-z.
+    expect(layout('ru-RU')?.KeyQ).toBe('q')
+    expect(layout('ja-JP')?.Backquote).toBe('半角/全角')
+    expect(layout('pt-BR')?.IntlRo).toBe('/')
+    expect(buildLaunchArgs(profile({ language: 'de-DE' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-keyboard-layout'))).toBe(false)
+  })
+
   it('refuses a laptop or unknown GPU on the 156 kernel instead of showing another card', () => {
     expect(() => buildLaunchArgs(profile({ ...WINDOWS, gpu: 'NVIDIA GeForce RTX 4060 Laptop GPU|0x000028A0' }), {
       userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47'

@@ -7,6 +7,8 @@ import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/netwo
 import { effectiveScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
 import { kernelVendor } from '../shared/kernel-id'
+import { gpuAv1Support } from '../shared/gpu-catalog'
+import { keyboardLayoutFor, keyboardLayoutText } from '../shared/keyboard-layouts'
 
 export interface HostScreen {
   width: number
@@ -145,6 +147,10 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
       args.push(`--fingerprint-gpu-vendor-id=${vendorId}`)
       args.push(`--fingerprint-gpu-device-id=${gpu.deviceId}`)
       args.push(`--fingerprint-gpu-description=${gpu.model}`)
+      // Video codecs of that card (patch 004, prism9+; older kernels ignore it): AV1 hardware
+      // decoding and encoding as WebCodecs and MediaCapabilities report them.
+      const av1 = gpuAv1Support(gpu.model)
+      if (av1) args.push(`--fingerprint-gpu-av1=${av1}`)
     }
   }
   if (brandVersion) args.push(`--fingerprint-brand-version=${brandVersion}`)
@@ -179,6 +185,11 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
     if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
     if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
+    // navigator.keyboard.getLayoutMap() of a Windows in the window's language (patch 011, prism9+;
+    // older kernels ignore it and report this computer's layout).
+    const keyboardLayout = keyboardLayoutFor(language)
+    const keyboardText = keyboardLayout ? keyboardLayoutText(keyboardLayout) : undefined
+    if (keyboardText) args.push(`--fingerprint-keyboard-layout=${Buffer.from(keyboardText, 'utf8').toString('base64')}`)
   }
   if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
     // 替换 on prism7+ with a proxy that relays UDP: WebRTC really goes through the proxy.

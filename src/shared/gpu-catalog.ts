@@ -27,6 +27,19 @@ export function gpuKey(gpu: Pick<KernelGpu, 'model' | 'deviceId'>): string {
   return gpu.deviceId ? `${gpu.model}|${gpu.deviceId}` : gpu.model
 }
 
+/**
+ * What a GeForce RTX card does with AV1 (NVIDIA's video codec SDK support matrix): RTX 20 (Turing)
+ * neither decodes nor encodes it, RTX 30 (Ampere) decodes it, RTX 40 and 50 encode it too.
+ * Undefined for any other card (the host's own codecs are kept).
+ */
+export function gpuAv1Support(model: string): 'none' | 'decode' | 'encode' | undefined {
+  const series = model.match(/\bRTX ([2-5])0[5-9]0\b/)?.[1]
+  if (series === '2') return 'none'
+  if (series === '3') return 'decode'
+  if (series === '4' || series === '5') return 'encode'
+  return undefined
+}
+
 /** Short label, e.g. "NVIDIA GeForce RTX 4060 · 2882". */
 export function gpuLabel(gpu: Pick<KernelGpu, 'model' | 'deviceId'>): string {
   return gpu.deviceId ? `${gpu.model} · ${gpu.deviceId.replace(/^0x0*/i, '')}` : gpu.model
