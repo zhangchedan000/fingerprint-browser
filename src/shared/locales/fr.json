@@ -1329,7 +1329,7 @@
   "粘贴 JSON 格式 Cookie（支持常见插件导出的格式），保存后导入": "Collez des Cookie au format JSON (formats d'export courants acceptés) ; import après l'enregistrement",
   "粘贴 JSON 格式 Cookie，或从文件导入": "Collez des Cookie JSON ou importez-les depuis un fichier",
   "选填": "Facultatif",
-  "更多设置：标签、颜色、扩展、窗口位置": "Plus de réglages : étiquettes, couleur, extensions, position",
+  "更多设置：标签、颜色、扩展": "Plus de réglages : étiquettes, couleur, extensions",
   "代理 IP 模块完成后开放": "Disponible avec le module IP des proxys",
   "从代理池选择": "Choisir dans le pool de proxys",
   "代理地址": "Adresse du proxy",

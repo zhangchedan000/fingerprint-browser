@@ -1329,7 +1329,7 @@
   "粘贴 JSON 格式 Cookie（支持常见插件导出的格式），保存后导入": "Dán Cookie dạng JSON (hỗ trợ định dạng xuất của các tiện ích phổ biến); nhập sau khi lưu",
   "粘贴 JSON 格式 Cookie，或从文件导入": "Dán Cookie dạng JSON hoặc nhập từ tệp",
   "选填": "Không bắt buộc",
-  "更多设置：标签、颜色、扩展、窗口位置": "Thêm cài đặt: nhãn, màu, tiện ích, vị trí cửa sổ",
+  "更多设置：标签、颜色、扩展": "Thêm cài đặt: nhãn, màu, tiện ích",
   "代理 IP 模块完成后开放": "Có khi mô-đun IP proxy hoàn thành",
   "从代理池选择": "Chọn từ kho proxy",
   "代理地址": "Địa chỉ proxy",

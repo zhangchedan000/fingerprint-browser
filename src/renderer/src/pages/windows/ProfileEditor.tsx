@@ -1186,7 +1186,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         className="fb-more"
         items={[{
           key: 'more',
-          label: t("更多设置：标签、颜色、扩展、窗口位置"),
+          label: t("更多设置：标签、颜色、扩展"),
           forceRender: true,
           children: (
             <>
@@ -1210,21 +1210,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   />
                 </Form.Item>
               </Row>
-              <Row label={t("浏览器窗口")} hint={windowMode === 'auto' ? t("和新装的 Chrome 一样打开默认大小的窗口，之后记住你拖动后的大小") : undefined}>
-                <Form.Item name={['window', 'mode']} noStyle>
-                  <Radio.Group size="small" optionType="button" options={[{ value: 'auto', label: t("自动尺寸与位置") }, { value: 'custom', label: t("固定尺寸与位置") }]} />
-                </Form.Item>
-              </Row>
-              {windowMode === 'custom' && (
-                <Row label={t("窗口尺寸")} hint={t("多显示器允许负坐标；显示器布局变化后，过期坐标可能让窗口出现在屏幕之外。")}>
-                  <Space wrap>
-                    <Form.Item name={['window', 'width']} noStyle><InputNumber min={480} max={7680} precision={0} prefix="W" /></Form.Item>
-                    <Form.Item name={['window', 'height']} noStyle><InputNumber min={360} max={4320} precision={0} prefix="H" /></Form.Item>
-                    <Form.Item name={['window', 'x']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="X" /></Form.Item>
-                    <Form.Item name={['window', 'y']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="Y" /></Form.Item>
-                  </Space>
-                </Row>
-              )}
             </>
           )
         }]}
@@ -1916,6 +1901,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       ) : (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
           <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
+        </Row>
+      )}
+      <Row label={t("浏览器窗口")} hint={windowMode === 'auto' ? t("和新装的 Chrome 一样打开默认大小的窗口，之后记住你拖动后的大小") : undefined}>
+        <Form.Item name={['window', 'mode']} noStyle>
+          <Radio.Group size="small" optionType="button" options={[{ value: 'auto', label: t("自动尺寸与位置") }, { value: 'custom', label: t("固定尺寸与位置") }]} />
+        </Form.Item>
+      </Row>
+      {windowMode === 'custom' && (
+        <Row label={t("窗口尺寸")} hint={t("多显示器允许负坐标；显示器布局变化后，过期坐标可能让窗口出现在屏幕之外。")}>
+          <Space wrap>
+            <Form.Item name={['window', 'width']} noStyle><InputNumber min={480} max={7680} precision={0} prefix="W" /></Form.Item>
+            <Form.Item name={['window', 'height']} noStyle><InputNumber min={360} max={4320} precision={0} prefix="H" /></Form.Item>
+            <Form.Item name={['window', 'x']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="X" /></Form.Item>
+            <Form.Item name={['window', 'y']} noStyle><InputNumber min={-20000} max={20000} precision={0} prefix="Y" /></Form.Item>
+          </Space>
         </Row>
       )}
       <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备")}>
