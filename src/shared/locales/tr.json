@@ -2487,5 +2487,11 @@
   "基本信息": "Temel bilgiler",
   "登录状态与备注": "Oturum ve notlar",
   "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Henüz eklenti yok. Bir Chrome eklentisini klasöre açın, içe aktarın, sonra bir pencerede etkinleştirin.",
-  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Otomatik: hoparlör + USB kulaklık, masaüstünde en yaygın set; kaydedince sabitlenir. Mikrofon veya kamera izni yoksa siteler yalnızca cihaz türlerini görür"
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Otomatik: hoparlör + USB kulaklık, masaüstünde en yaygın set; kaydedince sabitlenir. Mikrofon veya kamera izni yoksa siteler yalnızca cihaz türlerini görür",
+  "改为自动匹配": "Otomatik eşleştir",
+  "改回自动跟随": "Varsayılana dön",
+  "改成 {0}": "{0} olarak değiştir",
+  "改成跟随系统语言": "Sistem dilini izle",
+  "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Pencere açık: ad, grup, notlar vb. değiştirilebilir; proxy ve parmak izi ancak kapattıktan sonra",
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Pencere açık: bunlar başlatıldığı ayarlar; kapattıktan sonra değiştirilebilir. Ad, grup, notlar vb. «Temel» bölümünde değiştirilip kaydedilir"
 }

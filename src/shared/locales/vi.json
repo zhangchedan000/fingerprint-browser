@@ -2487,5 +2487,11 @@
   "基本信息": "Thông tin cơ bản",
   "登录状态与备注": "Trạng thái đăng nhập và ghi chú",
   "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Chưa có tiện ích nào. Giải nén tiện ích Chrome thành thư mục, nhập vào rồi bật trong cửa sổ.",
-  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Tự động: loa + tai nghe USB, bộ phổ biến nhất trên máy bàn; cố định khi lưu. Không có quyền micro hoặc camera, trang web chỉ thấy có những loại thiết bị nào"
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Tự động: loa + tai nghe USB, bộ phổ biến nhất trên máy bàn; cố định khi lưu. Không có quyền micro hoặc camera, trang web chỉ thấy có những loại thiết bị nào",
+  "改为自动匹配": "Tự khớp",
+  "改回自动跟随": "Quay về mặc định",
+  "改成 {0}": "Đổi thành {0}",
+  "改成跟随系统语言": "Theo ngôn ngữ hệ thống",
+  "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Cửa sổ đang mở: có thể đổi tên, nhóm, ghi chú…; proxy và vân tay chỉ đổi được sau khi đóng",
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Cửa sổ đang mở: đây là cài đặt lúc khởi động, đổi được sau khi đóng. Tên, nhóm, ghi chú… đổi và lưu ở «Cài đặt cơ bản»"
 }

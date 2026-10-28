@@ -210,7 +210,9 @@ button, input, textarea { font: inherit; }
 .fb-editor-alert.ant-alert .ant-alert-icon { margin-inline-end: 8px; font-size: 14px; }
 .fb-editor-alert.ant-alert .ant-alert-action { margin-inline-start: 10px; }
 /* A value chosen on its own that does not fit the rest: under its row, yellow, not blocking. */
+.fb-locked-note.ant-alert { margin-bottom: 14px; border-radius: 10px; }
 .fb-row-warning { display: block; margin-top: 4px; color: var(--fb-warning); font-size: 12px; }
+.fb-row-warning .fb-row-fix { height: auto; margin-left: 6px; padding: 0; font-size: 12px; }
 .fb-more { margin-left: -16px; }
 .fb-more .ant-collapse-content-box { display: flex; flex-direction: column; gap: 14px; padding-left: 16px !important; }
 .fb-fp-intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--fb-accent-soft-border); border-radius: 12px; color: var(--fb-text-secondary); background: var(--fb-accent-soft); font-size: 13px; }

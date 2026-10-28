@@ -651,7 +651,8 @@ export class TeamManager {
     const existing = this.localIdOf(teamId)
     if (existing) return existing
     const record = known ?? await this.requireApi().getProfile(teamId)
-    const created = await this.profiles.create(configDraft(record.config, record.name))
+    // The window keeps the number and creation time it has on the computer that made it, when free here.
+    const created = await this.profiles.create(configDraft(record.config, record.name), configOrigin(record.config))
     await this.applyCloudExtras(created.id, record.config)
     this.file.links[created.id] = { teamId, dataRev: 0, configRev: record.config_rev, ownerId: record.owner }
     for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {

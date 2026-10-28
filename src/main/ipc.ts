@@ -66,6 +66,13 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await team.afterLocalEdit(id)
     return profile
   })
+  // An open window: only what does not need a restart (name, group, note, account, …).
+  ipcMain.handle('profiles:update-details', async (_event, id: string, draft: ProfileDraft) => {
+    team.assertEditable(id)
+    const profile = publicProfile(await profiles.updateDetails(id, draft))
+    await team.afterLocalEdit(id)
+    return profile
+  })
   ipcMain.handle('profiles:duplicate', async (_event, id: string) => {
     team.assertEditable(id)
     const profile = publicProfile(await profiles.duplicate(id))

@@ -94,6 +94,32 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(reopened.get(c.id).proxyCheck).toBeUndefined()
   })
 
+  it('keeps the number and creation time a window has elsewhere when the number is free here', async () => {
+    const store = await open()
+    const [first] = await store.createMany([draft('First')])
+    const kept = await store.create(draft('From the cloud'), { serialNumber: 23, createdAt: '2026-10-28T10:01:11.408Z' })
+    expect(kept).toMatchObject({ serialNumber: 23, createdAt: '2026-10-28T10:01:11.408Z' })
+    // The number is taken: the next one; and later windows count on from the highest.
+    const clash = await store.create(draft('Clash'), { serialNumber: first.serialNumber })
+    expect(clash.serialNumber).not.toBe(first.serialNumber)
+    expect((await store.create(draft('Next'))).serialNumber).toBe(Math.max(24, clash.serialNumber + 1))
+  })
+
+  it('changes only the details of an open window, never its proxy or fingerprint', async () => {
+    const store = await open()
+    const [a] = await store.createMany([draft('A', { proxy: PROXY, group: 'G1' })])
+    await store.setRuntime(a.id, { status: 'running' })
+    await expect(store.update(a.id, draft('A2'))).rejects.toThrow('请先关闭浏览器环境再修改配置')
+    const changed = await store.updateDetails(a.id, {
+      ...draft('A2', { group: 'G2', proxy: { ...PROXY, host: '198.51.100.99' } }),
+      note: '运行中改的',
+      fingerprint: { ...a.fingerprint, timezone: 'Asia/Tokyo' }
+    })
+    expect(changed).toMatchObject({ name: 'A2', note: '运行中改的', group: 'G2', status: 'running', proxyId: a.proxyId })
+    expect(changed.proxy.host).toBe(PROXY.host)
+    expect(changed.fingerprint.timezone).toBe(a.fingerprint.timezone)
+  })
+
   it('assigns windows to a proxy or group through one call', async () => {
     const store = await open()
     const [a, b] = await store.createMany([draft('A'), draft('B')])

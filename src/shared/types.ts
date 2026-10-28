@@ -511,7 +511,7 @@ export type FingerprintCheckRow =
   | 'gpu' | 'cores' | 'memory' | 'canvas' | 'audio' | 'clientrects' | 'general'
 
 /** One-click fixes the editor can apply for a result. */
-export type FingerprintCheckFix = 'follow-ip' | 'webrtc-replace' | 'reseed' | 'shuffle-gpu' | 'use-real'
+export type FingerprintCheckFix = 'follow-ip' | 'set-timezone' | 'webrtc-replace' | 'reseed' | 'shuffle-gpu' | 'use-real'
 
 export interface FingerprintCheckItem {
   row: FingerprintCheckRow
@@ -519,6 +519,8 @@ export interface FingerprintCheckItem {
   /** Chinese source text, translated in the renderer. */
   message: string
   fix?: FingerprintCheckFix
+  /** The value the fix sets (set-timezone: the IP's time zone). */
+  fixValue?: string
 }
 
 /** What the page inside the checked browser actually saw. */
@@ -731,6 +733,8 @@ export interface BrowserApi {
     list: () => Promise<BrowserProfileView[]>
     create: (draft: ProfileDraft) => Promise<BrowserProfileView>
     update: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
+    /** An open window: name, group, note, account and the like; proxy and fingerprint stay as launched. */
+    updateDetails: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
     duplicate: (id: string) => Promise<BrowserProfileView>
     exportConfig: (id: string) => Promise<string | null>
     importConfig: () => Promise<BrowserProfileView | null>

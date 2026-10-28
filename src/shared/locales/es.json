@@ -2487,5 +2487,11 @@
   "基本信息": "Datos básicos",
   "登录状态与备注": "Sesión y notas",
   "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Aún no hay extensiones. Descomprime una extensión de Chrome en una carpeta, impórtala y actívala en una ventana.",
-  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Automático: altavoces + auriculares USB, lo más habitual en un sobremesa; fijo al guardar. Sin permiso de micrófono o cámara, los sitios solo ven qué tipos de dispositivos hay"
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Automático: altavoces + auriculares USB, lo más habitual en un sobremesa; fijo al guardar. Sin permiso de micrófono o cámara, los sitios solo ven qué tipos de dispositivos hay",
+  "改为自动匹配": "Ajustar automáticamente",
+  "改回自动跟随": "Volver a seguir el predeterminado",
+  "改成 {0}": "Cambiar a {0}",
+  "改成跟随系统语言": "Seguir el idioma del sistema",
+  "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Ventana abierta: se pueden cambiar nombre, grupo, notas, etc.; proxy y huella solo tras cerrarla",
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Ventana abierta: es la configuración con la que se inició; se puede cambiar al cerrarla. Nombre, grupo, notas, etc. se cambian y guardan en Básicos"
 }

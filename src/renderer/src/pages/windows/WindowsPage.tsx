@@ -141,8 +141,12 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   async function saveProfile(draft: ProfileDraft, extras: ProfileEditorExtras): Promise<void> {
     setSaving(true)
     try {
-      const saved = editing
-        ? await window.browserApi.profiles.update(editing.id, draft)
+      // An open window keeps its proxy and fingerprint: only the details are saved (the editor locks the rest).
+      const current = editing ? profiles.find((profile) => profile.id === editing.id) ?? editing : undefined
+      const saved = current
+        ? isEditable(current)
+          ? await window.browserApi.profiles.update(current.id, draft)
+          : await window.browserApi.profiles.updateDetails(current.id, draft)
         : await window.browserApi.profiles.create(draft)
       upsert(saved)
       setEditorOpen(false)
@@ -400,7 +404,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     const editable = isEditable(profile)
     return {
       items: [
-        { key: 'edit', icon: <EditOutlined />, label: t("编辑"), disabled: !editable },
+        { key: 'edit', icon: <EditOutlined />, label: t("编辑") },
         { key: 'data', icon: <DatabaseOutlined />, label: t("环境数据") },
         { key: 'diagnose', icon: <SafetyCertificateOutlined />, label: t("启动诊断") },
         { key: 'crashes', icon: <WarningFilled />, label: t("异常与恢复") },
@@ -558,8 +562,8 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
             >
               {profile.status === 'orphaned' ? t("结束遗留") : running ? t("关闭") : t("打开")}
             </Button>
-            <Tooltip title={editable ? undefined : t("请先关闭窗口再编辑")}>
-              <Button size="small" type="link" autoInsertSpace={false} disabled={!editable} onClick={() => openEditor(profile)}>{t("编辑")}</Button>
+            <Tooltip title={editable ? undefined : t("窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改")}>
+              <Button size="small" type="link" autoInsertSpace={false} onClick={() => openEditor(profile)}>{t("编辑")}</Button>
             </Tooltip>
             <Dropdown menu={profileMenu(profile)} trigger={['click']}>
               <Button size="small" type="text" icon={<MoreOutlined />} aria-label={t("更多操作")} />
@@ -700,6 +704,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         proxies={proxies}
         onCancel={() => { setEditorOpen(false); setEditing(undefined) }}
         onSave={saveProfile}
+        running={editing ? !isEditable(profiles.find((profile) => profile.id === editing.id) ?? editing) : false}
       />
       <AssignModal
         open={assigning === 'group'}

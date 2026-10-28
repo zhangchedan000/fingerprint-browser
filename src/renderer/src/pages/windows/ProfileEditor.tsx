@@ -10,6 +10,7 @@ import {
   Button,
   Collapse,
   ColorPicker,
+  ConfigProvider,
   Drawer,
   Form,
   Input,
@@ -56,7 +57,6 @@ import type {
   BrowserPlatform,
   BrowserProfileView,
   EngineStatus,
-  FingerprintCheckFix,
   FingerprintCheckItem,
   FingerprintCheckReport,
   FingerprintCheckRow,
@@ -112,7 +112,31 @@ interface ProfileEditorProps {
   proxies: ProxyRecordView[]
   onCancel: () => void
   onSave: (draft: ProfileDraft, extras: ProfileEditorExtras) => Promise<void>
+  /** The window is open right now (it may open or close while being edited). */
+  running?: boolean
 }
+
+/**
+ * A tab whose settings the open browser was started with: shown, not changeable until the window
+ * is closed. Checking stays possible (Unlocked).
+ */
+function Locked({ locked, children }: { locked: boolean; children: ReactNode }) {
+  if (!locked) return <>{children}</>
+  return (
+    <>
+      <Alert
+        type="info"
+        showIcon
+        className="fb-locked-note"
+        title={t("窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存")}
+      />
+      <ConfigProvider componentDisabled>{children}</ConfigProvider>
+    </>
+  )
+}
+
+/** Usable inside a Locked tab (checks that change nothing). */
+const Unlocked = ({ children }: { children: ReactNode }) => <ConfigProvider componentDisabled={false}>{children}</ConfigProvider>
 
 /** Login pages offered for the most common platforms; any other name can be typed. */
 const WINDOWS_VERSIONS = [
@@ -229,31 +253,38 @@ function Row({ label, children, hint, required, check }: { label: ReactNode; chi
 }
 
 /** Fingerprint check results for one row: green / yellow / red, each with an optional one-click fix. */
-function CheckResults({ items, stale, onFix }: { items: FingerprintCheckItem[]; stale: boolean; onFix: (item: FingerprintCheckItem) => void }) {
+/** A one-click change that fixes a mismatch: what the button says and what it does. */
+interface QuickFix {
+  label: string
+  apply: () => void
+}
+
+function CheckResults({ items, stale, fixOf }: { items: FingerprintCheckItem[]; stale: boolean; fixOf: (item: FingerprintCheckItem, stale: boolean) => QuickFix | undefined }) {
   if (!items.length) return null
   return (
     <div className={`fb-check-results${stale ? ' is-stale' : ''}`}>
-      {items.map((item, index) => (
-        <div key={index} className={`fb-check-item is-${item.status}`}>
-          <span className="fb-check-dot" />
-          <span className="fb-check-message">{mt(item.message)}</span>
-          {item.fix && !stale && item.status !== 'ok' && (
-            <Button type="link" size="small" onClick={() => onFix(item)}>{fixLabel(item.fix)}</Button>
-          )}
-        </div>
-      ))}
+      {items.map((item, index) => {
+        const fix = item.status === 'ok' ? undefined : fixOf(item, stale)
+        return (
+          <div key={index} className={`fb-check-item is-${item.status}`}>
+            <span className="fb-check-dot" />
+            <span className="fb-check-message">{mt(item.message)}</span>
+            {fix && <Button type="link" size="small" onClick={fix.apply}>{fix.label}</Button>}
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-function fixLabel(fix: FingerprintCheckFix): string {
-  switch (fix) {
-    case 'follow-ip': return t("改为跟随 IP")
-    case 'webrtc-replace': return t("改为替换")
-    case 'reseed': return t("换一组")
-    case 'shuffle-gpu': return t("换一块显卡")
-    case 'use-real': return t("改为本机真实")
-  }
+/** A yellow note under a row that does not fit the rest, with the change that makes it fit. */
+function RowWarning({ children, fix }: { children: ReactNode; fix?: QuickFix }) {
+  return (
+    <span className="fb-row-warning">
+      {children}
+      {fix && <Button type="link" size="small" className="fb-row-fix" onClick={fix.apply}>{fix.label}</Button>}
+    </span>
+  )
 }
 
 /** Shows the first validation message of a field rendered with `noStyle`. */
@@ -379,7 +410,7 @@ const LANGUAGES = CHROME_UI_LOCALES.map((uiLocale) => {
   return item === (same.find((other) => samePrimary(other.uiLocale, other.language)) ?? same[0])
 })
 
-export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave }: ProfileEditorProps) {
+export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave, running: runningNow }: ProfileEditorProps) {
   const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
     tor: t("Tor 出口"),
     vpn: t("VPN 网络"),
@@ -515,7 +546,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     void runCheck()
   }, [recheck, checking, currentSettingsKey])
   const checkFor = (...rows: FingerprintCheckRow[]) => checkReport
-    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} onFix={applyFix} />
+    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} fixOf={fixOf} />
     : undefined
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
   const gpu = effectiveGpu(fp, windowKernelVersion)
@@ -579,7 +610,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       timezone: item.zone
     })
   }
-  const running = Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
+  const running = runningNow ?? Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
 
   function patchFingerprint(patch: Partial<FingerprintConfig>): void {
     form.setFieldValue('fingerprint', { ...form.getFieldValue('fingerprint'), ...patch })
@@ -657,7 +688,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return (
       <span className="fb-fp-measured fb-muted">
         {checkReport ? t("设置已修改") : t("未检测")}
-        <Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button>
+        <Unlocked><Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button></Unlocked>
       </span>
     )
   }
@@ -1024,15 +1055,28 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }
   }
 
-  function applyFix(item: FingerprintCheckItem): void {
-    if (item.fix === 'follow-ip') fixToIp(lastCheck)
-    else if (item.fix === 'webrtc-replace') patchFingerprint({ webrtcPolicy: 'proxy_only' })
-    else if (item.fix === 'reseed') reseedNoise()
-    else if (item.fix === 'shuffle-gpu') shuffleGpu()
-    else if (item.fix === 'use-real') {
-      if (item.row === 'screen') chooseScreen('host')
-      else if (item.row === 'gpu') chooseGpu('real')
-      else if (item.row === 'canvas' || item.row === 'audio' || item.row === 'clientrects' || item.row === 'font') setSpoofing(item.row, false)
+  /**
+   * The one-click change for a check result that does not match, as precise as the result allows
+   * (the time zone alone, not the whole country). None once the setting already has it; changes that
+   * depend on what was measured (new noise, real values) only while the result is current.
+   */
+  function fixOf(item: FingerprintCheckItem, stale: boolean): QuickFix | undefined {
+    // Results saved before 0.5.21 offered the whole country for a time zone: the IP's time zone alone now.
+    const timezone = item.fix === 'set-timezone' || (item.fix === 'follow-ip' && item.row === 'timezone')
+      ? item.fixValue ?? lastCheck?.timezone
+      : undefined
+    if (timezone) return fp.timezone === timezone ? undefined : { label: t("改成 {0}", timezone), apply: () => patchFingerprint({ timezone }) }
+    switch (item.fix) {
+      case 'follow-ip': return lastCheck?.ok ? { label: t("改为跟随 IP"), apply: () => fixToIp(lastCheck) } : undefined
+      case 'webrtc-replace': return fp.webrtcPolicy === 'proxy_only' ? undefined : { label: t("改为替换"), apply: () => patchFingerprint({ webrtcPolicy: 'proxy_only' }) }
+      case 'reseed': return stale ? undefined : { label: t("换一组"), apply: reseedNoise }
+      case 'shuffle-gpu': return stale ? undefined : { label: t("换一块显卡"), apply: shuffleGpu }
+      case 'use-real':
+        if (item.row === 'screen') return fp.screenSource === 'host' ? undefined : { label: t("改为本机真实"), apply: () => chooseScreen('host') }
+        if (item.row === 'gpu') return gpuReal ? undefined : { label: t("改为本机真实"), apply: () => chooseGpu('real') }
+        if (stale || !(item.row === 'canvas' || item.row === 'audio' || item.row === 'clientrects' || item.row === 'font')) return undefined
+        return fp.disabledSpoofing.includes(item.row) ? undefined : { label: t("改为本机真实"), apply: () => setSpoofing(item.row as SpoofSurface, false) }
+      default: return undefined
     }
   }
 
@@ -1376,7 +1420,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row label="">
         <div className="fb-proxy-test">
-          <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>
+          {/* An open API window is not checked here: a dead proxy would be replaced under the running browser. */}
+          {proxyMode === 'api'
+            ? <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>
+            : <Unlocked><Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button></Unlocked>}
           {proxyMode === 'api' && apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url && (
             <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
               <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
@@ -1512,6 +1559,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     && fp.language.split('-')[1]?.toUpperCase() !== fp.region
     ? { expected: countryLocale.language }
     : undefined
+  // The fix for each: the IP's own zone when it is in this country, else the country's first; the country's language.
+  const fittingZone = countryZones.find((zone) => zone.iana === lastCheck?.timezone)?.iana ?? countryZones[0]?.iana
+  const timezoneFix: QuickFix | undefined = timezoneMismatch && fittingZone
+    ? { label: t("改成 {0}", fittingZone), apply: () => patchFingerprint({ timezone: fittingZone }) }
+    : undefined
+  const languageFix: QuickFix | undefined = languageMismatch && countryLocale
+    ? { label: t("改成 {0}", countryLocale.language), apply: () => patchFingerprint({ language: countryLocale.language, acceptLanguages: countryLocale.acceptLanguages }) }
+    : undefined
+  const followSystemLanguage = (key: 'voicesLocale' | 'mediaLocale'): QuickFix => ({ label: t("改成跟随系统语言"), apply: () => patchFingerprint({ [key]: undefined }) })
+  // A size desktops with this card usually have (the first 常见 one in the list).
+  const usualScreen = screenOdd ? screenChoices(floor, hostScale()).find((choice) => screenSuitsGpu(gpu!.model, choice.physical)) : undefined
+  const screenFix: QuickFix | undefined = usualScreen
+    ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
+    : undefined
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -1537,7 +1598,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </Form.Item>
       </Row>
       {kernelVersion && !pinnedKernel && (
-        <Alert type="error" showIcon className="fb-editor-alert" title={t("固定内核 {0} 当前不可用，安装该版本后才能启动，或改回自动跟随", kernelName(kernelVersion))} />
+        <Alert
+          type="error"
+          showIcon
+          className="fb-editor-alert"
+          title={t("固定内核 {0} 当前不可用，安装该版本后才能启动，或改回自动跟随", kernelName(kernelVersion))}
+          action={<Button size="small" onClick={() => form.setFieldValue('kernelVersion', '')}>{t("改回自动跟随")}</Button>}
+        />
       )}
       <Row label={t("浏览器品牌")}>
         <Select
@@ -1572,7 +1639,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <span title={userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}>{userAgentPreview(fp.platform, fp.brand, selectedEngine?.version)}</span>
         </div>
       </Row>
-      {versionWarning && <Alert type="warning" showIcon className="fb-editor-alert" title={`${mt(versionWarning)} · ${t("建议留空并自动匹配当前内核。")}`} />}
+      {versionWarning && (
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={`${mt(versionWarning)} · ${t("建议留空并自动匹配当前内核。")}`}
+          action={<Button size="small" onClick={() => patchFingerprint({ brandVersion: '' })}>{t("改为自动匹配")}</Button>}
+        />
+      )}
       </section>
 
       <section className="fb-fp-card">
@@ -1618,7 +1693,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
           <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
         </Form.Item>
-        {timezoneMismatch && <span className="fb-row-warning">{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</span>}
+        {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
       </Row>
       <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，Chrome 菜单也是它；字体、语音、设备名都跟着它")}>
         <Select
@@ -1659,7 +1734,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
           aria-label={t("浏览器语言")}
         />
-        {languageMismatch && <span className="fb-row-warning">{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</span>}
+        {languageMismatch && <RowWarning fix={languageFix}>{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</RowWarning>}
       </Row>
       <Row label={t("地理位置")} hint={fp.location ? t("经纬度按代理 IP 的位置{0}", networkIdentity.latitude !== undefined ? `：${networkIdentity.latitude.toFixed(2)}, ${networkIdentity.longitude!.toFixed(2)}` : '') : undefined}>
         <Select
@@ -1726,7 +1801,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
           aria-label={t("语音")}
         />
-        {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <span className="fb-row-warning">{t("真实 Windows 的语音一般和系统语言一致")}</span>}
+        {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <RowWarning fix={followSystemLanguage('voicesLocale')}>{t("真实 Windows 的语音一般和系统语言一致")}</RowWarning>}
       </Row>
       <Row label={t("媒体设备名")} hint={t("网站拿到麦克风或摄像头权限后看到的设备名语言，比如「扬声器」还是「Speakers」")}>
         <Select
@@ -1741,7 +1816,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
           aria-label={t("媒体设备名")}
         />
-        {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <span className="fb-row-warning">{t("真实 Windows 的设备名和系统语言一致")}</span>}
+        {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <RowWarning fix={followSystemLanguage('mediaLocale')}>{t("真实 Windows 的设备名和系统语言一致")}</RowWarning>}
       </Row>
       </section>
 
@@ -1768,7 +1843,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
       </Row>
       {gpuMissing && (
-        <Alert type="warning" showIcon className="fb-editor-alert" title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')} />
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')}
+          action={<Button size="small" onClick={shuffleGpu}>{t("换一块显卡")}</Button>}
+        />
       )}
       <Row label={t("CPU 型号")} hint={t("网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑")}>
         <ValueChoice
@@ -1829,7 +1910,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               </>
             )}
           </Space>
-          {screenOdd && <span className="fb-row-warning">{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</span>}
+          {screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
         </Row>
       ) : (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
@@ -1961,11 +2042,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   ].join(' · ')
                 : t("用这些设置启动一个临时浏览器，检查网站实际看到的指纹；不会动这个窗口的 Cookie 和登录数据")}
           </span>
-          <Button type="primary" loading={checking} onClick={() => void runCheck()}>{checkReport ? t("重新检测") : t("检测指纹")}</Button>
+          <Unlocked><Button type="primary" loading={checking} onClick={() => void runCheck()}>{checkReport ? t("重新检测") : t("检测指纹")}</Button></Unlocked>
         </div>
         {checkStale && !checking && <div className="fb-check-stale">{t("设置已修改，结果可能已过时，请重新检测")}</div>}
         {checkError && <Alert type="error" showIcon title={checkError} />}
-        {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} onFix={applyFix} />}
+        {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} fixOf={fixOf} />}
         {checkReport && !checkStale && (
           <div className="fb-check-values">
             {[
@@ -2016,8 +2097,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           }}
           items={[
             { key: 'basic', label: t("基础设置"), children: basic, forceRender: true },
-            { key: 'proxy', label: t("代理设置"), children: proxy, forceRender: true },
-            { key: 'fingerprint', label: t("指纹设置"), children: fingerprint, forceRender: true }
+            { key: 'proxy', label: t("代理设置"), children: <Locked locked={running}>{proxy}</Locked>, forceRender: true },
+            { key: 'fingerprint', label: t("指纹设置"), children: <Locked locked={running}>{fingerprint}</Locked>, forceRender: true }
           ]}
         />
       </Form>

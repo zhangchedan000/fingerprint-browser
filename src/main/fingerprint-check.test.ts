@@ -62,9 +62,9 @@ describe('fingerprint check verdicts', () => {
     expect(row(items, 'gpu')[0].message).toContain('RTX 4060')
   })
 
-  it('flags a time zone that does not match the proxy and offers to follow the IP', () => {
+  it('flags a time zone that does not match the proxy and offers that time zone alone', () => {
     const [item] = row(check({ proxy: { ...proxy, timezone: 'Europe/London' } }), 'timezone')
-    expect(item).toMatchObject({ status: 'bad', fix: 'follow-ip' })
+    expect(item).toMatchObject({ status: 'bad', fix: 'set-timezone', fixValue: 'Europe/London' })
   })
 
   it('flags a WebRTC address other than the proxy exit', () => {

@@ -2487,5 +2487,11 @@
   "基本信息": "Informations de base",
   "登录状态与备注": "Connexion et notes",
   "还没有导入扩展。把 Chrome 扩展解压成文件夹后导入，再在窗口里启用。": "Aucune extension. Décompressez une extension Chrome dans un dossier, importez-la, puis activez-la dans une fenêtre.",
-  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Auto : haut-parleurs + casque USB, l'ensemble le plus courant sur un PC fixe ; figé à l'enregistrement. Sans autorisation micro ou caméra, les sites ne voient que les types d'appareils"
+  "自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备": "Auto : haut-parleurs + casque USB, l'ensemble le plus courant sur un PC fixe ; figé à l'enregistrement. Sans autorisation micro ou caméra, les sites ne voient que les types d'appareils",
+  "改为自动匹配": "Ajuster automatiquement",
+  "改回自动跟随": "Revenir au noyau par défaut",
+  "改成 {0}": "Passer à {0}",
+  "改成跟随系统语言": "Suivre la langue du système",
+  "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Fenêtre ouverte : nom, groupe, notes, etc. modifiables ; proxy et empreinte seulement après fermeture",
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Fenêtre ouverte : ce sont les réglages de son lancement, modifiables après fermeture. Nom, groupe, notes, etc. se modifient et s'enregistrent dans Général"
 }

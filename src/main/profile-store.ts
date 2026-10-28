@@ -72,6 +72,12 @@ const PROFILE_OWNER_FILE = 'profile-owner.json'
 const MAX_PROFILE_SERIAL = 999_999_999
 const DIRECT: ProxyConfig = { protocol: 'direct', host: '', username: '', password: '' }
 
+/** Where a window came from when it already existed elsewhere: its number and when it was made. */
+export interface WindowOrigin {
+  serialNumber?: number
+  createdAt?: string
+}
+
 function validProfileSerial(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= MAX_PROFILE_SERIAL
 }
@@ -687,11 +693,15 @@ export class ProfileStore {
     return next.length
   }
 
-  async create(input: ProfileDraft): Promise<BrowserProfile> {
-    return (await this.createMany([input]))[0]
+  /**
+   * origin: a window that already existed elsewhere (from the cloud) keeps its number and creation
+   * time when no window here has that number; otherwise it takes the next number.
+   */
+  async create(input: ProfileDraft, origin?: WindowOrigin): Promise<BrowserProfile> {
+    return (await this.createMany([input], origin ? [origin] : undefined))[0]
   }
 
-  async createMany(inputs: ProfileDraft[]): Promise<BrowserProfile[]> {
+  async createMany(inputs: ProfileDraft[], origins?: Array<WindowOrigin | undefined>): Promise<BrowserProfile[]> {
     if (!Array.isArray(inputs) || inputs.length === 0) throw new Error('没有可创建的浏览器环境')
     if (inputs.length > 1000) throw new Error('单次最多创建 1000 个浏览器环境')
     const drafts = inputs.map(validateProfileDraft)
@@ -701,8 +711,22 @@ export class ProfileStore {
       : undefined
     return this.withLibraryRollback(async () => {
       const now = new Date().toISOString()
+      const taken = new Set([...this.profiles.values()].map((profile) => profile.serialNumber))
+      let next = this.nextSerialNumber
+      const numberFor = (origin: WindowOrigin | undefined): number => {
+        const wanted = origin?.serialNumber
+        if (validProfileSerial(wanted) && !taken.has(wanted)) {
+          taken.add(wanted)
+          return wanted
+        }
+        while (taken.has(next)) next += 1
+        taken.add(next)
+        return next++
+      }
       const created: StoredProfile[] = drafts.map((draft, index) => {
         const id = randomUUID()
+        const origin = origins?.[index]
+        const createdAt = typeof origin?.createdAt === 'string' && !Number.isNaN(Date.parse(origin.createdAt)) ? origin.createdAt : now
         const { proxy, group, tunnel, ...fields } = draft
         const proxyId = this.referenceProxy(inputs[index], tunnel ? { ...proxy, tunnel } : proxy, now)
         const api = !proxyId && proxy.apiUrl ? { url: proxy.apiUrl } : undefined
@@ -713,7 +737,7 @@ export class ProfileStore {
           ...(api ? { apiProxy: api } : {}),
           kernelVersion: fields.kernelVersion || defaultKernel || '',
           id,
-          serialNumber: this.nextSerialNumber + index,
+          serialNumber: numberFor(origin),
           proxyId,
           groupId: this.library.ensureGroup(group, now),
           account: privateAccount(draft.account),
@@ -722,7 +746,7 @@ export class ProfileStore {
             ...draft.fingerprint,
             seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
           }, undefined, { gpuModel: effectiveGpu(draft.fingerprint, fields.kernelVersion || defaultKernel)?.model }),
-          createdAt: now,
+          createdAt,
           updatedAt: now,
           favorite: false,
           status: 'closed' as const
@@ -731,7 +755,7 @@ export class ProfileStore {
       try {
         await Promise.all(created.map((profile) => this.ensureProfileDirectories(profile.id)))
         for (const profile of created) this.profiles.set(profile.id, profile)
-        this.nextSerialNumber += created.length
+        this.nextSerialNumber = Math.max(next, ...created.map((profile) => profile.serialNumber + 1))
         await this.persist()
         return created.map((profile) => this.resolve(profile))
       } catch (error) {
@@ -739,6 +763,36 @@ export class ProfileStore {
         await Promise.allSettled(created.map((profile) => rm(join(this.vaultPath, 'profiles', profile.id), { recursive: true, force: true })))
         throw error
       }
+    })
+  }
+
+  /**
+   * What can change while the window is open: its name, group, note, tags, colour, account, start
+   * pages, extensions and window size (used from its next launch). Proxy, kernel and fingerprint
+   * stay as the running browser was started with; changing them needs the window closed (update).
+   */
+  async updateDetails(id: string, input: ProfileDraft): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const draft = validateProfileDraft(input)
+    const keepAccountPassword = !draft.account.password
+      && draft.account.passwordStored === true
+      && sameAccountIdentity(draft.account, current.account)
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const { name, note, tags, color, startUrls, startupMode, extensionIds, window } = draft
+      const profile: StoredProfile = {
+        ...current,
+        name, note, tags, color, startUrls, startupMode, extensionIds, window,
+        groupId: this.library.ensureGroup(draft.group, now),
+        account: privateAccount({
+          ...draft.account,
+          password: keepAccountPassword ? current.account.password : draft.account.password
+        }),
+        updatedAt: now
+      }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
     })
   }
 

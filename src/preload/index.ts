@@ -48,6 +48,7 @@ const api: BrowserApi = {
     list: () => ipcRenderer.invoke('profiles:list'),
     create: (draft: ProfileDraft) => ipcRenderer.invoke('profiles:create', draft),
     update: (id: string, draft: ProfileDraft) => ipcRenderer.invoke('profiles:update', id, draft),
+    updateDetails: (id: string, draft: ProfileDraft) => ipcRenderer.invoke('profiles:update-details', id, draft),
     duplicate: (id: string) => ipcRenderer.invoke('profiles:duplicate', id),
     exportConfig: (id: string) => ipcRenderer.invoke('profiles:export-config', id),
     importConfig: () => ipcRenderer.invoke('profiles:import-config'),
