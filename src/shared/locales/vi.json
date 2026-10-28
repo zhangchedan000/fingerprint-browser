@@ -2496,7 +2496,8 @@
   "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Cửa sổ đang mở: đây là cài đặt lúc khởi động, đổi được sau khi đóng. Tên, nhóm, ghi chú… đổi và lưu ở «Cài đặt cơ bản»",
   "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "Trên máy tính có {0} GB RAM, giới hạn bộ nhớ JS của Chrome thấp hơn; cửa sổ này báo giá trị của máy 8 GB trở lên, trang web có thể so sánh được",
   "改为 8 GB": "Đổi thành 8 GB",
-  "缩放 {0}%，网页看到 {1} × {2}": "Thu phóng {0}%, trang web thấy {1} × {2}",
   "2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭": "2560 × 1600 nay chủ yếu là màn hình laptop 16 inch, không hợp với card đồ họa máy bàn",
-  "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "Màn hình máy này ({0} × {1}) nhỏ hơn độ phân giải đã chọn: phóng to chỉ lấp đầy màn hình này; đừng dùng toàn màn hình trong trang, trang sẽ nhỏ hơn kích thước màn hình và trang web nhận ra được"
+  "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "Màn hình máy này ({0} × {1}) nhỏ hơn độ phân giải đã chọn: phóng to chỉ lấp đầy màn hình này; đừng dùng toàn màn hình trong trang, trang sẽ nhỏ hơn kích thước màn hình và trang web nhận ra được",
+  "缩放 {0}%": "Thu phóng {0}%",
+  "4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5": "Màn hình 4K dùng mức thu phóng mặc định 150% của Windows: trang web thấy {0} × {1}, devicePixelRatio 1.5"
 }

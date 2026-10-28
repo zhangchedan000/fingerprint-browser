@@ -211,6 +211,7 @@ button, input, textarea { font: inherit; }
 .fb-editor-alert.ant-alert .ant-alert-action { margin-inline-start: 10px; }
 /* A value chosen on its own that does not fit the rest: under its row, yellow, not blocking. */
 .fb-locked-note.ant-alert { margin-bottom: 14px; border-radius: 10px; }
+.fb-row-note { display: block; margin-top: 4px; font-size: 12px; }
 .fb-row-warning { display: block; margin-top: 4px; color: var(--fb-warning); font-size: 12px; }
 .fb-row-warning .fb-row-fix { height: auto; margin-left: 6px; padding: 0; font-size: 12px; }
 .fb-more { margin-left: -16px; }
@@ -399,7 +400,7 @@ button, input, textarea { font: inherit; }
 .fb-block-gap { display: block; margin-bottom: 12px; }
 .fb-value-choice { align-self: flex-start; }
 .fb-fp-fixed { align-self: flex-start; padding: 5px 0; color: var(--fb-text-secondary); font-size: 13px; }
-.fb-cookie-file { margin-top: 6px; }
+.fb-cookie-file { margin-top: 8px; padding: 0 10px; }
 
 /* Fingerprint check: results under each row, summary at the bottom of the fingerprint tab. */
 .fb-check-results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }

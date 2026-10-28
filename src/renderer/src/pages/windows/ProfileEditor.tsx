@@ -170,9 +170,7 @@ function screenLabel(width: number, height: number, physical: { width: number; h
     : t("{0} × {1} · {2} {3} 显示器 · 缩放 {4}%", width, height, `${physical.width}×${physical.height}`, note, Math.round(scale * 100))
   // 4K at Windows' default 150% (shared/screen scaledScreen).
   const scaled = scaledScreen({ width, height })
-  return scaled.scale
-    ? `${label} · ${t("缩放 {0}%，网页看到 {1} × {2}", Math.round(scaled.scale * 100), scaled.screen.width, scaled.screen.height)}`
-    : label
+  return scaled.scale ? `${label} · ${t("缩放 {0}%", Math.round(scaled.scale * 100))}` : label
 }
 
 /** This computer's Windows display scale; a window keeps it, so resolutions are offered at it. */
@@ -1913,6 +1911,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               </>
             )}
           </Space>
+          {fp.screenSource !== 'host' && scaledScreen({ width: fp.screenWidth, height: fp.screenHeight }).scale && (
+            <div className="fb-muted fb-row-note">
+              {t("4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5", scaledScreen({ width: fp.screenWidth, height: fp.screenHeight }).screen.width, scaledScreen({ width: fp.screenWidth, height: fp.screenHeight }).screen.height)}
+            </div>
+          )}
           {laptopScreen ? (
             <RowWarning fix={{
               label: t("改成 {0}", '2560 × 1440'),
@@ -2057,7 +2060,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       </section>
 
-      <h3 className="fb-fp-group">{t("指纹检测")}</h3>
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("指纹检测")}</h3>
+        </div>
       <div className="fb-check-panel">
         <div className="fb-check-head">
           <span className="fb-check-summary">
@@ -2090,6 +2096,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         )}
         <DeepCheck draft={currentDraft} profileId={profile?.id} settingsKey={currentSettingsKey} />
       </div>
+      </section>
     </div>
   )
 
