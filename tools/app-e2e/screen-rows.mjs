@@ -59,6 +59,23 @@ try {
       return box ? box.innerText : ''
     })()`)
     console.log(`--- ${name}\n${row}`)
+    if (name.startsWith('2560x1600')) {
+      // The one-click change to 2560 × 1440.
+      const fixed = await run(`(() => {
+        const button = [...document.querySelectorAll('.ant-drawer-open .fb-row-fix')].find((node) => node.innerText.includes('2560 × 1440'))
+        if (!button) return 'no button'
+        button.click()
+        return 'clicked'
+      })()`)
+      await delay(500)
+      const after = await run(`(() => {
+        const label = [...document.querySelectorAll('.ant-drawer-open div, .ant-drawer-open span, .ant-drawer-open label')].find((node) => node.childElementCount === 0 && node.innerText?.trim() === '分辨率')
+        const box = label?.closest('.fb-row') ?? label?.parentElement?.parentElement
+        return (box?.innerText ?? '').split('\\n').find((line) => line.includes(' × ')) ?? ''
+      })()`)
+      console.log(`fix: ${fixed}; now ${after}`)
+      if (!after.startsWith('2560 × 1440')) failures.push(`2560x1600 fix left ${after}`)
+    }
     await delay(500)
     const { data } = await instance.client.send('Page.captureScreenshot', { format: 'png' })
     await writeFile(join(folder, `screen-row-${index + 1}.png`), Buffer.from(data, 'base64'))
