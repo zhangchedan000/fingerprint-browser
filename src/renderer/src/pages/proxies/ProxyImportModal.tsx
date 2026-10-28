@@ -2,7 +2,8 @@ import { Alert, Input, Modal, Radio, Typography } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { joinMessages, t, translateMessage as mt } from '../../../../shared/i18n'
 import { parsePastedProxy, splitPastedProxies } from '../../../../shared/proxy-paste'
-import type { ProxyDraft } from '../../../../shared/types'
+import type { ProxyDraft, TunnelRoute } from '../../../../shared/types'
+import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 
 interface ParsedLine {
   line: number
@@ -35,10 +36,14 @@ export function ProxyImportModal({ open, busy, onSubmit, onClose }: ProxyImportM
   const [text, setText] = useState('')
   const [protocol, setProtocol] = useState<ProxyDraft['protocol']>('socks5')
   const [note, setNote] = useState('')
+  const tunnelStatus = useTunnelStatus()
+  const [chosenRoute, setChosenRoute] = useState<TunnelRoute>()
+  const route = chosenRoute ?? defaultTunnelRoute(tunnelStatus)
   useEffect(() => {
     if (!open) return
     setText('')
     setNote('')
+    setChosenRoute(undefined)
   }, [open])
 
   const lines = useMemo(() => parseProxyLines(text, protocol, note.trim()), [text, protocol, note])
@@ -53,7 +58,8 @@ export function ProxyImportModal({ open, busy, onSubmit, onClose }: ProxyImportM
       cancelText={t("取消")}
       okButtonProps={{ disabled: !valid.length }}
       confirmLoading={busy}
-      onOk={() => void onSubmit(valid.map((line) => line.draft!))}
+      // HTTPS proxies cannot go through the tunnel (their certificate is checked against their own name).
+      onOk={() => void onSubmit(valid.map((line) => ({ ...line.draft!, tunnel: line.draft!.protocol === 'https' ? { ...route, enabled: false } : route })))}
       onCancel={onClose}
       destroyOnHidden
       width={640}
@@ -70,6 +76,10 @@ export function ProxyImportModal({ open, busy, onSubmit, onClose }: ProxyImportM
         <span>{t("未写类型的按")}</span>
         <Radio.Group size="small" optionType="button" value={protocol} onChange={(event) => setProtocol(event.target.value)} options={[{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }, { value: 'socks5', label: 'SOCKS5' }]} />
         <Input size="small" className="fb-small-input" maxLength={200} value={note} placeholder={t("统一备注（可选）")} onChange={(event) => setNote(event.target.value)} />
+      </div>
+      <div className="fb-import-route">
+        <span className="fb-import-route-label">{t("网络加速")}</span>
+        <TunnelRouteField value={route} status={tunnelStatus} onChange={setChosenRoute} />
       </div>
       {invalid.length > 0 && (
         <Alert

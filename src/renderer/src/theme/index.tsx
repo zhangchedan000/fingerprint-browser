@@ -81,10 +81,13 @@ export function useTheme(): ThemeChoice {
   return useSyncExternalStore(subscribe, currentTheme)
 }
 
+/** A required field is marked after its label ("代理地址 *"), so the labels themselves line up. */
+const requiredMark = (label: ReactNode, { required }: { required: boolean }) => <>{label}{required && <em className="fb-required-mark">*</em>}</>
+
 /** Gives antd components the current theme; our own styles already follow the CSS variables. */
 export function ThemeProvider({ locale, children }: { locale: ComponentProps<typeof ConfigProvider>['locale']; children: ReactNode }) {
   const choice = useTheme()
-  return <ConfigProvider locale={locale} theme={antdTheme(themeTokens(choice), choice.mode)}>{children}</ConfigProvider>
+  return <ConfigProvider locale={locale} theme={antdTheme(themeTokens(choice), choice.mode)} form={{ requiredMark }}>{children}</ConfigProvider>
 }
 
 let systemWatch: MediaQueryList | undefined

@@ -63,10 +63,12 @@ import type {
   ProfileDraft,
   ProxyRecordView,
   ProxyConfig,
-  ProxyTestResult
+  ProxyTestResult,
+  TunnelRoute
 } from '../../../../shared/types'
 import { DEVICE_MEMORY_CHOICES, type DeviceMemoryGb } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
+import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { DeepCheck } from './DeepCheck'
 import { kernelName } from '../../../../shared/kernel-id'
 
@@ -155,6 +157,7 @@ function editorValues(profile: BrowserProfileView | undefined, index: number): E
     window: { ...draft.window },
     proxy: { ...draft.proxy },
     proxyId: profile && !profile.proxyMissing ? profile.proxyId : '',
+    ...(profile?.tunnel ? { tunnel: { ...profile.tunnel } } : {}),
     account: profile
       ? { ...profile.account }
       : { platform: '', username: '', password: '' },
@@ -194,7 +197,7 @@ function countPastedCookies(text: string): { count?: number; error?: string } {
 function Row({ label, children, hint, required, check }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean; check?: ReactNode }) {
   return (
     <div className="fb-form-row">
-      <span className="fb-form-label">{required && <em>*</em>}{label}</span>
+      <span className="fb-form-label">{label}{required && <em>*</em>}</span>
       <div className="fb-form-control">
         {children}
         {hint && <span className="fb-form-hint">{hint}</span>}
@@ -373,6 +376,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** Protocol of the proxy the window will use, whether typed or picked. */
   const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : typedProtocol
   const sharedWith = libraryProxy ? libraryProxy.profileIds.filter((id) => id !== profile?.id).length : 0
+  const tunnelStatus = useTunnelStatus()
+  const watchedRoute = Form.useWatch('tunnel', { form, preserve: true }) as TunnelRoute | undefined
+  /** The window's 网络加速: its own, else its proxy's default (older proxies: what the old rule did). */
+  const shownRoute = watchedRoute ?? (proxyMode === 'library'
+    ? defaultTunnelRoute(tunnelStatus, libraryProxy?.tunnel, libraryProxy ? libraryProxy.check?.countryCode ?? '' : undefined)
+    : defaultTunnelRoute(tunnelStatus))
+  // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
+  const route = proxyProtocol === 'https' && !libraryProxy?.apiUrl ? { ...shownRoute, enabled: false } : shownRoute
   const proxyPassword = Form.useWatch(['proxy', 'password'], { form, preserve: true }) ?? ''
   const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], { form, preserve: true }) === true
   const accountPassword = Form.useWatch(['account', 'password'], { form, preserve: true }) ?? ''
@@ -767,20 +778,29 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (mode !== 'library') form.setFieldValue(['proxy', 'protocol'], mode)
   }
 
+  /**
+   * A proxy checked here sets the window to 基于 IP 生成: country, time zone, languages, location,
+   * and with the system language following them, fonts, voices and device names. Unchecked, nothing moves.
+   */
+  function followCheckedIp(result: ProxyTestResult | null): void {
+    setProxyResult(result)
+    if (result?.ok) patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })
+  }
+
   async function testCurrentProxy(): Promise<void> {
     try {
       if (proxyMode === 'library') {
         await form.validateFields(['proxyId'])
         setTestingProxy(true)
         setProxyResult(null)
-        // Saved on the library proxy, so every window using it sees the result.
-        setProxyResult((await window.browserApi.proxy.check(form.getFieldValue('proxyId'))).check ?? null)
+        // Saved on the library proxy, so every window using it sees the result; reached the way this window will.
+        followCheckedIp((await window.browserApi.proxy.check(form.getFieldValue('proxyId'), route)).check ?? null)
         return
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
       setProxyResult(null)
-      setProxyResult(await window.browserApi.proxy.test(form.getFieldValue('proxy'), profile?.id))
+      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id))
     } catch (error) {
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
         setProxyResult({ ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) })
@@ -833,6 +853,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       ...(proxyMode === 'library'
         ? { proxyId: values.proxyId, proxy: { protocol: 'direct' as const, host: '', username: '', password: '' } }
         : { proxy: values.proxy }),
+      ...(proxyProtocol !== 'direct' ? { tunnel: route } : {}),
       account: values.account,
       extensionIds: values.extensionIds,
       fingerprint: values.fingerprint
@@ -1033,7 +1054,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 className="fb-wide-select"
                 placeholder={t("搜索地址或备注")}
                 optionFilterProp="search"
-                onChange={() => setProxyResult(null)}
+                onChange={() => {
+                  setProxyResult(null)
+                  // Another proxy: start from its 网络加速 default.
+                  form.setFieldValue('tunnel', undefined)
+                }}
                 options={proxies.map((item) => ({
                   value: item.id,
                   search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
@@ -1104,6 +1129,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(event) => applyPastedProxy(event.target.value)}
         />
       </Row>
+      {proxyProtocol !== 'direct' && route === shownRoute && (
+        <Row label={t("网络加速")}>
+          <TunnelRouteField
+            value={route}
+            status={tunnelStatus}
+            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyResult(null) }}
+          />
+        </Row>
+      )}
       <Row label="">
         <div className="fb-proxy-test">
           <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>

@@ -260,7 +260,7 @@ export class BrowserLauncher {
     }
     if (profile.proxy.apiUrl && profile.proxyId) {
       // API 提取: a fresh proxy from the provider for this launch.
-      const endpoint = await resolveApiProxy(profile.proxy.apiUrl)
+      const endpoint = await resolveApiProxy(profile.proxy.apiUrl, profile.proxy.tunnel)
       await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint)
       profile = this.profiles.get(id)
       this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })

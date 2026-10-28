@@ -38,6 +38,19 @@ export interface ProfileWindowConfig {
   height: number
 }
 
+/**
+ * 网络加速 for one window (or a library proxy's default for the windows it is given to): whether the
+ * connection to the window's proxy goes out through the built-in tunnel, and on which node.
+ * Unset (windows from before 0.5.9): the old rule — through the tunnel while it runs, unless the
+ * proxy was checked to be in China.
+ */
+export interface TunnelRoute {
+  enabled: boolean
+  /** auto: the fastest node; manual: always `node`. */
+  mode: 'auto' | 'manual'
+  node?: string
+}
+
 export interface ProxyConfig {
   protocol: ProxyProtocol
   host: string
@@ -50,6 +63,8 @@ export interface ProxyConfig {
    * is SOCKS5 or HTTP; protocol/host/port/username/password are the last one it gave.
    */
   apiUrl?: string
+  /** How this proxy is reached: the window's 网络加速 setting (a library proxy's: its default). */
+  tunnel?: TunnelRoute
 }
 
 /** Login the window is used for. The password is encrypted at rest and never sent to the UI. */
@@ -150,6 +165,8 @@ export interface ProxyRecord {
   check?: ProxyCheckSummary
   /** See ProxyConfig.apiUrl. */
   apiUrl?: string
+  /** 网络加速 used when this proxy is checked, and given to a window when the proxy is assigned to it. */
+  tunnel?: TunnelRoute
 }
 
 export type ProxyRecordView = Omit<ProxyRecord, 'password'> & {
@@ -170,6 +187,8 @@ export interface ProxyDraft {
   note?: string
   /** See ProxyConfig.apiUrl; host and port are then filled in from the API. */
   apiUrl?: string
+  /** See ProxyRecord.tunnel. */
+  tunnel?: TunnelRoute
 }
 
 /** A window group. Windows refer to it by id, so renaming it renames it everywhere. */
@@ -216,6 +235,8 @@ export interface BrowserProfile {
   proxy: ProxyConfig
   /** True when proxyId points at a proxy that no longer exists. Such a window must not launch. */
   proxyMissing?: boolean
+  /** This window's 网络加速 (also copied into proxy.tunnel when the window is read). */
+  tunnel?: TunnelRoute
   account: PlatformAccount
   fingerprint: FingerprintConfig
   createdAt: string
@@ -249,6 +270,8 @@ export type ProfileDraft = Pick<
   BrowserProfile,
   'name' | 'note' | 'group' | 'tags' | 'extensionIds' | 'color' | 'startUrls' | 'startupMode' | 'kernelVersion' | 'window' | 'proxy' | 'fingerprint'
 > & {
+  /** The window's 网络加速; without it a window keeps its own, or takes its proxy's default. */
+  tunnel?: TunnelRoute
   /** Optional on input for older callers and files; validation fills an empty account. */
   account?: PlatformAccount
   proxyId?: string
@@ -755,8 +778,8 @@ export interface BrowserApi {
     update: (id: string, draft: ProxyDraft) => Promise<ProxyRecordView>
     /** replaceWith: what the windows using it switch to (another proxy id, or '' for direct). */
     remove: (id: string, replaceWith?: string) => Promise<void>
-    /** Tests a library proxy and saves the result on it. */
-    check: (id: string) => Promise<ProxyRecordView>
+    /** Tests a library proxy and saves the result on it; route: a window's 网络加速 instead of the proxy's default. */
+    check: (id: string, route?: TunnelRoute) => Promise<ProxyRecordView>
   }
   /** The group library. Windows refer to these groups by id. */
   groups: {

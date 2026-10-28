@@ -189,7 +189,21 @@ export function ProxiesPage() {
         </div>
       )
     },
-    { title: t("类型"), dataIndex: 'protocol', width: 90, render: (protocol: string, proxy) => proxy.apiUrl ? `API · ${protocol.toUpperCase()}` : protocol.toUpperCase() },
+    {
+      title: t("类型"),
+      dataIndex: 'protocol',
+      width: 110,
+      render: (protocol: string, proxy) => (
+        <div className="fb-two-line">
+          <span>{proxy.apiUrl ? `API · ${protocol.toUpperCase()}` : protocol.toUpperCase()}</span>
+          {proxy.tunnel?.enabled && (
+            <small className="fb-ellipsis fb-accent-text" title={proxy.tunnel.mode === 'manual' ? proxy.tunnel.node : undefined}>
+              {t("加速")} · {proxy.tunnel.mode === 'manual' ? proxy.tunnel.node : t("自动")}
+            </small>
+          )}
+        </div>
+      )
+    },
     {
       title: t("出口 IP / 地区"),
       key: 'exit',

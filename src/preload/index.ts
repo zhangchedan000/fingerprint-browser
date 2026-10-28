@@ -152,7 +152,7 @@ const api: BrowserApi = {
     createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),
     update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
     remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
-    check: (id) => ipcRenderer.invoke('proxy:check', id)
+    check: (id, route) => ipcRenderer.invoke('proxy:check', id, route)
   },
   groups: {
     list: () => ipcRenderer.invoke('groups:list'),

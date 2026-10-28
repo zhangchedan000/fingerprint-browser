@@ -34,7 +34,7 @@ export function GroupFormModal({ open, group, busy, onSubmit, onClose }: GroupFo
       onCancel={onClose}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      <Form form={form} layout="vertical">
         <Form.Item name="name" label={t("分组名称")} rules={[{ required: true, whitespace: true, message: t("分组名称不能为空") }]}>
           <Input maxLength={40} placeholder={t("例如：TikTok 美区")} />
         </Form.Item>

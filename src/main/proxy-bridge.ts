@@ -1,7 +1,7 @@
 import proxyChain from 'proxy-chain'
 import { connect, createServer, isIP, type AddressInfo, type Server, type Socket } from 'node:net'
 import { SocksClient } from 'socks'
-import type { ProxyConfig } from '../shared/types'
+import type { ProxyConfig, TunnelRoute } from '../shared/types'
 
 export interface ProxyBridgeObserver {
   onFailure?: (error: unknown) => void
@@ -19,7 +19,12 @@ export interface LocalProxy {
   port: number
 }
 
-export type LocalProxyResolver = (host: string, port: number) => Promise<LocalProxy | undefined>
+/**
+ * How the connection to a window proxy goes out: route is the window's 网络加速 (undefined for
+ * windows from before it existed). With route.enabled it must give the tunnel or throw — never
+ * undefined, which would mean a direct connection from this computer's own IP.
+ */
+export type LocalProxyResolver = (host: string, port: number, route?: TunnelRoute) => Promise<LocalProxy | undefined>
 
 let resolveLocalProxy: LocalProxyResolver | undefined
 
@@ -107,11 +112,12 @@ export async function connectThrough(via: LocalProxy, host: string, port: number
 }
 
 /** A local port that forwards every connection to host:port through the local proxy. */
-async function openTunnel(via: LocalProxy, host: string, port: number, observer: ProxyBridgeObserver): Promise<Server> {
+async function openTunnel(route: () => Promise<LocalProxy>, host: string, port: number, observer: ProxyBridgeObserver): Promise<Server> {
   const server = createServer((client) => {
     client.pause()
     client.on('error', () => undefined)
-    connectThrough(via, host, port).then((remote) => {
+    // Looked up for every connection: a restarted tunnel listens on new local ports.
+    route().then((via) => connectThrough(via, host, port)).then((remote) => {
       remote.on('error', () => client.destroy())
       client.on('error', () => remote.destroy())
       remote.on('close', () => client.destroy())
@@ -160,12 +166,21 @@ export function rememberDirectRoute(proxy: Pick<ProxyConfig, 'host' | 'port'>, d
   else directOnly.delete(proxyKey(proxy))
 }
 
-/** The local proxy a connection to this window proxy would go through, if any. */
+/**
+ * The local proxy a connection to this window proxy would go through, if any. A proxy set to
+ * 网络加速 gets the tunnel or an error, never a quiet direct connection.
+ */
 export async function localProxyFor(proxy: ProxyConfig): Promise<LocalProxy | undefined> {
+  const accelerated = proxy.tunnel?.enabled === true && proxy.protocol !== 'direct' && Boolean(proxy.port) && !isLocalAddress(proxy.host)
+  if (accelerated) {
+    // An HTTPS proxy checks its certificate against its own name, which a forwarded port would break.
+    if (proxy.protocol === 'https') throw new Error('HTTPS 代理暂不支持网络加速，请关闭这个窗口的网络加速，或改用 HTTP / SOCKS5')
+    if (!resolveLocalProxy) throw new Error('获取不到代理 IP（网络加速未开启）')
+    return resolveLocalProxy(proxy.host, proxy.port!, proxy.tunnel)
+  }
   if (directOnly.has(proxyKey(proxy))) return undefined
-  // An HTTPS proxy checks its certificate against its own name, which a forwarded port would break.
   if (proxy.protocol === 'direct' || proxy.protocol === 'https' || !proxy.port || isLocalAddress(proxy.host) || !resolveLocalProxy) return undefined
-  const via = await resolveLocalProxy(proxy.host, proxy.port).catch(() => undefined)
+  const via = await resolveLocalProxy(proxy.host, proxy.port, proxy.tunnel).catch(() => undefined)
   if (!via || (via.host === proxy.host && via.port === proxy.port)) return undefined
   return via
 }
@@ -173,7 +188,10 @@ export async function localProxyFor(proxy: ProxyConfig): Promise<LocalProxy | un
 export async function openProxyBridge(proxy: ProxyConfig, observer: ProxyBridgeObserver = {}, options: { direct?: boolean } = {}): Promise<string | undefined> {
   if (proxy.protocol === 'direct') return undefined
   const via = options.direct ? undefined : await localProxyFor(proxy)
-  const tunnel = via && proxy.port ? await openTunnel(via, proxy.host, proxy.port, observer) : undefined
+  const tunnel = via && proxy.port
+    // 网络加速: a connection the tunnel cannot take fails rather than going out directly.
+    ? await openTunnel(async () => proxy.tunnel?.enabled ? (await localProxyFor(proxy))! : await localProxyFor(proxy).catch(() => undefined) ?? via, proxy.host, proxy.port, observer)
+    : undefined
   const target = tunnel ? { ...proxy, host: '127.0.0.1', port: (tunnel.address() as AddressInfo).port } : proxy
   const upstream = upstreamProxyUrl(target)!
   const server = new proxyChain.Server({

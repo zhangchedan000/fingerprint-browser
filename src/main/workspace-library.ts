@@ -43,7 +43,11 @@ export class WorkspaceLibrary {
   /** The connection settings of a library proxy, in the shape the launcher and tester use. */
   proxyConfig(id: string): ProxyConfig | undefined {
     const proxy = this.proxies.get(id)
-    return proxy && { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: proxy.password, ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}) }
+    return proxy && {
+      protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: proxy.password,
+      ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}),
+      ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {})
+    }
   }
 
   /**
@@ -80,7 +84,9 @@ export class WorkspaceLibrary {
       note: '',
       createdAt: now,
       updatedAt: now,
-      ...(check ? { check } : {})
+      ...(check ? { check } : {}),
+      // A proxy typed into a window starts with that window's 网络加速 as its default.
+      ...(config.tunnel ? { tunnel: config.tunnel } : {})
     }
     this.proxies.set(record.id, record)
     return record.id
@@ -104,7 +110,8 @@ export class WorkspaceLibrary {
       note: draft.note,
       createdAt: now,
       updatedAt: now,
-      ...(draft.apiUrl ? { apiUrl: draft.apiUrl } : {})
+      ...(draft.apiUrl ? { apiUrl: draft.apiUrl } : {}),
+      ...(draft.tunnel ? { tunnel: draft.tunnel } : {})
     }
     this.proxies.set(record.id, record)
     return record
@@ -129,6 +136,7 @@ export class WorkspaceLibrary {
     }
     if (draft.apiUrl) record.apiUrl = draft.apiUrl
     else delete record.apiUrl
+    if (draft.tunnel) record.tunnel = draft.tunnel
     // A check of the old connection says nothing about the new one.
     if (connectionChanged) delete record.check
     this.proxies.set(id, record)

@@ -144,10 +144,17 @@ app.whenReady().then(async () => {
   registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
   void activeTunnel.initialize()
 
-  // A window proxy abroad is reached through the built-in tunnel when it runs, otherwise through
-  // the computer's own system proxy (Clash, v2rayN…) when that is on. Domestic proxies stay direct.
-  setLocalProxyResolver(async (host, port) => {
-    const tunnelVia = activeTunnel.localProxy()
+  // A window set to 网络加速 reaches its proxy through the built-in tunnel, on its own node choice.
+  // Windows from before that setting existed keep the old rule: a proxy abroad through the tunnel
+  // when it runs, otherwise through the computer's own system proxy (Clash, v2rayN…) when that is
+  // on; domestic proxies direct. A window with 网络加速 off connects like the latter.
+  setLocalProxyResolver(async (host, port, route) => {
+    if (route?.enabled) {
+      const via = await activeTunnel.routeProxy(route)
+      logger?.info('代理经网络加速连接', { proxy: `${host}:${port}`, node: route.mode === 'manual' ? route.node : '自动' })
+      return via
+    }
+    const tunnelVia = route ? undefined : activeTunnel.localProxy()
     if (tunnelVia) {
       const record = profiles.listProxies().find((item) => item.host.toLowerCase() === host.toLowerCase() && item.port === port)
       if (record?.check?.countryCode === 'CN') return undefined

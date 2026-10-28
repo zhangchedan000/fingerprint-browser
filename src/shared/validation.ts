@@ -7,7 +7,7 @@ import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
 import { DEVICE_MEMORY_CHOICES } from './types'
-import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, WebRtcPolicy } from './types'
+import type { FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, TunnelRoute, WebRtcPolicy } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -213,6 +213,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       height: rawWindow.height
     },
     proxy,
+    ...(draft.tunnel !== undefined ? { tunnel: validTunnelRoute(draft.tunnel) } : {}),
     account,
     fingerprint: {
       seed: fp.seed,
@@ -265,6 +266,18 @@ export function validProxyApiUrl(input: unknown): string {
   }
 }
 
+/** A window's (or a library proxy's default) 网络加速 setting. */
+export function validTunnelRoute(input: unknown): TunnelRoute {
+  const value = input as Partial<TunnelRoute> | null
+  if (!value || typeof value !== 'object' || typeof value.enabled !== 'boolean' || (value.mode !== 'auto' && value.mode !== 'manual')) {
+    throw new Error('网络加速设置无效')
+  }
+  const node = typeof value.node === 'string' ? value.node.trim() : ''
+  if (node.length > 200) throw new Error('加速节点名称过长')
+  if (value.enabled && value.mode === 'manual' && !node) throw new Error('请选择加速节点')
+  return { enabled: value.enabled, mode: value.mode, ...(node ? { node } : {}) }
+}
+
 export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   if (!input || typeof input.protocol !== 'string') throw new Error('代理配置不完整')
   if (typeof input.host !== 'string' || typeof input.username !== 'string' || typeof input.password !== 'string') {
@@ -283,6 +296,7 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   }
   if (input.passwordStored === true) proxy.passwordStored = true
   if (input.apiUrl !== undefined && input.apiUrl !== '') proxy.apiUrl = validProxyApiUrl(input.apiUrl)
+  if (input.tunnel !== undefined) proxy.tunnel = validTunnelRoute(input.tunnel)
   if (proxy.protocol === 'direct') {
     return { protocol: 'direct', host: '', username: '', password: '' }
   }
@@ -321,6 +335,7 @@ export function validateProxyDraft(input: ProxyDraft): ProxyDraft & { port: numb
     password: proxy.password,
     ...(proxy.passwordStored ? { passwordStored: true } : {}),
     ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}),
+    ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {}),
     note
   }
 }

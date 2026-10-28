@@ -151,17 +151,18 @@ function errorText(error: unknown): string {
  * codes (593 not found, 594 refused, 595 reset, 597 auth, 599 upstream error), which undici
  * reports as "Proxy response (595) !== 200 when HTTP Tunneling".
  */
-export function proxyFailureReason(text: string, viaLocalProxy: boolean): string | undefined {
+export function proxyFailureReason(text: string, viaLocalProxy: boolean, accelerated = false): string | undefined {
   if (/\b(407|597)\b|proxy authentication|authentication failed|auth failed/i.test(text)) return '代理认证失败，请检查用户名和密码'
   if (/\b593\b|ENOTFOUND|EAI_AGAIN/i.test(text)) return '找不到代理服务器，请检查地址是否填对'
   if (/\b594\b|ECONNREFUSED/i.test(text)) return '代理服务器拒绝连接，请检查端口是否填对，或代理是否已过期'
   if (/\b59[56]\b|ECONNRESET|EPIPE|socket hang up|Socket closed/i.test(text)) {
+    if (accelerated) return '已经过网络加速，仍然连不上这个代理；请换一个加速节点，或检查代理是否可用'
     return viaLocalProxy
       ? '已经过本机代理，仍然连不上这个代理；请检查本机代理软件是否正常，或更换代理'
       : '连接被中断，本机网络连不上这个代理；国外代理请先开启本机代理软件（如 Clash）的系统代理'
   }
   if (/timeout|timed out|ETIMEDOUT/i.test(text)) {
-    return viaLocalProxy
+    return viaLocalProxy || accelerated
       ? '代理连接超时，请检查线路或更换代理'
       : '代理连接超时；国外代理请先开启本机代理软件（如 Clash）的系统代理，或更换代理'
   }
@@ -256,7 +257,7 @@ async function testProxyOnce(config: ProxyConfig, direct = false): Promise<Proxy
     return {
       ok: false,
       latencyMs: Date.now() - startedAt,
-      error: proxyFailureReason(text, !direct && Boolean(await localProxyFor(config).catch(() => undefined))) ?? safeErrorText(error),
+      error: proxyFailureReason(text, !direct && Boolean(await localProxyFor(config).catch(() => undefined)), config.tunnel?.enabled === true) ?? safeErrorText(error),
       failureKind: classifyProxyFailure(new Error(text))
     }
   } finally {
@@ -271,7 +272,8 @@ export async function testProxy(config: ProxyConfig): Promise<ProxyTestResult> {
   const via = await localProxyFor(config).catch(() => undefined)
   const first = await testProxyOnce(config)
   if (first.ok || first.failureKind === 'authentication') return first
-  if (via) {
+  // 网络加速 is the user's choice for this proxy: never fall back to this computer's own IP.
+  if (via && !config.tunnel?.enabled) {
     // The tunnel or system proxy could not reach this proxy (some nodes block other proxies' ports,
     // and domestic proxies often refuse foreign visitors): try the computer's own network.
     const direct = await testProxyOnce(config, true)

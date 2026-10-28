@@ -20,7 +20,7 @@ describe('tunnel sources', () => {
 
   it('builds a config that sends everything through the chosen node, on loopback only', () => {
     const config = mihomoConfig({
-      mixedPort: 1000, controllerPort: 1001, secret: 's',
+      mixedPort: 1000, autoPort: 1002, slotPorts: [1003, 1004], controllerPort: 1001, secret: 's',
       sources: [{ id: 'a', name: 'Mine', kind: 'links', content: 'vless://x' }, { id: 'b', name: 'Sub', kind: 'subscription', content: 'https://s.example' }]
     }) as Record<string, any>
     expect(config['bind-address']).toBe('127.0.0.1')
@@ -32,6 +32,13 @@ describe('tunnel sources', () => {
     expect(config['proxy-groups'][1]).toMatchObject({ name: 'TUNNEL', type: 'select', proxies: [AUTO_TUNNEL_GROUP] })
     expect(config['proxy-providers']['source-b']).toMatchObject({ type: 'http', url: 'https://s.example' })
     expect(config['proxy-providers']['source-a'].override['additional-prefix']).toBe('Mine · ')
+    // Per-window ports: the fastest node, and node slots that reject until pointed at a node.
+    expect(config['proxy-groups'][2]).toMatchObject({ name: 'TUNNEL-NODE-1', type: 'select', proxies: ['REJECT'], use: ['source-a', 'source-b'] })
+    expect(config.listeners).toEqual([
+      { name: 'auto', type: 'mixed', listen: '127.0.0.1', port: 1002, udp: false, proxy: AUTO_TUNNEL_GROUP },
+      { name: 'node-1', type: 'mixed', listen: '127.0.0.1', port: 1003, udp: false, proxy: 'TUNNEL-NODE-1' },
+      { name: 'node-2', type: 'mixed', listen: '127.0.0.1', port: 1004, udp: false, proxy: 'TUNNEL-NODE-2' }
+    ])
   })
 })
 
@@ -97,6 +104,57 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
     await tunnel.initialize()
     expect((await tunnel.status()).state).toBe('running')
     expect((await tunnel.status()).selected).toBe('Test · n2')
+  }, 60_000)
+
+  it('gives each window its own node: fixed nodes on their own ports, auto on the fastest', async () => {
+    vault = await mkdtemp(join(tmpdir(), 'tunnel-route-'))
+    const echo = await listen(createServer((socket) => socket.pipe(socket)))
+    // Two SOCKS5 "nodes" that record which of them carried a connection.
+    const carried: string[] = []
+    const socksNode = (label: string) => createServer((client) => {
+      client.on('error', () => undefined)
+      client.once('data', () => {
+        client.write(Buffer.from([5, 0]))
+        client.once('data', (request) => {
+          const port = request.readUInt16BE(request.length - 2)
+          if (port === echo) carried.push(label)
+          const upstream = createConnection(port, '127.0.0.1', () => {
+            client.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
+            client.pipe(upstream).pipe(client)
+          })
+          upstream.on('error', () => client.destroy())
+        })
+      })
+    })
+    const a = await listen(socksNode('a'))
+    const b = await listen(socksNode('b'))
+    tunnel = new TunnelManager(vault, identitySecretCodec, core)
+    await tunnel.addSource({ name: 'T', kind: 'links', content: `proxies:\n  - {name: a, type: socks5, server: 127.0.0.1, port: ${a}, udp: false}\n  - {name: b, type: socks5, server: 127.0.0.1, port: ${b}, udp: false}\n` })
+    await expect(tunnel.routeProxy({ mode: 'auto' })).rejects.toThrow('网络加速未开启')
+    await tunnel.setEnabled(true)
+    await tunnel.select('T · a')
+    const roundTrip = async (via: Awaited<ReturnType<TunnelManager['routeProxy']>>) => {
+      const socket = await connectThrough(via, '127.0.0.1', echo)
+      const reply = new Promise<string>((done) => socket.once('data', (data) => done(data.toString())))
+      socket.resume()
+      socket.write('hello')
+      expect(await reply).toBe('hello')
+      socket.destroy()
+    }
+    // The settings page fixed node a; a window fixed to b still goes out through b, and back.
+    const viaB = await tunnel.routeProxy({ mode: 'manual', node: 'T · b' })
+    await roundTrip(viaB)
+    expect(carried.pop()).toBe('b')
+    const viaA = await tunnel.routeProxy({ mode: 'manual', node: 'T · a' })
+    expect(viaA.port).not.toBe(viaB.port)
+    await roundTrip(viaA)
+    expect(carried.pop()).toBe('a')
+    expect((await tunnel.routeProxy({ mode: 'manual', node: 'T · b' })).port).toBe(viaB.port)
+    await roundTrip(await tunnel.routeProxy({ mode: 'auto' }))
+    expect(['a', 'b']).toContain(carried.pop())
+    await expect(tunnel.routeProxy({ mode: 'manual', node: 'T · gone' })).rejects.toThrow('已不存在')
+    await tunnel.stop()
+    await expect(tunnel.routeProxy({ mode: 'manual', node: 'T · b' })).rejects.toThrow('网络加速未开启')
   }, 60_000)
 
   it('reports a source with no usable node', async () => {

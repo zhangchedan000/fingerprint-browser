@@ -18,7 +18,7 @@ import { validPreferences, type SettingsStore } from './settings-store'
 import { testProxy } from './proxy-tester'
 import { localProxyFor } from './proxy-bridge'
 import { proxySupportsUdp } from './webrtc-relay'
-import { validateProfileDraft, validateProxyConfig, validProxyApiUrl } from '../shared/validation'
+import { validateProfileDraft, validateProxyConfig, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
 import { resolveApiProxy } from './api-proxy'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
@@ -204,13 +204,17 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const validated = validateProfileDraft(draft)
     const existing = profileId ? profiles.get(profileId) : undefined
     let proxy: ProxyConfig
+    // The window's 网络加速, as a launch would use it.
+    const route = validated.tunnel ?? (existing && (!draft.proxyId || draft.proxyId === existing.proxyId) ? existing.tunnel : undefined)
     if (draft.proxyId) {
       const { protocol, host, port, username, password, apiUrl } = profiles.getProxy(draft.proxyId)
       // An API proxy is checked with a fresh one, as a launch would get.
-      proxy = apiUrl ? { ...await resolveApiProxy(apiUrl) } : { protocol, host, port, username, password }
+      proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password }
     } else {
-      proxy = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
+      const { tunnel: _default, ...typed } = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
+      proxy = typed
     }
+    if (route) proxy.tunnel = route
     const engine = await locateBrowserForProfile(settings, profiles.vaultPath, validated.kernelVersion)
     if (!engine.executable) {
       throw new Error(validated.kernelVersion ? `内核 ${validated.kernelVersion} 不可用，请先安装` : '没有找到浏览器内核，请先在内核管理里下载或导入')
@@ -608,7 +612,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   /** An API proxy draft with the proxy its API gives now filled in (others as they are). */
   const resolveDraft = async <T extends ProxyDraft | ProxyConfig>(draft: T): Promise<T> => {
     if (!draft || typeof draft !== 'object' || !draft.apiUrl) return draft
-    const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl))
+    const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl), draft.tunnel)
     return { ...draft, ...endpoint, passwordStored: false }
   }
   ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string) => {
@@ -640,11 +644,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
     return profiles.removeProxy(id, replaceWith)
   })
-  ipcMain.handle('proxy:check', async (_event, id: string) => {
+  /** route: the 网络加速 of the window being edited; without it, the proxy's own default. */
+  ipcMain.handle('proxy:check', async (_event, id: string, routeInput?: unknown) => {
     const saved = profiles.getProxy(id)
-    if (saved.apiUrl) await profiles.setApiProxyEndpoint(id, await resolveApiProxy(saved.apiUrl))
+    const route = routeInput === undefined || routeInput === null ? saved.tunnel : validTunnelRoute(routeInput)
+    if (saved.apiUrl) await profiles.setApiProxyEndpoint(id, await resolveApiProxy(saved.apiUrl, route))
     const tested = profiles.getProxy(id)
-    const result = await testProxy(tested)
+    const { tunnel: _default, ...connection } = tested
+    const result = await testProxy(route ? { ...connection, tunnel: route } : connection)
     const current = profiles.getProxy(id)
     if (!sameProxyIdentity(tested, current) || tested.password !== current.password) {
       throw new Error('检测期间代理配置已变更，本次结果未保存')

@@ -3,10 +3,10 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
-import type { TunnelNodeInfo, TunnelStatus } from '../shared/types'
+import type { TunnelNodeInfo, TunnelRoute, TunnelStatus } from '../shared/types'
 import type { LocalProxy } from './proxy-bridge'
 import type { SecretCodec } from './secret-codec'
-import { AUTO_TUNNEL_GROUP, DELAY_TEST_URL, TUNNEL_GROUP, mihomoConfig, providerName, validateTunnelSource, type TunnelSource } from './tunnel-config'
+import { AUTO_TUNNEL_GROUP, DELAY_TEST_URL, NODE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, providerName, validateTunnelSource, type TunnelSource } from './tunnel-config'
 
 interface Logger {
   info(message: string, detail?: unknown): void
@@ -42,6 +42,11 @@ export class TunnelManager {
   private state: TunnelStatus['state'] = 'off'
   private error?: string
   private mixedPort = 0
+  private autoPort = 0
+  private slotPorts: number[] = []
+  /** The node each slot (nodeSlotGroup) carries; kept across restarts and set again on start. */
+  private slots: string[] = []
+  private slotting: Promise<unknown> = Promise.resolve()
   private controller = ''
   private secret = ''
   private delays = new Map<string, number>()
@@ -82,6 +87,35 @@ export class TunnelManager {
   /** The local port that carries a connection out through the tunnel, while it runs. */
   localProxy(): LocalProxy | undefined {
     return this.state === 'running' ? { type: 'http', host: '127.0.0.1', port: this.mixedPort } : undefined
+  }
+
+  /**
+   * The local port for a window set to 网络加速: the fastest node, or the node it is fixed to.
+   * Throws when the tunnel is not running — such a window must not connect from this computer's IP.
+   */
+  async routeProxy(route: Pick<TunnelRoute, 'mode' | 'node'>): Promise<LocalProxy> {
+    for (let waited = 0; this.state === 'starting' && waited < 30_000; waited += 250) await delay(250)
+    if (this.state !== 'running') {
+      throw new Error(this.state === 'error' && this.error ? `获取不到代理 IP（网络加速出错：${this.error}）` : '获取不到代理 IP（网络加速未开启）')
+    }
+    if (route.mode !== 'manual' || !route.node) return { type: 'http', host: '127.0.0.1', port: this.autoPort }
+    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(route.node)] }
+  }
+
+  /** The slot that carries `node`, pointing a free one at it the first time it is asked for. */
+  private slotFor(node: string): Promise<number> {
+    const next = this.slotting.then(async () => {
+      const known = this.slots.indexOf(node)
+      if (known >= 0) return known
+      if (!(await this.groupNames()).includes(node)) throw new Error(`获取不到代理 IP（加速节点「${node}」已不存在，请在代理设置里重新选择）`)
+      const index = this.slots.includes('') ? this.slots.indexOf('') : this.slots.length
+      if (index >= NODE_SLOT_COUNT) throw new Error(`同时固定使用的加速节点不能超过 ${NODE_SLOT_COUNT} 个`)
+      await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
+      this.slots[index] = node
+      return index
+    })
+    this.slotting = next.catch(() => undefined)
+    return next
   }
 
   async status(): Promise<TunnelStatus> {
@@ -222,10 +256,13 @@ export class TunnelManager {
         if (source.kind === 'links') await writeFile(join(this.runtimeDir, 'providers', `${source.id}.txt`), source.content, { mode: 0o600 })
       }
       this.mixedPort = await freePort()
+      this.autoPort = await freePort()
+      this.slotPorts = []
+      for (let index = 0; index < NODE_SLOT_COUNT; index++) this.slotPorts.push(await freePort())
       const controllerPort = await freePort()
       this.secret = randomBytes(16).toString('hex')
       this.controller = `http://127.0.0.1:${controllerPort}`
-      const config = mihomoConfig({ mixedPort: this.mixedPort, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
+      const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
       await writeFile(join(this.runtimeDir, 'config.yaml'), JSON.stringify(config, null, 2), { mode: 0o600 })
 
       let output = ''
@@ -246,7 +283,8 @@ export class TunnelManager {
 
       for (let attempt = 0; ; attempt++) {
         if (child.exitCode !== null) throw new Error(`加速通道启动失败：${lastLine(output) || `code=${child.exitCode}`}`)
-        if (await this.api('GET', '/version').then(() => true, () => false)) break
+        // The controller can answer before the groups are loaded; wait for the group itself.
+        if (await this.api('GET', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`).then(() => true, () => false)) break
         if (attempt > 100) throw new Error('加速通道启动超时')
         await delay(100)
       }
@@ -255,6 +293,11 @@ export class TunnelManager {
       if (this.stored.selected && !names.includes(this.stored.selected)) throw new Error('固定节点已不存在，请切换自动选择或编辑节点来源')
       const selected = this.stored.selected ?? AUTO_TUNNEL_GROUP
       await this.api('PUT', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`, { name: selected })
+      // Windows fixed to a node keep their slot; a node gone after an edit leaves its slot empty (REJECT).
+      this.slots = this.slots.map((node) => names.includes(node) ? node : '')
+      for (const [index, node] of this.slots.entries()) {
+        if (node) await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
+      }
       this.delays.clear()
       this.state = 'running'
       this.restarts = 0

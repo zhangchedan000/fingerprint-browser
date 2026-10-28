@@ -250,4 +250,33 @@ describe('assigning extensions', () => {
     expect(store.get(b.id).extensionIds).toEqual([])
     await expect(store.assignMany([a.id], { extensionId: 'bad' })).rejects.toThrow('扩展')
   })
+
+  it('keeps 网络加速 per window: own choice, proxy default on assignment, none for older windows', async () => {
+    const path = await vault()
+    const store = await open(path)
+    const us = { enabled: true, mode: 'manual' as const, node: '手动节点 · US-vless' }
+    const proxy = await store.createProxy({ ...PROXY, note: '', tunnel: us })
+    const [a, b, old] = await store.createMany([draft('A', { proxyId: proxy.id }), draft('B', { proxyId: proxy.id, tunnel: { enabled: false, mode: 'auto' } }), draft('Old')])
+    // A takes the proxy's default; B keeps its own; the window's route is what connections use.
+    expect(store.get(a.id).proxy.tunnel).toEqual(us)
+    expect(store.get(b.id).proxy.tunnel).toEqual({ enabled: false, mode: 'auto' })
+    // Changing one window does not touch the other or the proxy's default.
+    await store.update(a.id, { ...draft('A', { proxyId: proxy.id }), tunnel: { enabled: true, mode: 'auto' } })
+    expect(store.get(a.id).tunnel).toEqual({ enabled: true, mode: 'auto' })
+    expect(store.get(b.id).tunnel).toEqual({ enabled: false, mode: 'auto' })
+    expect(store.getProxy(proxy.id).tunnel).toEqual(us)
+    // A window given the proxy later starts from its default; a direct window has none.
+    await store.assignMany([old.id], { proxyId: proxy.id })
+    expect(store.get(old.id).tunnel).toEqual(us)
+    await store.assignMany([old.id], { proxyId: '' })
+    expect(store.get(old.id).tunnel).toBeUndefined()
+    expect(store.get(old.id).proxy.tunnel).toBeUndefined()
+    // Survives a reload; an unreadable saved route leaves the window on the old rule.
+    const reopened = await open(path)
+    expect(reopened.get(a.id).proxy.tunnel).toEqual({ enabled: true, mode: 'auto' })
+    const file = JSON.parse(await readFile(join(path, 'profiles.json'), 'utf8'))
+    file.profiles.find((profile: { id: string }) => profile.id === b.id).tunnel = { enabled: 'yes' }
+    await writeFile(join(path, 'profiles.json'), JSON.stringify(file))
+    expect((await open(path)).get(b.id).tunnel).toBeUndefined()
+  })
 })

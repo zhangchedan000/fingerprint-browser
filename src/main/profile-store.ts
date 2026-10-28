@@ -5,12 +5,12 @@ import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from
 import { dirname, join } from 'node:path'
 import type {
   BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
-  ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, WebRtcPolicy
+  ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, TunnelRoute, WebRtcPolicy
 } from '../shared/types'
 import { defaultProfileWindow, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
 import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
-import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl } from '../shared/validation'
+import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
 import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
@@ -78,6 +78,22 @@ function validProfileSerial(value: unknown): value is number {
 function safeWebRtcPolicy(value: unknown): WebRtcPolicy {
   if (value === 'public_only') return 'default'
   return value === 'proxy_only' || value === 'privacy' || value === 'default' || value === 'disabled' ? value : 'proxy_only'
+}
+
+/** A saved 网络加速 setting, or none when it is unreadable (the window then keeps the old rule). */
+function safeTunnelRoute(value: unknown): TunnelRoute | undefined {
+  if (value === undefined) return undefined
+  try {
+    return validTunnelRoute(value)
+  } catch {
+    return undefined
+  }
+}
+
+/** The proxy as a window uses it: the window's own 网络加速, never the library proxy's default. */
+function withWindowRoute(config: ProxyConfig, tunnel: TunnelRoute | undefined): ProxyConfig {
+  const { tunnel: _default, ...rest } = config
+  return tunnel ? { ...rest, tunnel } : rest
 }
 
 function validRecordId(value: unknown): value is string {
@@ -240,6 +256,7 @@ export class ProfileStore {
         startupMode: stored.startupMode,
         kernelVersion: typeof stored.kernelVersion === 'string' ? stored.kernelVersion : '',
         window: stored.window ?? defaultProfileWindow(),
+        tunnel: proxyId ? safeTunnelRoute(stored.tunnel) : undefined,
         // A reference to a missing proxy is kept (and blocks launching); validate it as direct.
         proxy: legacy ? { ...stored.proxy!, password: this.secrets.decode(stored.proxy!.password) } : library.proxyConfig(proxyId) ?? DIRECT,
         account: stored.account && typeof stored.account === 'object'
@@ -333,7 +350,8 @@ export class ProfileStore {
         createdAt: stored.createdAt,
         updatedAt: stored.updatedAt,
         ...(check ? { check } : {}),
-        ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {})
+        ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {}),
+        ...(safeTunnelRoute(stored.tunnel) ? { tunnel: safeTunnelRoute(stored.tunnel) } : {})
       })
     }
     const groups: GroupRecord[] = []
@@ -359,10 +377,11 @@ export class ProfileStore {
   private resolve(stored: StoredProfile): BrowserProfile {
     const { directCheck, ...fields } = stored
     const record = stored.proxyId ? this.library.proxies.get(stored.proxyId) : undefined
+    const config = stored.proxyId ? this.library.proxyConfig(stored.proxyId) : undefined
     const profile: BrowserProfile = {
       ...fields,
       group: this.library.groupName(stored.groupId),
-      proxy: stored.proxyId ? this.library.proxyConfig(stored.proxyId) ?? { ...DIRECT } : { ...DIRECT },
+      proxy: config ? withWindowRoute(config, stored.tunnel) : { ...DIRECT },
       proxyCheck: stored.proxyId ? record?.check : directCheck
     }
     if (stored.proxyId && !record) profile.proxyMissing = true
@@ -399,6 +418,17 @@ export class ProfileStore {
     const current = currentProxyId ? this.library.proxyConfig(currentProxyId) : undefined
     if (current && proxy.passwordStored && !proxy.password && sameProxyIdentity(proxy, current)) return currentProxyId
     return this.library.ensureProxy(proxy, now)
+  }
+
+  /**
+   * A window's 网络加速: the one it was given, else (same proxy as before) the one it had, else the
+   * default of the library proxy it now uses. A direct window has none.
+   */
+  private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile): TunnelRoute | undefined {
+    if (!proxyId) return undefined
+    if (draft.tunnel) return draft.tunnel
+    if (current && current.proxyId === proxyId) return current.tunnel
+    return this.library.proxies.get(proxyId)?.tunnel
   }
 
   /** Runs a change that may add library records; on failure the libraries are put back. */
@@ -448,13 +478,16 @@ export class ProfileStore {
       const now = new Date().toISOString()
       const created: StoredProfile[] = drafts.map((draft, index) => {
         const id = randomUUID()
-        const { proxy, group, ...fields } = draft
+        const { proxy, group, tunnel, ...fields } = draft
+        const proxyId = this.referenceProxy(inputs[index], tunnel ? { ...proxy, tunnel } : proxy, now)
+        const route = this.windowTunnel(draft, proxyId)
         return {
           ...fields,
+          ...(route ? { tunnel: route } : {}),
           kernelVersion: fields.kernelVersion || defaultKernel || '',
           id,
           serialNumber: this.nextSerialNumber + index,
-          proxyId: this.referenceProxy(inputs[index], proxy, now),
+          proxyId,
           groupId: this.library.ensureGroup(group, now),
           account: privateAccount(draft.account),
           fingerprint: {
@@ -492,8 +525,9 @@ export class ProfileStore {
       && sameAccountIdentity(draft.account, current.account)
     return this.withLibraryRollback(async () => {
       const now = new Date().toISOString()
-      const { proxy, group, ...fields } = draft
-      const proxyId = this.referenceProxy(input, proxy, now, current.proxyId)
+      const { proxy, group, tunnel, ...fields } = draft
+      const proxyId = this.referenceProxy(input, tunnel ? { ...proxy, tunnel } : proxy, now, current.proxyId)
+      const route = this.windowTunnel(draft, proxyId, current)
       const profile: StoredProfile = {
         ...current,
         ...fields,
@@ -509,6 +543,8 @@ export class ProfileStore {
         status: current.status
       }
       if (proxyId || current.proxyId) delete profile.directCheck
+      if (route) profile.tunnel = route
+      else delete profile.tunnel
       this.profiles.set(id, profile)
       await this.persist()
       return this.resolve(profile)
@@ -590,6 +626,10 @@ export class ProfileStore {
       if (proxyId !== undefined && proxyId !== current.proxyId) {
         profile.proxyId = proxyId
         delete profile.directCheck
+        // A window given another proxy starts with that proxy's 网络加速 default.
+        const route = this.windowTunnel({}, proxyId)
+        if (route) profile.tunnel = route
+        else delete profile.tunnel
       }
       if (extensionId !== undefined) {
         const others = current.extensionIds.filter((id) => id !== extensionId)
@@ -941,6 +981,7 @@ export class ProfileStore {
           webrtcPolicy: safeWebRtcPolicy(saved.fingerprint?.webrtcPolicy)
         },
         window: saved.window ?? defaultProfileWindow(),
+        tunnel: proxyId ? safeTunnelRoute(saved.tunnel) : undefined,
         favorite: saved.favorite === true,
         account: saved.account && typeof saved.account === 'object'
           ? privateAccount(validatePlatformAccount({

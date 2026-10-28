@@ -4,20 +4,9 @@ import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { TunnelNodeInfo, TunnelStatus } from '../../../../shared/types'
 import { humanError } from '../../components/format'
+import { DelayText, TUNNEL_STATE_PILL as STATE_PILL } from '../../components/TunnelRouteField'
 import { useWorkspace } from '../../data/workspace'
 
-const STATE_PILL: Record<TunnelStatus['state'], [string, string]> = {
-  off: ['is-off', '未开启'],
-  starting: ['is-busy', '启动中'],
-  running: ['is-on', '运行中'],
-  error: ['is-bad', '出错']
-}
-
-function DelayText({ delay }: { delay?: number }) {
-  if (delay === undefined) return <span className="fb-muted">—</span>
-  if (delay === 0) return <span className="fb-tunnel-delay is-bad">{t("超时")}</span>
-  return <span className={`fb-tunnel-delay ${delay < 300 ? 'is-good' : delay < 800 ? 'is-fair' : 'is-bad'}`}>{delay} ms</span>
-}
 
 /** Settings → 网络加速: the built-in tunnel that carries foreign window proxies out of the country. */
 export function TunnelSettings() {
@@ -123,7 +112,7 @@ export function TunnelSettings() {
     <>
       <h2>{t("网络加速")}</h2>
       <p className="fb-muted fb-tunnel-intro">
-        {t("国外代理 IP 在国内直连常被干扰。开启后，窗口连国外代理时会先经过你自己的节点加密出国，本机不用开 Clash，开不开软路由都能用；国内代理照常直连。网站看到的仍然是窗口代理的 IP。")}
+        {t("有些代理 IP 在国内直连不上（或只接受境外 IP）。在这里添加你自己的节点、开启加速通道；每个窗口在「代理设置 → 网络加速」里选择要不要经过节点、用哪个节点，本机不用开 Clash。网站看到的仍然是窗口代理的 IP。")}
       </p>
       {status && !status.available && <Alert type="warning" showIcon title={t("当前版本没有附带加速通道组件，请安装最新版指纹浏览器。")} className="fb-block-gap" />}
       <section className="fb-tunnel-card">
@@ -166,7 +155,7 @@ export function TunnelSettings() {
       {running && (
         <section className="fb-tunnel-card fb-tunnel-nodes">
           <div className="fb-tunnel-actions">
-            <span className="fb-muted">{t("选一个延迟低的节点；所有经加速的窗口共用它出国。")}</span>
+            <span className="fb-muted">{t("这里选的是默认节点：新窗口和新代理先用它；每个窗口还可以在自己的代理设置里另选节点。")}</span>
             <Button size="small" loading={busy === 'test'} disabled={Boolean(busy)} onClick={() => void run('test', () => window.browserApi.tunnel.test())}>{t("测速")}</Button>
             {status.sources.some((source) => source.kind === 'subscription') && (
               <Button size="small" loading={busy === 'refresh'} disabled={Boolean(busy)} onClick={() => void run('refresh', () => window.browserApi.tunnel.refresh())}>{t("更新订阅")}</Button>

@@ -31,6 +31,7 @@ export function portableDraft(profile: BrowserProfile, options: PortableDraftOpt
     proxy: strip
       ? { protocol: profile.proxy.protocol, host: profile.proxy.host, port: profile.proxy.port, username: profile.proxy.username, password: '' }
       : { protocol: profile.proxy.protocol, host: profile.proxy.host, port: profile.proxy.port, username: profile.proxy.username, password: profile.proxy.password },
+    ...(profile.tunnel ? { tunnel: { ...profile.tunnel } } : {}),
     account: {
       platform: profile.account.platform,
       username: profile.account.username,

@@ -2,7 +2,8 @@ import { Form, Input, InputNumber, Modal, Radio, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
-import type { ProxyDraft, ProxyRecordView, ProxyTestResult } from '../../../../shared/types'
+import type { ProxyDraft, ProxyRecordView, ProxyTestResult, TunnelRoute } from '../../../../shared/types'
+import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { ProxyTestButton } from './ProxyTestButton'
 
 interface ProxyFormModalProps {
@@ -28,6 +29,12 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const protocol = Form.useWatch('protocol', form) ?? 'socks5'
   // API 提取: only the provider's extraction link; the proxy and its protocol come from it.
   const [apiMode, setApiMode] = useState(false)
+  // 网络加速: used for 检测代理 here, and given to windows this proxy is assigned to.
+  const tunnelStatus = useTunnelStatus()
+  const [chosenRoute, setChosenRoute] = useState<TunnelRoute>()
+  const shownRoute = chosenRoute ?? defaultTunnelRoute(tunnelStatus, undefined, proxy ? proxy.check?.countryCode ?? '' : undefined)
+  // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
+  const route = !apiMode && protocol === 'https' ? { ...shownRoute, enabled: false } : shownRoute
 
   useEffect(() => {
     if (!open) return
@@ -36,6 +43,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       ? { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: '', passwordStored: proxy.passwordStored, note: proxy.note, apiUrl: proxy.apiUrl ?? '' }
       : EMPTY)
     setApiMode(Boolean(proxy?.apiUrl))
+    setChosenRoute(proxy?.tunnel)
     setPaste('')
     setPasteError('')
     setPasted(null)
@@ -60,7 +68,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   /** What an API proxy is saved and tested as: the link only (the app fills in the proxy). */
   function apiDraft(): ProxyDraft {
     const values = form.getFieldsValue(true) as ProxyDraft
-    return { protocol: 'http', host: '', port: undefined, username: '', password: '', note: values.note ?? '', apiUrl: (values.apiUrl ?? '').trim() }
+    return { protocol: 'http', host: '', port: undefined, username: '', password: '', note: values.note ?? '', apiUrl: (values.apiUrl ?? '').trim(), tunnel: route }
   }
 
   async function submit(): Promise<void> {
@@ -70,7 +78,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       return
     }
     const values = await form.validateFields()
-    await onSubmit({ ...form.getFieldsValue(true), ...values, apiUrl: undefined })
+    await onSubmit({ ...form.getFieldsValue(true), ...values, apiUrl: undefined, tunnel: route })
   }
 
   return (
@@ -85,7 +93,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
       destroyOnHidden
       width={560}
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      <Form form={form} layout="vertical">
         <Form.Item label={t("方式")}>
           <Radio.Group
             optionType="button"
@@ -98,7 +106,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
           <Form.Item
             name="apiUrl"
             label={t("API 链接")}
-            extra={t("每次打开窗口都从这个链接取一个代理，自动识别是 SOCKS5 还是 HTTP。白名单模式要先在服务商后台把这台电脑的 IP 加进白名单。")}
+            extra={t("每次打开窗口都从这个链接取一个代理，自动识别是 SOCKS5 还是 HTTP。白名单模式要先在服务商后台把这台电脑的 IP 加进白名单；只接受境外 IP 的服务商，打开下面的网络加速，把加速节点的 IP 加进白名单。")}
             rules={[{ required: true, message: t("请输入 API 链接") }, { pattern: /^https?:\/\//i, message: t("API 链接要以 http:// 或 https:// 开头") }]}
           >
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="https://example.com/api?num=1&format=txt" />
@@ -137,6 +145,11 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
         <Form.Item name="note" label={t("备注")}>
           <Input maxLength={200} placeholder={t("例如：住宅 IP、BM 专用")} />
         </Form.Item>
+        {(apiMode || protocol !== 'https') && (
+          <Form.Item label={t("网络加速")} extra={t("检测这个代理时按这里连接；把它分配给窗口时，窗口先用这个设置，之后可在窗口里单独修改")}>
+            <TunnelRouteField value={shownRoute} status={tunnelStatus} onChange={(next) => { setChosenRoute(next); setResult(null) }} />
+          </Form.Item>
+        )}
         <ProxyTestButton
           result={result}
           onTest={async () => {
@@ -146,7 +159,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
               return
             }
             const values = await form.validateFields(['host', 'port'])
-            const draft = { ...form.getFieldsValue(true), ...values } as ProxyDraft
+            const draft = { ...form.getFieldsValue(true), ...values, tunnel: route } as ProxyDraft
             const tested = await window.browserApi.proxy.test({ ...draft, password: draft.password ?? '' }, undefined, proxy?.id)
             setResult(tested)
           }}

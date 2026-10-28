@@ -20,6 +20,13 @@ export interface TunnelSource {
 
 export const TUNNEL_GROUP = 'TUNNEL'
 export const AUTO_TUNNEL_GROUP = 'TUNNEL-AUTO'
+/**
+ * Windows set to a node of their own each get one of these: a select group on its own local port.
+ * Node names come from the providers only once mihomo runs, so the groups are made empty (REJECT,
+ * never a wrong node) and pointed at a node when a window first needs it.
+ */
+export const NODE_SLOT_COUNT = 16
+export const nodeSlotGroup = (index: number) => `TUNNEL-NODE-${index + 1}`
 export const DELAY_TEST_URL = 'https://www.gstatic.com/generate_204'
 
 export function providerName(source: Pick<TunnelSource, 'id'>): string {
@@ -51,6 +58,10 @@ export function validateTunnelSource(input: { name?: unknown; kind?: unknown; co
 
 export interface MihomoConfigInput {
   mixedPort: number
+  /** Local port that always uses the fastest node (a window set to 自动选择最低延迟). */
+  autoPort: number
+  /** One local port per node slot (nodeSlotGroup). */
+  slotPorts: number[]
   controllerPort: number
   secret: string
   delayTestUrl?: string
@@ -68,6 +79,7 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
       ? { type: 'http', url: source.content, path: `./providers/${source.id}.yaml`, interval: 86_400, 'health-check': healthCheck, override }
       : { type: 'file', path: `./providers/${source.id}.txt`, 'health-check': healthCheck, override }
   }
+  const listener = (name: string, port: number, proxy: string) => ({ name, type: 'mixed', listen: '127.0.0.1', port, udp: false, proxy })
   return {
     'mixed-port': input.mixedPort,
     'bind-address': '127.0.0.1',
@@ -82,7 +94,12 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     'proxy-providers': providers,
     'proxy-groups': [
       { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: Object.keys(providers), url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },
-      { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: Object.keys(providers) }
+      { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: Object.keys(providers) },
+      ...input.slotPorts.map((_, index) => ({ name: nodeSlotGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) }))
+    ],
+    listeners: [
+      listener('auto', input.autoPort, AUTO_TUNNEL_GROUP),
+      ...input.slotPorts.map((port, index) => listener(`node-${index + 1}`, port, nodeSlotGroup(index)))
     ],
     rules: [`MATCH,${TUNNEL_GROUP}`]
   }
