@@ -961,4 +961,11 @@ export interface RelocateProgress {
 
 /** Values desktop Chrome itself reports for navigator.deviceMemory (147+: 2/4/8/16/32). */
 export type DeviceMemoryGb = 2 | 4 | 8 | 16 | 32
-export const DEVICE_MEMORY_CHOICES: readonly DeviceMemoryGb[] = [2, 4, 8, 16, 32]
+/**
+ * The memory a window can be given. Not 2 or 4 GB: Chrome on such a computer has a smaller JS heap
+ * limit (V8 sizes it from the RAM and reaches the full 4 GB at 8 GB), while the kernel reports this
+ * computer's, so performance.memory would not fit.
+ */
+export const DEVICE_MEMORY_CHOICES: readonly DeviceMemoryGb[] = [8, 16, 32]
+/** Windows saved with 2 or 4 GB before keep it until changed (the editor offers 8 GB). */
+export const SMALL_DEVICE_MEMORY: readonly DeviceMemoryGb[] = [2, 4]

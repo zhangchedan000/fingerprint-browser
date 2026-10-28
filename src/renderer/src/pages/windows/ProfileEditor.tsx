@@ -71,7 +71,7 @@ import type {
   ServerPlace,
   TunnelRoute
 } from '../../../../shared/types'
-import { DEVICE_MEMORY_CHOICES, type DeviceMemoryGb } from '../../../../shared/types'
+import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY, type DeviceMemoryGb } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { DeepCheck } from './DeepCheck'
@@ -1862,8 +1862,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           value={fp.deviceMemory ?? 8}
           onChange={(value: DeviceMemoryGb) => patchFingerprint({ deviceMemory: value })}
           onShuffle={() => patchFingerprint({ deviceMemory: pickOther(DEVICE_MEMORY_CHOICES, fp.deviceMemory ?? 8) })}
-          options={DEVICE_MEMORY_CHOICES.map((value) => ({ value, label: `${value} GB` }))}
+          // A window saved with 2 or 4 GB shows it, but they are no longer offered.
+          options={[...(fp.deviceMemory && SMALL_DEVICE_MEMORY.includes(fp.deviceMemory) ? [fp.deviceMemory] : []), ...DEVICE_MEMORY_CHOICES]
+            .map((value) => ({ value, label: `${value} GB` }))}
         />
+        {fp.deviceMemory && SMALL_DEVICE_MEMORY.includes(fp.deviceMemory) && (
+          <RowWarning fix={{ label: t("改为 8 GB"), apply: () => patchFingerprint({ deviceMemory: 8 }) }}>
+            {t("{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来", fp.deviceMemory)}
+          </RowWarning>
+        )}
       </Row>
       {kernelSpoofsScreen(windowKernelVersion) ? (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen

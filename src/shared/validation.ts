@@ -6,7 +6,7 @@ import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hard
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
-import { DEVICE_MEMORY_CHOICES } from './types'
+import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY } from './types'
 import type { FingerprintConfig, FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, TunnelRoute, WebRtcPolicy } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
@@ -111,7 +111,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
     hardwareConcurrency: ownValues('cores') ? rawFp.hardwareConcurrency ?? templated.hardwareConcurrency : templated.hardwareConcurrency,
     platformVersion: ownValues('platformVersion') ? rawFp.platformVersion ?? templated.platformVersion : templated.platformVersion
   }
-  if (rawFp.deviceMemory !== undefined && !DEVICE_MEMORY_CHOICES.includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4、8、16 或 32 GB')
+  if (rawFp.deviceMemory !== undefined && !DEVICE_MEMORY_CHOICES.includes(rawFp.deviceMemory) && !SMALL_DEVICE_MEMORY.includes(rawFp.deviceMemory)) throw new Error('设备内存只能是 2、4、8、16 或 32 GB')
   const cpu = rawFp.cpu ? findCpu(rawFp.cpu) : undefined
   if (rawFp.cpu && !cpu) throw new Error('不认识的 CPU 型号')
   // A CPU and a different core count would describe no real machine; the CPU wins.

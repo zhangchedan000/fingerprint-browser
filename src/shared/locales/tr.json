@@ -2493,5 +2493,7 @@
   "改成 {0}": "{0} olarak değiştir",
   "改成跟随系统语言": "Sistem dilini izle",
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Pencere açık: ad, grup, notlar vb. değiştirilebilir; proxy ve parmak izi ancak kapattıktan sonra",
-  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Pencere açık: bunlar başlatıldığı ayarlar; kapattıktan sonra değiştirilebilir. Ad, grup, notlar vb. «Temel» bölümünde değiştirilip kaydedilir"
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Pencere açık: bunlar başlatıldığı ayarlar; kapattıktan sonra değiştirilebilir. Ad, grup, notlar vb. «Temel» bölümünde değiştirilip kaydedilir",
+  "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "{0} GB RAM'li bir bilgisayarda Chrome'un JS bellek sınırı daha düşüktür; bu pencere 8 GB veya üzeri bir bilgisayarın değerini bildirir ve siteler bunu karşılaştırabilir",
+  "改为 8 GB": "8 GB yap"
 }

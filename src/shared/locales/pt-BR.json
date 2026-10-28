@@ -2493,5 +2493,7 @@
   "改成 {0}": "Mudar para {0}",
   "改成跟随系统语言": "Seguir o idioma do sistema",
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Janela aberta: nome, grupo, notas etc. podem ser alterados; proxy e impressão só depois de fechá-la",
-  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Janela aberta: são as configurações com que foi iniciada; altere depois de fechá-la. Nome, grupo, notas etc. se alteram e salvam em Básico"
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Janela aberta: são as configurações com que foi iniciada; altere depois de fechá-la. Nome, grupo, notas etc. se alteram e salvam em Básico",
+  "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "Num computador com {0} GB de RAM, o limite de memória JS do Chrome é menor; esta janela informa o valor de um computador com 8 GB ou mais, e os sites podem comparar",
+  "改为 8 GB": "Mudar para 8 GB"
 }

@@ -2493,5 +2493,7 @@
   "改成 {0}": "Đổi thành {0}",
   "改成跟随系统语言": "Theo ngôn ngữ hệ thống",
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Cửa sổ đang mở: có thể đổi tên, nhóm, ghi chú…; proxy và vân tay chỉ đổi được sau khi đóng",
-  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Cửa sổ đang mở: đây là cài đặt lúc khởi động, đổi được sau khi đóng. Tên, nhóm, ghi chú… đổi và lưu ở «Cài đặt cơ bản»"
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Cửa sổ đang mở: đây là cài đặt lúc khởi động, đổi được sau khi đóng. Tên, nhóm, ghi chú… đổi và lưu ở «Cài đặt cơ bản»",
+  "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "Trên máy tính có {0} GB RAM, giới hạn bộ nhớ JS của Chrome thấp hơn; cửa sổ này báo giá trị của máy 8 GB trở lên, trang web có thể so sánh được",
+  "改为 8 GB": "Đổi thành 8 GB"
 }

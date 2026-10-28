@@ -2493,5 +2493,7 @@
   "改成 {0}": "Passer à {0}",
   "改成跟随系统语言": "Suivre la langue du système",
   "窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改": "Fenêtre ouverte : nom, groupe, notes, etc. modifiables ; proxy et empreinte seulement après fermeture",
-  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Fenêtre ouverte : ce sont les réglages de son lancement, modifiables après fermeture. Nom, groupe, notes, etc. se modifient et s'enregistrent dans Général"
+  "窗口运行中：这里是窗口打开时用的设置，关闭窗口后才能修改；名称、分组、备注等在「基础设置」里可以直接改并保存": "Fenêtre ouverte : ce sont les réglages de son lancement, modifiables après fermeture. Nom, groupe, notes, etc. se modifient et s'enregistrent dans Général",
+  "{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来": "Sur un ordinateur avec {0} Go de RAM, la limite mémoire JS de Chrome est plus basse ; cette fenêtre indique la valeur d'un ordinateur de 8 Go ou plus, ce que les sites peuvent comparer",
+  "改为 8 GB": "Passer à 8 Go"
 }
