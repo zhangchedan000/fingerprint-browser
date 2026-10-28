@@ -44,7 +44,7 @@ import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS } from '../../../../shar
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey } from '../../../../shared/fingerprint-check-key'
 import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, localeForCountry } from '../../../../shared/network-identity'
-import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
+import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsReportedZone, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
 import { PLATFORMS } from '../../../../shared/platforms'
@@ -481,7 +481,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
   // The exit country the proxy was last seen in, against the country picked by hand.
-  const exitCountry = (proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck)?.countryCode
+  const lastCheck = proxyResult?.ok ? proxyResult : libraryProxy?.check ?? profile?.proxyCheck
+  const exitCountry = lastCheck?.countryCode
   const regionMismatch = !followIp && fp.region && exitCountry && proxyProtocol !== 'direct' && exitCountry.toUpperCase() !== fp.region
     ? { ip: exitCountry.toUpperCase(), window: fp.region }
     : undefined
@@ -784,14 +785,34 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
 
   /**
-   * A proxy checked while creating a window sets it to 基于 IP 生成: country, time zone, languages,
-   * location, and with the system language following them, fonts, voices and device names.
+   * A proxy checked while creating a window fills in its country, time zone and languages from that
+   * IP and keeps them (the system language follows, and with it fonts, voices and device names):
+   * a later IP, often another one for API and rotating proxies, does not change the window.
    * An existing window keeps its settings; a mismatch with the IP is only pointed out (regionMismatch).
    */
   function followCheckedIp(result: ProxyTestResult | null, run: number): void {
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
-    if (result?.ok && !profile) patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })
+    if (!profile) fixToIp(result)
+  }
+
+  /** Fills in the country, time zone and languages of a checked IP and keeps them (they are not re-read at launch). */
+  function fixToIp(result: ProxyTestResult | null | undefined): void {
+    if (!result?.ok || result.geoConfidence === 'conflict' || !result.countryCode) return
+    const region = regions.find((entry) => entry.code === result.countryCode!.toUpperCase())
+    if (!region) return
+    const current = form.getFieldValue('fingerprint') as FingerprintConfig
+    const zone = result.timezone
+      ? (current.platform === 'windows' ? windowsReportedZone(result.timezone, region.code) : result.timezone)
+      : undefined
+    patchFingerprint({
+      networkIdentityMode: 'manual',
+      region: region.code,
+      language: region.locale.language,
+      acceptLanguages: region.locale.acceptLanguages,
+      uiLocale: undefined,
+      timezone: zone ?? region.zone
+    })
   }
 
   /** API 提取 typed into the window: only the link; the proxy comes from it when saved and at every launch. */
@@ -1207,7 +1228,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           className="fb-editor-alert"
           title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
           description={t("已经创建的窗口不会自动改国家、时区和语言；要和 IP 一致就点右边的按钮，或换一个那个国家的代理。")}
-          action={<Button size="small" onClick={() => patchFingerprint({ networkIdentityMode: 'proxy', uiLocale: undefined })}>{t("改成和 IP 一致")}</Button>}
+          action={<Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button>}
         />
       )}
       <Row label={t("时区和语言")}>
@@ -1365,8 +1386,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           showIcon
           className="fb-editor-alert"
           title={t("代理 IP 在{0}，窗口地区是{1}", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
-          description={t("时区、语言和 IP 所在国家不一致，网站可能发现。可以改成基于 IP 生成，或换一个那个国家的代理。")}
-          action={<Button size="small" onClick={() => patchFingerprint({ networkIdentityMode: 'proxy' })}>{t("基于 IP 生成")}</Button>}
+          description={t("时区、语言和 IP 所在国家不一致，网站可能发现。可以点右边的按钮改成和 IP 一致（改完固定，不会随 IP 再变），或换一个那个国家的代理。")}
+          action={<Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button>}
         />
       )}
       <Row label={t("时区")} check={checkFor('timezone')} hint={t("这台 Windows 的系统时区，网页里的时间按它显示")}>
