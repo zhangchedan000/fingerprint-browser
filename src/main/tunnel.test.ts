@@ -227,3 +227,29 @@ describe.skipIf(!core)('tunnel core (mihomo)', () => {
     expect((await tunnel.status()).selected).toBe('Edited · fast')
   }, 60_000)
 })
+
+describe('node sources travel with a window', () => {
+  it('gives the source of a fixed node, all for auto, and adds missing ones by name elsewhere', async () => {
+    const roots = [await mkdtemp(join(tmpdir(), 'fb-tunnel-a-')), await mkdtemp(join(tmpdir(), 'fb-tunnel-b-'))]
+    try {
+      const a = new TunnelManager(roots[0], identitySecretCodec, '/nonexistent/mihomo')
+      await a.initialize()
+      await a.addSource({ name: 'US', kind: 'links', content: 'proxies:\n  - {name: v, type: socks5, server: 127.0.0.1, port: 1080}\n' })
+      await a.addSource({ name: 'JP', kind: 'subscription', content: 'https://sub.example.com/token' })
+      expect(a.sourcesFor({ enabled: true, mode: 'manual', node: 'US · v' }).map((source) => source.name)).toEqual(['US'])
+      expect(a.sourcesFor({ enabled: true, mode: 'auto' }).map((source) => source.name)).toEqual(['US', 'JP'])
+      expect(a.sourcesFor({ enabled: false, mode: 'auto' })).toEqual([])
+
+      const b = new TunnelManager(roots[1], identitySecretCodec, '/nonexistent/mihomo')
+      await b.initialize()
+      await b.addSource({ name: 'JP', kind: 'links', content: 'proxies:\n  - {name: own, type: socks5, server: 127.0.0.1, port: 1081}\n' })
+      await b.adoptSources([...a.sourcesFor({ enabled: true, mode: 'auto' }), { name: 'bad', kind: 'links', content: '' }])
+      const status = await b.status()
+      expect(status.sources.map((source) => source.name)).toEqual(['JP', 'US'])
+      // B's own JP stays as it was.
+      expect(b.source(status.sources[0].id).content).toContain('own')
+    } finally {
+      await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
+    }
+  })
+})

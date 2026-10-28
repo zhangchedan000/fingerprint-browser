@@ -20,6 +20,13 @@ interface Logger {
   error(message: string, detail?: unknown): void
 }
 
+/** A node source as it travels with a window (no id: the other computer gives its own). */
+export interface PortableTunnelSource {
+  name: string
+  kind: TunnelSource['kind']
+  content: string
+}
+
 interface StoredTunnel {
   schemaVersion: 1
   enabled: boolean
@@ -200,6 +207,51 @@ export class TunnelManager {
       await this.save(previous)
       await this.restart().catch(() => undefined)
       throw error
+    }
+  }
+
+  /**
+   * The node sources a window's 网络加速 uses, to go with it to another computer: the one holding
+   * its fixed node, or all of them for 自动. Secrets included (the user's own cloud).
+   */
+  sourcesFor(route: Pick<TunnelRoute, 'enabled' | 'mode' | 'node'> | undefined): PortableTunnelSource[] {
+    if (!route?.enabled) return []
+    const used = route.mode === 'manual' && route.node
+      ? this.stored.sources.filter((source) => route.node!.startsWith(`${source.name} · `))
+      : this.stored.sources
+    return used.map((source) => ({ name: source.name, kind: source.kind, content: this.codec.decode(source.content) }))
+  }
+
+  /** Node sources that came with a window from another computer: added when this one has none of that name. */
+  async adoptSources(input: unknown): Promise<void> {
+    if (!Array.isArray(input) || !input.length) return
+    const known = new Set(this.stored.sources.map((source) => source.name))
+    const added: TunnelSource[] = []
+    for (const item of input) {
+      let source: ReturnType<typeof validateTunnelSource>
+      try { source = validateTunnelSource(item as Record<string, unknown>) } catch { continue }
+      if (known.has(source.name)) continue
+      known.add(source.name)
+      added.push({ id: randomUUID().slice(0, 8), ...source, content: this.codec.encode(source.content), updatedAt: new Date().toISOString() })
+    }
+    if (!added.length) return
+    this.logger?.info('从云端窗口带来的加速节点已添加', { sources: added.map((source) => source.name) })
+    await this.replaceSources({ ...this.stored, sources: [...this.stored.sources, ...added] })
+    await this.notify()
+  }
+
+  /** A window going through 网络加速 opens with it running (started here when it is off). */
+  async ensureRunning(route: TunnelRoute): Promise<void> {
+    if (!this.stored.enabled) {
+      if (!this.stored.sources.length) throw new Error('这个窗口要走网络加速，但这台电脑还没有加速节点；请到 设置 → 网络加速 添加')
+      this.logger?.info('窗口要走网络加速，自动开启')
+      await this.setEnabled(true)
+    }
+    if (route.mode === 'manual' && route.node) {
+      const status = await this.status()
+      if (status.state === 'running' && !status.nodes.some((node) => node.name === route.node)) {
+        throw new Error(`这个窗口固定用的加速节点「${route.node}」不在这台电脑的 设置 → 网络加速 里`)
+      }
     }
   }
 

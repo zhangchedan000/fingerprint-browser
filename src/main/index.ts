@@ -24,7 +24,8 @@ import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
-import { registerLanguageFontsIpc } from './language-fonts'
+import { fontPackStatus, installFontPack, registerLanguageFontsIpc } from './language-fonts'
+import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
 
@@ -189,6 +190,19 @@ app.whenReady().then(async () => {
     (version) => profiles.kernelUsers(version),
     (input, init) => net.fetch(input as string, init)
   )
+  // A window from another computer opens here as it is: its kernel, 网络加速 and font pack are fetched.
+  launcher.setPrerequisites({
+    installKernel: async (version) => { await kernels.install(version) },
+    ensureTunnel: (route) => activeTunnel.ensureRunning(route),
+    ensureFonts: async (uiLocale) => {
+      const script = windowsFontScript(uiLocale)
+      const status = await fontPackStatus()
+      if (!script || !status.supported || !status.missing.includes(script)) return
+      logger?.info('窗口的系统语言缺字体包，自动下载', { script })
+      await installFontPack(script, (input, init) => net.fetch(input as string, init),
+        (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined)
+    }
+  })
   // Windows keep the kernel they were created with; changing the default only affects new ones.
   profiles.setDefaultKernelResolver(() => defaultKernelId(settings, vaultPath))
   try {
@@ -204,6 +218,9 @@ app.whenReady().then(async () => {
     mainWindow?.webContents.send('team:sync', event)
   }, logger)
   team = activeTeam
+  // A window's 网络加速 nodes go to the cloud with it, and come along to other computers.
+  activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
+  activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)
   activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))
   await activeTeam.initialize()
   launcher.setLaunchHooks(activeTeam)

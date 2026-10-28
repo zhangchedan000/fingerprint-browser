@@ -19,7 +19,8 @@ import type {
   TeamSyncEvent,
   TeamUser
 } from '../../shared/team'
-import type { BrowserProfile, ProfileDraft } from '../../shared/types'
+import type { BrowserProfile, ProfileDraft, TunnelRoute } from '../../shared/types'
+import type { PortableTunnelSource } from '../tunnel-manager'
 import { validateProfileDraft } from '../../shared/validation'
 import type { Logger } from '../app-logger'
 import type { CookieManager } from '../cookie-manager'
@@ -27,7 +28,8 @@ import type { ProfileStore } from '../profile-store'
 import { portableDraft } from '../profile-portable'
 import type { SecretCodec } from '../secret-codec'
 import { normalizeServer, TeamApi, TeamApiError, type Fetch, type RemoteProfile } from './team-api'
-import { packProfileState, sha256File, unpackProfileState } from './team-archive'
+import { packProfileState, sha256File, unpackProfileState, type PasswordTransfer } from './team-archive'
+import { windowsKeyProtector, type KeyProtector } from './saved-passwords'
 
 interface TeamLink {
   teamId: string
@@ -110,6 +112,61 @@ export class TeamManager {
   private readonly pushes = new Map<string, Promise<void>>()
   private readonly locked = new Set<string>()
 
+  /** The 网络加速 node sources a window uses (set by the app), so they go to the cloud with it. */
+  tunnelSources?: (route: TunnelRoute | undefined) => PortableTunnelSource[]
+  /** Adds node sources that came with a cloud window and are missing here. */
+  adoptTunnelSources?: (sources: unknown) => Promise<void>
+
+  /**
+   * A window's cloud config, with what makes it work the same on another computer: the node
+   * sources of its 网络加速 and, for API 提取, the proxy it is on and its IP history.
+   */
+  private cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string } } {
+    const sources = this.tunnelSources?.(profile.tunnel) ?? []
+    return {
+      ...cloudConfig(profile),
+      ...(sources.length ? { tunnelSources: sources } : {}),
+      ...(profile.apiProxy ? {
+        apiState: {
+          ...(profile.apiProxy.endpoint ? { endpoint: { ...profile.apiProxy.endpoint, password: profile.proxy.password } } : {}),
+          ...(profile.apiProxy.history ? { history: profile.apiProxy.history } : {}),
+          ...(profile.proxyCheck ? { check: profile.proxyCheck } : {})
+        }
+      } : {})
+    }
+  }
+
+  /** Locks Chrome's password key for this computer's user (Windows); tests set their own. */
+  keyProtector: KeyProtector | undefined = windowsKeyProtector
+
+  private passwordTransfer(id: string): PasswordTransfer {
+    return {
+      protector: this.keyProtector,
+      onError: (error) => this.logger?.error('保存的密码没有随登录态同步', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** What came with a cloud config beside the window itself (cloudConfig): nodes and the API proxy. */
+  private async applyCloudExtras(id: string, config: unknown): Promise<void> {
+    const extras = (config && typeof config === 'object' ? config : {}) as { tunnelSources?: unknown; apiState?: unknown }
+    try {
+      await this.adoptTunnelSources?.(extras.tunnelSources)
+      if (extras.apiState) await this.profiles.restoreApiState(id, extras.apiState)
+    } catch (error) {
+      this.logger?.error('云端窗口的加速节点或 API 代理没有带过来', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** Windows this version wrote values into on first start: their cloud copies get the same values. */
+  private async pushRewritten(): Promise<void> {
+    for (const id of this.profiles.takeRewrittenOnLoad()) {
+      if (!this.file.links[id]) continue
+      await this.afterLocalEdit(id).catch((error) => {
+        this.logger?.error('固定后的窗口配置没有同步到云端', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+  }
+
   constructor(
     private readonly vaultPath: string,
     private readonly profiles: ProfileStore,
@@ -169,6 +226,7 @@ export class TeamManager {
       this.file.token = this.secrets.encode(api.token)
       await this.save()
       this.scheduleSync()
+      void this.pushRewritten()
     } catch (error) {
       // Unreachable: keep the token so "retry" can try again; rejected (expired, disabled): sign out.
       this.user = undefined
@@ -448,7 +506,7 @@ export class TeamManager {
   private async packLocal(id: string): Promise<{ file: string; size: number; sha256: string }> {
     await mkdir(this.workPath, { recursive: true })
     const cookies = await this.cookies.exportCookies(id)
-    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`))
+    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`), this.passwordTransfer(id))
   }
 
   /** Puts a window of this computer into the cloud: its config and current login state. */
@@ -462,7 +520,7 @@ export class TeamManager {
         note: profile.note,
         source_id: id,
         owner: this.user!.id,
-        config: cloudConfig(profile)
+        config: this.cloudConfig(profile)
       }, { ...packed, rev: 1 })
       this.file.links[id] = { teamId: record.id, dataRev: record.data_rev, configRev: record.config_rev, ownerId: this.user!.id }
       await this.save()
@@ -581,6 +639,7 @@ export class TeamManager {
     if (existing) return existing
     const record = known ?? await this.requireApi().getProfile(teamId)
     const created = await this.profiles.create(configDraft(record.config, record.name))
+    await this.applyCloudExtras(created.id, record.config)
     this.file.links[created.id] = { teamId, dataRev: 0, configRev: record.config_rev, ownerId: record.owner }
     for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {
       if (link.teamId === teamId) delete this.file.removed![profileId]
@@ -602,7 +661,7 @@ export class TeamManager {
       const record = await this.api.saveProfile(link.teamId, {
         name: profile.name,
         note: profile.note,
-        config: cloudConfig(profile)
+        config: this.cloudConfig(profile)
       })
       link.configRev = record.config_rev
       await this.save()
@@ -649,6 +708,7 @@ export class TeamManager {
         const current = this.profiles.get(id)
         const draft = configDraft(record.config, record.name)
         await this.profiles.update(id, { ...draft, extensionIds: current.extensionIds })
+        await this.applyCloudExtras(id, record.config)
         link.configRev = record.config_rev
       }
       if (record.data_rev > link.dataRev && record.data) {
@@ -659,7 +719,7 @@ export class TeamManager {
           await api.downloadData(record, archive)
           const expected = (record as RemoteProfile & { data_sha256?: string }).data_sha256
           if (expected && await sha256File(archive) !== expected) throw new Error('下载的登录态校验失败，请重试')
-          const cookies = await unpackProfileState(archive, this.profiles.profileDataPath(id))
+          const cookies = await unpackProfileState(archive, this.profiles.profileDataPath(id), this.passwordTransfer(id))
           await this.cookies.importCookies(id, cookies, { replace: true })
           link.dataRev = record.data_rev
           this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: record.data_rev, cookies: cookies.length })
@@ -714,8 +774,11 @@ export class TeamManager {
     this.onSync({ profileId: id, phase: 'pushing' })
     const packed = await this.packLocal(id)
     try {
-      const record = await api.saveProfile(link.teamId, {}, { ...packed, rev: link.dataRev + 1 })
+      // The config goes up too (an API window may be on a new proxy now), when this account may change it.
+      const fields = this.isReadOnly(link) ? {} : { config: this.cloudConfig(this.profiles.get(id)) }
+      const record = await api.saveProfile(link.teamId, fields, { ...packed, rev: link.dataRev + 1 })
       link.dataRev = record.data_rev
+      if (!this.isReadOnly(link)) link.configRev = record.config_rev
       link.pendingUpload = false
       await this.save()
       this.logger?.info('团队窗口登录态已上传', { profileId: id, rev: record.data_rev, bytes: packed.size })

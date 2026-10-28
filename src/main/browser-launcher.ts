@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserCrashRecord, BrowserProfile, FingerprintConfig, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
+import type { BrowserCrashRecord, BrowserProfile, FingerprintConfig, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult, TunnelRoute } from '../shared/types'
 import { locateBrowserForProfile } from './browser-locator'
 import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
@@ -20,7 +20,7 @@ import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-prof
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, testProxy } from './proxy-tester'
-import { fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
@@ -87,6 +87,22 @@ function closeCapture(file: WriteStream | undefined): Promise<void> {
 }
 
 /** Work around a window's run that lives outside the launcher (team windows: lock and sync). */
+/**
+ * What a window needs on this computer before it opens, fetched instead of failing: a window
+ * that came from another computer (or the cloud) may use a kernel, 网络加速 or a language font
+ * pack this one does not have yet.
+ */
+const WHITELIST_HINT = '。如果代理或 API 是按 IP 白名单授权的，换电脑后要把这台电脑的公网 IP 加进服务商白名单（开着网络加速时，是加速节点的 IP）'
+
+export interface LaunchPrerequisites {
+  /** Downloads and installs this kernel version. */
+  installKernel(version: string): Promise<void>
+  /** Starts 网络加速 when the window goes through it (and makes sure its node is there). */
+  ensureTunnel(route: TunnelRoute): Promise<void>
+  /** Installs the Windows language font pack the window's system language needs, when missing. */
+  ensureFonts(uiLocale: string): Promise<void>
+}
+
 export interface LaunchHooks {
   /** Before the browser starts, while the window is still closed. Throwing cancels the launch. */
   beforeLaunch(id: string): Promise<void>
@@ -130,6 +146,12 @@ export class BrowserLauncher {
 
   setLaunchHooks(hooks: LaunchHooks): void {
     this.hooks = hooks
+  }
+
+  private prerequisites?: LaunchPrerequisites
+
+  setPrerequisites(prerequisites: LaunchPrerequisites): void {
+    this.prerequisites = prerequisites
   }
 
   /** Provides the primary display size for windows whose resolution follows the computer. */
@@ -253,11 +275,28 @@ export class BrowserLauncher {
     let profile = this.profiles.get(id)
     // Never fall back to the real network when the chosen proxy is gone.
     if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
-    const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    let engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    if (!engine.executable && profile.kernelVersion && this.prerequisites) {
+      // A window made on another computer keeps its kernel: fetched here instead of changed.
+      this.logger?.info('窗口的内核不在这台电脑上，自动下载', { profileId: id, kernel: profile.kernelVersion })
+      try {
+        await this.prerequisites.installKernel(profile.kernelVersion)
+      } catch (error) {
+        throw new Error(`环境绑定的内核 ${profile.kernelVersion} 不在这台电脑上，自动下载失败：${error instanceof Error ? error.message : String(error)}`)
+      }
+      engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    }
     if (!engine.executable) {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
+    }
+    if (profile.proxy.tunnel?.enabled && this.prerequisites) await this.prerequisites.ensureTunnel(profile.proxy.tunnel)
+    if (this.prerequisites && profile.fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
+      // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
+      await this.prerequisites.ensureFonts(effectiveNetworkIdentity(profile.fingerprint).uiLocale).catch((error) => {
+        this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      })
     }
     if (profile.apiProxy) {
       // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
@@ -950,10 +989,11 @@ export class BrowserLauncher {
   private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const region = profile.fingerprint.region?.toUpperCase()
     const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, { region: allowGeoConflict ? undefined : region, attempts: 3 })
+      .catch((error: unknown) => { throw new Error(`${error instanceof Error ? error.message : String(error)}${WHITELIST_HINT}`) })
     this.onChanged(outcome.profile)
     const { check } = outcome
     this.logger?.info('API 提取的代理', { profileId: profile.id, ip: check.ip, country: check.countryCode, newProxies: outcome.fetched })
-    if (!check.ok) throw new Error(proxyLaunchError(check, 'warn') ?? '代理不可用')
+    if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
     if (outcome.mismatch) {
       const where = check.geoConfidence === 'conflict'
         ? `链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}）`
@@ -972,7 +1012,8 @@ export class BrowserLauncher {
     const updated = await this.profiles.setProxyCheck(profile.id, { ...result, checkedAt: new Date().toISOString() })
     this.onChanged(updated)
     const error = proxyLaunchError(updated.proxyCheck!, updated.fingerprint.proxyExitPolicy)
-    if (error) throw new Error(error)
+    // A proxy authorised by IP refuses another computer until its IP is added (common after a cloud restore).
+    if (error) throw new Error(updated.proxyCheck?.ok ? error : `${error}${WHITELIST_HINT}`)
     if (updated.fingerprint.networkIdentityMode === 'proxy' && updated.proxyCheck?.geoConfidence === 'conflict' && !allowGeoConflict) {
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${updated.proxyCheck.geoConflict ?? 'GeoIP 数据源对代理地区判断不一致'}；继续使用可能导致 IP 地区与时区、语言或地理位置不一致，影响指纹效果。是否仍要启动？`)
     }

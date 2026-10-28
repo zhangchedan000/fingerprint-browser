@@ -228,13 +228,46 @@ export class ProfileStore {
    * of its last check, and the languages that followed are written in (savedFingerprint).
    */
   private fixSavedFingerprints(): void {
+    this.rewrittenOnLoad.clear()
     for (const [id, stored] of this.profiles) {
       const fingerprint = savedFingerprint(stored.fingerprint, this.resolve(stored).proxyCheck, {
         gpuModel: effectiveGpu(stored.fingerprint, stored.kernelVersion)?.model,
         legacy: true
       })
-      if (JSON.stringify(fingerprint) !== JSON.stringify(stored.fingerprint)) this.profiles.set(id, { ...stored, fingerprint })
+      if (JSON.stringify(fingerprint) !== JSON.stringify(stored.fingerprint)) {
+        this.profiles.set(id, { ...stored, fingerprint })
+        this.rewrittenOnLoad.add(id)
+      }
     }
+  }
+
+  private readonly rewrittenOnLoad = new Set<string>()
+
+  /** Windows whose values were written in when this version first opened them (their cloud copy is updated once). */
+  takeRewrittenOnLoad(): string[] {
+    const ids = [...this.rewrittenOnLoad]
+    this.rewrittenOnLoad.clear()
+    return ids
+  }
+
+  /**
+   * An API window's proxy as another computer left it (cloud): the same proxy and IP history, so
+   * it opens on the same IP. Only for the same link.
+   */
+  async restoreApiState(id: string, input: unknown): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; check?: unknown } | undefined
+    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history })
+    if (!current.apiProxy || !api) return this.resolve(current)
+    const check = safeProxyCheck(state?.check)
+    const password = typeof state?.endpoint?.password === 'string' ? state.endpoint.password : ''
+    if (api.endpoint && password) this.apiPasswords.set(id, password)
+    else if (api.endpoint) this.apiPasswords.delete(id)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, ...api } }
+    if (check) profile.directCheck = check
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
   }
 
   storageHealth(): ProfileStoreHealth {
