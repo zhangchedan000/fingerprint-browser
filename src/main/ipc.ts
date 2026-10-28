@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyConfig, ProxyDraft } from '../shared/types'
+import type { AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
@@ -19,7 +19,8 @@ import { testProxy } from './proxy-tester'
 import { localProxyFor } from './proxy-bridge'
 import { proxySupportsUdp } from './webrtc-relay'
 import { validateProfileDraft, validateProxyConfig, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
-import { resolveApiProxy } from './api-proxy'
+import { apiProxyFor } from './api-window'
+import { resolveApiProxy, type ApiProxyEndpoint } from './api-proxy'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
 import { clearProfileCache, profileStorageInfo, storageOverview } from './profile-data'
@@ -53,13 +54,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
-    const profile = publicProfile(await profiles.create(draft))
+    const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id))
     team.scheduleSync()
     return profile
   })
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
-    const profile = publicProfile(await profiles.update(id, draft))
+    await profiles.update(id, draft)
+    const profile = publicProfile(await adoptDraftApiProxy(id))
     await team.afterLocalEdit(id)
     return profile
   })
@@ -485,10 +487,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     for (const profile of changed) await team.afterLocalEdit(profile.id)
     return changed.map(publicProfile)
   })
-  ipcMain.handle('profiles:test-proxy', async (_event, id: string) => {
-    const apiWindow = profiles.get(id)
-    // API 提取: check a fresh proxy from the link, as a launch would get.
-    if (apiWindow.apiProxy) await profiles.setWindowApiEndpoint(id, await resolveApiProxy(apiWindow.apiProxy.url, apiWindow.proxy.tunnel))
+  ipcMain.handle('profiles:test-proxy', async (_event, id: string, refresh?: boolean) => {
+    // API 提取: the proxy the window has while it works (a new one when it does not, or on 换一个 IP).
+    if (profiles.get(id).apiProxy) return publicProfile((await apiProxyFor(profiles, id, (config) => testProxy(config), { refresh: refresh === true })).profile)
     const testedProfile = profiles.get(id)
     const result = await testProxy(testedProfile.proxy)
     const current = profiles.get(id)
@@ -620,6 +621,21 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return kernels.verify(version)
   })
   /** An API proxy draft with the proxy its API gives now filled in (others as they are). */
+  /**
+   * The proxy a link gave when it was checked in the editor (a new window, or a new link): the window
+   * gets it when saved, so it starts on the IP that was checked instead of taking another one.
+   */
+  const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; check: ProxyCheckSummary; at: number }>()
+  async function adoptDraftApiProxy(id: string): Promise<BrowserProfile> {
+    const profile = profiles.get(id)
+    const url = profile.apiProxy && !profile.apiProxy.endpoint ? profile.apiProxy.url : undefined
+    const kept = url ? draftApiProxies.get(url) : undefined
+    if (!url || !kept) return profile
+    draftApiProxies.delete(url)
+    if (Date.now() - kept.at > 30 * 60_000) return profile
+    await profiles.setWindowApiEndpoint(id, kept.endpoint)
+    return profiles.setProxyCheck(id, kept.check)
+  }
   const resolveDraft = async <T extends ProxyDraft | ProxyConfig>(draft: T): Promise<T> => {
     if (!draft || typeof draft !== 'object' || !draft.apiUrl) return draft
     const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl), draft.tunnel)
@@ -631,6 +647,13 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
     const proxy = proxyForTest(validated, saved)
     const result = await testProxy(proxy)
+    if (config.apiUrl && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
+      draftApiProxies.set(validProxyApiUrl(config.apiUrl), {
+        endpoint: { protocol: config.protocol, host: config.host, port: config.port, username: config.username, password: config.password },
+        check: { ...result, checkedAt: new Date().toISOString() },
+        at: Date.now()
+      })
+    }
     // WebRTC through the proxy needs UDP; only a proxy reached directly can carry it (webrtc-relay.ts).
     if (result.ok && proxy.protocol === 'socks5' && !await localProxyFor(proxy).catch(() => undefined)) {
       return { ...result, udp: await proxySupportsUdp(proxy) }

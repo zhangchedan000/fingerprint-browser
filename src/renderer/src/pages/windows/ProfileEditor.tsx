@@ -372,6 +372,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // check started) is dropped instead of showing up, or keeping the button spinning.
   const proxyCheckRun = useRef(0)
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
+  // An API window as its last check left it (its current proxy and IP history).
+  const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
@@ -399,6 +401,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
   const route = proxyProtocol === 'https' && !libraryProxy?.apiUrl ? { ...shownRoute, enabled: false } : shownRoute
   const proxyPassword = Form.useWatch(['proxy', 'password'], { form, preserve: true }) ?? ''
+  const apiUrlTyped = String(Form.useWatch(['proxy', 'apiUrl'], { form, preserve: true }) ?? '').trim()
   const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], { form, preserve: true }) === true
   const accountPassword = Form.useWatch(['account', 'password'], { form, preserve: true }) ?? ''
   const accountPasswordStored = Form.useWatch(['account', 'passwordStored'], { form, preserve: true }) === true
@@ -426,6 +429,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     proxyCheckRun.current += 1
     setTestingProxy(false)
     setProxyResult(null)
+    setApiView(profile)
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
@@ -875,7 +879,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return { protocol: 'http', host: '', username: '', password: '', apiUrl: String(form.getFieldValue(['proxy', 'apiUrl']) ?? '').trim(), tunnel: route }
   }
 
-  async function testCurrentProxy(fill = false): Promise<void> {
+  /** The window's saved API link, unchanged in the form: its kept proxy is the one to check. */
+  function savedApiLink(): boolean {
+    return Boolean(profile?.apiProxy && String(form.getFieldValue(['proxy', 'apiUrl']) ?? '').trim() === profile.apiProxy.url)
+  }
+
+  async function testCurrentProxy(fill = false, refresh = false): Promise<void> {
     const run = ++proxyCheckRun.current
     try {
       if (proxyMode === 'library') {
@@ -890,6 +899,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         await form.validateFields([['proxy', 'apiUrl']])
         setTestingProxy(true)
         setProxyResult(null)
+        if (savedApiLink()) {
+          // Its current proxy while it works (a new one when it does not, or on 换一个 IP); saved with its history.
+          const view = await window.browserApi.profiles.testProxy(profile!.id, refresh)
+          if (run === proxyCheckRun.current) setApiView(view)
+          followCheckedIp(view.proxyCheck ?? null, run, fill)
+          return
+        }
+        // A new window or a new link: the proxy taken now is the one the window starts on once saved.
         followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id), run, fill)
         return
       }
@@ -1127,7 +1144,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("代理方式")}
         hint={proxyMode === 'api'
-          ? t("链接只保存在这个窗口里，不进代理库；每次打开窗口都从链接取一个新代理，自动识别 SOCKS5 或 HTTP，并记下用过的 IP")
+          ? t("链接只保存在这个窗口里，不进代理库；取到的代理一直用到不能用了才取新的，自动识别 SOCKS5 或 HTTP，并记下用过的 IP")
           : proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
       >
         <Radio.Group
@@ -1189,17 +1206,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           </Row>
           <FieldError name={['proxy', 'apiUrl']} />
-          {profile?.apiProxy?.history?.length ? (
-            <Row label={t("IP 使用记录")} hint={t("每次打开窗口从链接取到的 IP，最近的在上面")}>
+          {apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url && (
+            <Row label={t("当前 IP")} hint={t("窗口一直用这个代理，直到它不能用了才从链接取新的；点「换一个 IP」可以手动换")}>
+              <span className="fb-api-current">
+                <span className="fb-mono">{apiView.proxyCheck?.ok && apiView.proxyCheck.ip ? apiView.proxyCheck.ip : t("未检测")}</span>
+                {apiView.proxyCheck?.ok && <span className="fb-muted">{[apiView.proxyCheck.countryCode, apiView.proxyCheck.city].filter(Boolean).join(' ')}</span>}
+                <span className="fb-muted fb-mono">{apiView.apiProxy.endpoint.protocol.toUpperCase()} {apiView.apiProxy.endpoint.host}:{apiView.apiProxy.endpoint.port}</span>
+                {apiView.apiProxy.endpoint.fetchedAt && <span className="fb-muted">{t("取于 {0}", relativeTime(apiView.apiProxy.endpoint.fetchedAt, getLocale(), ''))}</span>}
+              </span>
+            </Row>
+          )}
+          {apiView?.apiProxy?.history?.length ? (
+            <Row label={t("IP 使用记录")} hint={t("这个窗口从链接取到过的 IP，最近的在上面")}>
               <div className="fb-ip-history">
-                {profile.apiProxy.history.slice(0, 10).map((entry) => (
+                {apiView.apiProxy.history.slice(0, 10).map((entry) => (
                   <div key={`${entry.at}-${entry.ip}`}>
                     <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')}</span>
                     <span className="fb-mono">{entry.ip}{entry.port ? `:${entry.port}` : ''}</span>
                     <span className="fb-muted">{[entry.countryCode, entry.city].filter(Boolean).join(' ')}</span>
                   </div>
                 ))}
-                {profile.apiProxy.history.length > 10 && <span className="fb-muted">{t("共 {0} 条，只显示最近 10 条", profile.apiProxy.history.length)}</span>}
+                {apiView.apiProxy.history.length > 10 && <span className="fb-muted">{t("共 {0} 条，只显示最近 10 条", apiView.apiProxy.history.length)}</span>}
               </div>
             </Row>
           ) : null}
@@ -1268,6 +1295,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row label="">
         <div className="fb-proxy-test">
           <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>
+          {proxyMode === 'api' && apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url && (
+            <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
+              <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
+            </Tooltip>
+          )}
           {proxyResult?.ok && (
             <span className={`fb-proxy-result ${proxyResult.geoConfidence === 'conflict' ? 'warn' : 'ok'}`}>
               {t("连接正常")} · {proxyResult.ip} · {[proxyResult.country, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
@@ -1306,15 +1338,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </span>
         <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
       </Row>
-      <Row label={t("出口变化时")} hint={t("代理出口 IP 与上次检测不同时的处理方式")}>
-        <Radio.Group
-          size="small"
-          optionType="button"
-          value={fp.proxyExitPolicy}
-          onChange={(event) => patchFingerprint({ proxyExitPolicy: event.target.value })}
-          options={[{ value: 'block', label: t("阻止启动并确认（推荐）") }, { value: 'warn', label: t("仅告警，继续启动") }]}
-        />
-      </Row>
+      {/* An API window takes a new proxy when its own stops working: an exit change is expected there. */}
+      {proxyMode !== 'api' && (
+        <Row label={t("出口变化时")} hint={t("代理出口 IP 与上次检测不同时的处理方式")}>
+          <Radio.Group
+            size="small"
+            optionType="button"
+            value={fp.proxyExitPolicy}
+            onChange={(event) => patchFingerprint({ proxyExitPolicy: event.target.value })}
+            options={[{ value: 'block', label: t("阻止启动并确认（推荐）") }, { value: 'warn', label: t("仅告警，继续启动") }]}
+          />
+        </Row>
+      )}
     </div>
   )
 

@@ -505,6 +505,7 @@ body.fb-col-resizing * { cursor: col-resize !important; }
 .fb-region-source.is-ip { color: var(--fb-accent-text); background: var(--fb-accent-soft); }
 .fb-ip-history { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .fb-ip-history > div { display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.fb-api-current { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 13px; }
 th.fb-col-movable { cursor: grab; }
 th.fb-col-movable:active { cursor: grabbing; }
 th.fb-col-drop-before { box-shadow: inset 3px 0 0 var(--fb-accent); }

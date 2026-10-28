@@ -9,6 +9,7 @@ import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
 import { resolveApiProxy } from './api-proxy'
+import { apiProxyFor } from './api-window'
 import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
@@ -258,15 +259,19 @@ export class BrowserLauncher {
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
-    if (profile.proxy.apiUrl) {
-      // API 提取: a fresh proxy from the provider for this launch.
-      const endpoint = await resolveApiProxy(profile.proxy.apiUrl, profile.proxy.tunnel)
-      profile = profile.apiProxy
-        ? await this.profiles.setWindowApiEndpoint(id, endpoint)
-        : (await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint), this.profiles.get(id))
-      this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
+    if (profile.apiProxy) {
+      // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
+      profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true)
+    } else {
+      if (profile.proxy.apiUrl) {
+        // A library proxy with an API link (from before they moved into the windows): a fresh proxy.
+        const endpoint = await resolveApiProxy(profile.proxy.apiUrl, profile.proxy.tunnel)
+        await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint)
+        profile = this.profiles.get(id)
+        this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
+      }
+      if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     }
-    if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     profile = await this.lockOnLaunch(profile, options.allowGeoConflict === true)
     const hostHardware = hostHardwareSnapshot()
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
@@ -936,6 +941,26 @@ export class BrowserLauncher {
     this.onChanged(locked)
     this.logger?.info('窗口第一次打开，指纹值已固定', { profileId: profile.id, region: patch.region, timezone: patch.timezone, screen: patch.screenWidth && `${patch.screenWidth}×${patch.screenHeight}`, cores: patch.hardwareConcurrency })
     return locked
+  }
+
+  /**
+   * An API window's proxy for this launch: its current one while it works and is in the window's
+   * country; otherwise up to 3 new ones from the link. Still elsewhere (or rotating): asked first.
+   */
+  private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+    const region = profile.fingerprint.region?.toUpperCase()
+    const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, { region: allowGeoConflict ? undefined : region, attempts: 3 })
+    this.onChanged(outcome.profile)
+    const { check } = outcome
+    this.logger?.info('API 提取的代理', { profileId: profile.id, ip: check.ip, country: check.countryCode, newProxies: outcome.fetched })
+    if (!check.ok) throw new Error(proxyLaunchError(check, 'warn') ?? '代理不可用')
+    if (outcome.mismatch) {
+      const where = check.geoConfidence === 'conflict'
+        ? `链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}）`
+        : `代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 从 API 换了 ${outcome.fetched} 次 IP 还是不对：${where}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？`)
+    }
+    return outcome.profile
   }
 
   private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {

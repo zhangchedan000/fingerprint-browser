@@ -102,7 +102,13 @@ function safeApiProxy(value: unknown): WindowApiProxy | undefined {
   const endpoint = api.endpoint && typeof api.endpoint === 'object'
     && (api.endpoint.protocol === 'http' || api.endpoint.protocol === 'socks5')
     && typeof api.endpoint.host === 'string' && Number.isInteger(api.endpoint.port)
-    ? { protocol: api.endpoint.protocol, host: api.endpoint.host, port: api.endpoint.port, username: typeof api.endpoint.username === 'string' ? api.endpoint.username : '' }
+    ? {
+        protocol: api.endpoint.protocol,
+        host: api.endpoint.host,
+        port: api.endpoint.port,
+        username: typeof api.endpoint.username === 'string' ? api.endpoint.username : '',
+        ...(typeof api.endpoint.fetchedAt === 'string' ? { fetchedAt: api.endpoint.fetchedAt } : {})
+      }
     : undefined
   const history = Array.isArray(api.history)
     ? api.history.filter((entry): entry is ApiIpRecord => Boolean(entry) && typeof entry.ip === 'string' && typeof entry.at === 'string').slice(0, API_HISTORY_LIMIT)
@@ -325,6 +331,7 @@ export class ProfileStore {
         lastOpenedAt: typeof stored.lastOpenedAt === 'string' ? stored.lastOpenedAt : undefined,
         ...(directCheck ? { directCheck } : {}),
         ...(!resolvedProxyId && safeApiProxy(stored.apiProxy) ? { apiProxy: safeApiProxy(stored.apiProxy) } : {}),
+        ...this.loadApiPassword(stored),
         favorite: stored.favorite === true,
         status: 'closed',
         lastError: undefined
@@ -456,14 +463,21 @@ export class ProfileStore {
     return ids.map((id) => this.get(id))
   }
 
-  /** The proxy an API link gave a window for this launch. */
+  /** The proxy password of an API window, read from the file into memory (it never reaches the window list). */
+  private loadApiPassword(stored: { id?: unknown; apiProxy?: unknown }): Record<string, never> {
+    const password = (stored.apiProxy as { endpoint?: { password?: unknown } } | undefined)?.endpoint?.password
+    if (typeof stored.id === 'string' && typeof password === 'string' && password) this.apiPasswords.set(stored.id, this.secrets.decode(password))
+    return {}
+  }
+
+  /** A new proxy from a window's API link: used from now on, while it works. */
   async setWindowApiEndpoint(id: string, endpoint: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; password: string }): Promise<BrowserProfile> {
     const current = this.stored(id)
     if (!current.apiProxy) throw new Error('这个窗口没有使用 API 提取')
     const { password, ...shown } = endpoint
     if (password) this.apiPasswords.set(id, password)
     else this.apiPasswords.delete(id)
-    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: shown } }
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: { ...shown, fetchedAt: new Date().toISOString() } } }
     this.profiles.set(id, profile)
     await this.persist()
     return this.resolve(profile)
@@ -1165,11 +1179,14 @@ export class ProfileStore {
       return this.get(id)
     }
     if (current.apiProxy) {
-      // Every launch takes a new IP: no "exit changed" against the last one; the IP goes into the history.
+      // A new proxy from the link is expected: no "exit changed" against the last one; its IP goes into the history.
       const entry: ApiIpRecord | undefined = check.ok && check.ip
         ? { at: check.checkedAt, ip: check.ip, ...(current.apiProxy.endpoint ? { port: current.apiProxy.endpoint.port } : {}), ...(check.countryCode ? { countryCode: check.countryCode } : {}), ...(check.city ? { city: check.city } : {}) }
         : undefined
-      const history = entry ? [entry, ...(current.apiProxy.history ?? [])].slice(0, API_HISTORY_LIMIT) : current.apiProxy.history
+      // The same proxy checked again is not a new entry.
+      const latest = current.apiProxy.history?.[0]
+      const repeated = entry && latest && latest.ip === entry.ip && latest.port === entry.port
+      const history = entry && !repeated ? [entry, ...(current.apiProxy.history ?? [])].slice(0, API_HISTORY_LIMIT) : current.apiProxy.history
       const profile: StoredProfile = {
         ...current,
         directCheck: nextProxyCheck(check, undefined),
@@ -1298,6 +1315,9 @@ export class ProfileStore {
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((profile) => ({
           ...profile,
+          ...(profile.apiProxy?.endpoint && this.apiPasswords.get(profile.id)
+            ? { apiProxy: { ...profile.apiProxy, endpoint: { ...profile.apiProxy.endpoint, password: this.secrets.encode(this.apiPasswords.get(profile.id)!) } } }
+            : {}),
           account: { ...profile.account, password: this.secrets.encode(profile.account.password) }
         })),
       proxies: this.library.listProxies().map((proxy) => ({ ...proxy, password: this.secrets.encode(proxy.password) })),

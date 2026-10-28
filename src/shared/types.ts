@@ -61,12 +61,13 @@ export interface ApiIpRecord {
 }
 
 /**
- * API 提取 kept on the window itself (not in the proxy library: every launch takes a new proxy).
- * endpoint is the last proxy the link gave (its password is kept only in memory).
+ * API 提取 kept on the window itself (not in the proxy library). The proxy the link gave stays in use
+ * while it works; a new one is taken when it stops working, or on 换一个 IP.
  */
 export interface WindowApiProxy {
   url: string
-  endpoint?: { protocol: 'http' | 'socks5'; host: string; port: number; username: string }
+  /** The proxy the link gave last, used while it still works (its password is kept encrypted, apart). */
+  endpoint?: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; fetchedAt?: string }
   /** Newest first, at most 50. */
   history?: ApiIpRecord[]
 }
@@ -740,7 +741,8 @@ export interface BrowserApi {
     openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => Promise<BrowserProfileView>
     close: (id: string) => Promise<BrowserProfileView>
     closeAll: () => Promise<void>
-    testProxy: (id: string) => Promise<BrowserProfileView>
+    /** API 提取 windows: the proxy they have while it works; refresh takes a new one (换一个 IP). */
+    testProxy: (id: string, refresh?: boolean) => Promise<BrowserProfileView>
     /** API 提取 for these windows: each keeps the link itself (closed windows only). */
     setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
