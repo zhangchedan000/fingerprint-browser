@@ -3,6 +3,7 @@ import { defaultProfileDraft } from '../shared/defaults'
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { buildLaunchArgs, publicIpv4 } from './launch-args'
 import { defaultHardwareProfileId } from '../shared/hardware-profiles'
+import { savedFingerprint } from '../shared/network-identity'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
 
@@ -188,6 +189,24 @@ describe('launch arguments', () => {
     const host4k = { ...prism, hostScreen: { width: 3840, height: 2160 } }
     expect(buildLaunchArgs(profile({ ...WINDOWS, screenSource: 'host' }), host4k).some((arg) => arg.startsWith('--force-device-scale-factor'))).toBe(false)
     expect(buildLaunchArgs(profile({ ...WINDOWS, screenWidth: 3840, screenHeight: 2160 }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--force-device-scale-factor'))).toBe(false)
+  })
+
+  it('keeps a saved 基于 IP 生成 window on the country of its first check when the IP moves', () => {
+    const geo = (ip: string, countryCode: string, timezone: string, latitude: number, longitude: number): ProxyCheckSummary => ({
+      ok: true, ip, latencyMs: 10, checkedAt: '', countryCode, timezone, latitude, longitude, geoConfidence: 'consensus'
+    })
+    const firstCheck = geo('203.0.113.10', 'US', 'America/New_York', 40.7, -74)
+    const saved = savedFingerprint({ ...profile().fingerprint, networkIdentityMode: 'proxy' }, firstCheck)
+    expect(saved.networkIdentityMode).toBe('manual')
+    expect(saved.region).toBe('US')
+    // The proxy now exits in Mexico: the window still opens as the US one it was saved as.
+    const args = buildLaunchArgs(profile(saved), {
+      userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47',
+      proxyIdentity: geo('198.51.100.40', 'MX', 'America/Mexico_City', 19.4, -99.1)
+    })
+    expect(args).toContain('--timezone=America/New_York')
+    expect(args).toContain(`--fingerprint-language=${saved.language}`)
+    expect(args.some((arg) => arg.includes('Mexico'))).toBe(false)
   })
 
   it('passes media devices and the kept voice and device-name languages to Prism kernels only', () => {
