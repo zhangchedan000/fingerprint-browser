@@ -2577,7 +2577,7 @@
   "还没检测；检测后这里是这个代理的出口 IP": "Pas encore vérifié ; une vérification affiche ici l’IP de sortie de ce proxy",
   "还没检测；检测后这里是这个窗口的出口 IP": "Pas encore vérifié ; une vérification affiche ici l’IP de sortie de cette fenêtre",
   "选择站点": "Choisir un site",
-  "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0} est identique à la fenêtre {1} : il n’y a que 16 décalages, et les vrais ordinateurs avec le même système et les mêmes polices coïncident aussi",
+  "{0} 与窗口 {1} 相同：偏移的种类有限，同样系统和字体的真实电脑也相同": "{0} est identique à la fenêtre {1} : le nombre de décalages est limité, et les vrais ordinateurs avec le même système et les mêmes polices coïncident aussi",
   "每次打开指定页面": "Ouvrir ces pages à chaque fois",
   "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "Ces adresses s’ouvrent à chaque fois ; une par ligne, sans http elles s’ouvrent en https",
   "第一次打开这些网址，之后打开上次关闭的页面": "Ces adresses s’ouvrent la première fois ; ensuite, les pages de la dernière fois",

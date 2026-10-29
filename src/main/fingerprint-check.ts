@@ -271,9 +271,9 @@ export function evaluateFingerprint(input: {
     } else if (first !== second) {
       add({ row: surface, status: 'bad', message: `${name} 两次读取结果不同，容易被识别为伪装`, fix: 'use-real' })
     } else if (twin && surface === 'clientrects') {
-      // ClientRects has 16 offsets in all (whole 1/64 px steps, as real browsers report): windows on
-      // one computer share them, as real computers with the same system and fonts do.
-      add({ row: surface, status: 'ok', message: `${name} 与窗口 ${twin.label} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同` })
+      // ClientRects has few offsets in all (whole 1/64 px steps, as real browsers report: 16, 64 from
+      // prism11): windows on one computer can share one, as real computers with the same system and fonts do.
+      add({ row: surface, status: 'ok', message: `${name} 与窗口 ${twin.label} 相同：偏移的种类有限，同样系统和字体的真实电脑也相同` })
     } else if (twin && !real) {
       add({ row: surface, status: 'bad', message: `${name} 与窗口 ${twin.label} 相同，两个窗口会被关联`, fix: 'reseed' })
     } else if (twin) {
