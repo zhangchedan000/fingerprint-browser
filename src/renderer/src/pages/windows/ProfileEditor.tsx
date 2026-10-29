@@ -462,12 +462,6 @@ const LANGUAGES = CHROME_UI_LOCALES.map((uiLocale) => {
 })
 
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave, running: runningNow }: ProfileEditorProps) {
-  const riskLabels: Record<NonNullable<ProxyTestResult['networkRisk']>, string> = {
-    tor: t("Tor 出口"),
-    vpn: t("VPN 网络"),
-    proxy: t("代理网络"),
-    hosting: t("机房网络")
-  }
   const [form] = Form.useForm<EditorValues>()
   const [tab, setTab] = useState<EditorTab>('basic')
   // Each tab of each window keeps how far down it was scrolled.
@@ -1437,7 +1431,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             onOpen={profile ? (url) => void openInWindow(url) : undefined}
           />
         ) : undefined}
-        risk={proxyResult.ok && proxyResult.networkRisk ? riskLabels[proxyResult.networkRisk] : undefined}
         notes={[
           resultNote,
           resultAddress && (
