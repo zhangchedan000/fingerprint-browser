@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-10-29T14:25:54.164Z",
+  "checks": {
+    "upgradeMergedProxies": true,
+    "upgradeExtractedGroups": true,
+    "passwordsNeverReachUi": true,
+    "typedProxyReused": true,
+    "proxyEditReachesAllWindows": true,
+    "groupRenameReachesAllWindows": true,
+    "assignManyWorks": true,
+    "removeNeedsReplacement": true,
+    "groupDeleteUngroups": true,
+    "restoreBringsProxyBack": true,
+    "preferencesSaved": true,
+    "oldFileKeptBeforeUpgrade": true,
+    "storedAsReferences": true,
+    "noPlainPasswordOnDisk": true,
+    "restartKeepsReferences": true,
+    "themeRestoredAtStart": true
+  },
+  "passed": true
+}
