@@ -2601,7 +2601,7 @@
   "对照 {0}：{1}": "Comparé à {0} : {1}",
   "检测后从检测网站读取 IP 评分": "Après vérification, le score IP est lu sur les sites",
   "正在用这个窗口打开检测网站读取…（约 10–30 秒）": "Ouverture des sites via cette fenêtre… (10 à 30 s environ)",
-  "每次检测：基准网站必查（IP 评分、原生 / 广播、数据中心 / 家宽以它为准），再从其余开着的网站里轮流挑一个对照。": "Chaque vérification lit la référence (son score, natif / diffusé et centre de données / ligne domestique font foi), plus à tour de rôle un des autres sites actifs pour comparer.",
+  "每次检测：基准网站必查（IP 评分、原生 / 广播、数据中心 / 家宽以它为准），再从其余开着的网站里轮流挑一个对照。": "Chaque vérification lit la référence (son score IP, natif / diffusé et centre de données / ligne domestique font foi), plus à tour de rôle un des autres sites actifs pour comparer.",
   "没读到": "Non lu",
   "网站看到的 IP 和检测到的不是同一个（代理在换出口 IP）": "Le site a vu une autre IP que la vérification (le proxy change d’IP de sortie)",
   "设为基准": "Définir comme référence",
