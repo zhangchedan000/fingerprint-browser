@@ -1463,6 +1463,15 @@ export class ProfileStore {
     return this.resolve(profile)
   }
 
+  /** The extensions a team window came with (team-extensions.ts); not an edit of the window. */
+  async setExtensionIds(id: string, extensionIds: string[]): Promise<BrowserProfile> {
+    if (!Array.isArray(extensionIds) || extensionIds.length > 50 || extensionIds.some((item) => typeof item !== 'string')) throw new Error('环境扩展配置无效或超过 50 个')
+    const profile: StoredProfile = { ...this.stored(id), extensionIds: [...extensionIds] }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
   // ---- window data directories -----------------------------------------------------------
 
   profileDataPath(id: string): string {

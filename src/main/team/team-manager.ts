@@ -30,6 +30,8 @@ import type { SecretCodec } from '../secret-codec'
 import { normalizeServer, TeamApi, TeamApiError, type Fetch, type RemoteProfile } from './team-api'
 import { packProfileState, sha256File, unpackProfileState, type PasswordTransfer } from './team-archive'
 import { applyCheckRecords, collectCheckRecords } from './team-records'
+import { adoptWindowExtensions, windowExtensions } from './team-extensions'
+import type { ExtensionStore } from '../extension-store'
 import { fingerprintCheckStore } from '../fingerprint-check'
 import { windowsKeyProtector, type KeyProtector } from './saved-passwords'
 
@@ -216,6 +218,9 @@ export class TeamManager {
   private get workPath(): string {
     return join(this.vaultPath, 'team-transfer')
   }
+
+  /** This computer's extensions: a team window's go along with its login state (team-extensions.ts). */
+  extensions?: ExtensionStore
 
   /** The windows' fingerprint check reports (the same store the editor writes). */
   private get fingerprintChecks() {
@@ -546,7 +551,13 @@ export class TeamManager {
     const cookies = await this.cookies.exportCookies(id)
     // The check records go along, so the next computer shows what this one found.
     const records = await collectCheckRecords(this.profiles, this.fingerprintChecks, id).catch(() => undefined)
-    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`), this.passwordTransfer(id), records)
+    const extensions = this.extensions
+      ? await windowExtensions(this.extensions, this.profiles.get(id)).catch((error) => {
+        this.logger?.error('团队窗口的扩展没有带上', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+        return []
+      })
+      : []
+    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`), this.passwordTransfer(id), { records, extensions })
   }
 
   /** Puts a window of this computer into the cloud: its config and current login state. */
@@ -757,19 +768,26 @@ export class TeamManager {
         this.onSync({ profileId: id, phase: 'pulling' })
         await mkdir(this.workPath, { recursive: true })
         const archive = join(this.workPath, `${id}-pull-${Date.now()}.tgz`)
+        const extensionsFolder = join(this.workPath, `${id}-extensions-${Date.now()}`)
         try {
           await api.downloadData(record, archive)
           const expected = (record as RemoteProfile & { data_sha256?: string }).data_sha256
           if (expected && await sha256File(archive) !== expected) throw new Error('下载的登录态校验失败，请重试')
-          const { cookies, records } = await unpackProfileState(archive, this.profiles.profileDataPath(id), this.passwordTransfer(id))
+          const userData = this.profiles.profileDataPath(id)
+          const { cookies, records, extensions } = await unpackProfileState(archive, userData, this.passwordTransfer(id), this.extensions ? extensionsFolder : undefined)
           await this.cookies.importCookies(id, cookies, { replace: true })
           await applyCheckRecords(this.profiles, this.fingerprintChecks, id, records).catch((error) => {
             this.logger?.error('团队窗口的检测记录没有放好', { profileId: id, error: error instanceof Error ? error.message : String(error) })
           })
+          if (this.extensions && extensions?.length) {
+            const extensionIds = await adoptWindowExtensions(this.extensions, extensionsFolder, extensions, userData)
+            await this.profiles.setExtensionIds(id, extensionIds)
+          }
           link.dataRev = record.data_rev
-          this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: record.data_rev, cookies: cookies.length })
+          this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: record.data_rev, cookies: cookies.length, extensions: extensions?.length ?? 0 })
         } finally {
           await rm(archive, { force: true })
+          await rm(extensionsFolder, { recursive: true, force: true })
         }
         this.onSync({ profileId: id, phase: 'done' })
       }

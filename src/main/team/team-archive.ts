@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { PortableCookie } from '../cookie-file'
@@ -11,6 +11,21 @@ import { PASSWORDS_DIR, restorePasswords, stagePasswords, type KeyProtector } fr
 export const COOKIES_FILE = '.prism-team-cookies.json'
 /** The window's check records (team-records.ts), beside the cookies. */
 export const RECORDS_FILE = '.prism-team-records.json'
+/** The window's extensions (their folders, and EXTENSIONS_LIST saying what each is). */
+export const EXTENSIONS_DIR = '.prism-team-extensions'
+const EXTENSIONS_LIST = 'extensions.json'
+
+/** An extension that goes along with a window (team-extensions.ts says how it is matched up). */
+export interface ShippedExtension {
+  /** Its folder inside EXTENSIONS_DIR. */
+  folder: string
+  /** The browser's ID for it on the computer that packed it. */
+  chromeId: string
+  /** extension-id.ts: what makes it the same extension on another computer. */
+  identity: string
+  name: string
+  version: string
+}
 
 /**
  * A shared window's state, as close to the same browser as can be: what keeps sites signed in, the
@@ -33,7 +48,13 @@ export const LOGIN_STATE_PATHS = [
   'Default/History',
   'Default/Favicons',
   'Default/Top Sites',
-  'Default/Web Data'
+  'Default/Web Data',
+  // Extensions' own data (chrome.storage, their rules and state), filed under their browser ID.
+  'Default/Local Extension Settings',
+  'Default/Sync Extension Settings',
+  'Default/Extension State',
+  'Default/Extension Rules',
+  'Default/Extension Scripts'
 ]
 
 const EXCLUDED_INSIDE = ['./Default/WebStorage/*/CacheStorage', './Default/Sessions/*.tmp']
@@ -89,14 +110,33 @@ export interface PasswordTransfer {
   onError?: (error: unknown) => void
 }
 
-/** Packs a closed window's login state (LOGIN_STATE_PATHS), its cookies and check records into `target` (.tgz). */
-export async function packProfileState(userDataPath: string, cookies: PortableCookie[], target: string, passwords: PasswordTransfer = {}, records?: unknown): Promise<PackedState> {
+/** What goes along besides the login state: the check records and the extensions (each with its folder here). */
+export interface PackExtras {
+  records?: unknown
+  extensions?: { path: string; extension: Omit<ShippedExtension, 'folder'> }[]
+}
+
+/** Packs a closed window's login state (LOGIN_STATE_PATHS), its cookies, check records and extensions into `target` (.tgz). */
+export async function packProfileState(userDataPath: string, cookies: PortableCookie[], target: string, passwords: PasswordTransfer = {}, extras: PackExtras = {}): Promise<PackedState> {
+  const { records, extensions = [] } = extras
   // The window is closed, so the cookies file can sit in its folder while tar reads it.
   const cookiesPath = join(userDataPath, COOKIES_FILE)
   const recordsPath = join(userDataPath, RECORDS_FILE)
+  const extensionsPath = join(userDataPath, EXTENSIONS_DIR)
   await writeFile(cookiesPath, JSON.stringify(cookies), { encoding: 'utf8', mode: 0o600 })
   if (records) await writeFile(recordsPath, JSON.stringify(records), { encoding: 'utf8', mode: 0o600 })
   try {
+    if (extensions.length) {
+      // Copied in beside the cookies: tar is given no paths outside the folder (see runTar).
+      await rm(extensionsPath, { recursive: true, force: true })
+      const list: ShippedExtension[] = []
+      for (const [index, item] of extensions.entries()) {
+        const folder = String(index + 1)
+        await cp(item.path, join(extensionsPath, folder), { recursive: true })
+        list.push({ ...item.extension, folder })
+      }
+      await writeFile(join(extensionsPath, EXTENSIONS_LIST), JSON.stringify(list), 'utf8')
+    }
     const present: string[] = []
     for (const path of LOGIN_STATE_PATHS) if (await exists(join(userDataPath, path))) present.push(`./${path}`)
     const staged = passwords.protector
@@ -104,23 +144,40 @@ export async function packProfileState(userDataPath: string, cookies: PortableCo
       : false
     if (staged) present.push(`./${PASSWORDS_DIR}`)
     const excludes = EXCLUDED_INSIDE.flatMap((pattern) => ['--exclude', pattern])
-    await runTar(['-czf', '-', ...excludes, `./${COOKIES_FILE}`, ...(records ? [`./${RECORDS_FILE}`] : []), ...present], userDataPath, { write: target })
+    const extra = [...(records ? [`./${RECORDS_FILE}`] : []), ...(extensions.length ? [`./${EXTENSIONS_DIR}`] : [])]
+    await runTar(['-czf', '-', ...excludes, `./${COOKIES_FILE}`, ...extra, ...present], userDataPath, { write: target })
   } finally {
     await rm(cookiesPath, { force: true })
     await rm(recordsPath, { force: true })
+    await rm(extensionsPath, { recursive: true, force: true })
     await rm(join(userDataPath, PASSWORDS_DIR), { recursive: true, force: true })
   }
   const [info, sha256] = await Promise.all([stat(target), sha256File(target)])
   return { file: target, size: info.size, sha256 }
 }
 
+export interface UnpackedState {
+  cookies: PortableCookie[]
+  records?: unknown
+  /** The extensions that came along, moved to `extensionsTo` (each in its `folder` there). */
+  extensions?: ShippedExtension[]
+}
+
+function shippedList(input: unknown): ShippedExtension[] {
+  if (!Array.isArray(input)) return []
+  return input.filter((item): item is ShippedExtension => Boolean(item) && typeof item === 'object'
+    && typeof item.folder === 'string' && /^\d+$/.test(item.folder)
+    && typeof item.chromeId === 'string' && /^[a-p]{32}$/.test(item.chromeId)
+    && typeof item.identity === 'string' && typeof item.name === 'string' && typeof item.version === 'string')
+}
+
 /**
  * Replaces a closed window's login state (LOGIN_STATE_PATHS) with an archive's and returns the
- * cookies to import and the check records that came with it. Everything else in the folder
- * (caches…) stays this computer's. Archives of v0.3/v0.4.0 carry the whole folder; only these
- * paths are taken from them too.
+ * cookies to import, the check records and the extensions that came with it. Everything else in
+ * the folder (caches…) stays this computer's. Archives of v0.3/v0.4.0 carry the whole folder; only
+ * these paths are taken from them too.
  */
-export async function unpackProfileState(archive: string, userDataPath: string, passwords: PasswordTransfer = {}): Promise<{ cookies: PortableCookie[]; records?: unknown }> {
+export async function unpackProfileState(archive: string, userDataPath: string, passwords: PasswordTransfer = {}, extensionsTo?: string): Promise<UnpackedState> {
   const staging = `${userDataPath}.incoming-${randomUUID()}`
   const previous = `${userDataPath}.previous-${randomUUID()}`
   await mkdir(staging, { recursive: true })
@@ -135,6 +192,14 @@ export async function unpackProfileState(archive: string, userDataPath: string, 
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('登录态里的 Cookie 文件已损坏')
     }
     const records = await readFile(join(staging, RECORDS_FILE), 'utf8').then((text) => JSON.parse(text) as unknown, () => undefined)
+    const extensions = extensionsTo
+      ? shippedList(await readFile(join(staging, EXTENSIONS_DIR, EXTENSIONS_LIST), 'utf8').then((text) => JSON.parse(text) as unknown, () => undefined))
+      : []
+    if (extensions.length) {
+      await rm(extensionsTo!, { recursive: true, force: true })
+      await mkdir(dirname(extensionsTo!), { recursive: true })
+      await rename(join(staging, EXTENSIONS_DIR), extensionsTo!)
+    }
     // The shared copy replaces this computer's, also where it has none (a site signed out).
     const moved: string[] = []
     try {
@@ -157,7 +222,7 @@ export async function unpackProfileState(archive: string, userDataPath: string, 
     }
     // Before the cookies go in: they are written with the key that comes with the passwords.
     if (passwords.protector) await restorePasswords(staging, userDataPath, passwords.protector).catch((error) => passwords.onError?.(error))
-    return { cookies, ...(records ? { records } : {}) }
+    return { cookies, ...(records ? { records } : {}), ...(extensions.length ? { extensions } : {}) }
   } finally {
     await Promise.all([staging, previous].map((path) => rm(path, { recursive: true, force: true })))
   }

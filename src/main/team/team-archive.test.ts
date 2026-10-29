@@ -42,7 +42,7 @@ describe('team login state archive', () => {
     const cookies = [{ name: 'sid', value: 'abc', domain: '.example.com', path: '/' }]
 
     const records = { fingerprintCheck: { checkedAt: '2026-10-29T00:00:00.000Z' } }
-    const packed = await packProfileState(source, cookies as never, join(root, 'state.tgz'), {}, records)
+    const packed = await packProfileState(source, cookies as never, join(root, 'state.tgz'), {}, { records })
     expect(packed.size).toBeGreaterThan(0)
     expect(packed.sha256).toMatch(/^[a-f\d]{64}$/)
     expect(existsSync(join(source, '.prism-team-cookies.json'))).toBe(false)

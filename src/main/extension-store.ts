@@ -3,6 +3,7 @@ import { access, cp, lstat, mkdir, readdir, readFile, rename, rm, stat, writeFil
 import { basename, join, resolve, sep } from 'node:path'
 import type { BrowserExtension } from '../shared/types'
 import type { Logger } from './app-logger'
+import { extensionIdentity, manifestKey, newManifestKey } from './extension-id'
 
 interface ChromeExtensionManifest {
   manifest_version?: number
@@ -83,7 +84,25 @@ export class ExtensionStore {
     return extension.path
   }
 
-  async importDirectory(sourceInput: string): Promise<BrowserExtension> {
+  /** The extension's browser ID and cross-computer identity (extension-id.ts). */
+  identity(id: string): Promise<{ chromeId: string; identity: string }> {
+    return extensionIdentity(this.sourcePath(id))
+  }
+
+  /** This computer's copy of an extension (the same key, or without one the same manifest). */
+  async findByIdentity(identity: string): Promise<BrowserExtension | undefined> {
+    for (const extension of this.list()) {
+      if ((await extensionIdentity(extension.path).catch(() => undefined))?.identity === identity) return extension
+    }
+    return undefined
+  }
+
+  /**
+   * Copies an extension folder in. One without a key gets one, so it has the same browser ID on
+   * every computer and its data can go along with a team window; `keepManifest` takes a folder as it
+   * is (one that came with a team window, already the other computer's).
+   */
+  async importDirectory(sourceInput: string, options: { keepManifest?: boolean } = {}): Promise<BrowserExtension> {
     const source = resolve(sourceInput)
     const root = resolve(this.root)
     if (source === root || source.startsWith(`${root}${sep}`)) throw new Error('不能从扩展仓库内部重复导入')
@@ -110,6 +129,9 @@ export class ExtensionStore {
     await mkdir(staging, { recursive: true })
     try {
       await cp(source, join(staging, 'extension'), { recursive: true, errorOnExist: true })
+      if (!options.keepManifest && !manifestKey(manifest)) {
+        await writeFile(join(staging, 'extension', 'manifest.json'), JSON.stringify({ ...manifest, key: newManifestKey() }, null, 2), 'utf8')
+      }
       const extension: BrowserExtension = {
         id,
         name: manifest.name.startsWith('__MSG_') ? basename(source) : manifest.name.trim(),

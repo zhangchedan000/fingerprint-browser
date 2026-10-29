@@ -262,6 +262,8 @@ app.whenReady().then(async () => {
   // A window's 网络加速 nodes go to the cloud with it, and come along to other computers.
   activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
   activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)
+  // A window's extensions go to other computers with its login state.
+  activeTeam.extensions = extensions
   activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))
   // A new window's seed is none the team's cloud windows use (the seed decides Canvas and AudioContext).
   profiles.setSeedsInUse(() => activeTeam.seedsInUse())
