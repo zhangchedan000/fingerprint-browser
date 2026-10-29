@@ -668,10 +668,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return checkReport && noiseCurrent ? checkReport.observed[surface][0] : undefined
   }
 
-  function shownNoise(surface: NoiseSurface): string {
-    return measured(surface) ?? t("每个窗口不同")
-  }
-
   /** 换一换 on Canvas / AudioContext / ClientRects: new values, then the check reads what they are. */
   function reseedAndCheck(): void {
     reseedNoise()
@@ -680,22 +676,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   /**
    * What a site reads for this value in this window, measured by the fingerprint check (the kernel
-   * computes it on this computer's GPU and CPU, so the launcher cannot know it beforehand).
+   * computes it on this computer's GPU and CPU, so the launcher cannot know it beforehand). The value
+   * itself is shown in the choice above (noiseOptions); this line says when it was read, or offers the check.
    */
   function measuredLine(surface: NoiseSurface) {
     const value = measured(surface)
     if (checking) return <span className="fb-fp-measured fb-muted">{t("正在检测实际值…")}</span>
     if (value) {
-      return (
-        <span className="fb-fp-measured">
-          {t("网站读到")}<b className="fb-mono">{value}</b>
-          <span className="fb-muted"> · {relativeTime(checkReport!.checkedAt, getLocale())}</span>
-        </span>
-      )
+      return <span className="fb-fp-measured fb-muted">{t("上面是网站读到的值 · {0}", relativeTime(checkReport!.checkedAt, getLocale()))}</span>
     }
     return (
       <span className="fb-fp-measured fb-muted">
-        {checkReport ? t("设置已修改") : t("未检测")}
+        {checkReport ? t("设置已修改，值待重新检测") : t("还没检测，检测后在上面显示网站读到的值")}
         <Unlocked><Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button></Unlocked>
       </span>
     )
@@ -707,6 +699,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
   }
 
+  /** The two choices, each showing the value a site reads once the check has measured it. */
+  function noiseOptions(surface: NoiseSurface, real: boolean) {
+    const value = measured(surface)
+    const pending = checking ? t("正在检测…") : t("待检测")
+    return [
+      { value: 'noise', label: !real && value ? value : `${t("每个窗口不同")} · ${real ? '' : pending}`.replace(/ · $/, '') },
+      { value: 'real', label: real && value ? t("本机真实 · {0}", value) : t("本机真实") }
+    ]
+  }
+
   /** prism7+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
   function seededControl(surface: NoiseSurface, label: string) {
     const real = fp.disabledSpoofing.includes(surface)
@@ -715,7 +717,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label={label}
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
-        options={[{ value: 'noise', label: t("每个窗口不同") }, { value: 'real', label: t("本机真实") }]}
+        options={noiseOptions(surface, real)}
         onShuffle={reseedAndCheck}
         shuffleDisabled={real}
       />
@@ -729,7 +731,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label={label}
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
-        options={[{ value: 'noise', label: webrtcRelay ? t("每个窗口不同") : shownNoise(surface) }, { value: 'real', label: t("本机真实") }]}
+        options={noiseOptions(surface, real)}
         onShuffle={webrtcRelay ? reseedAndCheck : reseedNoise}
         shuffleDisabled={real}
       />

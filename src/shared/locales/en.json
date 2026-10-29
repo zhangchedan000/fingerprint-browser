@@ -2499,5 +2499,10 @@
   "2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭": "2560 × 1600 is now mostly a 16-inch laptop screen and does not fit a desktop graphics card",
   "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "This computer's screen ({0} × {1}) is smaller than the chosen resolution: maximizing only fills this screen; do not use full screen in pages, as the page would be smaller than the screen size and sites can tell",
   "缩放 {0}%": "{0}% scaling",
-  "4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5": "4K monitors run at Windows' default 150% scaling: pages see {0} × {1}, devicePixelRatio 1.5"
+  "4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5": "4K monitors run at Windows' default 150% scaling: pages see {0} × {1}, devicePixelRatio 1.5",
+  "正在检测…": "Checking…",
+  "待检测": "to be checked",
+  "上面是网站读到的值 · {0}": "Above: the value websites read · {0}",
+  "设置已修改，值待重新检测": "Settings changed; check again for the value",
+  "还没检测，检测后在上面显示网站读到的值": "Not checked yet; the value websites read appears above after a check"
 }

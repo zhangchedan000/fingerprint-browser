@@ -2499,5 +2499,10 @@
   "2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭": "2560 × 1600 est aujourd'hui surtout l'écran des portables de 16 pouces et ne va pas avec une carte graphique de bureau",
   "这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来": "L'écran de cet ordinateur ({0} × {1}) est plus petit que la résolution choisie : agrandir ne remplit que cet écran ; n'utilisez pas le plein écran dans les pages, la page serait plus petite que l'écran et les sites peuvent le voir",
   "缩放 {0}%": "Mise à l'échelle {0} %",
-  "4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5": "Les écrans 4K sont à 150 %, la mise à l'échelle par défaut de Windows : les pages voient {0} × {1}, devicePixelRatio 1.5"
+  "4K 显示器按 Windows 默认的 150% 缩放：网页看到 {0} × {1}，devicePixelRatio 1.5": "Les écrans 4K sont à 150 %, la mise à l'échelle par défaut de Windows : les pages voient {0} × {1}, devicePixelRatio 1.5",
+  "正在检测…": "Vérification…",
+  "待检测": "à vérifier",
+  "上面是网站读到的值 · {0}": "Ci-dessus : la valeur lue par les sites · {0}",
+  "设置已修改，值待重新检测": "Réglages modifiés ; revérifiez la valeur",
+  "还没检测，检测后在上面显示网站读到的值": "Pas encore vérifié ; après vérification, la valeur lue par les sites s'affiche ci-dessus"
 }
