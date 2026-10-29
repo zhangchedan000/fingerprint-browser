@@ -2580,5 +2580,8 @@
   "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0} giống cửa sổ {1}: chỉ có 16 mức lệch, máy thật cùng hệ thống và phông chữ cũng trùng nhau",
   "每次打开指定页面": "Lần nào cũng mở các trang này",
   "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "Mở các địa chỉ này mỗi lần; mỗi dòng một, không ghi http thì mở bằng https",
-  "第一次打开这些网址，之后打开上次关闭的页面": "Lần đầu mở các địa chỉ này, sau đó mở các trang đóng lần trước"
+  "第一次打开这些网址，之后打开上次关闭的页面": "Lần đầu mở các địa chỉ này, sau đó mở các trang đóng lần trước",
+  "键盘布局": "Bố cục bàn phím",
+  "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "Cách xếp phím trang web đọc được (navigator.keyboard), ví dụ bàn phím Đức đổi chỗ Y và Z",
+  "真实 Windows 的键盘一般和语言一致": "Trên Windows thật, bàn phím thường khớp với ngôn ngữ"
 }

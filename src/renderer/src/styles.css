@@ -230,6 +230,9 @@ button, input, textarea { font: inherit; }
 .fb-unsupported { display: inline-block; cursor: not-allowed; }
 /* Every choice in the fingerprint tab is one width; two side by side (system and version) make up one. */
 .fb-fp-select { width: 400px; max-width: 100%; }
+/* The chosen value is shown in full: a long one (a Windows time zone name) goes on to a second line instead of being cut. */
+.fb-fp-select.ant-select-single { height: auto; min-height: 32px; padding-block: 4px; }
+.fb-fp-select.ant-select-single .ant-select-content { white-space: normal; overflow: visible; text-overflow: clip; }
 .fb-fp-select-half { width: 196px; max-width: 100%; }
 /* 一键修正 sits inside the row's first box at its right end, before the arrow: the same place in every row. */
 .fb-form-row.has-fix .fb-form-control { position: relative; }

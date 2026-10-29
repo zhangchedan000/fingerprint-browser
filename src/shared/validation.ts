@@ -2,6 +2,7 @@ import { isKernelId } from './kernel-id'
 import { isVoiceLocale } from './windows-voices'
 import { CHROME_UI_LOCALES } from './chrome-languages'
 import { isMediaDevicesChoice, MEDIA_LOCALES } from './media-devices'
+import { isKeyboardLayout } from './keyboard-layouts'
 import { applyHardwareProfile, HARDWARE_PROFILES, hardwareProfile } from './hardware-profiles'
 import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
@@ -128,6 +129,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   if (rawFp.mediaDevices && !isMediaDevicesChoice(rawFp.mediaDevices)) throw new Error('媒体设备设置无效')
   if (rawFp.mediaLocale && !MEDIA_LOCALES.includes(rawFp.mediaLocale)) throw new Error('设备名称语言无效')
   if (rawFp.uiLocale && !CHROME_UI_LOCALES.includes(rawFp.uiLocale)) throw new Error('界面语言无效')
+  if (rawFp.keyboardLayout && (typeof rawFp.keyboardLayout !== 'string' || !isKeyboardLayout(rawFp.keyboardLayout))) throw new Error('键盘布局无效')
   if (rawFp.region !== undefined && (typeof rawFp.region !== 'string' || !/^[A-Z]{2}$/.test(rawFp.region))) throw new Error('地区无效')
   const screenSource = rawFp.screenSource ?? 'profile'
   if (screenSource !== 'profile' && screenSource !== 'host') throw new Error('分辨率来源无效')
@@ -249,6 +251,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
       ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {}),
       ...(rawFp.uiLocale ? { uiLocale: rawFp.uiLocale } : {}),
+      ...(rawFp.keyboardLayout ? { keyboardLayout: rawFp.keyboardLayout } : {}),
       ...(rawFp.region ? { region: rawFp.region } : {}),
       ...(rawFp.region && rawFp.regionSource === 'ip' ? { regionSource: 'ip' as const } : {}),
       ...(validLocation(rawFp.location) ? { location: validLocation(rawFp.location) } : {})

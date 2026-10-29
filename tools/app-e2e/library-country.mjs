@@ -2,7 +2,7 @@
 /**
  * A new window picking a library proxy that was checked before takes that IP's country (time zone,
  * languages) without a check of its own, and still shows no check result; a country picked by hand
- * first stays, with the mismatch pointed out. The language rows say what they follow.
+ * first stays, with the mismatch pointed out. The language rows say what they follow (国家 · language · code).
  *
  *   npm run build && node tools/app-e2e/library-country.mjs        (Linux: xvfb-run -a …)
  */
@@ -101,10 +101,10 @@ try {
   const region = await rowText('国家/地区')
   check(region.includes('按代理库上次检测的 IP 配好'), `country hint: ${region}`)
   const ui = await rowText('系统语言')
-  check(ui.includes('墨西哥 · es-419'), `系统语言: ${ui}`)
+  check(/墨西哥 · [^·]+ · es-419/.test(ui), `系统语言: ${ui}`)
   for (const label of ['语音', '媒体设备名']) {
     const text = await rowText(label)
-    check(text.includes('墨西哥 · es-mx'), `${label}: ${text}`)
+    check(/墨西哥 · ([^·]+ · )?es-mx/.test(text), `${label}: ${text}`)
   }
 
   // 2. Another checked proxy: the country follows it.
@@ -132,7 +132,7 @@ try {
   await tab('指纹设置')
   await choose('国家/地区', '日本')
   const manual = await rowText('系统语言')
-  check(manual.includes('日本 · ja'), `手动日本 系统语言: ${manual}`)
+  check(manual.includes('日本 · 日本語 · ja'), `手动日本 系统语言: ${manual}`)
   await pickProxy('198.51.100.31')
   const kept = await rowText('网络身份')
   check(kept.includes('手动选择') && kept.includes('日本'), `手动日本 then 墨西哥代理 → ${kept}`)

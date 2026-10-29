@@ -45,6 +45,7 @@ import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
+import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey, noiseStillMatches } from '../../../../shared/fingerprint-check-key'
@@ -688,6 +689,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       uiLocale: undefined,
       voicesLocale: undefined,
       mediaLocale: undefined,
+      keyboardLayout: undefined,
       timezone: item.zone
     })
   }
@@ -1008,7 +1010,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const fixed = fixedIdentityForCheck(form.getFieldValue('fingerprint') as FingerprintConfig, result ?? undefined, { followUiLocale: true })
     if (!fixed) return false
     // Everything under the country follows it again (voices and device names through the system language).
-    patchFingerprint({ ...fixed, voicesLocale: undefined, mediaLocale: undefined })
+    patchFingerprint({ ...fixed, voicesLocale: undefined, mediaLocale: undefined, keyboardLayout: undefined })
     countryByHand.current = false
     return true
   }
@@ -1699,6 +1701,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ? { label: t("改成 {0}", countryLocale.language), apply: () => patchFingerprint({ language: countryLocale.language, acceptLanguages: countryLocale.acceptLanguages }) }
     : undefined
   const followSystemLanguage = (key: 'voicesLocale' | 'mediaLocale'): QuickFix => ({ label: t("改成跟随系统语言"), apply: () => patchFingerprint({ [key]: undefined }) })
+  // The keyboard a fresh Windows in the browser language starts with (what the kernel reports unless picked).
+  const autoKeyboardLayout = keyboardLayoutFor(fp.language ?? '')
+  const keyboardPicked = fp.keyboardLayout && fp.keyboardLayout !== autoKeyboardLayout
+  const followLanguageKeyboard: QuickFix = { label: t("改成 {0}", keyboardLayoutName(autoKeyboardLayout ?? '') ?? ''), apply: () => patchFingerprint({ keyboardLayout: undefined }) }
   // A size desktops with this card usually have (the first 常见 one in the list).
   const usualScreen = screenOdd ? usualScreenFor(gpu!.model, screenChoices(floor, hostScale())) : undefined
   const screenFix: QuickFix | undefined = usualScreen
@@ -1870,7 +1876,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(language: string) => {
             const item = LANGUAGES.find((entry) => entry.language === language)
             // The system language, voices and device names follow it again.
-            if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages, uiLocale: undefined, voicesLocale: undefined, mediaLocale: undefined })
+            if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages, uiLocale: undefined, voicesLocale: undefined, mediaLocale: undefined, keyboardLayout: undefined })
           }}
           // The country's own language under the country itself, so it can be picked back after a change.
           options={languageOptions.map((option) => option.value === countryLocale?.language && fp.region
@@ -1969,6 +1975,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           aria-label={t("媒体设备名")}
         />
         {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <RowWarning fix={followSystemLanguage('mediaLocale')}>{t("真实 Windows 的设备名和系统语言一致")}</RowWarning>}
+      </Row>
+      <Row label={t("键盘布局")} fix={keyboardPicked ? followLanguageKeyboard : undefined} hint={t("网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换")}>
+        <Select
+          showSearch
+          optionFilterProp="label"
+          className="fb-fp-select"
+          value={fp.keyboardLayout ?? 'auto'}
+          onChange={(value: string) => patchFingerprint({ keyboardLayout: value === 'auto' ? undefined : value })}
+          options={[
+            ...(autoKeyboardLayout ? [{ value: 'auto', label: followUi(keyboardLayoutName(autoKeyboardLayout) ?? autoKeyboardLayout) }] : []),
+            ...KEYBOARD_LAYOUTS.map((layout) => ({ value: layout.klid, label: layout.name }))
+          ]}
+          aria-label={t("键盘布局")}
+        />
+        {keyboardPicked && <RowWarning fix={followLanguageKeyboard}>{t("真实 Windows 的键盘一般和语言一致")}</RowWarning>}
       </Row>
       </section>
 

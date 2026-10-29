@@ -2580,5 +2580,8 @@
   "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0} is the same as window {1}: there are only 16 offsets, and real computers with the same system and fonts match too",
   "每次打开指定页面": "Open these pages every time",
   "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "These addresses open every time; one per line, without http they open as https",
-  "第一次打开这些网址，之后打开上次关闭的页面": "These addresses open the first time; after that, the pages from last time"
+  "第一次打开这些网址，之后打开上次关闭的页面": "These addresses open the first time; after that, the pages from last time",
+  "键盘布局": "Keyboard layout",
+  "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "The key arrangement websites read (navigator.keyboard), e.g. Y and Z swapped on a German keyboard",
+  "真实 Windows 的键盘一般和语言一致": "On a real Windows the keyboard usually matches the language"
 }

@@ -191,9 +191,10 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
     if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
     if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
-    // navigator.keyboard.getLayoutMap() of a Windows in the window's language (patch 011, prism9+;
+    // navigator.keyboard.getLayoutMap() of a Windows in the window's language, or the layout picked in
+    // 键盘布局 (patch 011, prism9+;
     // older kernels ignore it and report this computer's layout).
-    const keyboardLayout = keyboardLayoutFor(language)
+    const keyboardLayout = fp.keyboardLayout ?? keyboardLayoutFor(language)
     const keyboardText = keyboardLayout ? keyboardLayoutText(keyboardLayout) : undefined
     if (keyboardText) args.push(`--fingerprint-keyboard-layout=${Buffer.from(keyboardText, 'utf8').toString('base64')}`)
   }

@@ -2580,5 +2580,8 @@
   "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0} é igual ao da janela {1}: há só 16 deslocamentos, e computadores reais com o mesmo sistema e fontes também coincidem",
   "每次打开指定页面": "Abrir estas páginas toda vez",
   "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "Estes endereços abrem toda vez; um por linha, sem http abrem como https",
-  "第一次打开这些网址，之后打开上次关闭的页面": "Estes endereços abrem na primeira vez; depois, as páginas da última vez"
+  "第一次打开这些网址，之后打开上次关闭的页面": "Estes endereços abrem na primeira vez; depois, as páginas da última vez",
+  "键盘布局": "Layout do teclado",
+  "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "A disposição das teclas que os sites leem (navigator.keyboard), ex.: Y e Z trocados no teclado alemão",
+  "真实 Windows 的键盘一般和语言一致": "Num Windows real o teclado costuma combinar com o idioma"
 }

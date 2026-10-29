@@ -3,7 +3,7 @@ import { defaultProfileDraft } from '../shared/defaults'
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { buildLaunchArgs, publicIpv4 } from './launch-args'
 import { defaultHardwareProfileId } from '../shared/hardware-profiles'
-import { savedFingerprint } from '../shared/network-identity'
+import { followingLocales, savedFingerprint } from '../shared/network-identity'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
 
@@ -99,6 +99,17 @@ describe('launch arguments', () => {
     expect(layout('ja-JP')?.Backquote).toBe('半角/全角')
     expect(layout('pt-BR')?.IntlRo).toBe('/')
     expect(buildLaunchArgs(profile({ language: 'de-DE' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-keyboard-layout'))).toBe(false)
+  })
+
+  it('passes the keyboard layout picked for the window, and writes the followed one in when saved', () => {
+    const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const arg = buildLaunchArgs(profile({ language: 'en-US', keyboardLayout: '00000407' }), prism).find((entry) => entry.startsWith('--fingerprint-keyboard-layout='))!
+    const keys = Object.fromEntries(Buffer.from(arg.slice('--fingerprint-keyboard-layout='.length), 'base64').toString('utf8').trim().split('\n').map((line) => line.split('\t')))
+    expect(keys.KeyY).toBe('z')
+    expect(savedFingerprint({ ...profile().fingerprint, language: 'es-MX' }).keyboardLayout).toBe('0000080A')
+    expect(savedFingerprint({ ...profile().fingerprint, language: 'es-MX', keyboardLayout: '00000409' }).keyboardLayout).toBe('00000409')
+    expect(followingLocales({ ...profile().fingerprint, language: 'es-MX', keyboardLayout: '0000080A' }).keyboardLayout).toBeUndefined()
+    expect(followingLocales({ ...profile().fingerprint, language: 'es-MX', keyboardLayout: '00000409' }).keyboardLayout).toBe('00000409')
   })
 
   it('refuses a laptop or unknown GPU on the 156 kernel instead of showing another card', () => {

@@ -194,6 +194,8 @@ export interface FingerprintConfig {
   mediaLocale?: string
   /** Chrome interface language (a CHROME_UI_LOCALES entry). Unset = the one Chrome picks for the language. */
   uiLocale?: string
+  /** Windows keyboard layout id (KLID, "0000080A") navigator.keyboard reports. Unset = the language's default. */
+  keyboardLayout?: string
 }
 
 export type FingerprintOverride = 'screen' | 'cores' | 'platformVersion'

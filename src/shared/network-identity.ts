@@ -2,6 +2,7 @@ import type { FingerprintConfig, ProxyTestResult } from './types'
 import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
 import { windowsReportedZone } from './windows-time-zones'
 import { kernelVoiceLocaleFor, voiceLocaleForLanguage } from './windows-voices'
+import { keyboardLayoutFor } from './keyboard-layouts'
 import { autoMediaDevices, kernelMediaLocaleFor, legacyAutoMediaDevices, mediaLocaleFor } from './media-devices'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
@@ -137,7 +138,7 @@ export function fixedIdentityForCheck(
 /**
  * A saved window's fingerprint, with nothing left to work out at launch. A window that still
  * followed its proxy's IP keeps the values of its last check (基于 IP 生成), or else the ones it
- * had (手动选择); the system language, speech voices and device-name language that followed the
+ * had (手动选择); the system language, speech voices, device-name language and keyboard layout that followed the
  * language are written in, so a later version of these tables cannot change a saved window.
  */
 export function savedFingerprint(
@@ -155,12 +156,14 @@ export function savedFingerprint(
     if (next[key] === undefined) delete next[key]
   }
   const uiLocale = next.uiLocale ?? chromeUiLocaleFor(next.language)
+  const keyboardLayout = next.keyboardLayout ?? keyboardLayoutFor(next.language)
   return {
     ...next,
     uiLocale,
     // Windows saved before these were written keep what the kernel gave them; new ones get the country's own.
     voicesLocale: next.voicesLocale ?? (options.legacy ? kernelVoiceLocaleFor : voiceLocaleForLanguage)(uiLocale),
     mediaLocale: next.mediaLocale ?? (options.legacy ? kernelMediaLocaleFor : mediaLocaleFor)(uiLocale),
+    ...(keyboardLayout ? { keyboardLayout } : {}),
     // The devices that went with its GPU (windows saved before this rule: the set they always had).
     mediaDevices: next.mediaDevices ?? (options.legacy ? legacyAutoMediaDevices : autoMediaDevices)(next.seed >>> 0, options.gpuModel)
   }
@@ -178,6 +181,7 @@ export function followingLocales(fingerprint: FingerprintConfig, gpuModel?: stri
   const uiLocale = next.uiLocale ?? followedUi
   if (next.voicesLocale === voiceLocaleForLanguage(uiLocale)) delete next.voicesLocale
   if (next.mediaLocale === mediaLocaleFor(uiLocale)) delete next.mediaLocale
+  if (next.keyboardLayout === keyboardLayoutFor(next.language)) delete next.keyboardLayout
   return next
 }
 

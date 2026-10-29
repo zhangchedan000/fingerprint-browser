@@ -2580,5 +2580,8 @@
   "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0}, {1} penceresiyle aynı: yalnızca 16 kaydırma var, aynı sistem ve yazı tiplerine sahip gerçek bilgisayarlar da eşleşir",
   "每次打开指定页面": "Her seferinde bu sayfaları aç",
   "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "Bu adresler her seferinde açılır; her satıra bir tane, http yoksa https ile açılır",
-  "第一次打开这些网址，之后打开上次关闭的页面": "İlk seferde bu adresler açılır; sonra son kapatılan sayfalar"
+  "第一次打开这些网址，之后打开上次关闭的页面": "İlk seferde bu adresler açılır; sonra son kapatılan sayfalar",
+  "键盘布局": "Klavye düzeni",
+  "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "Sitelerin okuduğu tuş düzeni (navigator.keyboard); ör. Almanca klavyede Y ile Z yer değiştirir",
+  "真实 Windows 的键盘一般和语言一致": "Gerçek Windows'ta klavye genelde dille eşleşir"
 }

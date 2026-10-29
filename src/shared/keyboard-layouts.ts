@@ -20,6 +20,15 @@ export function keyboardLayoutFor(language: string): string | undefined {
   return undefined
 }
 
+/** Every layout a Windows language starts with, as Windows names them, by name. */
+export const KEYBOARD_LAYOUTS: ReadonlyArray<{ klid: string; name: string }> = Object.entries(LAYOUTS)
+  .map(([klid, layout]) => ({ klid, name: layout.name }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+export function isKeyboardLayout(klid: string): boolean {
+  return Object.prototype.hasOwnProperty.call(LAYOUTS, klid)
+}
+
 /** The layout's name as Windows lists it ("German", "Latin American"). */
 export function keyboardLayoutName(klid: string): string | undefined {
   return LAYOUTS[klid]?.name
