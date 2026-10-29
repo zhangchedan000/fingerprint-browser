@@ -45,6 +45,13 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     form.setFieldsValue(proxy
       ? { protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: '', passwordStored: proxy.passwordStored, note: proxy.note, apiUrl: proxy.apiUrl ?? '' }
       : EMPTY)
+    // The saved password fills its box as dots; the eye button shows it.
+    let current = true
+    if (proxy?.passwordStored) {
+      void window.browserApi.proxy.password(proxy.id).then((password) => {
+        if (current && password && !form.getFieldValue('password')) form.setFieldValue('password', password)
+      }).catch(() => undefined)
+    }
     setApiMode(Boolean(proxy?.apiUrl))
     setChosenRoute(proxy?.tunnel)
     setPaste('')
@@ -52,6 +59,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     setPasted(null)
     checkRun.current += 1
     setResult(null)
+    return () => { current = false }
   }, [open, proxy, form])
 
   function applyPaste(text: string): void {
@@ -87,6 +95,9 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
 
   return (
     <Modal
+      // Only × or 取消 closes it: a click beside it or Esc would lose what was typed.
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title={proxy ? t("编辑代理") : t("添加代理")}
       okText={t("保存")}
@@ -142,7 +153,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
         <Form.Item name="note" label={t("备注")}>
           <Input maxLength={200} placeholder={t("例如：住宅 IP、BM 专用")} />
         </Form.Item>
-        <Form.Item label={t("网络加速")} extra={t("检测这个代理时按这里连接；把它分配给窗口时，窗口先用这个设置，之后可在窗口里单独修改")}>
+        <Form.Item label={t("网络加速")} extra={t("分配给窗口时，窗口先用这个设置")}>
           <TunnelRouteField
             value={shownRoute}
             status={tunnelStatus}

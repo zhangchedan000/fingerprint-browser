@@ -29,7 +29,7 @@ export function KernelSwitchModal({ open, count, runningCount, kernels, engine, 
     },
     ...kernels
       .filter((kernel) => kernel.installed && kernel.executable)
-      .map((kernel) => ({ value: kernel.version, label: kernelName(kernel.version) }))
+      .map((kernel, _index, ready) => ({ value: kernel.version, label: kernelName(kernel.version, ready.map((item) => item.version)) }))
   ]
 
   return (

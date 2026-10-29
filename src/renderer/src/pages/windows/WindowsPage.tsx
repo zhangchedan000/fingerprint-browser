@@ -42,7 +42,7 @@ import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
 import { ProfileEditor, type ProfileEditorExtras } from './ProfileEditor'
 import { profileTableSorters } from './profile-table-sort'
-import { kernelName, kernelShortName } from '../../../../shared/kernel-id'
+import { kernelName, kernelShortName, kernelFullName } from '../../../../shared/kernel-id'
 
 type ListTabKey = 'all' | 'running' | 'favorites' | 'ungrouped' | 'attention'
 const ALL_GROUPS = '__all__'
@@ -510,8 +510,8 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         <div className="fb-kernel-cell">
           <span>{profile.fingerprint.platform === 'windows' ? 'Windows' : 'macOS'} · {profile.fingerprint.brand}</span>
           {profile.kernelVersion
-            ? <Tooltip title={kernelName(profile.kernelVersion)}><small className="pinned">{t("{0} · 指定", kernelShortName(profile.kernelVersion))}</small></Tooltip>
-            : <Tooltip title={engine?.version ? kernelName(engine.version) : undefined}><small>{engine?.version ? t("{0} · 默认", kernelShortName(engine.version)) : t("默认内核")}</small></Tooltip>}
+            ? <Tooltip title={kernelFullName(profile.kernelVersion)}><small className="pinned">{t("{0} · 指定", kernelShortName(profile.kernelVersion))}</small></Tooltip>
+            : <Tooltip title={engine?.version ? kernelFullName(engine.version) : undefined}><small>{engine?.version ? t("{0} · 默认", kernelShortName(engine.version)) : t("默认内核")}</small></Tooltip>}
         </div>
       )
     },

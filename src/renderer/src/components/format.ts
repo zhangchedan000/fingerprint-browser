@@ -1,5 +1,5 @@
 import { kernelChromiumVersion } from '../../../shared/kernel-id'
-import { t, translateMessage as mt } from '../../../shared/i18n'
+import { getLocale, t, translateMessage as mt } from '../../../shared/i18n'
 import type { ProfileStatus } from '../../../shared/types'
 
 /** Window states in which a browser process exists. */
@@ -55,4 +55,13 @@ export function relativeTime(iso: string | undefined, locale: string, never = t(
   if (time >= startOfToday) return t("今天 {0}", clock)
   if (time >= startOfToday - 86_400_000) return t("昨天 {0}", clock)
   return date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+/** A country named in the launcher's language. */
+export function regionName(code: string): string {
+  try {
+    return new Intl.DisplayNames([getLocale()], { type: 'region' }).of(code) ?? code
+  } catch {
+    return code
+  }
 }

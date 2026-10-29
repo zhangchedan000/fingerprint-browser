@@ -10,7 +10,7 @@ import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
-import { kernelName, kernelVendor } from '../../../../shared/kernel-id'
+import { kernelName, kernelVendor, kernelFullName } from '../../../../shared/kernel-id'
 
 const FOLLOW_DEFAULT = ''
 
@@ -135,7 +135,8 @@ export function KernelsPage({ navigate }: PageProps) {
       dataIndex: 'version',
       render: (version: string, kernel) => (
         <span>
-          <span className="fb-mono">{kernelName(version)}</span>
+          <span>{kernelName(version, kernels.map((item) => item.version))}</span>
+          <small className="fb-mono fb-muted fb-kernel-full">{[kernelFullName(version), kernel.tag].filter(Boolean).join(' · ')}</small>
           {kernel.webrtcRelay && (
             <Tooltip title={t("WebRTC 可经代理 UDP 转发，可完全关闭 WebRTC；字体按系统语言显示 Windows 自带字体")}>
               <Tag color="blue" className="fb-inline-tag">{t("WebRTC 代理 · 语言字体")}</Tag>
@@ -193,7 +194,7 @@ export function KernelsPage({ navigate }: PageProps) {
   ]
 
   const targetOptions = [
-    ...ready.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version)}${kernel.version === defaultVersion ? ` · ${t("默认")}` : ''}` })),
+    ...ready.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version, ready.map((item) => item.version))}${kernel.version === defaultVersion ? ` · ${t("默认")}` : ''}` })),
     { value: FOLLOW_DEFAULT, label: t("跟随默认内核") }
   ]
   const users = defaultVersion ? kernelUsers(profiles, defaultVersion, defaultVersion).length : profiles.filter((profile) => !profile.kernelVersion).length

@@ -25,6 +25,9 @@ export function GroupFormModal({ open, group, busy, onSubmit, onClose }: GroupFo
 
   return (
     <Modal
+      // Only × or 取消 closes it: a click beside it or Esc would lose what was typed.
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title={group ? t("重命名分组") : t("新建分组")}
       okText={t("保存")}

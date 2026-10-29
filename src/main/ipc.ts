@@ -51,6 +51,12 @@ interface IpcDependencies {
 
 export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
+  // Only for the editor's eye button: lists and views never carry passwords.
+  ipcMain.handle('profiles:passwords', (_event, id: string) => {
+    const profile = profiles.get(id)
+    return { proxy: profile.proxy.password ?? '', account: profile.account.password ?? '' }
+  })
+  ipcMain.handle('proxy:password', (_event, id: string) => profiles.getProxy(id).password ?? '')
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {

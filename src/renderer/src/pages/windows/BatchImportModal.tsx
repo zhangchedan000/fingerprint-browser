@@ -144,6 +144,7 @@ export function BatchImportModal({ open, groups, onImported, onClose, onError, o
       footer={footer}
       onCancel={committing ? undefined : onClose}
       maskClosable={false}
+      keyboard={false}
       destroyOnHidden
       className="fb-import"
     >

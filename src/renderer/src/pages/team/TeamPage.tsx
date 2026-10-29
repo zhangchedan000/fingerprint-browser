@@ -88,7 +88,7 @@ function MemberFormModal({ member, open, onClose, onSaved }: { member?: TeamUser
   }
 
   return (
-    <Modal open={open} title={member ? t("修改成员") : t("新建成员")} okText={t("保存")} cancelText={t("取消")} confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
+    <Modal maskClosable={false} keyboard={false} open={open} title={member ? t("修改成员") : t("新建成员")} okText={t("保存")} cancelText={t("取消")} confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
       <Form layout="vertical" form={form} onFinish={(values) => void save(values)}>
         <Form.Item name="username" label={t("用户名")} extra={t("成员用它登录，不能有空格和 @")} rules={[{ required: true, message: t("请填写用户名") }, { pattern: /^[^\s@]{2,64}$/, message: t("2 到 64 个字符，不能有空格和 @") }]}>
           <Input autoComplete="off" />
@@ -272,7 +272,7 @@ function PasswordModal({ open, onClose }: { open: boolean; onClose: () => void }
   }
 
   return (
-    <Modal open={open} title={t("修改密码")} okText={t("保存")} cancelText={t("取消")} confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
+    <Modal maskClosable={false} keyboard={false} open={open} title={t("修改密码")} okText={t("保存")} cancelText={t("取消")} confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
       <Form layout="vertical" form={form} onFinish={(values) => void save(values)} autoComplete="off">
         <Form.Item name="oldPassword" label={t("当前密码")} rules={[{ required: true, message: t("请填写当前密码") }]}>
           <Input.Password autoComplete="current-password" />
@@ -843,7 +843,7 @@ function OffsiteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =
   }
 
   return (
-    <Modal open={open} title="设置异地备份（Cloudflare R2）" okText="测试并保存" cancelText="取消" confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
+    <Modal maskClosable={false} keyboard={false} open={open} title="设置异地备份（Cloudflare R2）" okText="测试并保存" cancelText="取消" confirmLoading={busy} onOk={() => form.submit()} onCancel={onClose} destroyOnHidden>
       <Form layout="vertical" form={form} onFinish={(values) => void save(values)} autoComplete="off">
         <Form.Item name="url" label="S3 API 地址" extra="R2 存储桶「设置」页里的 S3 API，形如 https://xxxx.r2.cloudflarestorage.com/存储桶名"
           rules={[{ required: true, message: '请填写 S3 API 地址' }, { pattern: /^https:\/\/[a-z0-9.-]+\/[a-z0-9-]+\/?$/i, message: '地址要带上存储桶名' }]}>

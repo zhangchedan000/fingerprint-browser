@@ -47,15 +47,31 @@ export function kernelChromiumVersion(id: string | null | undefined): string | u
 }
 
 const VENDOR_NAMES: Record<KernelVendor, string> = { 'fingerprint-chromium': 'Chromium', clearcote: 'Clearcote', prism: 'Prism' }
+/** What a kernel is shown as: our Prism builds are Chrome to the user. */
+const BRAND_NAMES: Record<KernelVendor, string> = { 'fingerprint-chromium': 'Chromium', clearcote: 'Clearcote', prism: 'Chrome' }
 
-/** "Chromium 148.0.7778.215" / "Clearcote 150.0.7871.114" / "Prism 156.0.8078.47". */
-export function kernelName(id: string): string {
+const majorOf = (id: string) => kernelChromiumVersion(id).split('.')[0]
+
+/** The full name, for the kernel page: "Prism 156.0.8078.47" / "Prism 155.0.8059.84 · 10-26 19:27". */
+export function kernelFullName(id: string): string {
   const build = kernelBuildLabel(id)
   return `${VENDOR_NAMES[kernelVendor(id)]} ${kernelChromiumVersion(id)}${build ? ` · ${build}` : ''}`
 }
 
-/** "Chromium 148" / "Clearcote 150" / "Prism 156". */
-export function kernelShortName(id: string): string {
+/**
+ * "Chrome 156" / "Chrome 155". Given the kernels it is listed with (`among`), one that shares its
+ * name with another also shows what tells them apart: its build time, else its full version.
+ */
+export function kernelName(id: string, among: readonly string[] = []): string {
+  const name = `${BRAND_NAMES[kernelVendor(id)]} ${majorOf(id)}`
+  const twins = among.filter((other) => other !== id && kernelVendor(other) === kernelVendor(id) && majorOf(other) === majorOf(id))
+  if (!twins.length) return name
   const build = kernelBuildLabel(id)
-  return `${VENDOR_NAMES[kernelVendor(id)]} ${kernelChromiumVersion(id).split('.')[0]}${build ? ` · ${build}` : ''}`
+  if (build) return `${name} · ${build}`
+  return twins.some((other) => kernelChromiumVersion(other) !== kernelChromiumVersion(id)) ? `${name} · ${kernelChromiumVersion(id)}` : name
+}
+
+/** Same as kernelName (kept for the window list). */
+export function kernelShortName(id: string, among: readonly string[] = []): string {
+  return kernelName(id, among)
 }

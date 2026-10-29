@@ -2,7 +2,7 @@ import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { FontPackDownload } from '../../components/FontPackDownload'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
-import { relativeTime } from '../../components/format'
+import { regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import { fittingCountryZone, ipZoneFix, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
 import {
@@ -26,6 +26,7 @@ import {
   Typography,
   Upload
 } from 'antd'
+import { ThunderboltOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
@@ -51,7 +52,7 @@ import { acceptLanguageHeader, chromeAcceptLanguages, effectiveNetworkIdentity, 
 import { allWindowsZones, countryWindowsZones, defaultCountryZone, windowsCountries, windowsZoneLabel } from '../../../../shared/windows-time-zones'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import { parseCookieFile } from '../../../../main/cookie-file'
-import { PLATFORMS } from '../../../../shared/platforms'
+import { PLATFORM_URLS, PLATFORMS } from '../../../../shared/platforms'
 import type {
   ApiCheckRecord,
   BrowserExtension,
@@ -74,6 +75,7 @@ import type {
 import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY, type DeviceMemoryGb } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
+import { ExitIpCard } from '../../components/ExitIpCard'
 import { DeepCheck } from './DeepCheck'
 import { kernelName } from '../../../../shared/kernel-id'
 
@@ -243,12 +245,21 @@ function countPastedCookies(text: string): { count?: number; error?: string } {
 }
 
 /** One label + controls line, laid out like the design's two-column rows. */
-function Row({ label, children, hint, required, check }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean; check?: ReactNode }) {
+/**
+ * One editor row. `fix`: the one-click change for what does not fit in this row, shown inside the
+ * choice's box at its right end (the same place in every row); the reason is the line under it.
+ */
+function Row({ label, children, hint, required, check, fix }: { label: ReactNode; children: ReactNode; hint?: ReactNode; required?: boolean; check?: ReactNode; fix?: QuickFix }) {
   return (
-    <div className="fb-form-row">
+    <div className={`fb-form-row${fix ? ' has-fix' : ''}`}>
       <span className="fb-form-label">{label}{required && <em>*</em>}</span>
       <div className="fb-form-control">
         {children}
+        {fix && (
+          <Unlocked>
+            <Button size="small" className="fb-inbox-fix" icon={<ThunderboltOutlined />} title={fix.label} onClick={fix.apply}>{t("一键修正")}</Button>
+          </Unlocked>
+        )}
         {hint && <span className="fb-form-hint">{hint}</span>}
         {check}
       </div>
@@ -263,7 +274,7 @@ interface QuickFix {
   apply: () => void
 }
 
-function CheckResults({ items, stale, fixOf }: { items: FingerprintCheckItem[]; stale: boolean; fixOf: (item: FingerprintCheckItem, stale: boolean) => QuickFix | undefined }) {
+function CheckResults({ items, stale, fixOf, buttons }: { items: FingerprintCheckItem[]; stale: boolean; fixOf: (item: FingerprintCheckItem, stale: boolean) => QuickFix | undefined; buttons?: boolean }) {
   if (!items.length) return null
   return (
     <div className={`fb-check-results${stale ? ' is-stale' : ''}`}>
@@ -273,7 +284,8 @@ function CheckResults({ items, stale, fixOf }: { items: FingerprintCheckItem[]; 
           <div key={index} className={`fb-check-item is-${item.status}`}>
             <span className="fb-check-dot" />
             <span className="fb-check-message">{mt(item.message)}</span>
-            {fix && <Button type="link" size="small" onClick={fix.apply}>{fix.label}</Button>}
+            {/* Under a row its 一键修正 is in the box; results that belong to no row keep their own button. */}
+            {fix && (buttons ? <Button type="link" size="small" onClick={fix.apply}>{fix.label}</Button> : <span className="fb-check-fix">· {fix.label}</span>)}
           </div>
         )
       })}
@@ -281,12 +293,12 @@ function CheckResults({ items, stale, fixOf }: { items: FingerprintCheckItem[]; 
   )
 }
 
-/** A yellow note under a row that does not fit the rest, with the change that makes it fit. */
+/** A yellow note under a row that does not fit the rest, naming the change its 一键修正 makes. */
 function RowWarning({ children, fix }: { children: ReactNode; fix?: QuickFix }) {
   return (
     <span className="fb-row-warning">
       {children}
-      {fix && <Button type="link" size="small" className="fb-row-fix" onClick={fix.apply}>{fix.label}</Button>}
+      {fix && <span className="fb-row-fix"> · {fix.label}</span>}
     </span>
   )
 }
@@ -384,15 +396,6 @@ const TIME_ZONES: string[] = (() => {
   try { return Intl.supportedValuesOf('timeZone') } catch { return ['Asia/Shanghai', 'America/New_York', 'Europe/London'] }
 })()
 
-/** A country named in the launcher's language. */
-function regionName(code: string): string {
-  try {
-    return new Intl.DisplayNames([getLocale()], { type: 'region' }).of(code) ?? code
-  } catch {
-    return code
-  }
-}
-
 /** Countries a window can be set to: a Windows zone and a language Chrome has for it. */
 function regionChoices() {
   return windowsCountries()
@@ -476,6 +479,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
   const startupMode = Form.useWatch('startupMode', { form, preserve: true })
+  const startUrlText = String(Form.useWatch('startUrlsText', { form, preserve: true }) ?? '')
+  const accountPlatform = String(Form.useWatch(['account', 'platform'], { form, preserve: true }) ?? '')
+  /** The seller sites of the account's platform, when it has one per region. */
+  const platformSites = PLATFORMS.find((item) => item.value === accountPlatform)?.sites
   const libraryProxy = proxyMode === 'library' ? proxies.find((item) => item.id === proxyId) : undefined
   /** Protocol of the proxy the window will use, whether typed or picked. */
   const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : proxyMode === 'api' ? 'http' : typedProtocol
@@ -541,6 +548,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setCheckError('')
     let current = true
     if (profile) void window.browserApi.profiles.lastFingerprintCheck(profile.id).then((report) => { if (current) setCheckReport(report) }).catch(() => undefined)
+    // Saved passwords fill their boxes as dots; the eye button shows them.
+    if (profile) {
+      void window.browserApi.profiles.passwords(profile.id).then(({ proxy, account }) => {
+        if (!current) return
+        if (proxy && form.getFieldValue(['proxy', 'passwordStored']) && !form.getFieldValue(['proxy', 'password'])) form.setFieldValue(['proxy', 'password'], proxy)
+        if (account && form.getFieldValue(['account', 'passwordStored']) && !form.getFieldValue(['account', 'password'])) form.setFieldValue(['account', 'password'], account)
+      }).catch(() => undefined)
+    }
     return () => { current = false }
   }, [form, open, profile, suggestedIndex])
 
@@ -580,6 +595,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     void runCheck()
   }, [recheck, checking, currentSettingsKey])
   // The 指纹值 rows show their value in the box: only a problem with it adds a line.
+  /** The first one-click change the check offers for these rows (shown in the row's box). */
+  const checkFix = (...rows: FingerprintCheckRow[]): QuickFix | undefined => {
+    const stale = rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale
+    for (const item of checkReport?.items ?? []) {
+      if (!rows.includes(item.row) || item.status === 'ok') continue
+      const fix = fixOf(item, stale)
+      if (fix) return fix
+    }
+    return undefined
+  }
   const checkFor = (...rows: FingerprintCheckRow[]) => {
     const items = checkReport?.items.filter((item) => rows.includes(item.row) && !(NOISE_ROWS.has(item.row) && item.status === 'ok'))
     return items?.length
@@ -1043,10 +1068,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }
   }
 
-  function onPlatformChange(platform: string): void {
-    const known = PLATFORMS.find((item) => item.value === platform)
+  /** The start addresses are empty or only what a platform filled in (none typed by hand). */
+  function startUrlsAreFilledIn(): boolean {
     const urls = String(form.getFieldValue('startUrlsText') ?? '').trim()
-    if (known && (!urls || urls === 'https://browserleaks.com/')) form.setFieldValue('startUrlsText', known.url)
+    return !urls || urls === 'https://browserleaks.com/' || PLATFORM_URLS.has(urls)
+  }
+
+  /** A platform picked (or cleared): its address replaces one a platform filled in; one typed by hand stays. */
+  function onPlatformChange(platform: string): void {
+    if (!startUrlsAreFilledIn()) return
+    form.setFieldValue('startUrlsText', PLATFORMS.find((item) => item.value === platform)?.url ?? '')
   }
 
   async function submit(): Promise<void> {
@@ -1198,6 +1229,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Form.Item name="startupMode" noStyle>
             <Radio.Group options={[{ value: 'urls', label: t("打开指定页面") }, { value: 'restore', label: t("打开上次关闭的页面") }]} />
           </Form.Item>
+          {startupMode !== 'restore' && platformSites && (
+            // Amazon and TikTok Shop have a seller site per region: the one picked here is the start page.
+            <Select
+              className="fb-site-select"
+              prefix={t("站点")}
+              placeholder={t("选择站点")}
+              value={platformSites.find((site) => site.url === startUrlText.trim())?.region}
+              onChange={(region: string) => form.setFieldValue('startUrlsText', platformSites.find((site) => site.region === region)?.url ?? '')}
+              options={platformSites.map((site) => ({ value: site.region, label: site.region === 'EU' ? t("欧洲（英国、德国、法国、意大利、西班牙）") : regionName(site.region) }))}
+              showSearch
+              optionFilterProp="label"
+              popupMatchSelectWidth={false}
+            />
+          )}
           <Form.Item noStyle shouldUpdate={(before, after) => before.startupMode !== after.startupMode}>
             {() => <Form.Item name="startUrlsText" noStyle>
               <Input.TextArea disabled={form.getFieldValue('startupMode') === 'restore'} autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
@@ -1295,11 +1340,83 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const apiTriggerLabels: Record<ApiCheckRecord['trigger'], string> = { check: t("检测代理"), refresh: t("换一个 IP"), launch: t("打开窗口") }
   const apiLog = keptEndpoint || (apiView?.apiProxy && apiUrlTyped === apiView.apiProxy.url) ? apiView?.apiProxy?.log ?? [] : []
 
+  /** What a check found, as the chosen exit IP: the window uses this IP; its country sets the identity below. */
+  const exitCard = !proxyResult
+    ? <span className="fb-muted">{proxyProtocol === 'direct' ? t("还没检测；检测后这里是本机的出口 IP") : t("还没检测；检测后这里是这个窗口的出口 IP")}</span>
+    : (
+      <ExitIpCard
+        result={proxyResult}
+        stale={proxyEdited}
+        typeHint={proxyMode !== 'library' && proxyMode !== 'api'}
+        risk={proxyResult.ok && proxyResult.networkRisk ? riskLabels[proxyResult.networkRisk] : undefined}
+        notes={[
+          resultNote,
+          resultAddress && (
+            <>
+              {t("提取地址")} <span className="fb-mono">{resultAddress.address}</span>{placeText(resultAddress.place) && `（${placeText(resultAddress.place)}）`}
+              {keptEndpoint?.fetchedAt && ` · ${t("取于 {0}", relativeTime(keptEndpoint.fetchedAt, getLocale(), ''))}`}
+            </>
+          )
+        ]}
+      />
+    )
+  const apiRecords = proxyMode === 'api' && (apiView?.apiProxy?.history?.length || apiLog.length) ? (
+    <section className="fb-fp-card">
+      <div className="fb-fp-card-head">
+        <h3 className="fb-fp-group">{t("记录")}</h3>
+      </div>
+      <Tabs
+        size="small"
+        items={[
+          {
+            key: 'ips',
+            label: t("IP 使用记录 · {0}", apiView?.apiProxy?.history?.length ?? 0),
+            children: (
+              <div className="fb-record-list">
+                {(apiView?.apiProxy?.history ?? []).slice(0, 10).map((entry) => (
+                  <div key={`${entry.at}-${entry.ip}`}>
+                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')}</span>
+                    <span className="fb-mono">{entry.ip}{entry.port ? `:${entry.port}` : ''}</span>
+                    <span>{[entry.countryCode ? regionName(entry.countryCode.toUpperCase()) : '', entry.city].filter(Boolean).join(' ')}</span>
+                  </div>
+                ))}
+                {(apiView?.apiProxy?.history?.length ?? 0) > 10 && <span className="fb-muted">{t("共 {0} 条，只显示最近 10 条", apiView?.apiProxy?.history?.length ?? 0)}</span>}
+              </div>
+            )
+          },
+          {
+            key: 'log',
+            label: t("检测记录 · {0}", apiLog.length),
+            children: (
+              <div className="fb-record-list">
+                {apiLog.slice(0, showApiLog ? apiLog.length : 5).map((entry) => (
+                  <div key={`${entry.at}-${entry.address ?? ''}-${entry.trigger}`}>
+                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')} · {apiTriggerLabels[entry.trigger]}</span>
+                    <span className="fb-mono">{[entry.address, entry.ok ? entry.ip : ''].filter(Boolean).join(' → ')}</span>
+                    {entry.ok
+                      ? <span className="fb-success-text">{t("成功")}{entry.fetched ? ` · ${t("新提取")}` : ''}{entry.rotating && <Tag color="warning" className="fb-inline-tag">{t("轮换 IP")}</Tag>}</span>
+                      : <span className="fb-danger-text">{t("失败：{0}", mt(entry.error))}</span>}
+                  </div>
+                ))}
+                {apiLog.length > 5 && (
+                  <Button size="small" type="link" className="fb-link-start" onClick={() => setShowApiLog(!showApiLog)}>
+                    {showApiLog ? t("收起") : t("展开全部 {0} 条", apiLog.length)}
+                  </Button>
+                )}
+              </div>
+            )
+          }
+        ]}
+      />
+    </section>
+  ) : null
+
   const proxy = (
     <div className="fb-editor-section">
       <section className="fb-fp-card">
         <div className="fb-fp-card-head">
           <h3 className="fb-fp-group">{t("代理")}</h3>
+          <span className="fb-fp-card-sub">{proxyMode === 'api' ? t("填好服务商给的 API 链接") : t("填好或选好要用的代理")}</span>
         </div>
       <Row
         label={t("代理方式")}
@@ -1321,6 +1438,22 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ]}
         />
       </Row>
+      {proxyMode !== 'api' && <Row
+        label={t("快速粘贴")}
+        hint={pasteError
+          ? <Typography.Text type="danger">{pasteError}</Typography.Text>
+          : pasted && proxyMode !== 'library' && proxyMode !== 'direct'
+            ? <Typography.Text type="success">{t("已识别：{0}", pastedProxySummary(pasted, proxyMode))}{pasted.protocol ? '' : ` · ${t("未写协议，按当前选择的类型")}`}</Typography.Text>
+            : undefined}
+      >
+        <Input.TextArea
+          className="fb-paste"
+          autoSize={{ minRows: 1, maxRows: 5 }}
+          value={pasteText}
+          placeholder={PASTE_PLACEHOLDER}
+          onChange={(event) => applyPastedProxy(event.target.value)}
+        />
+      </Row>}
       {proxyMode === 'library' && (
         <>
           <Row
@@ -1365,59 +1498,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Form.Item>
           </Row>
           <FieldError name={['proxy', 'apiUrl']} />
-          {apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url && (
-            <Row label={t("当前 IP")} hint={t("窗口一直用这个代理，直到它不能用了才从链接取新的；点「换一个 IP」可以手动换")}>
-              <span className="fb-api-current">
-                <span className="fb-mono">{apiView.proxyCheck?.ok && apiView.proxyCheck.ip ? apiView.proxyCheck.ip : t("未检测")}</span>
-                {apiView.proxyCheck?.ok && <span className="fb-muted">{[apiView.proxyCheck.countryCode, apiView.proxyCheck.city].filter(Boolean).join(' ')}</span>}
-                <span className="fb-muted">
-                  {t("提取地址")} <span className="fb-mono">{apiView.apiProxy.endpoint.protocol.toUpperCase()} {apiView.apiProxy.endpoint.host}:{apiView.apiProxy.endpoint.port}</span>
-                  {placeText(apiView.apiProxy.endpoint.place) && `（${placeText(apiView.apiProxy.endpoint.place)}）`}
-                </span>
-                {apiView.apiProxy.endpoint.fetchedAt && <span className="fb-muted">{t("取于 {0}", relativeTime(apiView.apiProxy.endpoint.fetchedAt, getLocale(), ''))}</span>}
-              </span>
-            </Row>
-          )}
-          {apiView?.apiProxy?.history?.length ? (
-            <Row label={t("IP 使用记录")} hint={t("这个窗口从链接取到过的 IP，最近的在上面")}>
-              <div className="fb-ip-history">
-                {apiView.apiProxy.history.slice(0, 10).map((entry) => (
-                  <div key={`${entry.at}-${entry.ip}`}>
-                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')}</span>
-                    <span className="fb-mono">{entry.ip}{entry.port ? `:${entry.port}` : ''}</span>
-                    <span className="fb-muted">{[entry.countryCode, entry.city].filter(Boolean).join(' ')}</span>
-                  </div>
-                ))}
-                {apiView.apiProxy.history.length > 10 && <span className="fb-muted">{t("共 {0} 条，只显示最近 10 条", apiView.apiProxy.history.length)}</span>}
-              </div>
-            </Row>
-          ) : null}
-          {apiLog.length > 0 && (
-            <Row label={t("检测记录")} hint={t("最近 50 次提取和检测，失败也记")}>
-              <div className="fb-api-log">
-                {apiLog.slice(0, showApiLog ? apiLog.length : 5).map((entry) => (
-                  <div key={`${entry.at}-${entry.address ?? ''}-${entry.trigger}`}>
-                    <span className="fb-muted">{relativeTime(entry.at, getLocale(), '')} · {apiTriggerLabels[entry.trigger]}{entry.fetched ? ` · ${t("新提取")}` : ''}</span>
-                    {entry.address && <span className="fb-mono">{entry.address}</span>}
-                    {placeText(entry.addressPlace) && <span className="fb-muted">{placeText(entry.addressPlace)}</span>}
-                    {entry.ok
-                      ? <span>→ <span className="fb-mono">{entry.ip}</span> <span className="fb-muted">{[entry.countryCode, entry.city].filter(Boolean).join(' ')}</span>{entry.rotating && <Tag color="warning" className="fb-inline-tag">{t("轮换 IP")}</Tag>}</span>
-                      : <span className="fb-danger-text">{t("失败：{0}", mt(entry.error))}</span>}
-                  </div>
-                ))}
-                {apiLog.length > 5 && (
-                  <Button size="small" type="link" className="fb-link-start" onClick={() => setShowApiLog(!showApiLog)}>
-                    {showApiLog ? t("收起") : t("展开全部 {0} 条", apiLog.length)}
-                  </Button>
-                )}
-              </div>
-            </Row>
-          )}
         </>
       )}
       {proxyMode !== 'library' && proxyMode !== 'api' && proxyProtocol !== 'direct' && (
         <>
-          <Row label={t("代理地址")} required>
+          <Row label={t("地址 / 端口")} required>
             <div className="fb-host-grid">
               <Form.Item name={['proxy', 'host']} noStyle rules={[{ required: true, message: t("请输入代理主机") }]}>
                 <Input placeholder="proxy.example.com" />
@@ -1449,22 +1534,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Row>
         </>
       )}
-      {proxyMode !== 'api' && <Row
-        label={t("快速粘贴")}
-        hint={pasteError
-          ? <Typography.Text type="danger">{pasteError}</Typography.Text>
-          : pasted && proxyMode !== 'library' && proxyMode !== 'direct'
-            ? <Typography.Text type="success">{t("已识别：{0}", pastedProxySummary(pasted, proxyMode))}{pasted.protocol ? '' : ` · ${t("未写协议，按当前选择的类型")}`}</Typography.Text>
-            : undefined}
-      >
-        <Input.TextArea
-          className="fb-paste"
-          autoSize={{ minRows: 1, maxRows: 5 }}
-          value={pasteText}
-          placeholder={PASTE_PLACEHOLDER}
-          onChange={(event) => applyPastedProxy(event.target.value)}
-        />
-      </Row>}
       {proxyProtocol !== 'direct' && (
         <Row label={t("网络加速")}>
           <TunnelRouteField
@@ -1475,82 +1544,65 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           />
         </Row>
       )}
-      <Row label="">
-        <div className="fb-proxy-test">
-          {/* An open API window is not checked here: a dead proxy would be replaced under the running browser. */}
-          {proxyMode === 'api'
-            ? <Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button>
-            : <Unlocked><Button loading={testingProxy} onClick={() => void testCurrentProxy()}>{t("检测代理")}</Button></Unlocked>}
-          {proxyMode === 'api' && apiView?.apiProxy?.endpoint && apiUrlTyped === apiView.apiProxy.url && (
-            <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
-              <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
-            </Tooltip>
-          )}
-          {proxyResult?.ok && (
-            <span className={`fb-proxy-result ${proxyResult.geoConfidence === 'conflict' ? 'warn' : 'ok'}`}>
-              {t("连接正常")} · {resultAddress
-                ? t("提取 {0} → 出口 {1}", `${resultAddress.address}${placeText(resultAddress.place) ? `（${placeText(resultAddress.place)}）` : ''}`, proxyResult.ip)
-                : proxyResult.ip} · {[proxyResult.country ?? proxyResult.countryCode, proxyResult.city].filter(Boolean).join(' ')} · {t("延迟 {0} ms", proxyResult.latencyMs)}
-              {proxyResult.udp !== undefined && ` · ${proxyResult.udp ? t("支持 UDP") : t("不支持 UDP")}`}
-              {proxyResult.networkRisk && <Tag color="warning" className="fb-inline-tag">{riskLabels[proxyResult.networkRisk]}</Tag>}
-            </span>
-          )}
-          {proxyResult && !proxyResult.ok && (
-            <span className="fb-proxy-result bad">
-              {t("连接失败：{0}", mt(proxyResult.error))}
-              {proxyMode !== 'library' && proxyMode !== 'api' && !proxyResult.error?.includes('白名单') ? ` · ${t("请确认代理类型（HTTP / SOCKS5）是否选对")}` : ''}
-            </span>
-          )}
-          {proxyResult && resultNote && <span className={`fb-muted${proxyEdited ? ' fb-result-stale' : ''}`}>{resultNote}</span>}
-        </div>
-      </Row>
-      {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (
-        <Alert
-          type="warning"
-          showIcon
-          className="fb-editor-alert"
-          title={proxyResult.geoConflict?.includes('轮换代理')
-            ? t("{0}；不会按它配置国家和语言，请在代理商后台改成固定会话（粘性 IP）", mt(proxyResult.geoConflict))
-            : t("{0}；不会按它配置国家和语言，启动时会再检测并由你确认", mt(proxyResult.geoConflict))}
-        />
-      )}
-      {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
-      {proxyResult?.ok && !proxyEdited && regionMismatch && (
-        <Alert
-          type="warning"
-          showIcon
-          className="fb-editor-alert"
-          title={t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
-          action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
-        />
-      )}
       </section>
 
       <section className="fb-fp-card">
         <div className="fb-fp-card-head">
-          <h3 className="fb-fp-group">{t("网络身份")}</h3>
+          <h3 className="fb-fp-group">{t("出口 IP")}</h3>
+          <span className="fb-fp-card-sub">{proxyMode === 'api' ? t("一个 IP 用到失效才从链接取新的") : t("检测后就是这个窗口用的 IP")}</span>
+          <span className="fb-fp-card-actions">
+            {proxyMode === 'api' && keptEndpoint && (
+              <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
+                <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
+              </Tooltip>
+            )}
+            {/* An open API window is not checked here: a dead proxy would be replaced under the running browser. */}
+            {proxyMode === 'api'
+              ? <Button type="primary" ghost loading={testingProxy} onClick={() => void testCurrentProxy()}>{proxyResult ? t("重新检测") : t("检测代理")}</Button>
+              : <Unlocked><Button type="primary" ghost loading={testingProxy} onClick={() => void testCurrentProxy()}>{proxyResult ? t("重新检测") : t("检测代理")}</Button></Unlocked>}
+          </span>
         </div>
-      <Row label={t("时区和语言")}>
-        <span className="fb-muted">
-          {fromIp && fp.region
-            ? t("基于 IP 生成：{0} · {1} · {2}", regionName(fp.region), fp.language, fp.timezone)
-            : t("手动选择：{0} · {1} · {2}", fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone)}
-        </span>
-        <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
-      </Row>
-      {/* An API window takes a new proxy when its own stops working: an exit change is expected there. */}
-      {proxyMode !== 'api' && (
-        <Row label={t("出口变化时")} hint={t("出口 IP 和上次检测的不一样时怎么处理")}>
-          <Radio.Group
-            size="small"
-            optionType="button"
-            value={fp.proxyExitPolicy}
-            onChange={(event) => patchFingerprint({ proxyExitPolicy: event.target.value })}
-            options={[{ value: 'block', label: t("阻止启动并确认（推荐）") }, { value: 'warn', label: t("仅告警，继续启动") }]}
+        {exitCard}
+        {proxyResult?.ok && proxyResult.geoConfidence === 'conflict' && (
+          <Alert
+            type="warning"
+            showIcon
+            className="fb-editor-alert"
+            title={proxyResult.geoConflict?.includes('轮换代理')
+              ? t("{0}；不会按它配置国家和语言，请在代理商后台改成固定会话（粘性 IP）", mt(proxyResult.geoConflict))
+              : t("{0}；不会按它配置国家和语言，启动时会再检测并由你确认", mt(proxyResult.geoConflict))}
           />
-        </Row>
-      )}
+        )}
+        {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
+        <div className="fb-ip-identity">
+          <Row label={t("网络身份")}>
+            <span className="fb-identity-line">
+              <span>{[fp.region ? regionName(fp.region) : t("自定义"), fp.language, fp.timezone].join(' · ')}</span>
+              <span className={`fb-region-source${fromIp ? ' is-ip' : ''}`}>{fromIp ? t("基于 IP 生成") : t("手动选择")}</span>
+              <Button size="small" type="link" onClick={() => setTab('fingerprint')}>{t("在指纹里修改")}</Button>
+            </span>
+            {proxyResult?.ok && !proxyEdited && regionMismatch && (
+              <RowWarning>
+                {t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+                <Button type="link" size="small" className="fb-link-start" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button>
+              </RowWarning>
+            )}
+          </Row>
+          {/* An API window takes a new proxy when its own stops working: an exit change is expected there. */}
+          {proxyMode !== 'api' && (
+            <Row label={t("IP 变了时")}>
+              <Radio.Group
+                size="small"
+                optionType="button"
+                value={fp.proxyExitPolicy}
+                onChange={(event) => patchFingerprint({ proxyExitPolicy: event.target.value })}
+                options={[{ value: 'block', label: t("阻止启动并确认（推荐）") }, { value: 'warn', label: t("仅提醒，继续启动") }]}
+              />
+            </Row>
+          )}
+        </div>
       </section>
+      {apiRecords}
     </div>
   )
 
@@ -1642,6 +1694,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const screenFix: QuickFix | undefined = usualScreen
     ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
     : undefined
+  // No longer offered (today mostly 16-inch laptops): the desktop size next to it.
+  const laptopFix: QuickFix = {
+    label: t("改成 {0}", '2560 × 1440'),
+    apply: () => { const size = cssScreenSize({ width: 2560, height: 1440 }, hostScale()); chooseScreen(`${size.width}x${size.height}`) }
+  }
+  const smallMemoryFix: QuickFix | undefined = fp.deviceMemory && SMALL_DEVICE_MEMORY.includes(fp.deviceMemory)
+    ? { label: t("改为 8 GB"), apply: () => patchFingerprint({ deviceMemory: 8 }) }
+    : undefined
   // Larger than this computer's monitor: the largest offered size that fits it (one desktops with this card have, when there is one).
   const fittingScreens = screenLarger
     ? screenChoices(floor, hostScale())
@@ -1671,7 +1731,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             className="fb-wide-select"
             options={[
               { value: '', label: engine?.version ? t("跟随默认内核（{0}）", kernelName(engine.version)) : t("跟随默认内核") },
-              ...kernels.map((kernel) => ({ value: kernel.version, label: `${kernelName(kernel.version)}${kernel.origin === 'local-build' ? ' · ' + t('本地构建') : ''}` })),
+              ...kernels.map((kernel) => ({ value: kernel.version, label: kernelName(kernel.version, kernels.map((item) => item.version)) })),
               ...(kernelVersion && !pinnedKernel ? [{ value: kernelVersion, label: t("{0} · 当前未安装", kernelName(kernelVersion)) }] : [])
             ]}
           />
@@ -1746,6 +1806,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 ? t("按代理库上次检测的 IP 配好（{0}）", relativeTime(libraryCheck.checkedAt, getLocale()))
                 : t("按检测到的 IP 配好；保存后固定，IP 再变只提醒")
             : t("窗口装成哪个国家的电脑，下面几项跟着配")}
+        fix={regionMismatch && lastCheck ? { label: t("改成和 IP 一致"), apply: () => fixToIp(lastCheck) } : undefined}
       >
         <div className="fb-region-line">
           <Select
@@ -1765,17 +1826,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           />
           <span className={`fb-region-source${fromIp ? ' is-ip' : ''}`}>{fromIp ? t("基于 IP 生成") : t("手动选择")}</span>
         </div>
+        {regionMismatch && (
+          <RowWarning fix={lastCheck ? { label: t("改成和 IP 一致"), apply: () => fixToIp(lastCheck) } : undefined}>
+            {t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
+          </RowWarning>
+        )}
       </Row>
-      {regionMismatch && (
-        <Alert
-          type="warning"
-          showIcon
-          className="fb-editor-alert"
-          title={t("代理 IP 在{0}，窗口是{1}，网站可能发现", regionName(regionMismatch.ip), regionName(regionMismatch.window))}
-          action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
-        />
-      )}
-      <Row label={t("时区")} check={checkFor('timezone')} hint={t("网页里的时间按它显示")}>
+      <Row label={t("时区")} check={checkFor('timezone')} fix={timezoneFix ?? checkFix('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
           <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} labelRender={({ value, label }) => zoneShort(String(value), label)} aria-label={t("时区")} />
         </Form.Item>
@@ -1797,7 +1854,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           aria-label={t("系统语言")}
         />
       </Row>
-      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("网站读到的语言")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
+      <Row label={t("浏览器语言")} check={checkFor('language')} fix={languageFix ?? checkFix('language')} hint={`${t("网站读到的语言")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1836,6 +1893,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row
           label={t("字体")}
           check={checkFor('font')}
+          fix={checkFix('font')}
           hint={fp.fontSource === 'host'
             ? t("这台电脑装的所有字体，用本机字体的窗口都一样")
             : t("Windows 自带字体 + 系统语言的字体包，本机另装的不显示")}
@@ -1874,10 +1932,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
         </Row>
       ) : (
-        <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
+        <Row label={t("字体")} check={checkFor('font')} fix={checkFix('font')}>{noiseControl('font', t("字体"))}</Row>
       )}
 
-      <Row label={t("语音")} hint={t("网页能读到的朗读语音")}>
+      <Row label={t("语音")} hint={t("网页能读到的朗读语音")} fix={fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale ? followSystemLanguage('voicesLocale') : undefined}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1893,7 +1951,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
         {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <RowWarning fix={followSystemLanguage('voicesLocale')}>{t("真实 Windows 的语音一般和系统语言一致")}</RowWarning>}
       </Row>
-      <Row label={t("媒体设备名")} hint={t("网站拿到麦克风、摄像头权限后看到的设备名，如「扬声器」或「Speakers」")}>
+      <Row label={t("媒体设备名")} fix={fp.mediaLocale && fp.mediaLocale !== autoMediaLocale ? followSystemLanguage('mediaLocale') : undefined} hint={t("网站拿到麦克风、摄像头权限后看到的设备名，如「扬声器」或「Speakers」")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1919,6 +1977,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("显卡")}
         check={checkFor('gpu')}
+        fix={gpuMissing ? { label: t("换一块显卡"), apply: shuffleGpu } : checkFix('gpu')}
         hint={gpuReal
           ? t("使用这台电脑的真实显卡（WebGL、WebGPU 一起）")
           : [gpu?.renderer, windowKernelVersion && (kernelGpus ? t("内核 {0} 的显卡清单", windowKernelVersion) : t("内核 {0} 还没有显卡清单", windowKernelVersion))].filter(Boolean).join(' · ')}
@@ -1932,16 +1991,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           shuffleDisabled={!kernelGpus?.length}
           options={gpuSelectOptions}
         />
+        {gpuMissing && (
+          <RowWarning fix={{ label: t("换一块显卡"), apply: shuffleGpu }}>{t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')}</RowWarning>
+        )}
       </Row>
-      {gpuMissing && (
-        <Alert
-          type="warning"
-          showIcon
-          className="fb-editor-alert"
-          title={t("内核 {0} 里没有这块显卡，打开窗口前请重新选择", windowKernelVersion ?? '')}
-          action={<Button size="small" onClick={shuffleGpu}>{t("换一块显卡")}</Button>}
-        />
-      )}
       <Row label={t("CPU 型号")} hint={t("网页读不到型号；硬件并发数自动等于它的线程数")}>
         <ValueChoice
           wide
@@ -1961,7 +2014,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'host', label: t("本机真实") }, ...coreOptions.map((value) => ({ value, label: t("{0} 核", value) }))]}
         />
       </Row>
-      <Row label={t("设备内存")} check={checkFor('memory')} hint={maxDeviceMemoryGb(windowKernelVersion) < 32 ? t("网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB") : undefined}>
+      <Row label={t("设备内存")} check={checkFor('memory')} fix={smallMemoryFix ?? checkFix('memory')} hint={maxDeviceMemoryGb(windowKernelVersion) < 32 ? t("网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB") : undefined}>
         <ValueChoice
           label={t("设备内存")}
           value={fp.deviceMemory ?? 8}
@@ -1972,13 +2025,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             .map((value) => ({ value, label: `${value} GB` }))}
         />
         {fp.deviceMemory && SMALL_DEVICE_MEMORY.includes(fp.deviceMemory) && (
-          <RowWarning fix={{ label: t("改为 8 GB"), apply: () => patchFingerprint({ deviceMemory: 8 }) }}>
+          <RowWarning fix={smallMemoryFix}>
             {t("{0} GB 内存的电脑上 Chrome 的 JS 内存上限更小，这个窗口报的是 8 GB 及以上电脑的值，网站能对比出来", fp.deviceMemory)}
           </RowWarning>
         )}
       </Row>
       {kernelSpoofsScreen(windowKernelVersion) ? (
-        <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
+        <Row label={t("分辨率")} check={checkFor('screen')} fix={(laptopScreen ? laptopFix : screenOdd ? screenFix : undefined) ?? (screenLarger ? largerFix : undefined) ?? checkFix('screen')} hint={windowScreen
           ? t("网站读到的屏幕尺寸，浏览器窗口不会比它大")
           : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
           <Space wrap size={8}>
@@ -2014,21 +2067,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </div>
           )}
           {laptopScreen ? (
-            <RowWarning fix={{
-              label: t("改成 {0}", '2560 × 1440'),
-              apply: () => { const size = cssScreenSize({ width: 2560, height: 1440 }, hostScale()); chooseScreen(`${size.width}x${size.height}`) }
-            }}>
+            <RowWarning fix={laptopFix}>
               {t("2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭")}
             </RowWarning>
           ) : screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
           {screenLarger && (
             <RowWarning fix={largerFix}>
-              {t("这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来", hostPhysical.width, hostPhysical.height)}
+              {t("比本机屏幕（{0} × {1}）大：最大化只铺满本机屏幕；别用网页全屏，网站能看出来", hostPhysical.width, hostPhysical.height)}
             </RowWarning>
           )}
         </Row>
       ) : (
-        <Row label={t("分辨率")} check={checkFor('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
+        <Row label={t("分辨率")} check={checkFor('screen')} fix={checkFix('screen')} hint={t("这个内核不支持修改分辨率，网站读到的是这台电脑的屏幕尺寸")}>
           <Fixed>{t("本机真实 · {0} × {1}", window.screen.width, window.screen.height)}</Fixed>
         </Row>
       )}
@@ -2077,6 +2127,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label="WebRTC"
         check={checkFor('webrtc')}
+        fix={checkFix('webrtc')}
         hint={fp.webrtcPolicy === 'proxy_only'
           ? webrtcRelay
             ? proxyResult?.udp === true
@@ -2112,15 +2163,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("指纹值")}</h3>
           <span className="fb-fp-card-sub">{t("每个窗口不同，同一窗口每次一样")}</span>
         </div>
-      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? undefined : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
+      <Row label="Canvas" check={checkFor('canvas')} fix={checkFix('canvas')} hint={webrtcRelay ? undefined : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
         {noiseControl('canvas', 'Canvas')}
         {webrtcRelay && measuredLine('canvas')}
       </Row>
-      <Row label="AudioContext" check={checkFor('audio')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
+      <Row label="AudioContext" check={checkFor('audio')} fix={checkFix('audio')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('audio', 'AudioContext') : realSurface('audio')}
         {webrtcRelay && measuredLine('audio')}
       </Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
+      <Row label="ClientRects" check={checkFor('clientrects')} fix={checkFix('clientrects')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('clientrects', 'ClientRects') : realSurface('clientrects')}
         {webrtcRelay && measuredLine('clientrects')}
       </Row>
@@ -2186,7 +2237,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </div>
         {checkStale && !checking && <div className="fb-check-stale">{t("设置已修改，结果可能已过时，请重新检测")}</div>}
         {checkError && <Alert type="error" showIcon title={checkError} />}
-        {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} fixOf={fixOf} />}
+        {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} fixOf={fixOf} buttons />}
         {checkReport && !checkStale && (
           <div className="fb-check-values">
             {[
@@ -2198,14 +2249,26 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ].map(([name, value]) => <span key={name}>{name}<b className="fb-mono">{value}</b></span>)}
           </div>
         )}
-        <DeepCheck draft={currentDraft} profileId={profile?.id} settingsKey={currentSettingsKey} />
       </div>
+      </section>
+
+      {/* Outside sites judging the window: kept apart from the check above, which reads the values itself. */}
+      <section className="fb-fp-card">
+        <div className="fb-fp-card-head">
+          <h3 className="fb-fp-group">{t("深度检测")}</h3>
+        </div>
+        <div className="fb-check-panel">
+          <DeepCheck draft={currentDraft} profileId={profile?.id} settingsKey={currentSettingsKey} />
+        </div>
       </section>
     </div>
   )
 
   return (
     <Drawer
+      // Only × or 取消 closes it: a click beside it or Esc would lose what was typed.
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={720}
       placement="right"

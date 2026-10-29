@@ -179,6 +179,7 @@ button, input, textarea { font: inherit; }
 .fb-editor .ant-drawer-body { padding: 0 24px 24px; background: var(--fb-surface-muted); }
 /* The tabs stay at the top while the long fingerprint tab scrolls; the cards sit on a muted page. */
 .fb-editor .ant-tabs-nav { position: sticky; top: 0; z-index: 2; margin: 0 -24px 16px; padding: 0 24px; background: var(--fb-surface-muted); }
+.fb-editor .fb-fp-card .ant-tabs-nav { position: static; margin: 0 0 6px; padding: 0; background: none; }
 .fb-editor-title { display: inline-flex; align-items: center; gap: 10px; }
 .fb-editor-title .ant-tag { margin: 0; font-weight: 400; }
 .fb-editor-footer { display: flex; justify-content: flex-end; gap: 10px; }
@@ -213,7 +214,6 @@ button, input, textarea { font: inherit; }
 .fb-locked-note.ant-alert { margin-bottom: 14px; border-radius: 10px; }
 .fb-row-note { display: block; margin-top: 4px; font-size: 12px; }
 .fb-row-warning { display: block; margin-top: 4px; color: var(--fb-warning); font-size: 12px; }
-.fb-row-warning .fb-row-fix { height: auto; margin-left: 6px; padding: 0; font-size: 12px; }
 .fb-more { margin-left: -16px; }
 .fb-more .ant-collapse-content-box { display: flex; flex-direction: column; gap: 14px; padding-left: 16px !important; }
 .fb-fp-intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--fb-accent-soft-border); border-radius: 12px; color: var(--fb-text-secondary); background: var(--fb-accent-soft); font-size: 13px; }
@@ -229,8 +229,16 @@ button, input, textarea { font: inherit; }
 .fb-ua span { display: block; padding: 6px 10px; overflow: hidden; border: 1px solid var(--fb-line); border-radius: 6px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .fb-unsupported { display: inline-block; cursor: not-allowed; }
 /* Every choice in the fingerprint tab is one width; two side by side (system and version) make up one. */
-.fb-fp-select { width: 420px; max-width: 100%; }
-.fb-fp-select-half { width: 206px; max-width: 100%; }
+.fb-fp-select { width: 400px; max-width: 100%; }
+.fb-fp-select-half { width: 196px; max-width: 100%; }
+/* 一键修正 sits inside the row's first box at its right end, before the arrow: the same place in every row. */
+.fb-form-row.has-fix .fb-form-control { position: relative; }
+.fb-inbox-fix.ant-btn { position: absolute; top: 5px; left: min(400px, 100%); transform: translateX(calc(-100% - 30px)); z-index: 1; height: 22px; padding: 0 10px; border: 0; border-radius: 11px; color: var(--fb-on-accent); background: var(--fb-warning-strong); font-size: 12px; box-shadow: none; }
+.fb-inbox-fix.ant-btn:not(:disabled):hover { color: var(--fb-on-accent); background: var(--fb-warning); }
+.fb-form-row.has-fix .fb-form-control > .ant-select.fb-fp-select,
+.fb-form-row.has-fix .fb-form-control > .ant-space > .ant-space-item:first-child > .ant-select.fb-fp-select,
+.fb-form-row.has-fix .fb-form-control > .fb-region-line > .ant-select.fb-fp-select { padding-right: 118px; border-color: var(--fb-warning-strong); }
+.fb-check-fix, .fb-row-fix { color: var(--fb-warning); }
 .fb-form-control > .ant-select.fb-fp-select, .fb-form-control > .fb-unsupported { align-self: flex-start; }
 .fb-editor .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) { background: var(--fb-accent-soft); }
 .fb-form-control > .ant-select.fb-small-select { align-self: flex-start; width: 240px; }
@@ -418,7 +426,7 @@ button, input, textarea { font: inherit; }
 .fb-check-stale { color: var(--fb-warning); font-size: 12px; }
 .fb-check-values { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--fb-text-secondary); font-size: 12px; }
 .fb-check-values b { margin-left: 6px; font-weight: 500; color: var(--fb-text); }
-.fb-deep-check { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--fb-line-soft); }
+.fb-deep-check { display: flex; flex-direction: column; gap: 10px; }
 .fb-deep-results { display: flex; flex-direction: column; gap: 8px; }
 .fb-deep-site { display: flex; align-items: flex-start; gap: 12px; padding: 8px; border-radius: 6px; background: var(--fb-surface); }
 .fb-deep-site.is-pending { align-items: center; gap: 8px; font-size: 13px; }
@@ -536,3 +544,28 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-colset-handle { color: var(--fb-text-faint); }
 .fb-colset-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--fb-line); font-size: 12px; }
 .fb-colset-button.is-changed { color: var(--fb-accent); border-color: var(--fb-accent-soft-border); }
+.fb-kernel-full { display: block; font-size: 12px; }
+.fb-site-select { width: 260px; }
+
+/* Proxy tab: the exit IP a check found, shown as the chosen one; the identity it sets right under it. */
+.fb-fp-card-actions { display: flex; gap: 8px; margin-left: auto; align-self: center; }
+.fb-ip-card { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 12px 14px; border: 1.5px solid var(--fb-accent); border-radius: 10px; background: var(--fb-accent-soft); }
+.fb-ip-mark { display: grid; grid-row: span 3; align-self: start; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: var(--fb-on-accent); background: var(--fb-accent); font-size: 12px; }
+.fb-ip-address { overflow: hidden; font: 600 17px/1.3 ui-monospace, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.fb-ip-place { font-weight: 600; white-space: nowrap; }
+.fb-ip-meta { display: flex; flex-wrap: wrap; grid-column: 2 / 4; gap: 2px 14px; color: var(--fb-text-secondary); font-size: 12.5px; }
+.fb-ip-card.is-stale { opacity: .6; border-style: dashed; }
+.fb-ip-card.is-warn { border-color: var(--fb-warning-strong); background: var(--fb-warning-soft); }
+.fb-ip-card.is-warn .fb-ip-mark { background: var(--fb-warning-strong); }
+.fb-ip-card.is-bad { border-color: var(--fb-danger); background: var(--fb-danger-soft); }
+.fb-ip-card.is-bad .fb-ip-mark { background: var(--fb-danger); }
+.fb-ip-card.is-bad .fb-ip-address { color: var(--fb-danger); font: 600 15px/1.3 inherit; }
+.fb-ip-identity { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--fb-line); }
+.fb-identity-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; }
+.fb-record-list { display: flex; flex-direction: column; font-size: 13px; }
+.fb-record-list > div { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--fb-line-soft); }
+.fb-record-list .fb-link-start { align-self: flex-start; height: auto; padding: 6px 0 0; font-size: 13px; }
+.fb-success-text { color: var(--fb-success); }
+.fb-exit-block { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--fb-line); }
+.fb-exit-head { display: flex; align-items: center; justify-content: space-between; }
+.fb-exit-title { font-weight: 600; }

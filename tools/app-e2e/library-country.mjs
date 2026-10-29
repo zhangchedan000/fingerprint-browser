@@ -94,7 +94,7 @@ try {
   // 1. Nothing picked by hand: the checked proxy's country fills the window.
   await openNew()
   await pickProxy('198.51.100.31')
-  const mx = await rowText('时区和语言')
+  const mx = await rowText('网络身份')
   check(mx.includes('基于 IP 生成') && mx.includes('墨西哥') && mx.includes('America/Mexico_City'), `墨西哥代理 → ${mx}`)
   check(await noResult(), 'no check result shown in this window')
   await tab('指纹设置')
@@ -109,12 +109,12 @@ try {
 
   // 2. Another checked proxy: the country follows it.
   await pickProxy('198.51.100.32')
-  const us = await rowText('时区和语言')
+  const us = await rowText('网络身份')
   check(us.includes('基于 IP 生成') && us.includes('美国') && us.includes('America/Chicago'), `美国代理 → ${us}`)
 
   // 3. A proxy never checked: the country stays, with a hint to check it.
   await pickProxy('198.51.100.33')
-  const none = await rowText('时区和语言')
+  const none = await rowText('网络身份')
   check(none.includes('美国'), `未检测代理 → ${none}`)
   await tab('指纹设置')
   const noneHint = await rowText('国家/地区')
@@ -134,7 +134,7 @@ try {
   const manual = await rowText('系统语言')
   check(manual.includes('日本 · ja'), `手动日本 系统语言: ${manual}`)
   await pickProxy('198.51.100.31')
-  const kept = await rowText('时区和语言')
+  const kept = await rowText('网络身份')
   check(kept.includes('手动选择') && kept.includes('日本'), `手动日本 then 墨西哥代理 → ${kept}`)
   await tab('指纹设置')
   const alert = await run(`${drawer}.innerText.includes('代理 IP 在墨西哥，窗口是日本')`)

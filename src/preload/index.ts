@@ -46,6 +46,7 @@ const api: BrowserApi = {
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),
+    passwords: (id: string) => ipcRenderer.invoke('profiles:passwords', id),
     create: (draft: ProfileDraft) => ipcRenderer.invoke('profiles:create', draft),
     update: (id: string, draft: ProfileDraft) => ipcRenderer.invoke('profiles:update', id, draft),
     updateDetails: (id: string, draft: ProfileDraft) => ipcRenderer.invoke('profiles:update-details', id, draft),
@@ -154,7 +155,8 @@ const api: BrowserApi = {
     createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),
     update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
     remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
-    check: (id, route) => ipcRenderer.invoke('proxy:check', id, route)
+    check: (id, route) => ipcRenderer.invoke('proxy:check', id, route),
+    password: (id) => ipcRenderer.invoke('proxy:password', id)
   },
   groups: {
     list: () => ipcRenderer.invoke('groups:list'),

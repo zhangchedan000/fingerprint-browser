@@ -184,6 +184,7 @@ export function TunnelSettings() {
         cancelButtonProps={{ disabled: busy === 'add' }}
         closable={busy !== 'add'}
         maskClosable={false}
+        keyboard={false}
         onOk={() => void add()}
         onCancel={closeEditor}
       >

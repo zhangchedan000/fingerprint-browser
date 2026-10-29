@@ -52,6 +52,9 @@ export function ProxyImportModal({ open, busy, onSubmit, onClose }: ProxyImportM
 
   return (
     <Modal
+      // Only × or 取消 closes it: a click beside it or Esc would lose what was typed.
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title={t("批量导入代理")}
       okText={t("导入 {0} 个代理", valid.length)}

@@ -5,9 +5,9 @@ import { t } from '../../../shared/i18n'
 import type { TunnelRoute, TunnelStatus } from '../../../shared/types'
 
 export const TUNNEL_STATE_PILL: Record<TunnelStatus['state'], [string, string]> = {
-  off: ['is-off', '未开启'],
+  off: ['is-off', '已关闭'],
   starting: ['is-busy', '启动中'],
-  running: ['is-on', '运行中'],
+  running: ['is-on', '已启用'],
   error: ['is-bad', '出错']
 }
 
@@ -66,7 +66,6 @@ export function TunnelRouteField({ value, onChange, status, disabledReason }: {
       </div>
     )
   }
-  const [stateClass, stateLabel] = TUNNEL_STATE_PILL[status?.state ?? 'off']
   const running = status?.state === 'running'
   const nodes = status?.nodes ?? []
   const options = nodes.map((node) => ({
@@ -92,7 +91,11 @@ export function TunnelRouteField({ value, onChange, status, disabledReason }: {
       <div className="fb-tunnel-route-line">
         <Switch checked={value.enabled} onChange={(enabled) => onChange({ ...value, enabled })} />
         <span className={value.enabled ? undefined : 'fb-muted'}>{value.enabled ? t("连接代理时先经过你的加速节点") : t("直接连接代理")}</span>
-        <span className={`fb-tunnel-state ${stateClass}`}><i />{t("加速通道")} · {t(stateLabel)}</span>
+        {/* Only for this proxy's own switch: what it goes through, while the tunnel can take it. */}
+        {value.enabled && running && (
+          <span className="fb-tunnel-state is-on"><i />{value.mode === 'manual' && value.node ? t("经过 {0}", value.node) : t("经过最快的节点")}</span>
+        )}
+        {value.enabled && status?.state === 'starting' && <span className="fb-tunnel-state is-busy"><i />{t("加速通道启动中")}</span>}
       </div>
       {value.enabled && (
         <>
@@ -128,8 +131,12 @@ export function TunnelRouteField({ value, onChange, status, disabledReason }: {
               ? t("一直用所选节点连接代理；节点在 设置 → 网络加速 里添加")
               : t("每 5 分钟测速，自动用延迟最低的节点")}
           </span>
-          {status && !running && (
-            <span className="fb-proxy-result bad">{t("加速通道没有运行，这个代理会获取不到 IP；请到 设置 → 网络加速 开启")}</span>
+          {(status?.state === 'off' || status?.state === 'error') && (
+            <span className="fb-proxy-result bad">
+              {status.state === 'off'
+                ? t("加速通道已关闭，这个代理连不上；到 设置 → 网络加速 开启")
+                : t("加速通道出错，这个代理连不上；到 设置 → 网络加速 查看")}
+            </span>
           )}
         </>
       )}

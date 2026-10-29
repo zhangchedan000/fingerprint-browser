@@ -732,6 +732,8 @@ export interface BrowserApi {
   }
   profiles: {
     list: () => Promise<BrowserProfileView[]>
+    /** A window's saved passwords (its typed proxy, its platform account), shown in its editor behind the eye button. */
+    passwords: (id: string) => Promise<{ proxy: string; account: string }>
     create: (draft: ProfileDraft) => Promise<BrowserProfileView>
     update: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
     /** An open window: name, group, note, account and the like; proxy and fingerprint stay as launched. */
@@ -847,6 +849,8 @@ export interface BrowserApi {
     remove: (id: string, replaceWith?: string) => Promise<void>
     /** Tests a library proxy and saves the result on it; route: a window's 网络加速 instead of the proxy's default. */
     check: (id: string, route?: TunnelRoute) => Promise<ProxyRecordView>
+    /** The saved password of a library proxy, shown in its edit form behind the eye button. */
+    password: (id: string) => Promise<string>
   }
   /** The group library. Windows refer to these groups by id. */
   groups: {

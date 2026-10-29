@@ -127,7 +127,7 @@ describe('Prism kernels', () => {
     const { kernelName, kernelChromiumVersion, isKernelId } = await import('./kernel-id')
     const { kernelTakesExplicitGpu, maxDeviceMemoryGb } = await import('./kernel-capabilities')
     expect(isKernelId('prism-155.0.8059.84')).toBe(true)
-    expect(kernelName('prism-156.0.8078.47')).toBe('Prism 156.0.8078.47')
+    expect(kernelName('prism-156.0.8078.47')).toBe('Chrome 156')
     expect(kernelChromiumVersion('prism-156.0.8078.47')).toBe('156.0.8078.47')
     expect(kernelTakesExplicitGpu('prism-155.0.8059.84')).toBe(true)
     expect(kernelTakesExplicitGpu('150.0.7871.186')).toBe(false)
