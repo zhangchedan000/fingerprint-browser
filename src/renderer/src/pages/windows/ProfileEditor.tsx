@@ -77,7 +77,7 @@ import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY, type DeviceMemoryGb } from 
 import { proxyLabel } from '../../components/proxy'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { ExitIpCard } from '../../components/ExitIpCard'
-import { IpScorePanel } from '../../components/IpScorePanel'
+import { useIpScore } from '../../components/useIpScore'
 import { DeepCheck } from './DeepCheck'
 import { IpCheckSites } from './IpCheckSites'
 import { useWindowLauncher } from '../../data/window-actions'
@@ -105,8 +105,8 @@ interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'accou
 export interface ProfileEditorExtras {
   /** Cookie JSON pasted in the basic tab, imported after the window is saved. */
   cookieText: string
-  /** API 提取: true when its exit IP was 取消勾选 (not used again), false when 勾选; unset otherwise. */
-  apiReleased?: boolean
+  /** API 提取, exit IP left unticked on a saved window: that proxy and its records are dropped. */
+  apiDiscard?: boolean
   /** A new window's IP 评分, read before it was saved. */
   ipSites?: IpSiteRecord
 }
@@ -473,12 +473,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // The last check's result stays shown, also when the editor is opened again, until 检测代理 is
   // clicked again; a proxy changed since is marked, not cleared.
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
-  // What the IP check sites said about the exit IP (IP 评分), read after each check that worked.
-  const [ipSites, setIpSites] = useState<{ record?: IpSiteRecord; loading?: boolean; error?: string }>({})
-  const ipSitesRun = useRef(0)
   const [editingIpSites, setEditingIpSites] = useState(false)
   const workspace = useWorkspace()
   const launcher = useWindowLauncher()
+  // What the IP check sites said about the exit IP (IP 评分), read after each check that worked.
+  const ipScore = useIpScore({ draft: () => currentDraft(), profileId: profile?.id, onOpen: profile ? (url) => void openInWindow(url) : undefined })
   const [proxyCheckedAt, setProxyCheckedAt] = useState<string>()
   const [proxyEdited, setProxyEdited] = useState(false)
   const [showApiLog, setShowApiLog] = useState(false)
@@ -486,6 +485,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
   // API 提取: the window opens on the IP checked (勾选); unticked, its next launch takes a new one.
   const [useApiIp, setUseApiIp] = useState(true)
+  const draftSession = useRef('')
+  // Closed (saved or not): the proxies this editor's API link gave are forgotten here.
+  useEffect(() => {
+    if (open) return
+    if (draftSession.current) void window.browserApi.proxy.forgetDraft(draftSession.current).catch(() => undefined)
+    draftSession.current = ''
+  }, [open])
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
@@ -560,14 +566,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyEdited(false)
     setShowApiLog(false)
     setApiView(profile)
-    setUseApiIp(!profile?.apiProxy?.released)
-    ipSitesRun.current += 1
-    setIpSites({})
+    setUseApiIp(true)
+    // This editor's own id: what its API links give belongs to this window only.
+    draftSession.current = crypto.randomUUID()
+    ipScore.reset()
     if (profile) {
-      const run = ipSitesRun.current
+      const startedAt = ipScore.token()
       // The last reading, while it is about the IP shown.
       void window.browserApi.profiles.lastIpSites(profile.id).then((record) => {
-        if (record && run === ipSitesRun.current && (!record.checkIp || record.checkIp === profile.proxyCheck?.ip)) setIpSites({ record })
+        if (record && (!record.checkIp || record.checkIp === profile.proxyCheck?.ip)) ipScore.showKept(record, startedAt)
       }).catch(() => undefined)
     }
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
@@ -1021,8 +1028,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyEdited(false)
     // The IP just checked is the one in use; what the IP check sites say about it comes next.
     setUseApiIp(true)
-    if (result?.ok) void readIpSites()
-    else { ipSitesRun.current += 1; setIpSites({}) }
+    if (result?.ok) void ipScore.read()
+    else ipScore.reset()
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
     if (fill || !profile) fixToIp(result)
   }
@@ -1082,7 +1089,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         }
         // A new window or a new link: the proxy the link gave (kept for the next 检测, and the one the
         // window starts on once saved); 换一个 IP or 取消勾选 take a new one.
-        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id, undefined, refresh || !useApiIp), run, fill)
+        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id, undefined, refresh || !useApiIp, draftSession.current), run, fill)
         return
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
@@ -1105,18 +1112,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }
     } finally {
       if (run === proxyCheckRun.current) setTestingProxy(false)
-    }
-  }
-
-  /** The baseline IP check site and one other read the exit IP through this window (IP 评分). */
-  async function readIpSites(): Promise<void> {
-    const run = ++ipSitesRun.current
-    setIpSites({ loading: true })
-    try {
-      const record = await window.browserApi.profiles.ipSites(currentDraft(), profile?.id)
-      if (run === ipSitesRun.current) setIpSites({ record })
-    } catch (error) {
-      if (run === ipSitesRun.current) setIpSites({ error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -1161,12 +1156,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       return
     }
     const values = form.getFieldsValue(true) as EditorValues
-    await onSave(currentDraft(), {
+    // API 提取 left unticked: the window keeps nothing about that IP (a new one comes next time).
+    const unticked = proxyMode === 'api' && !useApiIp
+    const draft = currentDraft()
+    await onSave(unticked ? { ...draft, draftSession: undefined } : draft, {
       cookieText: values.cookieText ?? '',
-      ...(proxyMode === 'api' ? { apiReleased: !useApiIp } : {}),
+      ...(unticked && profile?.apiProxy?.endpoint ? { apiDiscard: true } : {}),
       // A new window keeps the IP 评分 read before it was saved.
-      ...(!profile && ipSites.record ? { ipSites: ipSites.record } : {})
+      ...(!profile && !unticked && ipScore.record ? { ipSites: ipScore.record } : {})
     })
+  }
+
+  /** Closed without saving: an API exit IP left unticked is dropped from the window all the same. */
+  function cancel(): void {
+    if (proxyMode === 'api' && !useApiIp && profile?.apiProxy?.endpoint) void window.browserApi.profiles.discardApiIp(profile.id).catch(() => undefined)
+    onCancel()
   }
 
   /** The window as currently edited, in the shape save and the fingerprint check both take. */
@@ -1190,6 +1194,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ? { proxy: apiProxy() }
           : { proxy: values.proxy }),
       ...(proxyProtocol !== 'direct' ? { tunnel: route } : {}),
+      draftSession: draftSession.current,
       account: values.account,
       extensionIds: values.extensionIds,
       // Device name and MAC are kept as the values shown, not worked out again from the seed.
@@ -1421,16 +1426,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         stale={proxyEdited}
         typeHint={proxyMode !== 'library' && proxyMode !== 'api'}
         chosen={proxyMode === 'api' && proxyResult.ok && !proxyEdited ? { checked: useApiIp, onChange: setUseApiIp } : undefined}
-        aside={proxyResult.ok ? (
-          <IpScorePanel
-            record={ipSites.record}
-            loading={ipSites.loading}
-            error={ipSites.error}
-            checkIp={proxyResult.ip}
-            onRetry={() => void readIpSites()}
-            onOpen={profile ? (url) => void openInWindow(url) : undefined}
-          />
-        ) : undefined}
+        aside={proxyResult.ok ? ipScore.panel(proxyResult.ip) : undefined}
         notes={[
           resultNote,
           resultAddress && (
@@ -2359,7 +2355,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       placement="right"
       destroyOnHidden
       className="fb-editor"
-      onClose={onCancel}
+      onClose={cancel}
       title={(
         <span className="fb-editor-title">
           {profile ? t("编辑窗口") : t("新建窗口")}
@@ -2368,7 +2364,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       footer={(
         <div className="fb-editor-footer">
-          <Button onClick={onCancel}>{t("取消")}</Button>
+          <Button onClick={cancel}>{t("取消")}</Button>
           <Button type="primary" loading={saving} onClick={() => void submit()}>{profile ? t("保存修改") : t("确定创建")}</Button>
         </div>
       )}

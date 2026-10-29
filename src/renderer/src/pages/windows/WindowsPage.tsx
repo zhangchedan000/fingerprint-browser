@@ -148,10 +148,8 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
           ? await window.browserApi.profiles.update(current.id, draft)
           : await window.browserApi.profiles.updateDetails(current.id, draft)
         : await window.browserApi.profiles.create(draft)
-      // API 提取: the exit IP 勾选 (kept) or not (the next launch takes a new one).
-      if (extras.apiReleased !== undefined && saved.apiProxy?.endpoint && Boolean(saved.apiProxy.released) !== extras.apiReleased) {
-        saved = await window.browserApi.profiles.setApiReleased(saved.id, extras.apiReleased)
-      }
+      // API 提取 left unticked: nothing about that IP is kept (the next check or launch takes a new one).
+      if (extras.apiDiscard) saved = await window.browserApi.profiles.discardApiIp(saved.id)
       // A new window keeps the IP 评分 read before it was saved.
       if (!current && extras.ipSites) await window.browserApi.profiles.setIpSites(saved.id, extras.ipSites).catch(() => undefined)
       upsert(saved)

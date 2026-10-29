@@ -1,11 +1,11 @@
 import { ExitIpCard } from '../../components/ExitIpCard'
 import { Button } from 'antd'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { ProxyTestResult } from '../../../../shared/types'
 
-/** The exit IP part of the proxy forms: 检测代理 and what the check found (ExitIpCard). */
-export function ProxyTestButton({ result, onTest }: { result: ProxyTestResult | null; onTest: () => Promise<void> }) {
+/** The exit IP part of the proxy forms: 检测代理 and what the check found (ExitIpCard, IP 评分 on its right). */
+export function ProxyTestButton({ result, onTest, aside }: { result: ProxyTestResult | null; onTest: () => Promise<void>; aside?: ReactNode }) {
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState('')
   return (
@@ -30,7 +30,7 @@ export function ProxyTestButton({ result, onTest }: { result: ProxyTestResult | 
         >{result ? t("重新检测") : t("检测代理")}</Button>
       </div>
       {result
-        ? <ExitIpCard result={result} typeHint notes={[result.ok && result.degraded && result.warning ? mt(result.warning) : '']} />
+        ? <ExitIpCard result={result} typeHint notes={[result.ok && result.degraded && result.warning ? mt(result.warning) : '']} aside={result.ok ? aside : undefined} />
         : !error && <span className="fb-muted">{t("还没检测；检测后这里是这个代理的出口 IP")}</span>}
       {error && <span className="fb-proxy-result bad">{mt(error)}</span>}
     </div>

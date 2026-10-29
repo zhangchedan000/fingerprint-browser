@@ -66,7 +66,7 @@ const api: BrowserApi = {
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:check-fingerprint', draft, profileId, settingsKey),
     deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId, settingsKey),
     lastDeepCheck: (id: string) => ipcRenderer.invoke('profiles:last-deep-check', id),
-    ipSites: (draft: ProfileDraft, profileId?: string) => ipcRenderer.invoke('profiles:ip-sites', draft, profileId),
+    ipSites: (draft: ProfileDraft, profileId?: string, libraryProxyId?: string) => ipcRenderer.invoke('profiles:ip-sites', draft, profileId, libraryProxyId),
     lastIpSites: (id: string) => ipcRenderer.invoke('profiles:last-ip-sites', id),
     setIpSites: (id: string, record: unknown) => ipcRenderer.invoke('profiles:set-ip-sites', id, record),
     onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
@@ -94,7 +94,7 @@ const api: BrowserApi = {
     closeAll: () => ipcRenderer.invoke('profiles:close-all'),
     testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => ipcRenderer.invoke('profiles:test-proxy', id, refresh, route),
     setApiUrl: (ids: string[], url: string) => ipcRenderer.invoke('profiles:set-api-url', ids, url),
-    setApiReleased: (id: string, released: boolean) => ipcRenderer.invoke('profiles:set-api-released', id, released),
+    discardApiIp: (id: string) => ipcRenderer.invoke('profiles:discard-api-ip', id),
     diagnose: (id: string) => ipcRenderer.invoke('profiles:diagnose', id),
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),
     readLaunchLog: (id: string, logFile: string) => ipcRenderer.invoke('profiles:read-launch-log', id, logFile),
@@ -153,7 +153,8 @@ const api: BrowserApi = {
     }
   },
   proxy: {
-    test: (config, profileId, proxyId, refresh) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId, refresh),
+    test: (config, profileId, proxyId, refresh, session) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId, refresh, session),
+    forgetDraft: (session: string) => ipcRenderer.invoke('proxy:forget-draft', session),
     list: () => ipcRenderer.invoke('proxy:list'),
     create: (draft) => ipcRenderer.invoke('proxy:create', draft),
     createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),

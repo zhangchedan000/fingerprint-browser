@@ -5,6 +5,8 @@ import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedPro
 import type { ProxyDraft, ProxyRecordView, ProxyTestResult, TunnelRoute } from '../../../../shared/types'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { ProxyTestButton } from './ProxyTestButton'
+import { useIpScore } from '../../components/useIpScore'
+import { defaultProfileDraft } from '../../../../shared/defaults'
 
 interface ProxyFormModalProps {
   open: boolean
@@ -26,7 +28,13 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const [result, setResult] = useState<ProxyTestResult | null>(null)
   // A check that finishes after the dialog was closed and opened again is dropped.
   const checkRun = useRef(0)
-  const showResult = (run: number, next: ProxyTestResult) => { if (run === checkRun.current) setResult(next) }
+  const showResult = (run: number, next: ProxyTestResult) => {
+    if (run !== checkRun.current) return
+    setResult(next)
+    // IP 评分 of the exit IP, as in the window editor.
+    if (next.ok) void ipScore.read()
+    else ipScore.reset()
+  }
   const passwordStored = Form.useWatch('passwordStored', { form, preserve: true }) === true
   const password = Form.useWatch('password', form) ?? ''
   const protocol = Form.useWatch('protocol', form) ?? 'socks5'
@@ -38,6 +46,15 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const shownRoute = chosenRoute ?? defaultTunnelRoute(tunnelStatus, undefined, proxy ? proxy.check?.countryCode ?? '' : undefined)
   // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
   const route = !apiMode && protocol === 'https' ? { ...shownRoute, enabled: false } : shownRoute
+  // The IP check sites read through a check browser with this proxy (the saved password fills an empty one).
+  const ipScore = useIpScore({
+    draft: () => {
+      const values = form.getFieldsValue(true) as ProxyDraft
+      const config = apiMode ? { ...apiDraft(), password: '' } : { ...values, password: values.password ?? '', tunnel: route }
+      return { ...defaultProfileDraft(0), proxy: config, tunnel: route }
+    },
+    libraryProxyId: proxy?.id
+  })
 
   useEffect(() => {
     if (!open) return
@@ -59,6 +76,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     setPasted(null)
     checkRun.current += 1
     setResult(null)
+    ipScore.reset()
     return () => { current = false }
   }, [open, proxy, form])
 
@@ -163,6 +181,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
         </Form.Item>
         <ProxyTestButton
           result={result}
+          aside={ipScore.panel(result?.ok ? result.ip : undefined)}
           onTest={async () => {
             const run = ++checkRun.current
             if (apiMode) {

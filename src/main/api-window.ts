@@ -110,8 +110,7 @@ export async function apiProxyFor(
     const kept = profile.apiProxy?.endpoint
     if (check.ok && (protocol === 'http' || protocol === 'socks5') && port) working = { endpoint: { protocol, host, port, username, password }, check, place: kept?.place, fetchedAt: kept?.fetchedAt }
   }
-  // 取消勾选: the kept proxy is not used again.
-  if (!options.refresh && profile.apiProxy.endpoint && !profile.apiProxy.released) {
+  if (!options.refresh && profile.apiProxy.endpoint) {
     const kept = profile.apiProxy.endpoint
     const [check, found] = await Promise.all([tester(profile.proxy), kept.place ? Promise.resolve(kept.place) : placeOf(kept.host)])
     if (found && !kept.place) profile = await profiles.setWindowApiEndpoint(id, { ...kept, password: profile.proxy.password }, found, kept.fetchedAt)

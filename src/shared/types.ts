@@ -97,8 +97,6 @@ export interface WindowApiProxy {
   history?: ApiIpRecord[]
   /** Every extraction and check, newest first, at most 50. */
   log?: ApiCheckRecord[]
-  /** 取消勾选 on its exit IP: this proxy is not used again; the next launch or check takes a new one. */
-  released?: true
 }
 
 export interface ProxyConfig {
@@ -333,6 +331,8 @@ export type ProfileDraft = Pick<
   /** Optional on input for older callers and files; validation fills an empty account. */
   account?: PlatformAccount
   proxyId?: string
+  /** The editor this draft comes from: an API link's proxy checked there belongs to this window only. */
+  draftSession?: string
 }
 
 export interface ProfileBatchClassification {
@@ -767,8 +767,11 @@ export interface BrowserApi {
     deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<import('./deep-check').DeepSiteResult[]>
     /** The window's last deep check, or null. */
     lastDeepCheck: (id: string) => Promise<import('./deep-check').DeepCheckRecord | null>
-    /** The baseline IP site and one other, in turn, read through this window's proxy and kernel. */
-    ipSites: (draft: ProfileDraft, profileId?: string) => Promise<import('./ip-sites').IpSiteRecord>
+    /**
+     * The baseline IP site and one other, in turn, read through this window's proxy and kernel
+     * (a library proxy being edited: libraryProxyId fills its saved password).
+     */
+    ipSites: (draft: ProfileDraft, profileId?: string, libraryProxyId?: string) => Promise<import('./ip-sites').IpSiteRecord>
     lastIpSites: (id: string) => Promise<import('./ip-sites').IpSiteRecord | null>
     /** Keeps a reading made before the window was saved. */
     setIpSites: (id: string, record: import('./ip-sites').IpSiteRecord) => Promise<void>
@@ -797,8 +800,8 @@ export interface BrowserApi {
     testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => Promise<BrowserProfileView>
     /** API 提取 for these windows: each keeps the link itself (closed windows only). */
     setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
-    /** API 提取: 取消勾选 (true) the window's exit IP, so its next launch takes a new proxy; 勾选 (false) keeps it. */
-    setApiReleased: (id: string, released: boolean) => Promise<BrowserProfileView>
+    /** API 提取, exit IP left unticked: that proxy and everything recorded about it are dropped. */
+    discardApiIp: (id: string) => Promise<BrowserProfileView>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     /** Text of a launch log listed in the crash history. */
@@ -854,8 +857,13 @@ export interface BrowserApi {
   /** The proxy library. Windows refer to these proxies by id. */
   proxy: {
     /** Tests typed-in settings; an empty password with passwordStored uses the saved one of the window or library proxy. */
-    /** An API link checks the proxy it gave last while it answers; refresh takes a new one (换一个 IP). */
-    test: (config: ProxyConfig, profileId?: string, proxyId?: string, refresh?: boolean) => Promise<ProxyTestResult>
+    /**
+     * An API link checks the proxy it gave this editor (session) last while it answers; refresh takes
+     * a new one (换一个 IP).
+     */
+    test: (config: ProxyConfig, profileId?: string, proxyId?: string, refresh?: boolean, session?: string) => Promise<ProxyTestResult>
+    /** The editor closed: forget the proxies its API links gave. */
+    forgetDraft: (session: string) => Promise<void>
     list: () => Promise<ProxyRecordView[]>
     create: (draft: ProxyDraft) => Promise<ProxyRecordView>
     /** Adds many at once; proxies already in the library are counted as duplicates. */

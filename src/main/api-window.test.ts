@@ -105,7 +105,7 @@ describe('API 提取 windows keep their proxy while it works', () => {
     expect(kept).toMatchObject({ fetched: 0, mismatch: false })
   })
 
-  it('勾选: a launch keeps the working proxy wherever its IP is; 取消勾选: the next one takes a new proxy', async () => {
+  it('勾选: a launch keeps the working proxy wherever its IP is; unticked: nothing about it is kept, the next one is new', async () => {
     const { path, store, id } = await apiWindow()
     const api = provider([
       { port: 31001, ip: '203.0.113.1', countryCode: 'US' },
@@ -118,14 +118,14 @@ describe('API 提取 windows keep their proxy while it works', () => {
     expect(kept).toMatchObject({ fetched: 0, mismatch: true, check: { countryCode: 'MX' } })
     expect(api.fetched).toEqual([31001])
 
-    await store.setApiReleased(id, true)
-    expect(store.get(id).apiProxy?.released).toBe(true)
-    // Survives a restart (the window list and cloud keep it too).
-    expect((await open(path)).get(id).apiProxy?.released).toBe(true)
+    await store.discardApiEndpoint(id)
+    const dropped = (await open(path)).get(id)
+    expect(dropped.apiProxy?.endpoint).toBeUndefined()
+    expect(dropped.proxyCheck).toBeUndefined()
+    expect(dropped.apiProxy?.history ?? []).toEqual([])
+    expect((dropped.apiProxy?.log ?? []).some((entry) => entry.address?.endsWith(':31001') || entry.ip === '203.0.113.1')).toBe(false)
     const fresh = await apiProxyFor(store, id, api.tester, { region: 'US', attempts: 3, keepWorking: true }, api.fetchProxy)
     expect(fresh).toMatchObject({ fetched: 1, mismatch: false, check: { ip: '203.0.113.2' } })
-    // The new proxy is the one in use: ticked again.
-    expect(store.get(id).apiProxy?.released).toBeUndefined()
     expect(store.get(id).proxy.port).toBe(31002)
   })
 

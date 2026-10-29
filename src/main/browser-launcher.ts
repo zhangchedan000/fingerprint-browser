@@ -986,7 +986,7 @@ export class BrowserLauncher {
   /**
    * An API window's proxy for this launch: its current one while it works (勾选: the window opens on
    * this IP; elsewhere or rotating, asked first); up to 3 new ones from the link when it stopped
-   * working or was released (取消勾选). A new one still elsewhere: asked first.
+   * working (or there is none: 取消勾选 dropped it). A new one still elsewhere: asked first.
    */
   private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const region = profile.fingerprint.region?.toUpperCase()
@@ -1009,9 +1009,8 @@ export class BrowserLauncher {
       ip: check.ip,
       country: check.countryCode,
       newProxies: outcome.fetched,
-      // Why the window's own proxy was not used: it did not answer, or (取消勾选) it was released.
-      ...(outcome.replaced ? { replacedBecause: outcome.replaced.ok ? `出口 ${outcome.replaced.countryCode ?? '未知'}${outcome.replaced.rotating ? '，轮换' : ''}` : outcome.replaced.error ?? '连不上' } : {}),
-      ...(profile.apiProxy?.released ? { replacedBecause: '取消勾选' } : {})
+      // Why the window's own proxy was not used: it did not answer.
+      ...(outcome.replaced ? { replacedBecause: outcome.replaced.ok ? `出口 ${outcome.replaced.countryCode ?? '未知'}${outcome.replaced.rotating ? '，轮换' : ''}` : outcome.replaced.error ?? '连不上' } : {})
     })
     if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
     if (outcome.mismatch && check.rotating) {

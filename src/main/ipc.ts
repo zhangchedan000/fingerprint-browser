@@ -1,6 +1,6 @@
 import { t } from '../shared/i18n'
 import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
-import { lstat, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ServerPlace } from '../shared/types'
@@ -61,7 +61,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
-    const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id))
+    const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id, draft.draftSession))
     checkNewWindow(profile.id, draft)
     team.scheduleSync()
     return profile
@@ -69,7 +69,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
     await profiles.update(id, draft)
-    const profile = publicProfile(await adoptDraftApiProxy(id))
+    const profile = publicProfile(await adoptDraftApiProxy(id, draft.draftSession))
     await team.afterLocalEdit(id)
     return profile
   })
@@ -217,7 +217,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   const fingerprintChecks = new FingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
   ipcMain.handle('profiles:last-fingerprint-check', (_event, id: string) => fingerprintChecks.get(id))
   /** The check browser's settings for an editor draft: same kernel, proxy and hardware as a real launch. */
-  async function checkRunOptions(draft: ProfileDraft, profileId?: string) {
+  /** `libraryProxyId`: a library proxy being edited, whose saved password fills an empty one. */
+  async function checkRunOptions(draft: ProfileDraft, profileId?: string, libraryProxyId?: string) {
     const validated = validateProfileDraft(draft)
     const existing = profileId ? profiles.get(profileId) : undefined
     let proxy: ProxyConfig
@@ -230,7 +231,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     } else if (draft.proxy?.apiUrl) {
       const link = validProxyApiUrl(draft.proxy.apiUrl)
       // A saved API window is checked on the proxy it keeps, a new link on the one 检测 took; else one is taken.
-      const drafted = draftApiProxies.get(link)
+      const drafted = draftApiProxies.get(draftKey(link, draft.draftSession))
       if (existing?.apiProxy?.url === link && existing.apiProxy.endpoint) {
         const { apiUrl: _link, tunnel: _route, ...kept } = existing.proxy
         proxy = kept
@@ -241,7 +242,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
         proxy = { ...await resolveApiProxy(link, route) }
       }
     } else {
-      const { tunnel: _default, ...typed } = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy)
+      const { tunnel: _default, ...typed } = proxyForTest(validateProxyConfig(draft.proxy), existing?.proxy ?? (libraryProxyId ? profiles.getProxy(libraryProxyId) : undefined))
       proxy = typed
     }
     if (route) proxy.tunnel = route
@@ -305,8 +306,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   }
   // Each reading takes the next of the other sites, so they take turns.
   let ipSiteTurn = 0
-  ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string): Promise<IpSiteRecord> => {
-    const { runOptions, proxyResult } = await checkRunOptions(draft, profileId)
+  ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string, libraryProxyId?: string): Promise<IpSiteRecord> => {
+    const { runOptions, proxyResult } = await checkRunOptions(draft, profileId, typeof libraryProxyId === 'string' ? libraryProxyId : undefined)
     const preferences = settings.get()
     const sites = preferences.ipCheckSites ?? DEFAULT_IP_CHECK_SITES
     const baseline = ipBaseline(sites, preferences.ipCheckBaseline)
@@ -558,8 +559,10 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     for (const profile of changed) await team.afterLocalEdit(profile.id)
     return changed.map(publicProfile)
   })
-  ipcMain.handle('profiles:set-api-released', async (_event, id: string, released: unknown) => {
-    const profile = await profiles.setApiReleased(id, released === true)
+  ipcMain.handle('profiles:discard-api-ip', async (_event, id: string) => {
+    const profile = await profiles.discardApiEndpoint(id)
+    // Nothing about that IP is kept: its IP 评分 goes too.
+    await rm(join(profiles.profileRuntimePath(id), 'ip-sites.json'), { force: true }).catch(() => undefined)
     await team.afterLocalEdit(id)
     return publicProfile(profile)
   })
@@ -709,6 +712,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
    * window's once saved, so it starts on the IP that was checked. Kept while the launcher runs.
    */
   const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; place?: ServerPlace; check: ProxyCheckSummary; at: number }>()
+  /** Drafts are per editor (its session id) and link: one window's proxy never shows up in another. */
+  const draftKey = (link: string, session: unknown) => `${typeof session === 'string' ? session : ''}\n${link}`
   const draftTurns = new Map<string, number>()
   let draftTurn = 0
   /** What checking a link in the editor found, for the window's check log once saved. */
@@ -720,7 +725,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
    */
   const draftChecks = new Map<string, { password: string; check: ProxyCheckSummary; at: number }>()
   const proxyKey = (proxy: ProxyConfig) => [proxy.protocol, proxy.host.trim(), proxy.port ?? '', proxy.username].join('|')
-  async function adoptDraftApiProxy(id: string): Promise<BrowserProfile> {
+  async function adoptDraftApiProxy(id: string, session?: string): Promise<BrowserProfile> {
     let profile = profiles.get(id)
     if (!profile.apiProxy) {
       const kept = draftChecks.get(proxyKey(profile.proxy))
@@ -728,7 +733,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       draftChecks.delete(proxyKey(profile.proxy))
       return profiles.setProxyCheck(id, kept.check)
     }
-    const url = profile.apiProxy.url
+    const url = draftKey(profile.apiProxy.url, session)
     const log = draftApiLogs.get(url)
     draftApiLogs.delete(url)
     if (log?.length) profile = await profiles.noteApiCheck(id, ...log)
@@ -744,9 +749,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl), draft.tunnel)
     return { ...draft, ...endpoint, passwordStored: false }
   }
-  ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string, refresh?: unknown) => {
+  /** An editor closed: what its API links gave is forgotten (not saved, or saved into its window already). */
+  ipcMain.handle('proxy:forget-draft', (_event, session: unknown) => {
+    if (typeof session !== 'string' || !session) return
+    for (const map of [draftApiProxies, draftTurns, draftApiLogs]) {
+      for (const key of [...map.keys()]) if (key.startsWith(`${session}\n`)) map.delete(key)
+    }
+  })
+  ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string, refresh?: unknown, session?: unknown) => {
     // The newest check of a link is the one the editor shows: only its proxy is kept for saving.
-    const draftLink = (input as ProxyConfig | undefined)?.apiUrl ? validProxyApiUrl((input as ProxyConfig).apiUrl!) : undefined
+    const draftLink = (input as ProxyConfig | undefined)?.apiUrl ? draftKey(validProxyApiUrl((input as ProxyConfig).apiUrl!), session) : undefined
     const turn = ++draftTurn
     if (draftLink) draftTurns.set(draftLink, turn)
     const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
