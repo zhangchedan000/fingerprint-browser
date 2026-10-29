@@ -2616,5 +2616,6 @@
   "企业网络": "Mạng doanh nghiệp",
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "Không có kết quả trong 30 giây (proxy chậm, trang yêu cầu xác minh, hoặc trang đã đổi)",
   "页面没有出结果": "Trang không có kết quả",
-  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Không có trang đọc được nào đang bật: bật IPLark hoặc ping0.cc trong “Trang kiểm tra”"
+  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Không có trang đọc được nào đang bật: bật IPLark hoặc ping0.cc trong “Trang kiểm tra”",
+  "点「换一个 IP」从链接取一个新的": "Bấm “Đổi IP” để lấy IP mới từ liên kết"
 }

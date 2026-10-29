@@ -2616,5 +2616,6 @@
   "企业网络": "Business network",
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "No result on the page within 30 s (slow proxy, the site asked for verification, or its page changed)",
   "页面没有出结果": "The page showed no result",
-  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "No check site that can be read is on: turn on IPLark or ping0.cc in “Check sites”"
+  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "No check site that can be read is on: turn on IPLark or ping0.cc in “Check sites”",
+  "点「换一个 IP」从链接取一个新的": "Click “New IP” to take a new one from the link"
 }

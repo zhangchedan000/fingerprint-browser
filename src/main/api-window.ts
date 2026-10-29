@@ -5,6 +5,8 @@ import type { ProfileStore } from './profile-store'
 export interface ApiProxyOptions {
   /** Take a new proxy from the link even while the current one works (换一个 IP). */
   refresh?: boolean
+  /** A check from the editor: a proxy that stopped answering is shown as it is, not replaced (换一个 IP does that). */
+  keepDead?: boolean
   /**
    * The window's proxy is kept while it works, wherever its IP is (a launch: 勾选 means this IP);
    * `region` then only decides whether it counts as a mismatch, and new ones replace a dead one.
@@ -63,20 +65,16 @@ export function apiCheckRecord(
 
 /**
  * A link checked in the editor before its window is saved: the proxy it gave last, checked again
- * while it answers; a new one from the link when there is none, it stopped answering, or a new one
- * is asked for (换一个 IP, 取消勾选). `failedKept` is the kept proxy's failed check, for the log.
+ * (when it stopped answering, the failure is shown: a new one only on 换一个 IP or 取消勾选, so a
+ * check never uses up the link); a new one from the link when there is none yet.
  */
 export async function draftLinkCheck<T extends { result: ProxyTestResult }>(
   kept: ApiProxyEndpoint | undefined,
   refresh: boolean,
   checkKept: (endpoint: ApiProxyEndpoint) => Promise<T>,
   fetchNew: () => Promise<T>
-): Promise<{ checked: T; fetched: boolean; failedKept?: ProxyTestResult }> {
-  if (kept && !refresh) {
-    const checked = await checkKept(kept)
-    if (checked.result.ok) return { checked, fetched: false }
-    return { checked: await fetchNew(), fetched: true, failedKept: checked.result }
-  }
+): Promise<{ checked: T; fetched: boolean }> {
+  if (kept && !refresh) return { checked: await checkKept(kept), fetched: false }
   return { checked: await fetchNew(), fetched: true }
 }
 
@@ -118,6 +116,7 @@ export async function apiProxyFor(
     profile = await profiles.noteApiCheck(id, apiCheckRecord(trigger, kept, found, false, check))
     if (fits(check)) return { profile, check, fetched: 0, mismatch: false }
     if (check.ok && options.keepWorking) return { profile, check, fetched: 0, mismatch: true }
+    if (!check.ok && options.keepDead) return { profile, check, fetched: 0, mismatch: false }
     last = { profile, check }
     remember(check)
     if (check.ok && check.rotating) return { ...last, fetched: 0, mismatch: true }

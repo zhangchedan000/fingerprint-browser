@@ -82,6 +82,8 @@ describe('API 提取 windows keep their proxy while it works', () => {
     expect(store.get(id).proxy.port).toBe(31002)
     // The second stops working: the next launch takes the third.
     const dead = { ...api, tester: async (config: ProxyConfig) => config.port === 31002 ? { ok: false, latencyMs: 0, error: '连接超时' } : api.tester(config) }
+    // A check from the editor shows it dead and takes nothing; a launch takes the third.
+    expect(await apiProxyFor(store, id, dead.tester, { keepDead: true }, api.fetchProxy)).toMatchObject({ fetched: 0, check: { ok: false } })
     const outcome = await apiProxyFor(store, id, dead.tester, {}, api.fetchProxy)
     expect(outcome).toMatchObject({ fetched: 1, check: { ip: '203.0.113.3' } })
     expect(store.get(id).apiProxy?.history?.map((entry) => entry.ip)).toEqual(['203.0.113.3', '203.0.113.2', '203.0.113.1'])
@@ -206,9 +208,10 @@ describe('API 提取 windows log every extraction and check', () => {
     expect(fetches).toBe(0)
     // 换一个 IP / 取消勾选.
     expect(await draftLinkCheck(kept, true, async () => ok('203.0.113.1'), fetchNew)).toMatchObject({ fetched: true, checked: { result: { ip: '203.0.113.101' } } })
-    // The kept one stopped answering: a new one, and why.
+    // The kept one stopped answering: shown as it is, nothing taken from the link (换一个 IP does that).
     const dead = await draftLinkCheck(kept, false, async () => ({ result: { ok: false, latencyMs: 0, error: '连接超时' } as ProxyTestResult }), fetchNew)
-    expect(dead).toMatchObject({ fetched: true, failedKept: { error: '连接超时' }, checked: { result: { ip: '203.0.113.102' } } })
+    expect(dead).toMatchObject({ fetched: false, checked: { result: { error: '连接超时' } } })
+    expect(fetches).toBe(1)
     // Nothing kept yet: the link gives one.
     expect(await draftLinkCheck(undefined, false, async () => ok('x'), fetchNew)).toMatchObject({ fetched: true })
   })

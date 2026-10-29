@@ -2616,5 +2616,6 @@
   "企业网络": "Kurumsal ağ",
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "30 sn içinde sonuç yok (yavaş proxy, site doğrulama istedi veya sayfası değişti)",
   "页面没有出结果": "Sayfa sonuç göstermedi",
-  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Okunabilen site açık değil: “Denetim siteleri”nde IPLark veya ping0.cc’yi açın"
+  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Okunabilen site açık değil: “Denetim siteleri”nde IPLark veya ping0.cc’yi açın",
+  "点「换一个 IP」从链接取一个新的": "Bağlantıdan yenisini almak için “Yeni IP” düğmesine tıklayın"
 }

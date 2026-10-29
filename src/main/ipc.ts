@@ -573,7 +573,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       const route = routeInput === undefined ? undefined : validTunnelRoute(routeInput)
       const tester = (config: ProxyConfig) => testProxy(route ? { ...config, tunnel: route } : config)
       const fetchProxy = (url: string, saved: ProxyConfig['tunnel']) => resolveApiProxy(url, route ?? saved)
-      return publicProfile((await apiProxyFor(profiles, id, tester, { refresh: refresh === true, locate: locateServer }, fetchProxy)).profile)
+      // A proxy that stopped answering is shown as it is: 换一个 IP takes a new one, a launch does too.
+      return publicProfile((await apiProxyFor(profiles, id, tester, { refresh: refresh === true, keepDead: true, locate: locateServer }, fetchProxy)).profile)
     }
     const testedProfile = profiles.get(id)
     const result = await testProxy(testedProfile.proxy)
@@ -773,10 +774,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }))
     // A link checked before: its proxy again while it answers (换一个 IP / 取消勾选: a new one).
     const kept = draftLink ? draftApiProxies.get(draftLink) : undefined
-    const { checked, fetched, failedKept } = draftLink
+    const { checked, fetched } = draftLink
       ? await draftLinkCheck(kept?.endpoint, refresh === true, (endpoint) => checkOf({ ...(input as ProxyConfig), ...endpoint, passwordStored: false }), fresh)
       : { checked: await checkOf(input as ProxyConfig), fetched: false }
-    if (failedKept && kept) noteDraftApiCheck(draftLink!, apiCheckRecord('check', kept.endpoint, kept.place, false, failedKept))
     const { config, proxy, result } = checked
     const place = checked.place ?? (fetched ? undefined : kept?.place)
     const check: ProxyCheckSummary = { ...result, checkedAt: new Date().toISOString() }

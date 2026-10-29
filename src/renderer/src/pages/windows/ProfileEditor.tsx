@@ -1429,6 +1429,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         aside={proxyResult.ok ? ipScore.panel(proxyResult.ip) : undefined}
         notes={[
           resultNote,
+          // The link is not used again by itself: a new proxy comes from 换一个 IP.
+          proxyMode === 'api' && !proxyResult.ok ? t("点「换一个 IP」从链接取一个新的") : '',
           resultAddress && (
             <>
               {t("提取地址")} <span className="fb-mono">{resultAddress.address}</span>{placeText(resultAddress.place) && `（${placeText(resultAddress.place)}）`}
@@ -1627,7 +1629,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <span className="fb-fp-card-actions">
             <Button type="link" onClick={() => setEditingIpSites(true)}>{t("检测网站")}</Button>
             <IpCheckSites open={editingIpSites} onClose={() => setEditingIpSites(false)} />
-            {proxyMode === 'api' && (keptEndpoint || proxyResult?.ok) && (
+            {proxyMode === 'api' && (keptEndpoint || proxyResult) && (
               <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
                 <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
               </Tooltip>

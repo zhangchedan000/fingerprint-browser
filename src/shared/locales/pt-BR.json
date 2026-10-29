@@ -2616,5 +2616,6 @@
   "企业网络": "Rede empresarial",
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "Sem resultado em 30 s (proxy lento, o site pediu verificação ou mudou a página)",
   "页面没有出结果": "A página não mostrou resultado",
-  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Nenhum site legível ativo: ative IPLark ou ping0.cc em “Sites de verificação”"
+  "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Nenhum site legível ativo: ative IPLark ou ping0.cc em “Sites de verificação”",
+  "点「换一个 IP」从链接取一个新的": "Clique em “Outro IP” para pegar um novo pelo link"
 }
