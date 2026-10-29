@@ -103,7 +103,8 @@ const api: BrowserApi = {
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),
     assignMany: (ids, patch) => ipcRenderer.invoke('profiles:assign-many', ids, patch),
     setKernelMany: (ids: string[], kernelVersion: string) => ipcRenderer.invoke('profiles:set-kernel-many', ids, kernelVersion),
-    importCookiesText: (id: string, text: string) => ipcRenderer.invoke('profiles:import-cookies-text', id, text),
+    importCookiesText: (id: string, text: string, options?: { replace?: boolean }) => ipcRenderer.invoke('profiles:import-cookies-text', id, text, options),
+    currentCookies: (id: string) => ipcRenderer.invoke('profiles:current-cookies', id),
     removeMany: (ids: string[]) => ipcRenderer.invoke('profiles:remove-many', ids),
     onChanged: (listener: (profile: BrowserProfileView) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, profile: BrowserProfileView): void => listener(profile)

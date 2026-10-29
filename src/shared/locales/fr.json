@@ -2617,5 +2617,13 @@
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "Aucun résultat en 30 s (proxy lent, le site demande une vérification, ou sa page a changé)",
   "页面没有出结果": "La page n’a donné aucun résultat",
   "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Aucun site lisible n’est actif : activez IPLark ou ping0.cc dans « Sites de vérification »",
-  "点「换一个 IP」从链接取一个新的": "Cliquez sur « Nouvelle IP » pour en prendre une nouvelle via le lien"
+  "点「换一个 IP」从链接取一个新的": "Cliquez sur « Nouvelle IP » pour en prendre une nouvelle via le lien",
+  "Cookie 已存在本机，但同步到云端失败：{0}": "Cookies enregistrés sur cet ordinateur, mais la synchronisation cloud a échoué : {0}",
+  "Cookie 已更新，现在 {0} 条": "Cookies mis à jour : {0} maintenant",
+  "已修改：保存后这个窗口的 Cookie 换成框里的 {0} 条，并同步到云端": "Modifié : à l’enregistrement, les cookies de cette fenêtre deviennent les {0} du champ, synchronisés dans le cloud",
+  "正在读取这个窗口现在的 Cookie…": "Lecture des cookies de cette fenêtre…",
+  "窗口运行中，关闭后才能查看和修改 Cookie": "La fenêtre est ouverte : fermez-la pour voir ou modifier ses cookies",
+  "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "{0} cookies trouvés ; à l’enregistrement ils vont dans cette fenêtre et dans le cloud",
+  "读取现在的 Cookie 失败：{0}": "Impossible de lire les cookies actuels : {0}",
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Cette fenêtre a {0} cookies ; modifiez et enregistrez pour les remplacer et les synchroniser"
 }

@@ -815,7 +815,10 @@ export interface BrowserApi {
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
     /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
-    importCookiesText: (id: string, text: string) => Promise<{ count: number }>
+    /** replace: the window keeps exactly these. The login state then goes up to the team cloud (syncError when it could not). */
+    importCookiesText: (id: string, text: string, options?: { replace?: boolean }) => Promise<{ count: number; syncError?: string }>
+    /** A closed window's cookies now, as a JSON array (the editor's Cookie box). */
+    currentCookies: (id: string) => Promise<{ count: number; text: string }>
     removeMany: (ids: string[]) => Promise<void>
     onChanged: (listener: (profile: BrowserProfileView) => void) => () => void
   }

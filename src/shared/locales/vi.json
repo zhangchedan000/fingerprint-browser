@@ -2617,5 +2617,13 @@
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "Không có kết quả trong 30 giây (proxy chậm, trang yêu cầu xác minh, hoặc trang đã đổi)",
   "页面没有出结果": "Trang không có kết quả",
   "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Không có trang đọc được nào đang bật: bật IPLark hoặc ping0.cc trong “Trang kiểm tra”",
-  "点「换一个 IP」从链接取一个新的": "Bấm “Đổi IP” để lấy IP mới từ liên kết"
+  "点「换一个 IP」从链接取一个新的": "Bấm “Đổi IP” để lấy IP mới từ liên kết",
+  "Cookie 已存在本机，但同步到云端失败：{0}": "Đã lưu cookie trên máy này nhưng đồng bộ lên đám mây thất bại: {0}",
+  "Cookie 已更新，现在 {0} 条": "Đã cập nhật cookie: hiện có {0}",
+  "已修改：保存后这个窗口的 Cookie 换成框里的 {0} 条，并同步到云端": "Đã sửa: khi lưu, cookie của cửa sổ này thành {0} cookie trong ô và đồng bộ lên đám mây",
+  "正在读取这个窗口现在的 Cookie…": "Đang đọc cookie của cửa sổ này…",
+  "窗口运行中，关闭后才能查看和修改 Cookie": "Cửa sổ đang mở: đóng lại mới xem hay sửa được cookie",
+  "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "Nhận ra {0} cookie; khi lưu sẽ nhập vào cửa sổ này và đồng bộ lên đám mây",
+  "读取现在的 Cookie 失败：{0}": "Không đọc được cookie hiện tại: {0}",
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Cửa sổ này hiện có {0} cookie; sửa rồi lưu để thay thế và đồng bộ lên đám mây"
 }

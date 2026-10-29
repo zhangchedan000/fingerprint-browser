@@ -105,6 +105,8 @@ interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'accou
 export interface ProfileEditorExtras {
   /** Cookie JSON pasted in the basic tab, imported after the window is saved. */
   cookieText: string
+  /** The box held the window's own cookies and they were edited: the window keeps exactly cookieText. */
+  cookieReplace?: boolean
   /** API 提取, exit IP left unticked on a saved window: that proxy and its records are dropped. */
   apiDiscard?: boolean
   /** A new window's IP 评分, read before it was saved. */
@@ -486,6 +488,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // API 提取: the window opens on the IP checked (勾选); unticked, its next launch takes a new one.
   const [useApiIp, setUseApiIp] = useState(true)
   const draftSession = useRef('')
+  const profileIdRef = useRef<string | undefined>(undefined)
+  profileIdRef.current = open ? profile?.id : undefined
   // Closed (saved or not): the proxies this editor's API link gave are forgotten here.
   useEffect(() => {
     if (open) return
@@ -567,6 +571,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setShowApiLog(false)
     setApiView(profile)
     setUseApiIp(true)
+    setCurrentCookies({})
+    if (profile && (profile.status === 'closed' || profile.status === 'error')) {
+      setCurrentCookies({ loading: true })
+      const shownFor = profile.id
+      void window.browserApi.profiles.currentCookies(profile.id).then(({ text, count }) => {
+        // Only while this window is still the one being edited and nothing was typed into the box yet.
+        if (shownFor !== profileIdRef.current || String(form.getFieldValue('cookieText') ?? '').trim()) { setCurrentCookies({}); return }
+        form.setFieldValue('cookieText', count ? text : '')
+        setCurrentCookies({ text: count ? text : '', count })
+      }, (error: unknown) => setCurrentCookies({ error: error instanceof Error ? error.message : String(error) }))
+    }
     // This editor's own id: what its API links give belongs to this window only.
     draftSession.current = crypto.randomUUID()
     ipScore.reset()
@@ -669,6 +684,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const fromIp = fp.regionSource === 'ip'
   const networkIdentity = effectiveNetworkIdentity(fp, proxyResult?.ok ? proxyResult : undefined)
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
+  // A saved, closed window's cookies as they are now, shown in the box (edits replace them when saved).
+  const [currentCookies, setCurrentCookies] = useState<{ loading?: boolean; text?: string; count?: number; error?: string }>({})
+  const cookiesEdited = currentCookies.text !== undefined && cookieText !== currentCookies.text
   const regions = useMemo(regionChoices, [])
   // The exit country this window's last check saw (shown as its result), against the country picked by hand.
   /**
@@ -1159,8 +1177,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // API 提取 left unticked: the window keeps nothing about that IP (a new one comes next time).
     const unticked = proxyMode === 'api' && !useApiIp
     const draft = currentDraft()
+    // The box shows the window's own cookies: unchanged, nothing to import; changed, they replace them.
+    const ownCookies = currentCookies.text !== undefined
     await onSave(unticked ? { ...draft, draftSession: undefined } : draft, {
-      cookieText: values.cookieText ?? '',
+      cookieText: ownCookies && !cookiesEdited ? '' : values.cookieText ?? '',
+      ...(ownCookies && cookiesEdited ? { cookieReplace: true } : {}),
       ...(unticked && profile?.apiProxy?.endpoint ? { apiDiscard: true } : {}),
       // A new window keeps the IP 评分 read before it was saved.
       ...(!profile && !unticked && ipScore.record ? { ipSites: ipScore.record } : {})
@@ -1336,12 +1357,20 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("Cookie")}
         hint={running
-          ? t("窗口运行中，关闭后才能导入 Cookie")
-          : cookiePreview.error
-            ? <Typography.Text type="danger">{mt(cookiePreview.error)}</Typography.Text>
-            : cookiePreview.count !== undefined
-              ? t("识别到 {0} 条 Cookie，保存后导入此窗口", cookiePreview.count)
-              : t("可选：粘贴或导入已登录账号的 Cookie，保存后直接是登录状态")}
+          ? t("窗口运行中，关闭后才能查看和修改 Cookie")
+          : currentCookies.loading
+            ? t("正在读取这个窗口现在的 Cookie…")
+            : cookiePreview.error
+              ? <Typography.Text type="danger">{mt(cookiePreview.error)}</Typography.Text>
+              : currentCookies.text !== undefined
+                ? cookiesEdited
+                  ? t("已修改：保存后这个窗口的 Cookie 换成框里的 {0} 条，并同步到云端", cookiePreview.count ?? 0)
+                  : t("这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端", currentCookies.count ?? 0)
+                : cookiePreview.count !== undefined
+                  ? t("识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端", cookiePreview.count)
+                  : currentCookies.error
+                    ? <Typography.Text type="danger">{t("读取现在的 Cookie 失败：{0}", mt(currentCookies.error))}</Typography.Text>
+                    : t("可选：粘贴或导入已登录账号的 Cookie，保存后直接是登录状态")}
       >
         <Form.Item name="cookieText" noStyle>
           <Input.TextArea

@@ -2617,5 +2617,13 @@
   "页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）": "30 sn içinde sonuç yok (yavaş proxy, site doğrulama istedi veya sayfası değişti)",
   "页面没有出结果": "Sayfa sonuç göstermedi",
   "没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc": "Okunabilen site açık değil: “Denetim siteleri”nde IPLark veya ping0.cc’yi açın",
-  "点「换一个 IP」从链接取一个新的": "Bağlantıdan yenisini almak için “Yeni IP” düğmesine tıklayın"
+  "点「换一个 IP」从链接取一个新的": "Bağlantıdan yenisini almak için “Yeni IP” düğmesine tıklayın",
+  "Cookie 已存在本机，但同步到云端失败：{0}": "Çerezler bu bilgisayara kaydedildi ancak buluta eşitleme başarısız: {0}",
+  "Cookie 已更新，现在 {0} 条": "Çerezler güncellendi: şimdi {0}",
+  "已修改：保存后这个窗口的 Cookie 换成框里的 {0} 条，并同步到云端": "Düzenlendi: kaydedince bu pencerenin çerezleri kutudaki {0} çerez olur ve buluta eşitlenir",
+  "正在读取这个窗口现在的 Cookie…": "Bu pencerenin çerezleri okunuyor…",
+  "窗口运行中，关闭后才能查看和修改 Cookie": "Pencere açık: çerezleri görmek veya değiştirmek için kapatın",
+  "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "{0} çerez bulundu; kaydedince bu pencereye girer ve buluta eşitlenir",
+  "读取现在的 Cookie 失败：{0}": "Mevcut çerezler okunamadı: {0}",
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Bu pencerede şu an {0} çerez var; düzenleyip kaydedince değiştirilir ve buluta eşitlenir"
 }

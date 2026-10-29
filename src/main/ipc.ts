@@ -27,7 +27,7 @@ import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from 
 import { clearProfileCache, profileStorageInfo, storageOverview } from './profile-data'
 import type { ExtensionStore } from './extension-store'
 import type { CookieManager } from './cookie-manager'
-import { parseCookieFile, serializeCookieFile } from './cookie-file'
+import { cookieListText, parseCookieFile, serializeCookieFile } from './cookie-file'
 import { randomUUID } from 'node:crypto'
 import { analyzeBatchTable, batchTemplateRows, errorRows, importFormat, readImportTable, serializeCsv, serializeXlsx, type AnalyzedTable, type ImportFileFormat } from './profile-batch-import'
 import { proxyForTest, publicGroupRecord, publicProfile, publicProxyRecord, sameProxyIdentity } from './profile-secrets'
@@ -512,13 +512,30 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await writeFile(result.filePath, serializeCookieFile(profile.name, exported), { encoding: 'utf8', mode: 0o600 })
     return { count: exported.length, filePath: result.filePath }
   })
-  ipcMain.handle('profiles:import-cookies-text', async (_event, id: string, text: string) => {
+  /** What a closed window has in its cookie jar now, for the editor's Cookie box. */
+  ipcMain.handle('profiles:current-cookies', async (_event, id: string) => {
     profiles.get(id)
-    if (typeof text !== 'string' || !text.trim()) throw new Error('请粘贴 Cookie 内容')
+    if (launcher.isRunning(id)) throw new Error('窗口运行中，关闭后才能看 Cookie')
+    const current = await cookies.exportCookies(id)
+    return { count: current.length, text: cookieListText(current) }
+  })
+  /**
+   * Cookies pasted or edited in the editor: added (or, replace, the window keeps exactly these),
+   * then the login state goes up to the team cloud right away.
+   */
+  ipcMain.handle('profiles:import-cookies-text', async (_event, id: string, text: string, options?: { replace?: unknown }) => {
+    profiles.get(id)
+    const replace = options?.replace === true
+    if (typeof text !== 'string' || (!text.trim() && !replace)) throw new Error('请粘贴 Cookie 内容')
     if (Buffer.byteLength(text, 'utf8') > 10 * 1024 * 1024) throw new Error('Cookie 文件不能超过 10 MB')
     if (launcher.isRunning(id)) throw new Error('请先关闭浏览器环境再导入 Cookie')
-    const imported = parseCookieFile(text)
-    return { count: await cookies.importCookies(id, imported) }
+    const imported = text.trim() ? parseCookieFile(text) : []
+    const count = await cookies.importCookies(id, imported, { replace })
+    const syncError = await team.pushLoginState(id).then(() => undefined, (error: unknown) => {
+      logger.error('Cookie 改动同步到云端失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      return error instanceof Error ? error.message : String(error)
+    })
+    return { count, ...(syncError ? { syncError } : {}) }
   })
   ipcMain.handle('profiles:import-cookies', async (_event, id: string) => {
     profiles.get(id)
@@ -543,7 +560,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await profiles.remove(id)
     await team.forget(id)
   })
-  ipcMain.handle('profiles:launch', (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
+  ipcMain.handle('profiles:launch', async (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
+    // The editor reads a window's cookies when it opens (a few seconds): a launch waits for that.
+    for (let waited = 0; cookies.isBusy(id) && waited < 30_000; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250))
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
     return launcher.launch(id, { allowGeoConflict: options?.allowGeoConflict === true }).then(publicProfile)
   })

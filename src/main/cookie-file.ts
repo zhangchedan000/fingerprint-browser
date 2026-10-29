@@ -157,6 +157,11 @@ function parseCookieJson(raw: string): PortableCookie[] {
   })
 }
 
+/** A window's cookies as the editor shows them: a plain JSON array (as Cookie-Editor writes it). */
+export function cookieListText(cookies: CookieInput[]): string {
+  return JSON.stringify(cookies.map((cookie, index) => normalizeCookie(cookie, index)), null, 2)
+}
+
 export function serializeCookieFile(profileName: string, cookies: CookieInput[]): string {
   const normalized = cookies.map((cookie, index) => normalizeCookie(cookie, index))
   const file: PrismCookieFile = {

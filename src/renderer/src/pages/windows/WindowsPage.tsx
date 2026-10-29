@@ -156,10 +156,12 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       setEditorOpen(false)
       setEditing(undefined)
       notify.success(editing ? t("环境已更新") : t("环境已创建"))
-      if (extras.cookieText.trim()) {
+      // Cookies pasted, or the window's own edited in the box (replace): then they go up to the cloud.
+      if (extras.cookieText.trim() || extras.cookieReplace) {
         try {
-          const { count } = await window.browserApi.profiles.importCookiesText(saved.id, extras.cookieText)
-          notify.success(t("已导入 {0} 条 Cookie", count))
+          const { count, syncError } = await window.browserApi.profiles.importCookiesText(saved.id, extras.cookieText, { replace: extras.cookieReplace === true })
+          notify.success(extras.cookieReplace ? t("Cookie 已更新，现在 {0} 条", count) : t("已导入 {0} 条 Cookie", count))
+          if (syncError) notify.warning(t("Cookie 已存在本机，但同步到云端失败：{0}", syncError))
         } catch (error) {
           notify.warning(t("窗口已保存，但 Cookie 导入失败：{0}", humanError(error)))
         }

@@ -776,6 +776,25 @@ export class TeamManager {
     if (this.file.links[id] && !this.pushes.has(id)) await this.release(id)
   }
 
+  /**
+   * Cookies changed in the editor of a closed window: its login state goes up now, the way a close
+   * would send it (taking the lock while it does). Not linked: nothing to do.
+   */
+  async pushLoginState(id: string): Promise<void> {
+    const link = this.file.links[id]
+    if (!link || !this.api) return
+    const pending = this.pushes.get(id)
+    if (pending) await pending
+    await this.api.lock(link.teamId, hostname())
+    this.locked.add(id)
+    try {
+      await this.upload(id, link)
+      this.onSync({ profileId: id, phase: 'done' })
+    } finally {
+      await this.release(id)
+    }
+  }
+
   /** After a linked window exits: upload its login state, then give the lock back. */
   afterExit(id: string): Promise<void> {
     const link = this.file.links[id]
