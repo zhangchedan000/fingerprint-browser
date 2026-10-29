@@ -28,6 +28,7 @@ import { fontPackStatus, installFontPack, registerLanguageFontsIpc } from './lan
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
+import { readWindowState, windowPlacement, writeWindowState } from './window-state'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
@@ -60,9 +61,19 @@ function installedUpdater(log: AppLogger): UpdaterEngine | undefined {
 }
 
 function createWindow(): BrowserWindow {
+  // Opens the size and place it was last left at (the default size the first time).
+  const stateFile = join(app.getPath('userData'), 'window-state.json')
+  const placement = windowPlacement(
+    readWindowState(stateFile),
+    screen.getAllDisplays().map((display) => display.workArea),
+    { width: 1320, height: 820 },
+    { width: 1040, height: 680 }
+  )
   const window = new BrowserWindow({
-    width: 1320,
-    height: 820,
+    x: placement.x,
+    y: placement.y,
+    width: placement.width,
+    height: placement.height,
     minWidth: 1040,
     minHeight: 680,
     show: false,
@@ -76,7 +87,31 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => {
+    if (placement.maximized) window.maximize()
+    window.show()
+  })
+  // The size it goes back to from maximized, kept here: not every platform reports it once maximized.
+  let normalBounds = window.getBounds()
+  let saveTimer: NodeJS.Timeout | undefined
+  const saveState = () => {
+    if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+    const maximized = window.isMaximized()
+    if (!maximized) normalBounds = window.getBounds()
+    writeWindowState(stateFile, { ...normalBounds, maximized })
+  }
+  const saveSoon = () => {
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(saveState, 500)
+  }
+  window.on('resize', saveSoon)
+  window.on('move', saveSoon)
+  window.on('maximize', saveSoon)
+  window.on('unmaximize', saveSoon)
+  window.on('close', () => {
+    clearTimeout(saveTimer)
+    saveState()
+  })
   window.webContents.on('console-message', (event) => {
     if (event.level === 'error') logger?.error('Renderer console error', event.message)
   })
