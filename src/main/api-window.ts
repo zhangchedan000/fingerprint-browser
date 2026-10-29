@@ -29,6 +29,8 @@ export interface ApiProxyOutcome {
    * more are taken: the link gives rotating ones); the last one is in use.
    */
   mismatch: boolean
+  /** The proxy kept before, when it was replaced: what its check found (for the log). */
+  replaced?: ProxyTestResult
 }
 
 type Tester = (config: ProxyConfig) => Promise<ProxyTestResult>
@@ -57,6 +59,25 @@ export function apiCheckRecord(
     ...(check && !check.ok ? { error: check.error ?? '代理不可用' } : {}),
     ...(!check && 'error' in result ? { error: result.error } : {})
   }
+}
+
+/**
+ * A link checked in the editor before its window is saved: the proxy it gave last, checked again
+ * while it answers; a new one from the link when there is none, it stopped answering, or a new one
+ * is asked for (换一个 IP, 取消勾选). `failedKept` is the kept proxy's failed check, for the log.
+ */
+export async function draftLinkCheck<T extends { result: ProxyTestResult }>(
+  kept: ApiProxyEndpoint | undefined,
+  refresh: boolean,
+  checkKept: (endpoint: ApiProxyEndpoint) => Promise<T>,
+  fetchNew: () => Promise<T>
+): Promise<{ checked: T; fetched: boolean; failedKept?: ProxyTestResult }> {
+  if (kept && !refresh) {
+    const checked = await checkKept(kept)
+    if (checked.result.ok) return { checked, fetched: false }
+    return { checked: await fetchNew(), fetched: true, failedKept: checked.result }
+  }
+  return { checked: await fetchNew(), fetched: true }
 }
 
 /**
@@ -102,6 +123,8 @@ export async function apiProxyFor(
     remember(check)
     if (check.ok && check.rotating) return { ...last, fetched: 0, mismatch: true }
   }
+  // Why the kept proxy was not used (its check), when one was kept.
+  const replaced = last?.check
   let fetched = 0
   let fetchError: unknown
   while (fetched < attempts) {
@@ -120,16 +143,16 @@ export async function apiProxyFor(
     if (place) profile = await profiles.setWindowApiEndpoint(id, endpoint, place, profile.apiProxy?.endpoint?.fetchedAt)
     profile = await save(check)
     profile = await profiles.noteApiCheck(id, apiCheckRecord(trigger, endpoint, place, true, check))
-    if (fits(check)) return { profile, check, fetched, mismatch: false }
+    if (fits(check)) return { profile, check, fetched, mismatch: false, ...(replaced ? { replaced } : {}) }
     last = { profile, check }
     remember(check)
-    if (check.ok && check.rotating) return { ...last, fetched, mismatch: true }
+    if (check.ok && check.rotating) return { ...last, fetched, mismatch: true, ...(replaced ? { replaced } : {}) }
   }
   if (!last?.check.ok && working) {
     profile = await profiles.setWindowApiEndpoint(id, working.endpoint, working.place, working.fetchedAt)
     profile = await save(working.check)
-    return { profile, check: working.check, fetched, mismatch: true }
+    return { profile, check: working.check, fetched, mismatch: true, ...(replaced ? { replaced } : {}) }
   }
   if (!last) throw fetchError instanceof Error ? fetchError : new Error(String(fetchError))
-  return { ...last, fetched, mismatch: last.check.ok }
+  return { ...last, fetched, mismatch: last.check.ok, ...(replaced ? { replaced } : {}) }
 }

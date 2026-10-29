@@ -1062,8 +1062,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           followCheckedIp(view.proxyCheck ?? null, run, fill)
           return
         }
-        // A new window or a new link: the proxy taken now is the one the window starts on once saved.
-        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id), run, fill)
+        // A new window or a new link: the proxy the link gave (kept for the next 检测, and the one the
+        // window starts on once saved); 换一个 IP or 取消勾选 take a new one.
+        followCheckedIp(await window.browserApi.proxy.test(apiProxy(), profile?.id, undefined, refresh || !useApiIp), run, fill)
         return
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
@@ -1572,7 +1573,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("出口 IP")}</h3>
           <span className="fb-fp-card-sub">{proxyMode === 'api' ? t("一个 IP 用到失效才从链接取新的") : t("检测后就是这个窗口用的 IP")}</span>
           <span className="fb-fp-card-actions">
-            {proxyMode === 'api' && keptEndpoint && (
+            {proxyMode === 'api' && (keptEndpoint || proxyResult?.ok) && (
               <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
                 <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
               </Tooltip>

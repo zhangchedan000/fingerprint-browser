@@ -150,7 +150,7 @@ const api: BrowserApi = {
     }
   },
   proxy: {
-    test: (config, profileId, proxyId) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId),
+    test: (config, profileId, proxyId, refresh) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId, refresh),
     list: () => ipcRenderer.invoke('proxy:list'),
     create: (draft) => ipcRenderer.invoke('proxy:create', draft),
     createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),

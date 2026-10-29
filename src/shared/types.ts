@@ -845,7 +845,8 @@ export interface BrowserApi {
   /** The proxy library. Windows refer to these proxies by id. */
   proxy: {
     /** Tests typed-in settings; an empty password with passwordStored uses the saved one of the window or library proxy. */
-    test: (config: ProxyConfig, profileId?: string, proxyId?: string) => Promise<ProxyTestResult>
+    /** An API link checks the proxy it gave last while it answers; refresh takes a new one (换一个 IP). */
+    test: (config: ProxyConfig, profileId?: string, proxyId?: string, refresh?: boolean) => Promise<ProxyTestResult>
     list: () => Promise<ProxyRecordView[]>
     create: (draft: ProxyDraft) => Promise<ProxyRecordView>
     /** Adds many at once; proxies already in the library are counted as duplicates. */

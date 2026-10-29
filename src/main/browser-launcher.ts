@@ -1004,7 +1004,15 @@ export class BrowserLauncher {
       })
     this.onChanged(outcome.profile)
     const { check } = outcome
-    this.logger?.info('API 提取的代理', { profileId: profile.id, ip: check.ip, country: check.countryCode, newProxies: outcome.fetched })
+    this.logger?.info('API 提取的代理', {
+      profileId: profile.id,
+      ip: check.ip,
+      country: check.countryCode,
+      newProxies: outcome.fetched,
+      // Why the window's own proxy was not used: it did not answer, or (取消勾选) it was released.
+      ...(outcome.replaced ? { replacedBecause: outcome.replaced.ok ? `出口 ${outcome.replaced.countryCode ?? '未知'}${outcome.replaced.rotating ? '，轮换' : ''}` : outcome.replaced.error ?? '连不上' } : {}),
+      ...(profile.apiProxy?.released ? { replacedBecause: '取消勾选' } : {})
+    })
     if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
     if (outcome.mismatch && check.rotating) {
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？`)

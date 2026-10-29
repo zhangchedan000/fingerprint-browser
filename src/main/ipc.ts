@@ -19,7 +19,7 @@ import { locateServer, testProxy } from './proxy-tester'
 import { localProxyFor } from './proxy-bridge'
 import { proxySupportsUdp } from './webrtc-relay'
 import { validateProfileDraft, validateProxyConfig, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
-import { apiCheckRecord, apiProxyFor } from './api-window'
+import { apiCheckRecord, apiProxyFor, draftLinkCheck } from './api-window'
 import { resolveApiProxy, type ApiProxyEndpoint } from './api-proxy'
 import type { AppLogger } from './app-logger'
 import { parseProfileConfig, safeProfileFileName, serializeProfileConfig } from './profile-transfer'
@@ -228,10 +228,14 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password }
     } else if (draft.proxy?.apiUrl) {
       const link = validProxyApiUrl(draft.proxy.apiUrl)
-      // A saved API window is checked on the proxy it keeps; a new link takes one.
+      // A saved API window is checked on the proxy it keeps, a new link on the one 检测 took; else one is taken.
+      const drafted = draftApiProxies.get(link)
       if (existing?.apiProxy?.url === link && existing.apiProxy.endpoint) {
         const { apiUrl: _link, tunnel: _route, ...kept } = existing.proxy
         proxy = kept
+      } else if (drafted) {
+        // The one 检测 showed for this link: the checks judge the IP the window will start on.
+        proxy = { ...drafted.endpoint }
       } else {
         proxy = { ...await resolveApiProxy(link, route) }
       }
@@ -667,8 +671,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   /** An API proxy draft with the proxy its API gives now filled in (others as they are). */
   /**
-   * The proxy a link gave when it was checked in the editor (a new window, or a new link): the window
-   * gets it when saved, so it starts on the IP that was checked instead of taking another one.
+   * The proxy a link gave when it was checked in the editor (a new window, or a new link): checked
+   * again on the next 检测 (no new one taken), used by the fingerprint and deep checks, and the
+   * window's once saved, so it starts on the IP that was checked. Kept while the launcher runs.
    */
   const draftApiProxies = new Map<string, { endpoint: ApiProxyEndpoint; place?: ServerPlace; check: ProxyCheckSummary; at: number }>()
   const draftTurns = new Map<string, number>()
@@ -696,8 +701,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (log?.length) profile = await profiles.noteApiCheck(id, ...log)
     const kept = !profile.apiProxy?.endpoint ? draftApiProxies.get(url) : undefined
     if (!kept) return profile
+    // Now this window's: another new window with the link takes its own.
     draftApiProxies.delete(url)
-    if (Date.now() - kept.at > 30 * 60_000) return profile
     await profiles.setWindowApiEndpoint(id, kept.endpoint, kept.place)
     return profiles.setProxyCheck(id, kept.check)
   }
@@ -706,22 +711,32 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl), draft.tunnel)
     return { ...draft, ...endpoint, passwordStored: false }
   }
-  ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string) => {
+  ipcMain.handle('proxy:test', async (_event, input, profileId?: string, proxyId?: string, refresh?: unknown) => {
     // The newest check of a link is the one the editor shows: only its proxy is kept for saving.
     const draftLink = (input as ProxyConfig | undefined)?.apiUrl ? validProxyApiUrl((input as ProxyConfig).apiUrl!) : undefined
     const turn = ++draftTurn
     if (draftLink) draftTurns.set(draftLink, turn)
-    const config = await resolveDraft(input as ProxyConfig).catch((error: unknown) => {
+    const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
+    const checkOf = async (config: ProxyConfig) => {
+      const proxy = proxyForTest(validateProxyConfig(config), saved)
+      const [result, place] = await Promise.all([testProxy(proxy), draftLink ? locateServer(config.host).catch(() => undefined) : undefined])
+      return { config, proxy, result, place }
+    }
+    const fresh = async () => checkOf(await resolveDraft(input as ProxyConfig).catch((error: unknown) => {
       if (draftLink) noteDraftApiCheck(draftLink, apiCheckRecord('check', undefined, undefined, true, { error: error instanceof Error ? error.message : String(error) }))
       throw error
-    })
-    const validated = validateProxyConfig(config)
-    const saved = proxyId ? profiles.getProxy(proxyId) : profileId ? profiles.get(profileId).proxy : undefined
-    const proxy = proxyForTest(validated, saved)
-    const [result, place] = await Promise.all([testProxy(proxy), draftLink ? locateServer(config.host).catch(() => undefined) : undefined])
+    }))
+    // A link checked before: its proxy again while it answers (换一个 IP / 取消勾选: a new one).
+    const kept = draftLink ? draftApiProxies.get(draftLink) : undefined
+    const { checked, fetched, failedKept } = draftLink
+      ? await draftLinkCheck(kept?.endpoint, refresh === true, (endpoint) => checkOf({ ...(input as ProxyConfig), ...endpoint, passwordStored: false }), fresh)
+      : { checked: await checkOf(input as ProxyConfig), fetched: false }
+    if (failedKept && kept) noteDraftApiCheck(draftLink!, apiCheckRecord('check', kept.endpoint, kept.place, false, failedKept))
+    const { config, proxy, result } = checked
+    const place = checked.place ?? (fetched ? undefined : kept?.place)
     const check: ProxyCheckSummary = { ...result, checkedAt: new Date().toISOString() }
     if (draftLink && (config.protocol === 'http' || config.protocol === 'socks5') && config.port) {
-      noteDraftApiCheck(draftLink, apiCheckRecord('check', config as ApiProxyEndpoint, place, true, result))
+      noteDraftApiCheck(draftLink, apiCheckRecord('check', config as ApiProxyEndpoint, place, fetched, result))
       if (draftTurns.get(draftLink) === turn) {
         draftApiProxies.set(draftLink, {
           endpoint: { protocol: config.protocol, host: config.host, port: config.port, username: config.username, password: config.password },

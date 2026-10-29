@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { defaultProfileDraft } from '../shared/defaults'
 import type { ProxyConfig, ProxyTestResult } from '../shared/types'
 import type { ApiProxyEndpoint } from './api-proxy'
-import { apiProxyFor } from './api-window'
+import { apiProxyFor, draftLinkCheck } from './api-window'
 import { ProfileStore } from './profile-store'
 import type { SecretCodec } from './secret-codec'
 
@@ -194,5 +194,22 @@ describe('API 提取 windows log every extraction and check', () => {
     const reopened = await open(path)
     expect(reopened.get(id).apiProxy?.log).toHaveLength(3)
     expect(reopened.get(id).apiProxy?.endpoint?.place).toEqual({ countryCode: 'US', city: 'Los Angeles' })
+  })
+
+  it('a link checked in a new window: the same proxy again while it answers, a new one when asked or dead', async () => {
+    const kept: ApiProxyEndpoint = { protocol: 'socks5', host: '198.51.100.1', port: 31001, username: 'u', password: 'p' }
+    const ok = (ip: string) => ({ result: { ok: true, latencyMs: 10, ip } as ProxyTestResult })
+    let fetches = 0
+    const fetchNew = async () => { fetches += 1; return ok(`203.0.113.${100 + fetches}`) }
+    const same = await draftLinkCheck(kept, false, async () => ok('203.0.113.1'), fetchNew)
+    expect(same).toMatchObject({ fetched: false, checked: { result: { ip: '203.0.113.1' } } })
+    expect(fetches).toBe(0)
+    // 换一个 IP / 取消勾选.
+    expect(await draftLinkCheck(kept, true, async () => ok('203.0.113.1'), fetchNew)).toMatchObject({ fetched: true, checked: { result: { ip: '203.0.113.101' } } })
+    // The kept one stopped answering: a new one, and why.
+    const dead = await draftLinkCheck(kept, false, async () => ({ result: { ok: false, latencyMs: 0, error: '连接超时' } as ProxyTestResult }), fetchNew)
+    expect(dead).toMatchObject({ fetched: true, failedKept: { error: '连接超时' }, checked: { result: { ip: '203.0.113.102' } } })
+    // Nothing kept yet: the link gives one.
+    expect(await draftLinkCheck(undefined, false, async () => ok('x'), fetchNew)).toMatchObject({ fetched: true })
   })
 })
