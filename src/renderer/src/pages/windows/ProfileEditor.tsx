@@ -1579,13 +1579,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Alert
             type="warning"
             showIcon
-            className="fb-editor-alert"
+            className="fb-editor-alert fb-exit-alert"
             title={proxyResult.geoConflict?.includes('轮换代理')
               ? t("{0}；不会按它配置国家和语言，请在代理商后台改成固定会话（粘性 IP）", mt(proxyResult.geoConflict))
               : t("{0}；不会按它配置国家和语言，启动时会再检测并由你确认", mt(proxyResult.geoConflict))}
           />
         )}
-        {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert" title={mt(proxyResult.warning)} />}
+        {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert fb-exit-alert" title={mt(proxyResult.warning)} />}
         <div className="fb-ip-identity">
           <Row label={t("网络身份")}>
             <span className="fb-identity-line">

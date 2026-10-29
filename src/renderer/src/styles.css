@@ -210,6 +210,9 @@ button, input, textarea { font: inherit; }
 .fb-editor-alert.ant-alert { align-items: center; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; line-height: 1.5; }
 .fb-editor-alert.ant-alert .ant-alert-icon { margin-inline-end: 8px; font-size: 14px; }
 .fb-editor-alert.ant-alert .ant-alert-action { margin-inline-start: 10px; }
+/* Under the exit IP card: as wide as the card, same corners. */
+.fb-editor-alert.fb-exit-alert { margin: 0; }
+.fb-editor-alert.fb-exit-alert.ant-alert { padding: 10px 14px; border-radius: 10px; }
 /* A value chosen on its own that does not fit the rest: under its row, yellow, not blocking. */
 .fb-locked-note.ant-alert { margin-bottom: 14px; border-radius: 10px; }
 .fb-row-note { display: block; margin-top: 4px; font-size: 12px; }
