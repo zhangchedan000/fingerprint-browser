@@ -7,6 +7,8 @@ import { defaultProfileDraft } from '../../shared/defaults'
 import type { TeamSyncEvent } from '../../shared/team'
 import type { PortableCookie } from '../cookie-file'
 import type { CookieManager } from '../cookie-manager'
+import { ExtensionStore } from '../extension-store'
+import { fingerprintCheckStore } from '../fingerprint-check'
 import { ProfileStore } from '../profile-store'
 import { identitySecretCodec } from '../secret-codec'
 import { TeamManager } from './team-manager'
@@ -150,8 +152,11 @@ async function computer(server: ReturnType<typeof fakeServer>) {
   const events: TeamSyncEvent[] = []
   const team = new TeamManager(vault, profiles, cookies, identitySecretCodec, (event) => events.push(event), undefined, server.fetcher)
   team.syncDelayMs = -1
+  const extensions = new ExtensionStore(vault)
+  await extensions.initialize()
+  team.extensions = extensions
   await team.initialize()
-  return { vault, profiles, jars, team, events }
+  return { vault, profiles, jars, team, events, extensions }
 }
 
 const cookie = (value: string) => ({ name: 'sid', value, domain: '.example.com', path: '/' }) as PortableCookie
@@ -341,5 +346,49 @@ describe('TeamManager', () => {
     expect(owner.team.links()[0].pendingUpload).toBe(false)
     expect([...server.records.values()][0].data_rev).toBe(2)
     expect(existsSync(join(owner.vault, 'team.json'))).toBe(true)
+  })
+
+  it('brings bookmarks, history, extensions with their data and the check records along', async () => {
+    const server = fakeServer()
+    const owner = await computer(server)
+    const member = await computer(server)
+    await owner.team.login('http://team.test', 'boss', 'ownerpass')
+    await member.team.login('http://team.test', 'alice', 'alicepass')
+
+    const folder = join(owner.vault, 'unpacked-wallet')
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(folder, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Wallet', version: '2.1' }))
+    const wallet = await owner.extensions.importDirectory(folder)
+    const walletId = (await owner.extensions.identity(wallet.id)).chromeId
+    const local = await owner.profiles.create({ ...defaultProfileDraft(), name: '店铺 2', extensionIds: [wallet.id] })
+    const data = owner.profiles.profileDataPath(local.id)
+    await mkdir(join(data, 'Default', 'Local Extension Settings', walletId), { recursive: true })
+    await writeFile(join(data, 'Default', 'Local Extension Settings', walletId, 'CURRENT'), 'wallet vault')
+    await writeFile(join(data, 'Default', 'Bookmarks'), '{"roots":{"bookmark_bar":{}}}')
+    await writeFile(join(data, 'Default', 'History'), 'owner history')
+    await fingerprintCheckStore(join(owner.vault, 'fingerprint-checks.json')).set(local.id, { checkedAt: '2026-10-29T08:00:00.000Z' } as never)
+
+    await owner.team.sync()
+    const teamId = owner.team.links()[0].teamId
+    await owner.team.share([teamId], ['member1'])
+    await member.team.sync()
+    const copyId = member.team.links()[0].profileId
+    await member.team.beforeLaunch(copyId)
+
+    const copyData = member.profiles.profileDataPath(copyId)
+    const [installed] = member.extensions.list()
+    expect(installed).toMatchObject({ name: 'Wallet', version: '2.1' })
+    expect(member.profiles.get(copyId).extensionIds).toEqual([installed.id])
+    // The same browser ID as on the owner's computer, so its data is its own again.
+    expect((await member.extensions.identity(installed.id)).chromeId).toBe(walletId)
+    expect(await readFile(join(copyData, 'Default', 'Local Extension Settings', walletId, 'CURRENT'), 'utf8')).toBe('wallet vault')
+    expect(await readFile(join(copyData, 'Default', 'Bookmarks'), 'utf8')).toBe('{"roots":{"bookmark_bar":{}}}')
+    expect(await readFile(join(copyData, 'Default', 'History'), 'utf8')).toBe('owner history')
+    expect(await fingerprintCheckStore(join(member.vault, 'fingerprint-checks.json')).get(copyId)).toEqual({ checkedAt: '2026-10-29T08:00:00.000Z' })
+    await member.team.afterExit(copyId)
+    // Coming back, the owner's own copy of the extension is used.
+    await owner.team.beforeLaunch(local.id)
+    expect(owner.extensions.list()).toHaveLength(1)
+    expect(owner.profiles.get(local.id).extensionIds).toEqual([wallet.id])
   })
 })
