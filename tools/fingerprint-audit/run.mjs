@@ -49,7 +49,7 @@ function parseArguments(argv) {
     allowNoSandbox: false,
     debugTransport: 'auto',
     surfaceMode: 'template',
-    version: '144.0.7559.132',
+    version: '156.0.8078.47',
     platformVersion: '',
     hardwareConcurrency: 8,
     screenWidth: 1440,
@@ -97,7 +97,7 @@ function parseArguments(argv) {
     else if (argument === '--debug-transport') result.debugTransport = argv[++index] ?? ''
     else throw new Error(`Unknown argument: ${argument}`)
   }
-  if (!result.browser) throw new Error('Usage: node tools/fingerprint-audit/run.mjs --browser /path/to/Chromium [--platform macos|windows] [--surface-mode native|template|fixed-template] [--version 144.0.7559.132] [--output report.json]')
+  if (!result.browser) throw new Error('Usage: node tools/fingerprint-audit/run.mjs --browser /path/to/Chromium [--platform macos|windows] [--surface-mode native|template|fixed-template] [--version 156.0.8078.47] [--output report.json]')
   if (!['macos', 'windows'].includes(result.platform)) throw new Error('--platform must be macos or windows')
   if (!result.platformVersion) result.platformVersion = currentPlatformVersion(result.platform)
   if (!['native', 'template', 'fixed-template'].includes(result.surfaceMode)) throw new Error('--surface-mode must be native, template or fixed-template')

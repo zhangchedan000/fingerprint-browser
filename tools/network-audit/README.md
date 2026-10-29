@@ -26,14 +26,14 @@ npm run audit:network -- \
   --browser "/path/to/Chromium.app/Contents/MacOS/Chromium" \
   --proxy-file private-proxy.json \
   --platform macos \
-  --version 144.0.7559.132 \
+  --version 156.0.8078.47 \
   --output release/network-audit-macos.json
 ```
 
 Windows PowerShell：
 
 ```powershell
-npm run audit:network -- --browser ".\release\win-unpacked\resources\kernels\current\chrome.exe" --proxy-file ".\private-proxy.json" --platform windows --platform-version 10.0.0 --version 144.0.7559.132 --debug-transport websocket --output ".\release\network-audit-windows.json"
+npm run audit:network -- --browser ".\release\win-unpacked\resources\kernels\current\chrome.exe" --proxy-file ".\private-proxy.json" --platform windows --platform-version 10.0.0 --version 156.0.8078.47 --debug-transport websocket --output ".\release\network-audit-windows.json"
 ```
 
 HTTP、HTTPS 和 SOCKS5 使用同一流程。审计工具不会把凭据放入 Chromium 参数，而是先创建只监听

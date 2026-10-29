@@ -44,6 +44,8 @@ export function KernelsPage({ navigate }: PageProps) {
   }, [engine])
 
   const current = kernels.find((kernel) => kernel.executable && kernel.executable === engine?.executable)
+  // Which prism build it is, from its release (tag or zip name); a local build has none.
+  const prism = prismRevision(current?.tag) ?? prismRevision(current?.assetName)
   const defaultVersion = current?.version ?? engine?.version
 
   async function changeEngine(action: () => Promise<Awaited<ReturnType<typeof window.browserApi.engine.status>>>, success: (version?: string) => string): Promise<void> {
@@ -219,9 +221,8 @@ export function KernelsPage({ navigate }: PageProps) {
           </div>
           <span className="fb-muted">
             {[
-              // Which prism build it is, from its release (tag or zip name); a local build has none.
               engine?.fingerprintKernel
-                ? prismRevision(current?.tag ?? current?.assetName) ? t("Prism 指纹内核 prism{0}", prismRevision(current?.tag ?? current?.assetName)) : t("Prism 指纹内核")
+                ? prism ? t("Prism 指纹内核 prism{0}", prism) : t("Prism 指纹内核")
                 : t("兼容模式"),
               defaultVersion && health[defaultVersion]?.status === 'healthy' ? t("文件校验正常") : '',
               t("新建窗口默认使用"),

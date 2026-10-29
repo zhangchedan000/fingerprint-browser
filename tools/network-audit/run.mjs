@@ -57,7 +57,7 @@ function parseArguments(argv) {
     output: resolve('release/network-audit.json'),
     platform,
     platformVersion: '',
-    version: '144.0.7559.132',
+    version: '156.0.8078.47',
     hardwareConcurrency: Math.max(2, Math.min(64, availableParallelism())),
     screenWidth: platform === 'windows' ? 1920 : 1440,
     screenHeight: platform === 'windows' ? 1080 : 900,

@@ -7,6 +7,7 @@ import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelRelaysWeb
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
   expect(prismRevision('155.0.8059.84-prism12')).toBe(12)
+  expect(prismRevision('prism11')).toBe(11)
   expect(prismRevision('v0.2.0')).toBeUndefined()
   expect(prismRevision('ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip')).toBe(5)
 })

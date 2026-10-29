@@ -77,10 +77,11 @@ export function kernelShortName(id: string, among: readonly string[] = []): stri
 }
 
 /**
- * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5; app releases (v0.2.0) carry it in the
- * zip name instead ("ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip").
+ * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5, prism-kernel-releases tags ("prism11")
+ * → 11; app releases (v0.2.0) carry it in the zip name instead
+ * ("ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip").
  */
 export function prismRevision(name: string | undefined): number | undefined {
-  const match = name?.match(/-prism(\d+)(?:_|$)/)
+  const match = name?.match(/(?:^|-)prism(\d+)(?:_|$)/)
   return match ? Number(match[1]) : undefined
 }

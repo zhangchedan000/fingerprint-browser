@@ -1,6 +1,6 @@
 {
   "name": "fingerprint-browser",
-  "version": "0.5.30",
+  "version": "0.5.31",
   "private": true,
   "author": {
     "name": "zhangchedan000",
@@ -21,7 +21,6 @@
     "test:watch": "vitest",
     "audit:fingerprint": "node tools/fingerprint-audit/run.mjs",
     "audit:pixelscan": "node tools/pixelscan-online-probe/run.mjs",
-    "audit:fingerprint-matrix": "node tools/fingerprint-matrix/run.mjs",
     "audit:network": "node tools/network-audit/run.mjs",
     "audit:profile-data": "node tools/profile-data-audit/run.mjs",
     "audit:app-e2e": "node tools/app-e2e/run.mjs",
