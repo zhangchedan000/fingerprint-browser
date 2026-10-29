@@ -347,12 +347,6 @@ function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, lab
   )
 }
 
-/** A chosen time zone: Windows' UTC offset and the zone, without Windows' long name. */
-function zoneShort(zone: string, label: ReactNode): ReactNode {
-  const offset = typeof label === 'string' ? label.match(/^\(UTC[^)]*\)/)?.[0] : undefined
-  return offset ? `${offset} ${zone}` : zone
-}
-
 type ChoiceOption = { value: string | number; label: string; short?: string; disabled?: boolean }
 
 /** What each 指纹值 row is, in the line under it. */
@@ -1474,10 +1468,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
                   label: proxyLabel(item)
                 }))}
-                labelRender={({ value, label }) => {
-                  const chosen = proxies.find((item) => item.id === value)
-                  return chosen ? proxyLabel(chosen, true) : label
-                }}
               />
             </Form.Item>
           </Row>
@@ -1822,8 +1812,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               ...(!fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
               ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
             ]}
-            // Once chosen, the country alone: its language and time zone are the rows below.
-            labelRender={({ value, label }) => typeof value === 'string' && /^[A-Z]{2}$/.test(value) ? regionName(value) : label}
             aria-label={t("国家/地区")}
           />
           <span className={`fb-region-source${fromIp ? ' is-ip' : ''}`}>{fromIp ? t("基于 IP 生成") : t("手动选择")}</span>
@@ -1836,7 +1824,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row label={t("时区")} check={checkFor('timezone')} fix={timezoneFix ?? checkFix('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
-          <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} labelRender={({ value, label }) => zoneShort(String(value), label)} aria-label={t("时区")} />
+          <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} aria-label={t("时区")} />
         </Form.Item>
         {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
       </Row>
@@ -1852,7 +1840,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followUi(`${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
             ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
-          labelRender={({ value, label }) => value === 'auto' ? followUi(autoUiLocale) : label}
           aria-label={t("系统语言")}
         />
       </Row>
@@ -1869,7 +1856,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           }}
           // The country's own language is marked, so it can be picked back after a change.
           options={languageOptions.map((option) => option.value === countryLocale?.language && fp.region
-            ? { ...option, label: `${option.label} · ${t("{0}默认", regionName(fp.region))}` }
+            ? { ...option, label: `${regionName(fp.region)} · ${option.label}` }
             : option)}
           optionRender={(option) => (
             <span className="fb-language-option">
@@ -1878,7 +1865,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
             </span>
           )}
-          labelRender={({ value }) => value === countryLocale?.language && fp.region ? `${regionName(fp.region)} · ${value}` : String(value)}
           aria-label={t("浏览器语言")}
         />
         {languageMismatch && <RowWarning fix={languageFix}>{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</RowWarning>}
@@ -1904,7 +1890,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             className="fb-fp-select"
             value={fp.fontSource ?? 'language'}
             onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
-            labelRender={({ value, label }) => value === 'language' ? followSystem(windowUiLocale) : label}
             options={[
               { value: 'language', label: followSystem(`${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
               { value: 'host', label: t("本机真实字体") }
@@ -1948,7 +1933,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followSystem(voicesLabel(autoVoicesLocale)) },
             ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: voicesLabel(item.locale) }))
           ]}
-          labelRender={({ value }) => value === 'auto' ? followSystem(autoVoicesLocale) : String(value)}
           aria-label={t("语音")}
         />
         {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <RowWarning fix={followSystemLanguage('voicesLocale')}>{t("真实 Windows 的语音一般和系统语言一致")}</RowWarning>}
@@ -1964,7 +1948,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followSystem(`${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
             ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
-          labelRender={({ value, label }) => value === 'auto' ? followSystem(autoMediaLocale) : label}
           aria-label={t("媒体设备名")}
         />
         {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <RowWarning fix={followSystemLanguage('mediaLocale')}>{t("真实 Windows 的设备名和系统语言一致")}</RowWarning>}
@@ -2104,13 +2087,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           className="fb-fp-select"
           value={fp.mediaDevices ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
-          // Once chosen, what is plugged in; the counts are in the list.
-          labelRender={({ value, label }) => {
-            const set = value === 'auto' ? autoMediaDevices(fp.seed >>> 0, gpu?.model) : String(value)
-            const setup = MEDIA_SETUPS.find((item) => item.set === set)
-            if (!setup) return label
-            return value === 'auto' ? t("自动 · {0}", t(MEDIA_KIND_LABELS[setup.kind])) : t(MEDIA_KIND_LABELS[setup.kind])
-          }}
           options={[
             { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
             ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),
