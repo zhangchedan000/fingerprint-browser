@@ -21,6 +21,8 @@ export interface LaunchArgumentOptions {
   userDataDir: string
   /** Pages to open besides the window's own start pages. */
   extraUrls?: string[]
+  /** The window has no saved session yet (never opened here): 打开上次关闭的页面 opens its start pages instead. */
+  firstOpen?: boolean
   proxyUrl?: string
   remoteDebuggingPort?: number
   extensionPaths?: string[]
@@ -225,7 +227,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
   if (options.remoteDebuggingPort) args.push(`--remote-debugging-port=${options.remoteDebuggingPort}`)
   if (options.extensionPaths?.length) args.push(`--load-extension=${options.extensionPaths.join(',')}`)
-  if (profile.startupMode === 'restore') args.push('--restore-last-session')
+  // 打开上次关闭的页面: the start pages the first time (nothing to restore yet), the last session after.
+  if (profile.startupMode === 'restore' && !options.firstOpen) args.push('--restore-last-session')
   else args.push(...profile.startUrls)
   args.push(...(options.extraUrls ?? []))
   return args

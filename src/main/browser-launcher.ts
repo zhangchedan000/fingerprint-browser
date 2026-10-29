@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { access, mkdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserCrashRecord, BrowserProfile, FingerprintConfig, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult, TunnelRoute } from '../shared/types'
@@ -375,7 +375,8 @@ export class BrowserLauncher {
         languageFonts: engine.webrtcRelay,
         seededAudioRects: engine.webrtcRelay,
         webrtcRelayPort: webrtcRelay?.port,
-        extraUrls: options.openUrl ? [options.openUrl] : undefined
+        extraUrls: options.openUrl ? [options.openUrl] : undefined,
+        firstOpen: !await hasSavedSession(this.profiles.profileDataPath(id))
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
@@ -1186,4 +1187,13 @@ export class BrowserLauncher {
     }
   }
 
+}
+
+/** Chrome keeps the tabs to restore in Default/Sessions; a window never opened (or opened elsewhere and not brought here) has none. */
+async function hasSavedSession(userDataDir: string): Promise<boolean> {
+  try {
+    return (await readdir(join(userDataDir, 'Default', 'Sessions'))).length > 0
+  } catch {
+    return false
+  }
 }

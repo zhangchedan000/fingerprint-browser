@@ -471,3 +471,27 @@ describe('ProfileStore', () => {
     expect(reopened.get(profile.id).account).toEqual({ platform: '', username: '', password: '' })
   })
 })
+
+describe('fingerprint seeds', () => {
+  it('gives a new window a seed no window here or in the team has; a window from the cloud keeps its own', async () => {
+    const repository = await store()
+    const first = await repository.create({ ...defaultProfileDraft(1), fingerprint: { ...defaultProfileDraft(1).fingerprint, seed: 1234 } })
+    expect(first.fingerprint.seed).toBe(1234)
+    // The same seed again (and one a teammate's cloud window uses): both replaced.
+    repository.setSeedsInUse(() => [5678])
+    const second = await repository.create({ ...defaultProfileDraft(2), fingerprint: { ...defaultProfileDraft(2).fingerprint, seed: 1234 } })
+    const third = await repository.create({ ...defaultProfileDraft(3), fingerprint: { ...defaultProfileDraft(3).fingerprint, seed: 5678 } })
+    expect(second.fingerprint.seed).not.toBe(1234)
+    expect(third.fingerprint.seed).not.toBe(5678)
+    // Several at once never share one either.
+    const many = await repository.createMany([1, 2, 3].map((index) => ({ ...defaultProfileDraft(10 + index), fingerprint: { ...defaultProfileDraft(1).fingerprint, seed: 42 } })))
+    expect(new Set(many.map((profile) => profile.fingerprint.seed)).size).toBe(3)
+    // Pulled from the cloud (it arrives with its origin): the same window, the same seed.
+    const pulled = await repository.createMany([{ ...defaultProfileDraft(20), fingerprint: { ...defaultProfileDraft(20).fingerprint, seed: 5678 } }], [{ serialNumber: 99, createdAt: new Date().toISOString() }])
+    expect(pulled[0].fingerprint.seed).toBe(5678)
+    // 换一换 to a seed another window has: replaced as well.
+    const changed = await repository.update(first.id, { ...defaultProfileDraft(1), fingerprint: { ...first.fingerprint, seed: second.fingerprint.seed } })
+    expect(changed.fingerprint.seed).not.toBe(second.fingerprint.seed)
+  })
+})
+

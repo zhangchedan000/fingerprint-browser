@@ -25,6 +25,10 @@ describe('launch arguments', () => {
     const urls = buildLaunchArgs({ ...saved, startupMode: 'urls' }, { userDataDir: '/data' })
     expect(urls).not.toContain('--restore-last-session')
     expect(urls).toContain(saved.startUrls[0])
+    // Nothing to restore yet (the window's first opening here): its start pages instead.
+    const first = buildLaunchArgs(saved, { userDataDir: '/data', firstOpen: true })
+    expect(first).not.toContain('--restore-last-session')
+    expect(first).toContain(saved.startUrls[0])
   })
   it('passes device memory only when the window sets it', () => {
     expect(buildLaunchArgs(profile(), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-device-memory'))).toBe(false)

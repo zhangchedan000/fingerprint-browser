@@ -91,7 +91,6 @@ try {
   // New window: platform → start page; Amazon and TikTok Shop by site.
   await click('新建窗口')
   await delay(900)
-  await click('打开指定页面', drawer)
   const typePlatform = async (name) => {
     await run(`(() => { const input = ${row('平台账号')}.querySelector('input'); input.focus(); input.select(); return true })()`)
     await instance.client.send('Input.insertText', { text: name })
@@ -101,6 +100,8 @@ try {
   }
   await typePlatform('TikTok Shop')
   check((await urls()) === 'https://seller-us.tiktok.com/', `TikTok Shop → ${await urls()}`)
+  const mode = await run(`${row('启动页面')}.querySelector('.ant-radio-wrapper-checked')?.innerText.trim()`)
+  check(mode === '打开上次关闭的页面', `a platform opens its page the first time, then the last session (${mode})`)
   await typePlatform('Meta Business')
   check((await urls()) === 'https://business.facebook.com/', `then Meta Business → ${await urls()}`)
   await typePlatform('Amazon Seller')

@@ -1076,8 +1076,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   /** A platform picked (or cleared): its address replaces one a platform filled in; one typed by hand stays. */
   function onPlatformChange(platform: string): void {
+    const known = PLATFORMS.find((item) => item.value === platform)
+    // A platform's page opens the first time; after that the window carries on where it was left.
+    if (known) form.setFieldValue('startupMode', 'restore')
     if (!startUrlsAreFilledIn()) return
-    form.setFieldValue('startUrlsText', PLATFORMS.find((item) => item.value === platform)?.url ?? '')
+    form.setFieldValue('startUrlsText', known?.url ?? '')
   }
 
   async function submit(): Promise<void> {
@@ -1224,12 +1227,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </div>
       </Row>
-      <Row label={t("启动页面")} hint={startupMode === 'restore' ? t("打开上次关闭时的标签页，第一次打开是新标签页") : t("每行一个网址，没写 http 的按 https 打开")}>
+      <Row label={t("启动页面")} hint={startupMode === 'restore' ? t("第一次打开这些网址，之后打开上次关闭的页面") : t("每次都打开这些网址；每行一个，没写 http 的按 https 打开")}>
         <div className="fb-stack">
           <Form.Item name="startupMode" noStyle>
-            <Radio.Group options={[{ value: 'urls', label: t("打开指定页面") }, { value: 'restore', label: t("打开上次关闭的页面") }]} />
+            <Radio.Group options={[{ value: 'restore', label: t("打开上次关闭的页面") }, { value: 'urls', label: t("每次打开指定页面") }]} />
           </Form.Item>
-          {startupMode !== 'restore' && platformSites && (
+          {platformSites && (
             // Amazon and TikTok Shop have a seller site per region: the one picked here is the start page.
             <Select
               className="fb-site-select"
@@ -1245,7 +1248,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           )}
           <Form.Item noStyle shouldUpdate={(before, after) => before.startupMode !== after.startupMode}>
             {() => <Form.Item name="startUrlsText" noStyle>
-              <Input.TextArea disabled={form.getFieldValue('startupMode') === 'restore'} autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
+              <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} placeholder="https://seller-us.tiktok.com" />
             </Form.Item>}
           </Form.Item>
         </div>

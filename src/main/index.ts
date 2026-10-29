@@ -263,6 +263,8 @@ app.whenReady().then(async () => {
   activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
   activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)
   activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))
+  // A new window's seed is none the team's cloud windows use (the seed decides Canvas and AudioContext).
+  profiles.setSeedsInUse(() => activeTeam.seedsInUse())
   await activeTeam.initialize()
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)

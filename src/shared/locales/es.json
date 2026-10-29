@@ -2576,5 +2576,9 @@
   "还没检测；检测后这里是本机的出口 IP": "Aún sin comprobar; al comprobar aparece aquí la IP de salida de este equipo",
   "还没检测；检测后这里是这个代理的出口 IP": "Aún sin comprobar; al comprobar aparece aquí la IP de salida de este proxy",
   "还没检测；检测后这里是这个窗口的出口 IP": "Aún sin comprobar; al comprobar aparece aquí la IP de salida de esta ventana",
-  "选择站点": "Elige un sitio"
+  "选择站点": "Elige un sitio",
+  "{0} 与窗口 {1} 相同：只有 16 种偏移，同样系统和字体的真实电脑也相同": "{0} es igual que en la ventana {1}: solo hay 16 desplazamientos y los equipos reales con el mismo sistema y fuentes también coinciden",
+  "每次打开指定页面": "Abrir estas páginas cada vez",
+  "每次都打开这些网址；每行一个，没写 http 的按 https 打开": "Estas direcciones se abren cada vez; una por línea, sin http se abren con https",
+  "第一次打开这些网址，之后打开上次关闭的页面": "Estas direcciones se abren la primera vez; después, las páginas de la última vez"
 }

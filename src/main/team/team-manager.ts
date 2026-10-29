@@ -111,6 +111,8 @@ export class TeamManager {
   private readonly heartbeats = new Map<string, NodeJS.Timeout>()
   private readonly pushes = new Map<string, Promise<void>>()
   private readonly locked = new Set<string>()
+  /** Fingerprint seeds of the team's cloud windows not on this computer, from the last listing. */
+  private cloudSeeds = new Set<number>()
 
   /** The 网络加速 node sources a window uses (set by the app), so they go to the cloud with it. */
   tunnelSources?: (route: TunnelRoute | undefined) => PortableTunnelSource[]
@@ -121,6 +123,21 @@ export class TeamManager {
    * A window's cloud config, with what makes it work the same on another computer: the node
    * sources of its 网络加速 and, for API 提取, the proxy it is on, its IP history and check log.
    */
+  private noteCloudSeeds(records: Array<{ id: string; config?: unknown }>): void {
+    const seeds = new Set<number>()
+    for (const record of records) {
+      if (this.localIdOf(record.id)) continue
+      const seed = (record.config as { fingerprint?: { seed?: unknown } } | undefined)?.fingerprint?.seed
+      if (typeof seed === 'number' && Number.isInteger(seed)) seeds.add(seed)
+    }
+    this.cloudSeeds = seeds
+  }
+
+  /** Seeds the team's cloud windows use: a new window here takes none of them. */
+  seedsInUse(): Iterable<number> {
+    return this.cloudSeeds
+  }
+
   private cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string } } {
     const sources = this.tunnelSources?.(profile.tunnel) ?? []
     return {
@@ -479,6 +496,7 @@ export class TeamManager {
   async listProfiles(): Promise<TeamProfileView[]> {
     const api = this.requireApi()
     const [records, locks] = await Promise.all([api.listProfiles(), api.listLocks()])
+    this.noteCloudSeeds(records)
     const removed = new Set(Object.values(this.file.removed ?? {}).map((link) => link.teamId))
     const now = Date.now()
     return records.map((record) => {
@@ -584,6 +602,7 @@ export class TeamManager {
         }
       }
       const records = await this.api.listProfiles()
+      this.noteCloudSeeds(records)
       const hidden = new Set(Object.values(removed).map((link) => link.teamId))
       for (const record of records) {
         if (this.localIdOf(record.id) || hidden.has(record.id)) continue

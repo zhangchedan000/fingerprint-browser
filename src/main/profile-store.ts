@@ -7,7 +7,7 @@ import type {
   ApiCheckRecord, ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
   FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, ServerPlace, TunnelRoute, WebRtcPolicy, WindowApiProxy
 } from '../shared/types'
-import { defaultProfileWindow, seedFromId } from '../shared/defaults'
+import { defaultProfileWindow, randomSeed, seedFromId } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
 import { effectiveGpu, refreshSeededGpuIdentity } from '../shared/hardware-profiles'
 import { savedFingerprint } from '../shared/network-identity'
@@ -192,6 +192,7 @@ export class ProfileStore {
 
   /** The kernel a new window is pinned to when it names none (the default kernel at creation). */
   private defaultKernel?: () => Promise<string | undefined>
+  private seedsElsewhere: () => Iterable<number> = () => []
 
   constructor(vaultPath: string, private readonly secrets: SecretCodec = identitySecretCodec) {
     this.vaultPath = vaultPath
@@ -671,6 +672,24 @@ export class ProfileStore {
     }
   }
 
+  /** Seeds windows elsewhere use (the team's cloud windows): a new window's seed is none of them. */
+  setSeedsInUse(provider: () => Iterable<number>): void {
+    this.seedsElsewhere = provider
+  }
+
+  /**
+   * The seed itself when no other window here or in the team has it, else a new random one: the
+   * seed decides the window's Canvas and AudioContext values, so two windows never share them.
+   */
+  private uniqueSeed(seed: number, except?: string, alsoTaken: ReadonlySet<number> = new Set()): number {
+    const taken = new Set<number>(alsoTaken)
+    for (const profile of this.profiles.values()) if (profile.id !== except) taken.add(profile.fingerprint.seed)
+    for (const value of this.seedsElsewhere()) taken.add(value)
+    let value = seed
+    while (taken.has(value)) value = randomSeed()
+    return value
+  }
+
   setDefaultKernelResolver(resolver: () => Promise<string | undefined>): void {
     this.defaultKernel = resolver
   }
@@ -721,9 +740,15 @@ export class ProfileStore {
         taken.add(next)
         return next++
       }
+      const seedsNow = new Set<number>()
       const created: StoredProfile[] = drafts.map((draft, index) => {
         const id = randomUUID()
         const origin = origins?.[index]
+        // A window brought from the cloud or a backup keeps its seed (it is the same window).
+        const wanted = Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
+        const seed = origin ? wanted : this.uniqueSeed(wanted, undefined, seedsNow)
+        seedsNow.add(seed)
+        const fingerprint = seed === wanted ? { ...draft.fingerprint, seed } : refreshSeededGpuIdentity({ ...draft.fingerprint, seed })
         const createdAt = typeof origin?.createdAt === 'string' && !Number.isNaN(Date.parse(origin.createdAt)) ? origin.createdAt : now
         const { proxy, group, tunnel, ...fields } = draft
         const proxyId = this.referenceProxy(inputs[index], tunnel ? { ...proxy, tunnel } : proxy, now)
@@ -740,10 +765,7 @@ export class ProfileStore {
           groupId: this.library.ensureGroup(group, now),
           account: privateAccount(draft.account),
           // A saved window keeps its values: nothing follows an IP or a table from here on.
-          fingerprint: savedFingerprint({
-            ...draft.fingerprint,
-            seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
-          }, undefined, { gpuModel: effectiveGpu(draft.fingerprint, fields.kernelVersion || defaultKernel)?.model }),
+          fingerprint: savedFingerprint(fingerprint, undefined, { gpuModel: effectiveGpu(fingerprint, fields.kernelVersion || defaultKernel)?.model }),
           createdAt,
           updatedAt: now,
           favorite: false,
@@ -811,6 +833,11 @@ export class ProfileStore {
       const proxyId = this.referenceProxy(input, tunnel ? { ...proxy, tunnel } : proxy, now, current.proxyId)
       const apiUrl = !proxyId ? proxy.apiUrl : undefined
       const route = this.windowTunnel(draft, proxyId, current, Boolean(apiUrl))
+      // A seed changed here (换一换) is one no other window has either.
+      if (fields.fingerprint.seed !== current.fingerprint.seed) {
+        const seed = this.uniqueSeed(fields.fingerprint.seed, id)
+        if (seed !== fields.fingerprint.seed) fields.fingerprint = refreshSeededGpuIdentity({ ...fields.fingerprint, seed })
+      }
       const profile: StoredProfile = {
         ...current,
         ...fields,

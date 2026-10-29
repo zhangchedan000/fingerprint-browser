@@ -94,6 +94,12 @@ describe('fingerprint check verdicts', () => {
     expect(row(items, 'canvas')[0].message).toContain('#2 shop')
   })
 
+  it('lets ClientRects match another window: it has 16 offsets, as real computers share them', () => {
+    const items = check({ others: [{ label: '#2 shop', observed: seen, disabledSpoofing: [] }] })
+    expect(row(items, 'clientrects')[0]).toMatchObject({ status: 'ok' })
+    expect(row(items, 'clientrects')[0].fix).toBeUndefined()
+  })
+
   it('treats a surface that changes between reads as detectable', () => {
     expect(row(check({ observed: { audio: ['aaaa', 'bbbb'] } }), 'audio')[0]).toMatchObject({ status: 'bad', fix: 'use-real' })
   })
