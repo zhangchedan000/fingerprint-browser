@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { screenSuitsGpu } from './hardware-match'
 import { gpuChoices } from './hardware-profiles'
 import { localeForCountry } from './network-identity'
-import { fittingCountryZone, ipZoneFix, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
+import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
 import { screenChoices } from './screen'
 import { COUNTRY_ZONES } from './windows-time-zones-data'
 import { countryWindowsZones, windowsCountries } from './windows-time-zones'
@@ -80,6 +80,36 @@ describe('one-click fix values', () => {
           expect(choices).toContain(usual)
           expect(screenSuitsGpu(gpu.model, usual.physical), `${gpu.model} @${scale}`).toBe(true)
         }
+      }
+    }
+  })
+})
+
+describe('time zone against the IP in the same country', () => {
+  const ip = (timezone: string, countryCode = 'US') => ({ ok: true, timezone, countryCode })
+
+  it('points out a Washington IP for a Central-time window, with the zone to set', () => {
+    // A user's API window: made with a Texas IP, its new IP is in Kennewick, WA.
+    expect(ipZoneMismatch('America/Chicago', 'US', ip('America/Los_Angeles'), 'windows')).toBe('America/Los_Angeles')
+  })
+
+  it('is quiet when Windows reports both as one zone (Detroit is New York there)', () => {
+    expect(ipZoneMismatch('America/New_York', 'US', ip('America/Detroit'), 'windows')).toBeUndefined()
+    expect(ipZoneMismatch('America/Chicago', 'US', ip('America/Chicago'), 'windows')).toBeUndefined()
+  })
+
+  it('leaves another country, a failed check and disagreeing databases to their own warnings', () => {
+    expect(ipZoneMismatch('America/Chicago', 'US', ip('Europe/Berlin', 'DE'), 'windows')).toBeUndefined()
+    expect(ipZoneMismatch('America/Chicago', 'US', { ok: false }, 'windows')).toBeUndefined()
+    expect(ipZoneMismatch('America/Chicago', 'US', { ...ip('America/Los_Angeles'), geoConfidence: 'conflict' }, 'windows')).toBeUndefined()
+    expect(ipZoneMismatch(undefined, 'US', ip('America/Los_Angeles'), 'windows')).toBeUndefined()
+  })
+
+  it('the zone it names is one the fix can set', () => {
+    for (const [country, zones] of Object.entries(COUNTRY_ZONES)) {
+      for (const [, iana] of zones) {
+        const named = ipZoneMismatch('Etc/UTC', country, ip(iana, country), 'windows')
+        if (named) expect(ipZoneFix(iana, country, 'windows')).toBe(named)
       }
     }
   })

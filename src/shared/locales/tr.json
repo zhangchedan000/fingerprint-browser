@@ -2633,5 +2633,8 @@
   "勾选：保留这次检测结果": "İşaretle: bu kontrol sonucunu sakla",
   "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Bu proxy'nin proxy IP kitaplığındaki son kontrolü; onu kullanan tüm pencereler aynısını gösterir",
   "Prism 指纹内核 prism{0}": "Prism parmak izi çekirdeği prism{0}",
-  "Prism 指纹内核": "Prism parmak izi çekirdeği"
+  "Prism 指纹内核": "Prism parmak izi çekirdeği",
+  "检测时的出口 IP 是 {0}，现在是 {1}，请重新检测": "Kontrol {0} üzerinden yapıldı; çıkış IP'si artık {1}. Yeniden kontrol edin",
+  "代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上": "Proxy IP'sinin saat dilimi {0}, pencereninki {1}; web siteleri saatin IP'nin konumuyla uyuşmadığını görebilir",
+  "代理 IP（{0}）的时区是 {1}，窗口的时区是 {2}；网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？": "Proxy IP'sinin ({0}) saat dilimi {1}, pencereninki {2}; web siteleri tarayıcı saatinin IP'nin konumuyla uyuşmadığını görebilir. Pencere düzenleyicisinde Saat dilimi satırındaki \"IP ile eşleştir\"e tıklayın. Yine de başlatılsın mı?"
 }

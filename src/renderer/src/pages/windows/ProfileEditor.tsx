@@ -4,7 +4,7 @@ import { FontPackDownload } from '../../components/FontPackDownload'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
-import { fittingCountryZone, ipZoneFix, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
+import { fittingCountryZone, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
 import {
   Alert,
   AutoComplete,
@@ -289,10 +289,11 @@ interface QuickFix {
   apply: () => void
 }
 
-function CheckResults({ items, stale, fixOf, buttons }: { items: FingerprintCheckItem[]; stale: boolean; fixOf: (item: FingerprintCheckItem, stale: boolean) => QuickFix | undefined; buttons?: boolean }) {
+function CheckResults({ items, stale, fixOf, buttons, note }: { items: FingerprintCheckItem[]; stale: boolean; fixOf: (item: FingerprintCheckItem, stale: boolean) => QuickFix | undefined; buttons?: boolean; note?: string }) {
   if (!items.length) return null
   return (
     <div className={`fb-check-results${stale ? ' is-stale' : ''}`}>
+      {note && <div className="fb-check-stale">{note}</div>}
       {items.map((item, index) => {
         const fix = item.status === 'ok' ? undefined : fixOf(item, stale)
         return (
@@ -395,6 +396,8 @@ const MEDIA_KIND_LABELS: Record<MediaSetup['kind'], string> = {
 
 /** Rows whose check results only depend on the seed, GPU, kernel and their own switch. */
 const NOISE_ROWS = new Set<FingerprintCheckRow>(['canvas', 'audio', 'clientrects'])
+// What the check said about these compared the page with the exit IP of that check.
+const IP_ROWS = new Set<FingerprintCheckRow>(['timezone', 'webrtc'])
 
 function Fixed({ children }: { children: ReactNode }) {
   return <span className="fb-fp-fixed">{children}</span>
@@ -670,8 +673,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }, [recheck, checking, currentSettingsKey])
   // The 指纹值 rows show their value in the box: only a problem with it adds a line.
   /** The first one-click change the check offers for these rows (shown in the row's box). */
+  const rowsStale = (rows: FingerprintCheckRow[]) => rows.every((row) => NOISE_ROWS.has(row))
+    ? !noiseCurrent
+    : checkStale || (checkIpChanged && rows.some((row) => IP_ROWS.has(row)))
   const checkFix = (...rows: FingerprintCheckRow[]): QuickFix | undefined => {
-    const stale = rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale
+    const stale = rowsStale(rows)
     for (const item of checkReport?.items ?? []) {
       if (!rows.includes(item.row) || item.status === 'ok') continue
       const fix = fixOf(item, stale)
@@ -682,7 +688,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const checkFor = (...rows: FingerprintCheckRow[]) => {
     const items = checkReport?.items.filter((item) => rows.includes(item.row) && !(NOISE_ROWS.has(item.row) && item.status === 'ok'))
     return items?.length
-      ? <CheckResults items={items} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} fixOf={fixOf} />
+      ? <CheckResults
+          items={items}
+          stale={rowsStale(rows)}
+          fixOf={fixOf}
+          note={checkIpChanged && !checkStale && rows.some((row) => IP_ROWS.has(row)) ? t("检测时的出口 IP 是 {0}，现在是 {1}，请重新检测", checkReport!.exitIp!, lastCheck!.ip!) : undefined}
+        />
       : undefined
   }
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
@@ -713,6 +724,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    */
   const libraryCheck = !profile && libraryProxy && !libraryProxy.apiUrl && libraryProxy.check?.ok ? libraryProxy.check : undefined
   const lastCheck = proxyResult ? (proxyResult.ok ? proxyResult : undefined) : libraryCheck
+  // The fingerprint check went out through another exit IP than the latest proxy check's.
+  const checkIpChanged = Boolean(checkReport?.exitIp && lastCheck?.ip && checkReport.exitIp !== lastCheck.ip)
 
   /**
    * A typed proxy that is in the library already (same address, account and password) shows that
@@ -773,6 +786,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
     ? { ip: exitCountry.toUpperCase(), window: fp.region }
     : undefined
+  // The IP's own country but another clock (a new IP elsewhere in it): pointed out, its fix sets the zone and position.
+  const ipZone = proxyProtocol !== 'direct' && !regionMismatch ? ipZoneMismatch(fp.timezone, fp.region, lastCheck, fp.platform) : undefined
   // Windows only has its own zones: the picked country's first, then the rest as Windows lists them.
   const timezoneOptions = useMemo(() => {
     const locale = getLocale()
@@ -1149,6 +1164,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     patchFingerprint({ ...fixed, voicesLocale: undefined, mediaLocale: undefined, keyboardLayout: undefined })
     countryByHand.current = false
     return true
+  }
+
+  /** The IP's zone and position for a window already in the IP's country: the rest fits as it is. */
+  function zoneToIp(result: ProxyTestResult): void {
+    const current = form.getFieldValue('fingerprint') as FingerprintConfig
+    const fixed = fixedIdentityForCheck(current, result)
+    if (!fixed?.timezone) return
+    // A window placed by its IP moves with it; one without a position keeps none.
+    patchFingerprint({ timezone: fixed.timezone, ...(current.location && fixed.location ? { location: fixed.location } : {}) })
   }
 
   /** 基于 IP 生成 picked by hand: the last check's IP, or a new check when there is none yet. */
@@ -1902,6 +1926,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const timezoneFix: QuickFix | undefined = timezoneMismatch && fittingZone
     ? { label: t("改成 {0}", fittingZone), apply: () => patchFingerprint({ timezone: fittingZone }) }
     : undefined
+  const ipZoneFixLink: QuickFix | undefined = ipZone && lastCheck ? { label: t("改成和 IP 一致"), apply: () => zoneToIp(lastCheck) } : undefined
   const languageFix: QuickFix | undefined = languageMismatch && countryLocale
     ? { label: t("改成 {0}", countryLocale.language), apply: () => patchFingerprint({ language: countryLocale.language, acceptLanguages: countryLocale.acceptLanguages }) }
     : undefined
@@ -2051,11 +2076,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </RowWarning>
         )}
       </Row>
-      <Row label={t("时区")} check={checkFor('timezone')} fix={timezoneFix ?? checkFix('timezone')} hint={t("网页里的时间按它显示")}>
+      <Row label={t("时区")} check={checkFor('timezone')} fix={timezoneFix ?? ipZoneFixLink ?? checkFix('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
           <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} aria-label={t("时区")} />
         </Form.Item>
         {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
+        {!timezoneMismatch && ipZone && (
+          <RowWarning fix={ipZoneFixLink}>
+            {t("代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上", windowsZoneLabel(ipZone, getLocale(), fp.region), windowsZoneLabel(fp.timezone!, getLocale(), fp.region))}
+          </RowWarning>
+        )}
       </Row>
       <Row label={t("系统语言")} hint={t("Windows 和 Chrome 菜单的语言；字体、语音、设备名跟着它")}>
         <Select
@@ -2458,6 +2488,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Unlocked><Button type="primary" loading={checking} onClick={() => void runCheck()}>{checkReport ? t("重新检测") : t("检测指纹")}</Button></Unlocked>
         </div>
         {checkStale && !checking && <div className="fb-check-stale">{t("设置已修改，结果可能已过时，请重新检测")}</div>}
+        {!checkStale && checkIpChanged && !checking && <div className="fb-check-stale">{t("检测时的出口 IP 是 {0}，现在是 {1}，请重新检测", checkReport!.exitIp!, lastCheck!.ip!)}</div>}
         {checkError && <Alert type="error" showIcon title={checkError} />}
         {checkReport && <CheckResults items={checkReport.items.filter((item) => item.row === 'general')} stale={checkStale} fixOf={fixOf} buttons />}
         {checkReport && !checkStale && (

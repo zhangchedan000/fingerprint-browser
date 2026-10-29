@@ -79,7 +79,8 @@ describe('interface languages', () => {
       }
     }
     for (const folder of ['src/renderer/src', 'src/main']) {
-      for (const name of readdirSync(folder).filter(name => /\.tsx?$/.test(name) && !name.includes('.test.'))) {
+      // Every file under the folder: the pages and components are in subfolders.
+      for (const name of (readdirSync(folder, { recursive: true }) as string[]).filter(name => /\.tsx?$/.test(name) && !name.includes('.test.'))) {
         const path = join(folder, name)
         const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)
         function visit(node: ts.Node): void {

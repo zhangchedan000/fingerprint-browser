@@ -2633,5 +2633,8 @@
   "勾选：保留这次检测结果": "Chọn: giữ kết quả kiểm tra này",
   "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Lần kiểm tra mới nhất của proxy này trong thư viện IP proxy; mọi cửa sổ dùng nó đều hiển thị như nhau",
   "Prism 指纹内核 prism{0}": "Nhân vân tay Prism prism{0}",
-  "Prism 指纹内核": "Nhân vân tay Prism"
+  "Prism 指纹内核": "Nhân vân tay Prism",
+  "检测时的出口 IP 是 {0}，现在是 {1}，请重新检测": "Lần kiểm tra đi qua IP {0}; IP ra hiện là {1}. Hãy kiểm tra lại",
+  "代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上": "Múi giờ của IP proxy là {0}, của cửa sổ là {1}; trang web có thể thấy giờ không khớp với nơi đặt IP",
+  "代理 IP（{0}）的时区是 {1}，窗口的时区是 {2}；网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？": "Múi giờ của IP proxy ({0}) là {1}, của cửa sổ là {2}; trang web có thể thấy giờ của trình duyệt không khớp với nơi đặt IP. Nhấn \"Đổi cho khớp IP\" ở dòng Múi giờ trong trình chỉnh sửa cửa sổ. Vẫn khởi chạy?"
 }

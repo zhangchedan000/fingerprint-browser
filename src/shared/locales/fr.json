@@ -2633,5 +2633,8 @@
   "勾选：保留这次检测结果": "Cocher : conserver ce résultat",
   "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Dernière vérification de ce proxy dans la bibliothèque d'IP proxy ; toutes les fenêtres qui l'utilisent affichent la même",
   "Prism 指纹内核 prism{0}": "Noyau d’empreintes Prism prism{0}",
-  "Prism 指纹内核": "Noyau d’empreintes Prism"
+  "Prism 指纹内核": "Noyau d’empreintes Prism",
+  "检测时的出口 IP 是 {0}，现在是 {1}，请重新检测": "La vérification est passée par {0} ; l'IP de sortie est maintenant {1}. Vérifiez à nouveau",
+  "代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上": "Le fuseau de l'IP du proxy est {0}, celui de la fenêtre est {1} ; les sites peuvent voir que l'heure ne correspond pas au lieu de l'IP",
+  "代理 IP（{0}）的时区是 {1}，窗口的时区是 {2}；网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？": "L'IP du proxy ({0}) est dans le fuseau {1}, la fenêtre dans {2} ; les sites peuvent voir que l'heure du navigateur ne correspond pas au lieu de l'IP. Cliquez sur « Suivre l'IP » à la ligne Fuseau horaire de l'éditeur de fenêtre. Lancer quand même ?"
 }

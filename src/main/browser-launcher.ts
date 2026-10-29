@@ -21,6 +21,7 @@ import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { ipZoneMismatch } from '../shared/quick-fix'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
@@ -29,6 +30,14 @@ import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFil
 import type { WriteStream } from 'node:fs'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
+
+/** What a fixed window's clock and its IP in the same country disagree on, for the confirmation; none when they agree. */
+function zoneMismatchText(fp: FingerprintConfig, check: ProxyTestResult | undefined): string | undefined {
+  if (fp.networkIdentityMode === 'proxy') return undefined
+  const zone = ipZoneMismatch(fp.timezone, fp.region, check, fp.platform)
+  return zone ? `代理 IP（${check!.ip}）的时区是 ${zone}，窗口的时区是 ${fp.timezone}` : undefined
+}
+const ZONE_MISMATCH_ADVICE = '网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？'
 
 interface RunningBrowser {
   process: ChildProcess
@@ -1028,6 +1037,9 @@ export class BrowserLauncher {
         : `代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 从 API 换了 ${outcome.fetched} 次 IP 还是不对：${where}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？`)
     }
+    // The IP's country but another clock (a new IP elsewhere in the country): asked first, never followed.
+    const zone = allowGeoConflict ? undefined : zoneMismatchText(outcome.profile.fingerprint, check)
+    if (zone) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
     return outcome.profile
   }
 
@@ -1066,6 +1078,11 @@ export class BrowserLauncher {
         throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。可以在编辑窗口里点「改成和 IP 一致」，或换一个这个国家的代理。是否仍要启动？`)
       }
       this.logger?.error('代理 IP 的国家和窗口的国家不一致', { profileId: profile.id, ipCountry, region: fp.region })
+    }
+    const zone = zoneMismatchText(fp, updated.proxyCheck)
+    if (zone) {
+      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+      this.logger?.error('代理 IP 的时区和窗口的时区不一致', { profileId: profile.id, ipZone: updated.proxyCheck?.timezone, timezone: fp.timezone })
     }
     return updated
   }

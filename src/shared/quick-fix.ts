@@ -27,6 +27,23 @@ export function ipZoneFix(ipZone: string, country: string | undefined, platform:
   return platform === 'windows' ? windowsReportedZone(ipZone, country) : ipZone
 }
 
+/**
+ * The IP's zone (as this computer reports it) when the IP is in the window's country but its clock
+ * is another zone's — a Washington IP for a Central-time window. Undefined when they agree, when
+ * the IP is in another country (that has its own warning) or when the databases disagree.
+ */
+export function ipZoneMismatch(
+  windowZone: string | undefined,
+  region: string | undefined,
+  check: { ok: boolean; timezone?: string; countryCode?: string; geoConfidence?: string } | null | undefined,
+  platform: string
+): string | undefined {
+  if (!windowZone || !region || !check?.ok || !check.timezone || !check.countryCode || check.geoConfidence === 'conflict') return undefined
+  if (check.countryCode.toUpperCase() !== region.toUpperCase()) return undefined
+  const ipZone = ipZoneOnComputer(check.timezone, check.countryCode, platform)
+  return ipZone !== ipZoneOnComputer(windowZone, region, platform) ? ipZone : undefined
+}
+
 /** Whether a Windows computer in this country can have this zone. */
 export function zoneInCountry(zone: string, country: string): boolean {
   return (COUNTRY_ZONES[country.toUpperCase()] ?? []).some(([, iana]) => iana === zone)
