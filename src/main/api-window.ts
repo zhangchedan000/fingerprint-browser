@@ -5,6 +5,11 @@ import type { ProfileStore } from './profile-store'
 export interface ApiProxyOptions {
   /** Take a new proxy from the link even while the current one works (换一个 IP). */
   refresh?: boolean
+  /**
+   * The window's proxy is kept while it works, wherever its IP is (a launch: 勾选 means this IP);
+   * `region` then only decides whether it counts as a mismatch, and new ones replace a dead one.
+   */
+  keepWorking?: boolean
   /** The window's country: a proxy elsewhere is replaced, up to `attempts` new ones. */
   region?: string
   attempts?: number
@@ -84,13 +89,15 @@ export async function apiProxyFor(
     const kept = profile.apiProxy?.endpoint
     if (check.ok && (protocol === 'http' || protocol === 'socks5') && port) working = { endpoint: { protocol, host, port, username, password }, check, place: kept?.place, fetchedAt: kept?.fetchedAt }
   }
-  if (!options.refresh && profile.apiProxy.endpoint) {
+  // 取消勾选: the kept proxy is not used again.
+  if (!options.refresh && profile.apiProxy.endpoint && !profile.apiProxy.released) {
     const kept = profile.apiProxy.endpoint
     const [check, found] = await Promise.all([tester(profile.proxy), kept.place ? Promise.resolve(kept.place) : placeOf(kept.host)])
     if (found && !kept.place) profile = await profiles.setWindowApiEndpoint(id, { ...kept, password: profile.proxy.password }, found, kept.fetchedAt)
     profile = await save(check)
     profile = await profiles.noteApiCheck(id, apiCheckRecord(trigger, kept, found, false, check))
     if (fits(check)) return { profile, check, fetched: 0, mismatch: false }
+    if (check.ok && options.keepWorking) return { profile, check, fetched: 0, mismatch: true }
     last = { profile, check }
     remember(check)
     if (check.ok && check.rotating) return { ...last, fetched: 0, mismatch: true }

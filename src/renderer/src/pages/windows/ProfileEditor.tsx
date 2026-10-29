@@ -45,7 +45,7 @@ import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
-import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
+import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
 import { CHROME_UI_LOCALES, chromeLanguageProfile, chromeUiLocaleFor } from '../../../../shared/chrome-languages'
 import { checkedSettingsKey, checkProxyKey, noiseStillMatches } from '../../../../shared/fingerprint-check-key'
@@ -100,6 +100,8 @@ interface EditorValues extends Omit<ProfileDraft, 'startUrls' | 'color' | 'accou
 export interface ProfileEditorExtras {
   /** Cookie JSON pasted in the basic tab, imported after the window is saved. */
   cookieText: string
+  /** API 提取: true when its exit IP was 取消勾选 (not used again), false when 勾选; unset otherwise. */
+  apiReleased?: boolean
 }
 
 interface ProfileEditorProps {
@@ -475,6 +477,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [showApiLog, setShowApiLog] = useState(false)
   // An API window as its last check left it (its current proxy and IP history).
   const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
+  // API 提取: the window opens on the IP checked (勾选); unticked, its next launch takes a new one.
+  const [useApiIp, setUseApiIp] = useState(true)
   const [pasteText, setPasteText] = useState('')
   const [pasteError, setPasteError] = useState('')
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
@@ -549,6 +553,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyEdited(false)
     setShowApiLog(false)
     setApiView(profile)
+    setUseApiIp(!profile?.apiProxy?.released)
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
@@ -998,6 +1003,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyResult(result)
     setProxyCheckedAt(new Date().toISOString())
     setProxyEdited(false)
+    // The IP just checked is the one in use.
+    setUseApiIp(true)
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
     if (fill || !profile) fixToIp(result)
   }
@@ -1049,7 +1056,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         setTestingProxy(true)
         if (savedApiLink()) {
           // Its current proxy while it works (a new one when it does not, or on 换一个 IP); saved with its history.
-          const view = await window.browserApi.profiles.testProxy(profile!.id, refresh, route)
+          // Unticked: that IP is not used again, a new one is taken.
+          const view = await window.browserApi.profiles.testProxy(profile!.id, refresh || !useApiIp, route)
           if (run === proxyCheckRun.current) setApiView(view)
           followCheckedIp(view.proxyCheck ?? null, run, fill)
           return
@@ -1110,7 +1118,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       return
     }
     const values = form.getFieldsValue(true) as EditorValues
-    await onSave(currentDraft(), { cookieText: values.cookieText ?? '' })
+    await onSave(currentDraft(), { cookieText: values.cookieText ?? '', ...(proxyMode === 'api' ? { apiReleased: !useApiIp } : {}) })
   }
 
   /** The window as currently edited, in the shape save and the fingerprint check both take. */
@@ -1364,6 +1372,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         result={proxyResult}
         stale={proxyEdited}
         typeHint={proxyMode !== 'library' && proxyMode !== 'api'}
+        chosen={proxyMode === 'api' && proxyResult.ok && !proxyEdited ? { checked: useApiIp, onChange: setUseApiIp } : undefined}
         risk={proxyResult.ok && proxyResult.networkRisk ? riskLabels[proxyResult.networkRisk] : undefined}
         notes={[
           resultNote,
@@ -1984,8 +1993,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           value={fp.keyboardLayout ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ keyboardLayout: value === 'auto' ? undefined : value })}
           options={[
-            ...(autoKeyboardLayout ? [{ value: 'auto', label: followUi(keyboardLayoutName(autoKeyboardLayout) ?? autoKeyboardLayout) }] : []),
-            ...KEYBOARD_LAYOUTS.map((layout) => ({ value: layout.klid, label: layout.name }))
+            ...(autoKeyboardLayout ? [{ value: 'auto', label: followUi([keyboardLayoutName(autoKeyboardLayout), keyboardLayoutLocale(autoKeyboardLayout)].filter(Boolean).join(' · ')) }] : []),
+            ...KEYBOARD_LAYOUTS.map((layout) => ({ value: layout.klid, label: [languageCountry(layout.locale), layout.name, layout.locale].filter(Boolean).join(' · ') }))
           ]}
           aria-label={t("键盘布局")}
         />

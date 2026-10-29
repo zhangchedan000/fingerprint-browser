@@ -143,11 +143,15 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     try {
       // An open window keeps its proxy and fingerprint: only the details are saved (the editor locks the rest).
       const current = editing ? profiles.find((profile) => profile.id === editing.id) ?? editing : undefined
-      const saved = current
+      let saved = current
         ? isEditable(current)
           ? await window.browserApi.profiles.update(current.id, draft)
           : await window.browserApi.profiles.updateDetails(current.id, draft)
         : await window.browserApi.profiles.create(draft)
+      // API 提取: the exit IP 勾选 (kept) or not (the next launch takes a new one).
+      if (extras.apiReleased !== undefined && saved.apiProxy?.endpoint && Boolean(saved.apiProxy.released) !== extras.apiReleased) {
+        saved = await window.browserApi.profiles.setApiReleased(saved.id, extras.apiReleased)
+      }
       upsert(saved)
       setEditorOpen(false)
       setEditing(undefined)

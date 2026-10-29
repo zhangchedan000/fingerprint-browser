@@ -521,6 +521,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     for (const profile of changed) await team.afterLocalEdit(profile.id)
     return changed.map(publicProfile)
   })
+  ipcMain.handle('profiles:set-api-released', async (_event, id: string, released: unknown) => {
+    const profile = await profiles.setApiReleased(id, released === true)
+    await team.afterLocalEdit(id)
+    return publicProfile(profile)
+  })
   ipcMain.handle('profiles:test-proxy', async (_event, id: string, refresh?: boolean, routeInput?: unknown) => {
     // API 提取: the proxy the window has while it works (a new one when it does not, or on 换一个 IP),
     // reached through the 网络加速 shown in the editor when one is given.

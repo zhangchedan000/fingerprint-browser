@@ -152,7 +152,7 @@ function safeApiProxy(value: unknown): WindowApiProxy | undefined {
     ? api.history.filter((entry): entry is ApiIpRecord => Boolean(entry) && typeof entry.ip === 'string' && typeof entry.at === 'string').slice(0, API_HISTORY_LIMIT)
     : []
   const log = Array.isArray(api.log) ? api.log.map(safeApiCheckRecord).filter((entry): entry is ApiCheckRecord => Boolean(entry)).slice(0, API_HISTORY_LIMIT) : []
-  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}), ...(log.length ? { log } : {}) }
+  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}), ...(log.length ? { log } : {}), ...(endpoint && api.released === true ? { released: true as const } : {}) }
 }
 
 /** The proxy as a window uses it: the window's own 网络加速, never the library proxy's default. */
@@ -312,14 +312,15 @@ export class ProfileStore {
    */
   async restoreApiState(id: string, input: unknown): Promise<BrowserProfile> {
     const current = this.stored(id)
-    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; log?: unknown; check?: unknown } | undefined
-    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history, log: state?.log })
+    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; log?: unknown; check?: unknown; released?: unknown } | undefined
+    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history, log: state?.log, released: state?.released })
     if (!current.apiProxy || !api) return this.resolve(current)
     const check = safeProxyCheck(state?.check)
     const password = typeof state?.endpoint?.password === 'string' ? state.endpoint.password : ''
     if (api.endpoint && password) this.apiPasswords.set(id, password)
     else if (api.endpoint) this.apiPasswords.delete(id)
-    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, ...api } }
+    const { released: _released, ...kept } = current.apiProxy
+    const profile: StoredProfile = { ...current, apiProxy: { ...kept, ...api } }
     if (check) profile.directCheck = check
     this.profiles.set(id, profile)
     await this.persist()
@@ -574,7 +575,21 @@ export class ProfileStore {
     const { password, ...shown } = endpoint
     if (password) this.apiPasswords.set(id, password)
     else this.apiPasswords.delete(id)
-    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: { ...shown, fetchedAt, ...(place ? { place } : {}) } } }
+    // A new extraction is the one in use (取消勾选 was about the one before).
+    const { released, ...api } = current.apiProxy
+    const same = fetchedAt === current.apiProxy.endpoint?.fetchedAt
+    const profile: StoredProfile = { ...current, apiProxy: { ...api, endpoint: { ...shown, fetchedAt, ...(place ? { place } : {}) }, ...(same && released ? { released } : {}) } }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /** 取消勾选 / 勾选 on an API window's exit IP: released, the next launch or check takes a new proxy. */
+  async setApiReleased(id: string, released: boolean): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    if (!current.apiProxy?.endpoint || Boolean(current.apiProxy.released) === released) return this.resolve(current)
+    const { released: _old, ...api } = current.apiProxy
+    const profile: StoredProfile = { ...current, apiProxy: { ...api, ...(released ? { released: true as const } : {}) }, updatedAt: new Date().toISOString() }
     this.profiles.set(id, profile)
     await this.persist()
     return this.resolve(profile)

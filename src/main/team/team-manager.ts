@@ -148,6 +148,7 @@ export class TeamManager {
           ...(profile.apiProxy.endpoint ? { endpoint: { ...profile.apiProxy.endpoint, password: profile.proxy.password } } : {}),
           ...(profile.apiProxy.history ? { history: profile.apiProxy.history } : {}),
           ...(profile.apiProxy.log ? { log: profile.apiProxy.log } : {}),
+          ...(profile.apiProxy.released ? { released: true } : {}),
           ...(profile.proxyCheck ? { check: profile.proxyCheck } : {})
         }
       } : {})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { keyboardLayoutFor, keyboardLayoutName, keyboardLayoutText } from './keyboard-layouts'
+import { isKeyboardLayout, KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName, keyboardLayoutText } from './keyboard-layouts'
 
 describe('keyboard layouts', () => {
   it('finds the layout by the full tag, then by the language', () => {
@@ -11,6 +11,14 @@ describe('keyboard layouts', () => {
     expect(keyboardLayoutFor('fr-CA')).toBe('00001009')
     expect(keyboardLayoutFor('zh-CN')).toBe('00000804')
     expect(keyboardLayoutFor('xx-YY')).toBeUndefined()
+  })
+
+  it('names the language every layout is Windows\' own for', () => {
+    expect(keyboardLayoutLocale('0000080A')).toBe('es-MX')
+    expect(keyboardLayoutLocale('00020409')).toBe('en-US')
+    expect(KEYBOARD_LAYOUTS).toHaveLength(67)
+    expect(KEYBOARD_LAYOUTS.every((layout) => layout.locale && isKeyboardLayout(layout.klid))).toBe(true)
+    expect(isKeyboardLayout('00000000')).toBe(false)
   })
 
   it('lists the keys in Chrome\'s order', () => {

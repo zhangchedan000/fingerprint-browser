@@ -97,6 +97,8 @@ export interface WindowApiProxy {
   history?: ApiIpRecord[]
   /** Every extraction and check, newest first, at most 50. */
   log?: ApiCheckRecord[]
+  /** 取消勾选 on its exit IP: this proxy is not used again; the next launch or check takes a new one. */
+  released?: true
 }
 
 export interface ProxyConfig {
@@ -786,6 +788,8 @@ export interface BrowserApi {
     testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => Promise<BrowserProfileView>
     /** API 提取 for these windows: each keeps the link itself (closed windows only). */
     setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
+    /** API 提取: 取消勾选 (true) the window's exit IP, so its next launch takes a new proxy; 勾选 (false) keeps it. */
+    setApiReleased: (id: string, released: boolean) => Promise<BrowserProfileView>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     /** Text of a launch log listed in the crash history. */

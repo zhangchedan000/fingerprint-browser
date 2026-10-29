@@ -91,6 +91,7 @@ const api: BrowserApi = {
     closeAll: () => ipcRenderer.invoke('profiles:close-all'),
     testProxy: (id: string, refresh?: boolean, route?: TunnelRoute) => ipcRenderer.invoke('profiles:test-proxy', id, refresh, route),
     setApiUrl: (ids: string[], url: string) => ipcRenderer.invoke('profiles:set-api-url', ids, url),
+    setApiReleased: (id: string, released: boolean) => ipcRenderer.invoke('profiles:set-api-released', id, released),
     diagnose: (id: string) => ipcRenderer.invoke('profiles:diagnose', id),
     crashHistory: (id: string) => ipcRenderer.invoke('profiles:crash-history', id),
     readLaunchLog: (id: string, logFile: string) => ipcRenderer.invoke('profiles:read-launch-log', id, logFile),

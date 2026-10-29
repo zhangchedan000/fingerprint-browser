@@ -2583,5 +2583,9 @@
   "第一次打开这些网址，之后打开上次关闭的页面": "İlk seferde bu adresler açılır; sonra son kapatılan sayfalar",
   "键盘布局": "Klavye düzeni",
   "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "Sitelerin okuduğu tuş düzeni (navigator.keyboard); ör. Almanca klavyede Y ile Z yer değiştirir",
-  "真实 Windows 的键盘一般和语言一致": "Gerçek Windows'ta klavye genelde dille eşleşir"
+  "真实 Windows 的键盘一般和语言一致": "Gerçek Windows'ta klavye genelde dille eşleşir",
+  "取消勾选：不用这个 IP，下次启动从链接取新的": "İşareti kaldır: bu IP kullanılmaz; sonraki açılışta bağlantıdan yenisi alınır",
+  "勾选：窗口用这个 IP 启动": "İşaretle: pencere bu IP ile açılır",
+  "窗口用这个 IP 启动": "Pencere bu IP ile açılır",
+  "不用这个 IP：保存后，下次启动从链接取新的": "Bu IP kullanılmıyor: kaydettikten sonra sonraki açılışta bağlantıdan yenisi alınır"
 }

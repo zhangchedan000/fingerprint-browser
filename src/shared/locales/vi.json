@@ -2583,5 +2583,9 @@
   "第一次打开这些网址，之后打开上次关闭的页面": "Lần đầu mở các địa chỉ này, sau đó mở các trang đóng lần trước",
   "键盘布局": "Bố cục bàn phím",
   "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "Cách xếp phím trang web đọc được (navigator.keyboard), ví dụ bàn phím Đức đổi chỗ Y và Z",
-  "真实 Windows 的键盘一般和语言一致": "Trên Windows thật, bàn phím thường khớp với ngôn ngữ"
+  "真实 Windows 的键盘一般和语言一致": "Trên Windows thật, bàn phím thường khớp với ngôn ngữ",
+  "取消勾选：不用这个 IP，下次启动从链接取新的": "Bỏ chọn: không dùng IP này; lần mở sau lấy IP mới từ liên kết",
+  "勾选：窗口用这个 IP 启动": "Chọn: cửa sổ mở bằng IP này",
+  "窗口用这个 IP 启动": "Cửa sổ mở bằng IP này",
+  "不用这个 IP：保存后，下次启动从链接取新的": "Không dùng IP này: sau khi lưu, lần mở sau lấy IP mới từ liên kết"
 }

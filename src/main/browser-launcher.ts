@@ -984,14 +984,15 @@ export class BrowserLauncher {
   }
 
   /**
-   * An API window's proxy for this launch: its current one while it works and is in the window's
-   * country; otherwise up to 3 new ones from the link. Still elsewhere, or rotating (then no new
-   * ones are taken): asked first.
+   * An API window's proxy for this launch: its current one while it works (勾选: the window opens on
+   * this IP; elsewhere or rotating, asked first); up to 3 new ones from the link when it stopped
+   * working or was released (取消勾选). A new one still elsewhere: asked first.
    */
   private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const region = profile.fingerprint.region?.toUpperCase()
     const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, {
       region: allowGeoConflict ? undefined : region,
+      keepWorking: true,
       attempts: 3,
       trigger: 'launch',
       // Where the link's server is, for the check log (not in tests with their own tester).
@@ -1007,6 +1008,12 @@ export class BrowserLauncher {
     if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
     if (outcome.mismatch && check.rotating) {
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？`)
+    }
+    if (outcome.mismatch && !outcome.fetched) {
+      const where = check.geoConfidence === 'conflict'
+        ? `两个 IP 数据库对代理的国家判断不一致（${check.geoConflict ?? check.ip}）`
+        : `这个窗口用的代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。不想用这个 IP：在编辑页取消勾选它或点「换一个 IP」。是否仍要启动？`)
     }
     if (outcome.mismatch) {
       const where = check.geoConfidence === 'conflict'

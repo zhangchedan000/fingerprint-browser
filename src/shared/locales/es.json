@@ -2583,5 +2583,9 @@
   "第一次打开这些网址，之后打开上次关闭的页面": "Estas direcciones se abren la primera vez; después, las páginas de la última vez",
   "键盘布局": "Distribución del teclado",
   "网站读到的键盘按键排列（navigator.keyboard），如德语键盘 Y、Z 互换": "La disposición de teclas que leen los sitios (navigator.keyboard), p. ej. Y y Z intercambiadas en un teclado alemán",
-  "真实 Windows 的键盘一般和语言一致": "En un Windows real el teclado suele coincidir con el idioma"
+  "真实 Windows 的键盘一般和语言一致": "En un Windows real el teclado suele coincidir con el idioma",
+  "取消勾选：不用这个 IP，下次启动从链接取新的": "Desmarcar: no usar esta IP; el próximo inicio toma otra del enlace",
+  "勾选：窗口用这个 IP 启动": "Marcar: la ventana se abre con esta IP",
+  "窗口用这个 IP 启动": "La ventana se abre con esta IP",
+  "不用这个 IP：保存后，下次启动从链接取新的": "Sin usar esta IP: tras guardar, el próximo inicio toma otra del enlace"
 }

@@ -566,6 +566,14 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-ip-card.is-bad { border-color: var(--fb-danger); background: var(--fb-danger-soft); }
 .fb-ip-card.is-bad .fb-ip-mark { background: var(--fb-danger); }
 .fb-ip-card.is-bad .fb-ip-address { color: var(--fb-danger); font: 600 15px/1.3 inherit; }
+/* API 提取: the mark is a checkbox; unticked, the card is greyed (that IP is not used again). */
+.fb-ip-mark.is-toggle { padding: 0; border: 1.5px solid transparent; cursor: pointer; }
+.fb-ip-mark.is-toggle:focus-visible { outline: 2px solid var(--fb-accent); outline-offset: 2px; }
+.fb-ip-card.is-off { border-style: dashed; border-color: var(--fb-line); background: transparent; }
+.fb-ip-card.is-off .fb-ip-mark { border-color: var(--fb-text-faint); background: transparent; }
+.fb-ip-card.is-off .fb-ip-address, .fb-ip-card.is-off .fb-ip-place { color: var(--fb-text-secondary); text-decoration: line-through; }
+.fb-ip-use { flex-basis: 100%; color: var(--fb-text); font-weight: 500; }
+.fb-ip-card.is-off .fb-ip-use { color: var(--fb-warning-strong); }
 .fb-ip-identity { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--fb-line); }
 .fb-identity-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; }
 .fb-record-list { display: flex; flex-direction: column; font-size: 13px; }
