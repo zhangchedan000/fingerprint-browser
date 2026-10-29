@@ -7,7 +7,8 @@ import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckRe
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
-import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, observeFingerprint } from './fingerprint-check'
+import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, ipSiteCheck, observeFingerprint } from './fingerprint-check'
+import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, type IpSiteRecord } from '../shared/ip-sites'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
 import { hostHardwareSnapshot } from './host-hardware'
@@ -294,6 +295,38 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     return results
   })
+  /** A window's last IP site reading (IP 评分), in its runtime folder. */
+  const ipSitesFile = (id: string) => join(profiles.profileRuntimePath(id), 'ip-sites.json')
+  const saveIpSites = async (id: string, record: IpSiteRecord) => {
+    await mkdir(profiles.profileRuntimePath(id), { recursive: true })
+    await writeFile(ipSitesFile(id), JSON.stringify(record), { mode: 0o600 }).catch((error) => {
+      logger.error('保存 IP 评分失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    })
+  }
+  // Each reading takes the next of the other sites, so they take turns.
+  let ipSiteTurn = 0
+  ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string): Promise<IpSiteRecord> => {
+    const { runOptions, proxyResult } = await checkRunOptions(draft, profileId)
+    const preferences = settings.get()
+    const sites = preferences.ipCheckSites ?? DEFAULT_IP_CHECK_SITES
+    const baseline = ipBaseline(sites, preferences.ipCheckBaseline)
+    if (!baseline) throw new Error('没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc')
+    const other = ipSiteInTurn(sites, baseline, ipSiteTurn++)
+    const [first, second] = await ipSiteCheck(runOptions, other ? [baseline, other] : [baseline])
+    const record: IpSiteRecord = { checkedAt: new Date().toISOString(), ...(proxyResult?.ip ? { checkIp: proxyResult.ip } : {}), baseline: first, ...(second ? { other: second } : {}) }
+    if (profileId) await saveIpSites(profileId, record)
+    return record
+  })
+  ipcMain.handle('profiles:last-ip-sites', async (_event, id: string): Promise<IpSiteRecord | null> => {
+    profiles.get(id)
+    return readFile(ipSitesFile(id), 'utf8').then((text) => JSON.parse(text) as IpSiteRecord).catch(() => null)
+  })
+  ipcMain.handle('profiles:set-ip-sites', async (_event, id: string, record: unknown) => {
+    profiles.get(id)
+    const value = record as Partial<IpSiteRecord> | undefined
+    if (!value || typeof value.checkedAt !== 'string' || !value.baseline || typeof value.baseline !== 'object') throw new Error('IP 评分数据无效')
+    await saveIpSites(id, value as IpSiteRecord)
+  })
   ipcMain.handle('profiles:last-deep-check', async (_event, id: string): Promise<DeepCheckRecord | null> => {
     profiles.get(id)
     return readFile(deepCheckFile(id), 'utf8').then((text) => JSON.parse(text) as DeepCheckRecord).catch(() => null)
@@ -431,7 +464,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
     const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
     // deepCheckSites always goes in, so going back to the default list clears the stored one.
-    await settings.update({ ...next, deepCheckSites: next.deepCheckSites, downloadFolder: next.downloadFolder, downloadPerWindow: next.downloadPerWindow })
+    await settings.update({ ...next, deepCheckSites: next.deepCheckSites, ipCheckSites: next.ipCheckSites, ipCheckBaseline: next.ipCheckBaseline, downloadFolder: next.downloadFolder, downloadPerWindow: next.downloadPerWindow })
     return next
   })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))

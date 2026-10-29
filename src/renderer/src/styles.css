@@ -573,6 +573,29 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-ip-card.is-off .fb-ip-mark { border-color: var(--fb-text-faint); background: transparent; }
 .fb-ip-card.is-off .fb-ip-address, .fb-ip-card.is-off .fb-ip-place { color: var(--fb-text-secondary); text-decoration: line-through; }
 .fb-ip-use { flex-basis: 100%; color: var(--fb-text); font-weight: 500; }
+/* The exit IP card with what the IP check sites say on its right (one bordered block). */
+.fb-ip-card-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); border: 1.5px solid var(--fb-accent); border-radius: 10px; background: var(--fb-accent-soft); overflow: hidden; }
+.fb-ip-card-row > .fb-ip-card { border: 0; border-radius: 0; background: transparent; align-content: start; }
+.fb-ip-card-row.is-off { border-style: dashed; border-color: var(--fb-line); background: transparent; }
+.fb-ip-card-row.is-stale { opacity: .6; border-style: dashed; }
+.fb-ip-card-aside { padding: 12px 14px; border-left: 1px solid var(--fb-accent-soft-border); background: var(--fb-surface); }
+.fb-ip-score { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px 10px; align-content: start; font-size: 13px; }
+.fb-ip-score .k { color: var(--fb-text-secondary); }
+.fb-ip-score .v { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.fb-ip-score .ant-skeleton { grid-column: 1 / 3; }
+.fb-ip-score.is-empty, .fb-ip-score.is-failed { display: flex; flex-direction: column; gap: 4px; }
+.fb-ip-score-value { display: flex; align-items: center; gap: 8px; }
+.fb-ip-score-value b { font-size: 20px; line-height: 1; color: var(--fb-warning-strong); }
+.fb-ip-score-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--fb-surface-muted); overflow: hidden; }
+.fb-ip-score-bar i { display: block; height: 100%; background: var(--fb-warning-strong); }
+.fb-ip-score-src { grid-column: 1 / 3; display: flex; flex-direction: column; gap: 2px; padding-top: 8px; margin-top: 2px; border-top: 1px dashed var(--fb-line); color: var(--fb-text-secondary); font-size: 12px; line-height: 1.6; }
+.fb-ip-score-src .is-diff { color: var(--fb-warning-strong); }
+.fb-ip-score-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.fb-ip-score-shot { border-radius: 4px; border: 1px solid var(--fb-line); }
+.fb-ip-tag { display: inline-block; padding: 0 7px; border-radius: 5px; font-size: 12px; line-height: 20px; background: var(--fb-surface-muted); }
+.fb-ip-tag.is-datacenter, .fb-ip-tag.is-broadcast { background: var(--fb-warning-soft); color: var(--fb-warning-strong); }
+.fb-ip-tag.is-residential, .fb-ip-tag.is-mobile, .fb-ip-tag.is-native { background: var(--fb-success-soft); color: var(--fb-success); }
+.fb-ip-sites-desc { margin-bottom: 12px; font-size: 12.5px; }
 .fb-ip-card.is-off .fb-ip-use { color: var(--fb-warning-strong); }
 .fb-ip-identity { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--fb-line); }
 .fb-identity-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; }

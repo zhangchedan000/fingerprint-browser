@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join } from 'node:path'
 import type { AppPreferences, AppSettings } from '../shared/types'
 import { DEFAULT_KERNEL_SOURCES, validKernelSources, withOfficialKernelSource } from '../shared/kernel-sources'
 import { validDeepCheckSites } from '../shared/deep-check'
+import { validIpCheckSites } from '../shared/ip-sites'
 
 export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5 }
 
@@ -13,6 +14,9 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const gap = Number(input.batchLaunchGapSeconds)
   const batchLaunchGapSeconds = Number.isFinite(gap) && gap >= 0.5 && gap <= 30 ? Math.round(gap * 10) / 10 : base.batchLaunchGapSeconds
   const deepCheckSites = 'deepCheckSites' in input ? validDeepCheckSites(input.deepCheckSites) : base.deepCheckSites
+  const ipCheckSites = 'ipCheckSites' in input ? validIpCheckSites(input.ipCheckSites) : base.ipCheckSites
+  const baseline = 'ipCheckBaseline' in input ? input.ipCheckBaseline : base.ipCheckBaseline
+  const ipCheckBaseline = typeof baseline === 'string' && /^[\w-]{1,40}$/.test(baseline) ? baseline : undefined
   const folder = 'downloadFolder' in input ? input.downloadFolder : base.downloadFolder
   const downloadFolder = typeof folder === 'string' && isAbsolute(folder.trim()) && folder.trim().length <= 260 ? folder.trim() : undefined
   const downloadPerWindow = 'downloadPerWindow' in input ? input.downloadPerWindow === true : base.downloadPerWindow === true
@@ -20,6 +24,8 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
     theme,
     batchLaunchGapSeconds,
     ...(deepCheckSites ? { deepCheckSites } : {}),
+    ...(ipCheckSites ? { ipCheckSites } : {}),
+    ...(ipCheckBaseline ? { ipCheckBaseline } : {}),
     ...(downloadFolder ? { downloadFolder } : {}),
     ...(downloadFolder && downloadPerWindow ? { downloadPerWindow: true } : {})
   }

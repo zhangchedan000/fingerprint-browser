@@ -66,6 +66,9 @@ const api: BrowserApi = {
     checkFingerprint: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:check-fingerprint', draft, profileId, settingsKey),
     deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => ipcRenderer.invoke('profiles:deep-check', draft, profileId, settingsKey),
     lastDeepCheck: (id: string) => ipcRenderer.invoke('profiles:last-deep-check', id),
+    ipSites: (draft: ProfileDraft, profileId?: string) => ipcRenderer.invoke('profiles:ip-sites', draft, profileId),
+    lastIpSites: (id: string) => ipcRenderer.invoke('profiles:last-ip-sites', id),
+    setIpSites: (id: string, record: unknown) => ipcRenderer.invoke('profiles:set-ip-sites', id, record),
     onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult): void => listener(result)
       ipcRenderer.on('profiles:deep-check-progress', handler)

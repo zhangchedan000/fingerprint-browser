@@ -152,6 +152,8 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       if (extras.apiReleased !== undefined && saved.apiProxy?.endpoint && Boolean(saved.apiProxy.released) !== extras.apiReleased) {
         saved = await window.browserApi.profiles.setApiReleased(saved.id, extras.apiReleased)
       }
+      // A new window keeps the IP 评分 read before it was saved.
+      if (!current && extras.ipSites) await window.browserApi.profiles.setIpSites(saved.id, extras.ipSites).catch(() => undefined)
       upsert(saved)
       setEditorOpen(false)
       setEditing(undefined)

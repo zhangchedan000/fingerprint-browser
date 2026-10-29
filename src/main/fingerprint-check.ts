@@ -1,6 +1,7 @@
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
+import { knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -480,6 +481,48 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
       onSite(result)
     }
     return results
+  })
+}
+
+/**
+ * What IP check sites say about the window's exit IP: each site opened in the check browser (the
+ * window's kernel, proxy and fingerprint), read when its verdict shows (built-in sites) or when
+ * the page settles (others: title and screenshot only).
+ */
+export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonly IpCheckSite[]): Promise<IpSiteReading[]> {
+  return withCheckBrowser(options, 'about:blank', async (client) => {
+    const readings: IpSiteReading[] = []
+    for (const site of sites) {
+      const reading: IpSiteReading = { site: site.id, name: site.name, url: site.url }
+      const known = Boolean(knownIpSite(site.url))
+      try {
+        await client.send('Page.navigate', { url: site.url }, 30_000)
+        const deadline = Date.now() + 30_000
+        let parsed: ReturnType<typeof parseIpSite>
+        let previous: string | undefined
+        let settled = false
+        // Read on until the page text stops changing: the score can show before the place and company.
+        while (!settled && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+          const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
+          const text = page?.result?.value ?? ''
+          parsed = parseIpSite(site.url, text) ?? parsed
+          settled = (Boolean(parsed) || (!known && text.length > 0)) && text === previous
+          previous = text
+        }
+        if (parsed) Object.assign(reading, parsed)
+        else if (known) reading.error = '页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）'
+        if (!known || !parsed) {
+          await client.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' }).catch(() => undefined)
+          const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
+          if (shot?.data) reading.screenshot = `data:image/jpeg;base64,${shot.data}`
+        }
+      } catch (error) {
+        reading.error = error instanceof Error ? error.message : String(error)
+      }
+      readings.push(reading)
+    }
+    return readings
   })
 }
 

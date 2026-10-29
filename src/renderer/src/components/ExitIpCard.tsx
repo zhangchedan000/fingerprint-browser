@@ -10,9 +10,10 @@ import { DelayText } from './TunnelRouteField'
  * A proxy check, as the exit IP it found: a chosen-looking card with the IP, where it is, how fast
  * it answered and whether UDP goes through; red with the reason when it failed. `note` adds a line
  * (when it was checked, where an API proxy came from), `stale` greys it once the proxy was changed.
- * `chosen` makes its mark a checkbox (API 提取: ticked, the window opens on this IP).
+ * `chosen` makes its mark a checkbox (API 提取: ticked, the window opens on this IP); `aside` goes on
+ * its right (what the IP check sites say).
  */
-export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen }: {
+export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen, aside }: {
   result: ProxyTestResult
   stale?: boolean
   notes?: ReactNode[]
@@ -20,6 +21,7 @@ export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen }: {
   typeHint?: boolean
   risk?: string
   chosen?: { checked: boolean; onChange: (checked: boolean) => void }
+  aside?: ReactNode
 }) {
   const shownNotes = (notes ?? []).filter(Boolean)
   if (!result.ok) {
@@ -37,8 +39,8 @@ export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen }: {
   }
   const country = result.countryCode ? regionName(result.countryCode.toUpperCase()) : result.country
   const off = chosen && !chosen.checked
-  return (
-    <div className={`fb-ip-card${stale ? ' is-stale' : ''}${result.geoConfidence === 'conflict' ? ' is-warn' : ''}${off ? ' is-off' : ''}`}>
+  const card = (
+    <div className={`fb-ip-card${stale ? ' is-stale' : ''}${result.geoConfidence === 'conflict' ? ' is-warn' : ''}${off ? ' is-off' : ''}${aside ? ' has-aside' : ''}`}>
       {chosen ? (
         <button
           type="button"
@@ -60,6 +62,13 @@ export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen }: {
         {risk && <Tag color="warning" className="fb-inline-tag">{risk}</Tag>}
         {chosen && <span className="fb-ip-use">{chosen.checked ? t("窗口用这个 IP 启动") : t("不用这个 IP：保存后，下次启动从链接取新的")}</span>}
       </span>
+    </div>
+  )
+  if (!aside) return card
+  return (
+    <div className={`fb-ip-card-row${stale ? ' is-stale' : ''}${off ? ' is-off' : ''}`}>
+      {card}
+      <div className="fb-ip-card-aside">{aside}</div>
     </div>
   )
 }

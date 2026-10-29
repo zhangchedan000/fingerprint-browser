@@ -369,6 +369,10 @@ export interface AppPreferences {
   batchLaunchGapSeconds: number
   /** Sites the deep check opens, in order. Unset = the four built-in ones. */
   deepCheckSites?: import('./deep-check').DeepCheckSite[]
+  /** Sites that read the exit IP after a proxy check (IP 评分). Unset = IPLark and ping0.cc. */
+  ipCheckSites?: import('./ip-sites').IpCheckSite[]
+  /** The site whose score, native and data-centre verdicts count (a readable one). Unset = IPLark. */
+  ipCheckBaseline?: string
   /** Where windows save downloaded files (absolute). Unset = Chrome's own (the user's Downloads). */
   downloadFolder?: string
   /** Each window downloads into its own subfolder of downloadFolder ("18 环境 1"). */
@@ -763,6 +767,11 @@ export interface BrowserApi {
     deepCheck: (draft: ProfileDraft, profileId?: string, settingsKey?: string) => Promise<import('./deep-check').DeepSiteResult[]>
     /** The window's last deep check, or null. */
     lastDeepCheck: (id: string) => Promise<import('./deep-check').DeepCheckRecord | null>
+    /** The baseline IP site and one other, in turn, read through this window's proxy and kernel. */
+    ipSites: (draft: ProfileDraft, profileId?: string) => Promise<import('./ip-sites').IpSiteRecord>
+    lastIpSites: (id: string) => Promise<import('./ip-sites').IpSiteRecord | null>
+    /** Keeps a reading made before the window was saved. */
+    setIpSites: (id: string, record: import('./ip-sites').IpSiteRecord) => Promise<void>
     onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult) => void) => () => void
     /** Last saved check of a window, or null. */
     lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>

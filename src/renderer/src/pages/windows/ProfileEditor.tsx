@@ -2,7 +2,7 @@ import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
 import { FontPackDownload } from '../../components/FontPackDownload'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
-import { regionName, relativeTime } from '../../components/format'
+import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import { fittingCountryZone, ipZoneFix, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
 import {
@@ -77,7 +77,12 @@ import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY, type DeviceMemoryGb } from 
 import { proxyLabel } from '../../components/proxy'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
 import { ExitIpCard } from '../../components/ExitIpCard'
+import { IpScorePanel } from '../../components/IpScorePanel'
 import { DeepCheck } from './DeepCheck'
+import { IpCheckSites } from './IpCheckSites'
+import { useWindowLauncher } from '../../data/window-actions'
+import { useWorkspace } from '../../data/workspace'
+import type { IpSiteRecord } from '../../../../shared/ip-sites'
 import { kernelName } from '../../../../shared/kernel-id'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
@@ -102,6 +107,8 @@ export interface ProfileEditorExtras {
   cookieText: string
   /** API 提取: true when its exit IP was 取消勾选 (not used again), false when 勾选; unset otherwise. */
   apiReleased?: boolean
+  /** A new window's IP 评分, read before it was saved. */
+  ipSites?: IpSiteRecord
 }
 
 interface ProfileEditorProps {
@@ -472,6 +479,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // The last check's result stays shown, also when the editor is opened again, until 检测代理 is
   // clicked again; a proxy changed since is marked, not cleared.
   const [proxyResult, setProxyResult] = useState<ProxyTestResult | null>(null)
+  // What the IP check sites said about the exit IP (IP 评分), read after each check that worked.
+  const [ipSites, setIpSites] = useState<{ record?: IpSiteRecord; loading?: boolean; error?: string }>({})
+  const ipSitesRun = useRef(0)
+  const [editingIpSites, setEditingIpSites] = useState(false)
+  const workspace = useWorkspace()
+  const launcher = useWindowLauncher()
   const [proxyCheckedAt, setProxyCheckedAt] = useState<string>()
   const [proxyEdited, setProxyEdited] = useState(false)
   const [showApiLog, setShowApiLog] = useState(false)
@@ -554,6 +567,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setShowApiLog(false)
     setApiView(profile)
     setUseApiIp(!profile?.apiProxy?.released)
+    ipSitesRun.current += 1
+    setIpSites({})
+    if (profile) {
+      const run = ipSitesRun.current
+      // The last reading, while it is about the IP shown.
+      void window.browserApi.profiles.lastIpSites(profile.id).then((record) => {
+        if (record && run === ipSitesRun.current && (!record.checkIp || record.checkIp === profile.proxyCheck?.ip)) setIpSites({ record })
+      }).catch(() => undefined)
+    }
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
@@ -1003,8 +1025,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyResult(result)
     setProxyCheckedAt(new Date().toISOString())
     setProxyEdited(false)
-    // The IP just checked is the one in use.
+    // The IP just checked is the one in use; what the IP check sites say about it comes next.
     setUseApiIp(true)
+    if (result?.ok) void readIpSites()
+    else { ipSitesRun.current += 1; setIpSites({}) }
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
     if (fill || !profile) fixToIp(result)
   }
@@ -1090,6 +1114,30 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }
   }
 
+  /** The baseline IP check site and one other read the exit IP through this window (IP 评分). */
+  async function readIpSites(): Promise<void> {
+    const run = ++ipSitesRun.current
+    setIpSites({ loading: true })
+    try {
+      const record = await window.browserApi.profiles.ipSites(currentDraft(), profile?.id)
+      if (run === ipSitesRun.current) setIpSites({ record })
+    } catch (error) {
+      if (run === ipSitesRun.current) setIpSites({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  /** A site in this window itself (saved windows): a new tab when it runs, otherwise it starts with it. */
+  async function openInWindow(url: string): Promise<void> {
+    const saved = profile ? workspace.profiles.find((item) => item.id === profile.id) ?? profile : undefined
+    if (!saved) return
+    try {
+      const next = await launcher.openUrl(saved, url)
+      if (next) workspace.upsertProfiles([next])
+    } catch (reason) {
+      workspace.notify.error(humanError(reason))
+    }
+  }
+
   /** The start addresses are empty or only what a platform filled in (none typed by hand). */
   function startUrlsAreFilledIn(): boolean {
     const urls = String(form.getFieldValue('startUrlsText') ?? '').trim()
@@ -1119,7 +1167,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       return
     }
     const values = form.getFieldsValue(true) as EditorValues
-    await onSave(currentDraft(), { cookieText: values.cookieText ?? '', ...(proxyMode === 'api' ? { apiReleased: !useApiIp } : {}) })
+    await onSave(currentDraft(), {
+      cookieText: values.cookieText ?? '',
+      ...(proxyMode === 'api' ? { apiReleased: !useApiIp } : {}),
+      // A new window keeps the IP 评分 read before it was saved.
+      ...(!profile && ipSites.record ? { ipSites: ipSites.record } : {})
+    })
   }
 
   /** The window as currently edited, in the shape save and the fingerprint check both take. */
@@ -1374,6 +1427,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         stale={proxyEdited}
         typeHint={proxyMode !== 'library' && proxyMode !== 'api'}
         chosen={proxyMode === 'api' && proxyResult.ok && !proxyEdited ? { checked: useApiIp, onChange: setUseApiIp } : undefined}
+        aside={proxyResult.ok ? (
+          <IpScorePanel
+            record={ipSites.record}
+            loading={ipSites.loading}
+            error={ipSites.error}
+            checkIp={proxyResult.ip}
+            onRetry={() => void readIpSites()}
+            onOpen={profile ? (url) => void openInWindow(url) : undefined}
+          />
+        ) : undefined}
         risk={proxyResult.ok && proxyResult.networkRisk ? riskLabels[proxyResult.networkRisk] : undefined}
         notes={[
           resultNote,
@@ -1573,6 +1636,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("出口 IP")}</h3>
           <span className="fb-fp-card-sub">{proxyMode === 'api' ? t("一个 IP 用到失效才从链接取新的") : t("检测后就是这个窗口用的 IP")}</span>
           <span className="fb-fp-card-actions">
+            <Button type="link" onClick={() => setEditingIpSites(true)}>{t("检测网站")}</Button>
+            <IpCheckSites open={editingIpSites} onClose={() => setEditingIpSites(false)} />
             {proxyMode === 'api' && (keptEndpoint || proxyResult?.ok) && (
               <Tooltip title={t("从 API 链接取一个新代理，换掉现在这个")}>
                 <Button disabled={testingProxy} onClick={() => void testCurrentProxy(false, true)}>{t("换一个 IP")}</Button>
