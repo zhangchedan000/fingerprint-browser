@@ -453,6 +453,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
+  const startupMode = Form.useWatch('startupMode', { form, preserve: true })
   const libraryProxy = proxyMode === 'library' ? proxies.find((item) => item.id === proxyId) : undefined
   /** Protocol of the proxy the window will use, whether typed or picked. */
   const proxyProtocol = proxyMode === 'library' ? libraryProxy?.protocol ?? 'direct' : proxyMode === 'api' ? 'http' : typedProtocol
@@ -692,11 +693,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const value = measured(surface)
     if (checking) return <span className="fb-fp-measured fb-muted">{t("正在检测实际值…")}</span>
     if (value) {
-      return <span className="fb-fp-measured fb-muted">{t("上面是网站读到的值 · {0}", relativeTime(checkReport!.checkedAt, getLocale()))}</span>
+      return <span className="fb-fp-measured fb-muted">{t("网站读到的值 · {0}", relativeTime(checkReport!.checkedAt, getLocale()))}</span>
     }
     return (
       <span className="fb-fp-measured fb-muted">
-        {checkReport ? t("设置已修改，值待重新检测") : t("还没检测，检测后在上面显示网站读到的值")}
+        {checkReport ? t("设置改了，要重新检测") : t("还没检测")}
         <Unlocked><Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button></Unlocked>
       </span>
     )
@@ -1132,7 +1133,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       <Row
         label={t("平台账号")}
-        hint={accountPasswordStored && !accountPassword ? t("密码已加密保存；平台和账号不变时留空即保持原密码。") : t("账号密码只加密保存在本机，导出配置时不会带出密码。")}
+        hint={accountPasswordStored && !accountPassword ? t("已加密保存；平台和账号不变时留空保持原密码") : t("密码加密保存；导出文件不带密码，同步到团队时会一起同步")}
       >
         <div className="fb-account-grid">
           <Form.Item name={['account', 'platform']} noStyle>
@@ -1152,7 +1153,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Form.Item>
         </div>
       </Row>
-      <Row label={t("启动页面")} hint={t("恢复此环境上次关闭时的标签页；首次使用时打开新标签页。指定网址每行一个，不填写协议时使用 HTTPS。")}>
+      <Row label={t("启动页面")} hint={startupMode === 'restore' ? t("打开上次关闭时的标签页，第一次打开是新标签页") : t("每行一个网址，没写 http 的按 https 打开")}>
         <div className="fb-stack">
           <Form.Item name="startupMode" noStyle>
             <Radio.Group options={[{ value: 'urls', label: t("打开指定页面") }, { value: 'restore', label: t("打开上次关闭的页面") }]} />
@@ -1178,7 +1179,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             ? <Typography.Text type="danger">{mt(cookiePreview.error)}</Typography.Text>
             : cookiePreview.count !== undefined
               ? t("识别到 {0} 条 Cookie，保存后导入此窗口", cookiePreview.count)
-              : t("可选。已在别处登录的账号，把 Cookie 粘贴或导入到这里，保存后这个窗口直接是登录状态")}
+              : t("可选：粘贴或导入已登录账号的 Cookie，保存后直接是登录状态")}
       >
         <Form.Item name="cookieText" noStyle>
           <Input.TextArea
@@ -1263,8 +1264,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("代理方式")}
         hint={proxyMode === 'api'
-          ? t("链接只保存在这个窗口里，不进代理库；取到的代理一直用到不能用了才取新的，自动识别 SOCKS5 或 HTTP，并记下用过的 IP")
-          : proxyMode !== 'direct' && proxyMode !== 'library' ? t("填写的代理会自动存入代理库；代理库里已有相同的代理时直接使用那一条。") : undefined}
+          ? t("链接只存在这个窗口；一个 IP 用到失效才取新的")
+          : proxyMode !== 'direct' && proxyMode !== 'library' ? t("保存后自动存进代理库，库里已有相同的就用那一条") : undefined}
       >
         <Radio.Group
           optionType="button"
@@ -1314,7 +1315,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       {proxyMode === 'api' && (
         <>
-          <Row label={t("API 链接")} required hint={t("白名单模式要先在服务商后台把这台电脑的 IP 加进白名单；只接受境外 IP 的服务商，打开下面的网络加速，把加速节点的 IP 加进白名单。")}>
+          <Row label={t("API 链接")} required hint={t("白名单模式：先把本机 IP 加进服务商白名单；只认境外 IP 的，开网络加速，加节点 IP")}>
             <Form.Item name={['proxy', 'apiUrl']} noStyle rules={[{ required: true, message: t("请输入 API 链接") }, { pattern: /^\s*https?:\/\//i, message: t("API 链接要以 http:// 或 https:// 开头") }]}>
               <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="https://example.com/api?num=1&format=txt" />
             </Form.Item>
@@ -1348,7 +1349,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </Row>
           ) : null}
           {apiLog.length > 0 && (
-            <Row label={t("检测记录")} hint={t("每次提取和检测都记一条（最近 50 条），失败也记，随云端同步；提取地址是服务商的服务器，网站看到的是出口 IP")}>
+            <Row label={t("检测记录")} hint={t("最近 50 次提取和检测，失败也记")}>
               <div className="fb-api-log">
                 {apiLog.slice(0, showApiLog ? apiLog.length : 5).map((entry) => (
                   <div key={`${entry.at}-${entry.address ?? ''}-${entry.trigger}`}>
@@ -1410,7 +1411,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           ? <Typography.Text type="danger">{pasteError}</Typography.Text>
           : pasted && proxyMode !== 'library' && proxyMode !== 'direct'
             ? <Typography.Text type="success">{t("已识别：{0}", pastedProxySummary(pasted, proxyMode))}{pasted.protocol ? '' : ` · ${t("未写协议，按当前选择的类型")}`}</Typography.Text>
-            : t("支持 host:port:user:pass、user:pass@host:port、socks5:// 链接，以及“地址：… 端口：… 用户名：… 密码：…”这类文字，粘贴后自动填入")}
+            : undefined}
       >
         <Input.TextArea
           className="fb-paste"
@@ -1495,7 +1496,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       {/* An API window takes a new proxy when its own stops working: an exit change is expected there. */}
       {proxyMode !== 'api' && (
-        <Row label={t("出口变化时")} hint={t("代理出口 IP 与上次检测不同时的处理方式")}>
+        <Row label={t("出口变化时")} hint={t("出口 IP 和上次检测的不一样时怎么处理")}>
           <Radio.Group
             size="small"
             optionType="button"
@@ -1681,14 +1682,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("国家/地区")}
         hint={!profile && libraryProxy && !libraryProxy.apiUrl && !libraryCheck && !proxyResult && !countryByHand.current
-          ? t("这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项")
+          ? t("这个代理还没检测，检测后按 IP 配")
           : fromIp
             ? profile
-              ? t("按代理 IP 所在国家生成，已固定；IP 变了只提醒，不自动改")
+              ? t("已固定，IP 再变只提醒，不自动改")
               : !proxyResult && libraryCheck && libraryCheck.countryCode?.toUpperCase() === fp.region
-                ? t("按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配", relativeTime(libraryCheck.checkedAt, getLocale()))
-                : t("按检测到的代理 IP 配好下面几项；保存后固定，以后 IP 变了只提醒")
-            : t("这台电脑在哪个国家；选了它，下面几项自动配好，也能单独改")}
+                ? t("按代理库上次检测的 IP 配好（{0}）", relativeTime(libraryCheck.checkedAt, getLocale()))
+                : t("按检测到的 IP 配好；保存后固定，IP 再变只提醒")
+            : t("窗口装成哪个国家的电脑，下面几项跟着配")}
       >
         <div className="fb-region-line">
           <Select
@@ -1716,13 +1717,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           action={<Tooltip title={t("把国家、时区、语言和位置改成这个 IP 的，改完固定")}><Button size="small" onClick={() => fixToIp(lastCheck)}>{t("改成和 IP 一致")}</Button></Tooltip>}
         />
       )}
-      <Row label={t("时区")} check={checkFor('timezone')} hint={t("这台 Windows 的系统时区，网页里的时间按它显示")}>
+      <Row label={t("时区")} check={checkFor('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
           <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
         </Form.Item>
         {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
       </Row>
-      <Row label={t("系统语言")} hint={t("这台 Windows 的显示语言，Chrome 菜单也是它；字体、语音、设备名都跟着它")}>
+      <Row label={t("系统语言")} hint={t("Windows 和 Chrome 菜单的语言；字体、语音、设备名跟着它")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1737,7 +1738,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           aria-label={t("系统语言")}
         />
       </Row>
-      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("Chrome 的首选语言，网站读到的就是它")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
+      <Row label={t("浏览器语言")} check={checkFor('language')} hint={`${t("网站读到的语言")} · Accept-Language: ${acceptLanguageHeader(chromeAcceptLanguages(networkIdentity.language, networkIdentity.acceptLanguages))}`}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1776,8 +1777,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           label={t("字体")}
           check={checkFor('font')}
           hint={fp.fontSource === 'host'
-            ? t("网页看到这台电脑装的所有字体，包括你另装的；所有用本机字体的窗口都一样")
-            : t("Windows 自带字体，加上系统语言对应的语言字体包；本机另装的字体不显示")}
+            ? t("这台电脑装的所有字体，用本机字体的窗口都一样")
+            : t("Windows 自带字体 + 系统语言的字体包，本机另装的不显示")}
         >
           <Select
             className="fb-fp-select fb-fp-select-wide"
@@ -1815,7 +1816,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Row label={t("字体")} check={checkFor('font')}>{noiseControl('font', t("字体"))}</Row>
       )}
 
-      <Row label={t("语音")} hint={t("网页读到的 Windows 语音（朗读用的声音），默认是系统语言的那几个")}>
+      <Row label={t("语音")} hint={t("网页能读到的朗读语音")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1830,7 +1831,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         />
         {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <RowWarning fix={followSystemLanguage('voicesLocale')}>{t("真实 Windows 的语音一般和系统语言一致")}</RowWarning>}
       </Row>
-      <Row label={t("媒体设备名")} hint={t("网站拿到麦克风或摄像头权限后看到的设备名语言，比如「扬声器」还是「Speakers」")}>
+      <Row label={t("媒体设备名")} hint={t("网站拿到麦克风、摄像头权限后看到的设备名，如「扬声器」或「Speakers」")}>
         <Select
           showSearch
           optionFilterProp="label"
@@ -1878,7 +1879,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           action={<Button size="small" onClick={shuffleGpu}>{t("换一块显卡")}</Button>}
         />
       )}
-      <Row label={t("CPU 型号")} hint={t("网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑")}>
+      <Row label={t("CPU 型号")} hint={t("网页读不到型号；硬件并发数自动等于它的线程数")}>
         <ValueChoice
           wide
           label={t("CPU 型号")}
@@ -1897,7 +1898,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'host', label: t("本机真实") }, ...coreOptions.map((value) => ({ value, label: t("{0} 核", value) }))]}
         />
       </Row>
-      <Row label={t("设备内存")} check={checkFor('memory')} hint={t("网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB")}>
+      <Row label={t("设备内存")} check={checkFor('memory')} hint={maxDeviceMemoryGb(windowKernelVersion) < 32 ? t("网站读到的内存由内核决定：内核 147 及以上可选 16、32 GB，旧内核最多 8 GB") : undefined}>
         <ValueChoice
           label={t("设备内存")}
           value={fp.deviceMemory ?? 8}
@@ -1915,7 +1916,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       </Row>
       {kernelSpoofsScreen(windowKernelVersion) ? (
         <Row label={t("分辨率")} check={checkFor('screen')} hint={windowScreen
-          ? t("浏览器窗口会被限制在所选分辨率以内，比这台电脑屏幕（{0} × {1}）小也可以", hostScreen().width, hostScreen().height)
+          ? t("网站读到的屏幕尺寸，浏览器窗口不会比它大")
           : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
           <Space wrap size={8}>
             <ValueChoice
@@ -1974,7 +1975,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </Form.Item>
       </Row>
       {windowMode === 'custom' && (
-        <Row label={t("窗口尺寸")} hint={t("多显示器允许负坐标；显示器布局变化后，过期坐标可能让窗口出现在屏幕之外。")}>
+        <Row label={t("窗口尺寸")} hint={t("坐标从主显示器左上角算，换了显示器可能跑到屏幕外")}>
           <Space wrap>
             <Form.Item name={['window', 'width']} noStyle><InputNumber min={480} max={7680} precision={0} prefix="W" /></Form.Item>
             <Form.Item name={['window', 'height']} noStyle><InputNumber min={360} max={4320} precision={0} prefix="H" /></Form.Item>
@@ -1983,7 +1984,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Space>
         </Row>
       )}
-      <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，台式机最常见的一套，保存后固定。网站没有麦克风或摄像头权限时，只能看到有哪几种设备")}>
+      <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，保存后固定；没授权的网站只看到有哪几类设备")}>
         <Select
           className="fb-fp-select fb-fp-select-wide"
           value={fp.mediaDevices ?? 'auto'}
@@ -2009,18 +2010,18 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         hint={fp.webrtcPolicy === 'proxy_only'
           ? webrtcRelay
             ? proxyResult?.udp === true
-              ? t("这个代理支持 UDP：WebRTC 走代理，网站看到代理 IP，视频通话可用")
+              ? t("网站看到代理 IP，视频通话能用")
               : proxyResult?.udp === false
-                ? t("这个代理不支持 UDP：WebRTC 只报代理 IP、不发 UDP，视频通话不可用")
-                : t("代理支持 UDP 时 WebRTC 真的走代理（网站看到代理 IP，视频通话可用）；不支持时只报代理 IP")
+                ? t("只报代理 IP，这个代理不支持 UDP，视频通话用不了")
+                : t("报代理 IP；代理支持 UDP 时还能视频通话")
             : t("替换为代理 IP，防止泄露本机 IP")
           : fp.webrtcPolicy === 'privacy'
-            ? t("开启 WebRTC，但网站拿不到任何 IP")
+            ? t("开着 WebRTC，网站拿不到 IP")
             : fp.webrtcPolicy === 'disabled'
               ? webrtcRelay
-                ? t("完全关闭 WebRTC；真实 Chrome 不会没有 WebRTC，网站可能视为异常")
+                ? t("完全关掉；真 Chrome 都有 WebRTC，网站可能起疑")
                 : t("这个内核不能关闭 WebRTC，按「隐私」处理")
-              : t("原版 Chrome 行为，不经过代理，会暴露本机真实 IP")}
+              : t("和原版 Chrome 一样，会暴露本机真实 IP")}
       >
         <Select
           className="fb-fp-select"
@@ -2039,17 +2040,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <section className="fb-fp-card">
         <div className="fb-fp-card-head">
           <h3 className="fb-fp-group">{t("指纹值")}</h3>
-          <span className="fb-fp-card-sub">{t("每个窗口不同，同一个窗口每次读取都相同")}</span>
+          <span className="fb-fp-card-sub">{t("每个窗口不同，同一窗口每次一样")}</span>
         </div>
-      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? t("每个窗口一个种子，换一换会换成另一组 Canvas 值") : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
+      <Row label="Canvas" check={checkFor('canvas')} hint={webrtcRelay ? undefined : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
         {noiseControl('canvas', 'Canvas')}
         {webrtcRelay && measuredLine('canvas')}
       </Row>
-      <Row label="AudioContext" check={checkFor('audio')} hint={webrtcRelay ? t("每个窗口微调极少数音频采样，同一窗口每次相同") : t("这个内核只能用本机真实值")}>
+      <Row label="AudioContext" check={checkFor('audio')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('audio', 'AudioContext') : realSurface('audio')}
         {webrtcRelay && measuredLine('audio')}
       </Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} hint={webrtcRelay ? t("每个窗口整体偏移几个 1/64 像素，数值仍是真实浏览器的格式") : t("这个内核只能用本机真实值")}>
+      <Row label="ClientRects" check={checkFor('clientrects')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
         {webrtcRelay ? seededControl('clientrects', 'ClientRects') : realSurface('clientrects')}
         {webrtcRelay && measuredLine('clientrects')}
       </Row>
@@ -2059,7 +2060,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <div className="fb-fp-card-head">
           <h3 className="fb-fp-group">{t("其他")}</h3>
         </div>
-      <Row label={t("设备名称")} hint={t("网页读取不到，仅用于显示和区分窗口")}>
+      <Row label={t("设备名称")} hint={t("网页读不到，只用来区分窗口")}>
         <TextWithShuffle
           label={t("设备名称")}
           value={shownDeviceName}
@@ -2070,8 +2071,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("MAC 地址")}
         hint={shownMacVendor
-          ? t("{0} 网卡 · 网页读取不到，仅用于显示和区分窗口", shownMacVendor)
-          : t("网页读取不到，仅用于显示和区分窗口")}
+          ? t("{0} 网卡 · 网页读不到，只用来区分窗口", shownMacVendor)
+          : t("网页读不到，只用来区分窗口")}
       >
         <TextWithShuffle
           label={t("MAC 地址")}

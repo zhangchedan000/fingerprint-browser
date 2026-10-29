@@ -99,7 +99,7 @@ try {
   check(await noResult(), 'no check result shown in this window')
   await tab('指纹设置')
   const region = await rowText('国家/地区')
-  check(region.includes('按代理库里这个 IP 上次的检测结果配好'), `country hint: ${region}`)
+  check(region.includes('按代理库上次检测的 IP 配好'), `country hint: ${region}`)
   const ui = await rowText('系统语言')
   check(ui.includes('随 IP 所在国家'), `系统语言: ${ui}`)
   for (const label of ['语音', '媒体设备名']) {
@@ -118,7 +118,7 @@ try {
   check(none.includes('美国'), `未检测代理 → ${none}`)
   await tab('指纹设置')
   const noneHint = await rowText('国家/地区')
-  check(noneHint.includes('这个代理还没检测出国家'), `未检测代理 hint: ${noneHint}`)
+  check(noneHint.includes('这个代理还没检测，检测后按 IP 配'), `未检测代理 hint: ${noneHint}`)
 
   // 4. The system language picked on its own: the rows under it say they follow it.
   await choose('系统语言', 'Deutsch')
