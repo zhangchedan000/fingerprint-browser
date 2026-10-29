@@ -409,6 +409,24 @@ function ownLanguageName(locale: string): string {
   }
 }
 
+/**
+ * The country a language is listed under: its own region (es-MX, pt-BR, es-419 → 拉丁美洲), else
+ * where it is mostly used, from Chrome's locale data (CLDR likely subtags: ar → 埃及, af → 南非).
+ */
+function languageCountry(locale: string): string {
+  try {
+    const region = new Intl.Locale(locale).maximize().region
+    return region ? regionName(region) : ''
+  } catch {
+    return ''
+  }
+}
+
+/** 国家 · language in itself · code, as every language list shows it. */
+function countryLanguageLabel(locale: string, country = languageCountry(locale)): string {
+  return [country, ownLanguageName(locale), locale].filter(Boolean).join(' · ')
+}
+
 const samePrimary = (first: string, second: string) => first.split('-')[0].toLowerCase() === second.split('-')[0].toLowerCase()
 
 /**
@@ -1646,7 +1664,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     }))
   ]
   const languageOptions = [
-    ...LANGUAGES.map((item) => ({ value: item.language, label: `${item.name} · ${item.language}`, voices: item.voices, devices: item.devices })),
+    ...LANGUAGES.map((item) => ({ value: item.language, label: [languageCountry(item.language), item.name, item.language].filter(Boolean).join(' · '), voices: item.voices, devices: item.devices })),
     ...(fp.language && !LANGUAGES.some((item) => item.language === fp.language) ? [{ value: fp.language, label: fp.language, voices: false, devices: false }] : [])
   ]
   const autoUiLocale = chromeUiLocaleFor(shownLanguage)
@@ -1838,7 +1856,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value, voicesLocale: undefined, mediaLocale: undefined })}
           options={[
             { value: 'auto', label: followUi(`${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
-            ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
+            ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: countryLanguageLabel(locale) }))
           ]}
           aria-label={t("系统语言")}
         />
@@ -1854,9 +1872,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             // The system language, voices and device names follow it again.
             if (item) patchFingerprint({ language: item.language, acceptLanguages: item.acceptLanguages, uiLocale: undefined, voicesLocale: undefined, mediaLocale: undefined })
           }}
-          // The country's own language is marked, so it can be picked back after a change.
+          // The country's own language under the country itself, so it can be picked back after a change.
           options={languageOptions.map((option) => option.value === countryLocale?.language && fp.region
-            ? { ...option, label: `${regionName(fp.region)} · ${option.label}` }
+            ? { ...option, label: [regionName(fp.region), LANGUAGES.find((item) => item.language === option.value)?.name, option.value].filter(Boolean).join(' · ') }
             : option)}
           optionRender={(option) => (
             <span className="fb-language-option">
@@ -1931,7 +1949,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
           options={[
             { value: 'auto', label: followSystem(voicesLabel(autoVoicesLocale)) },
-            ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: voicesLabel(item.locale) }))
+            ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: `${languageCountry(item.locale)} · ${voicesLabel(item.locale)}` }))
           ]}
           aria-label={t("语音")}
         />
@@ -1946,7 +1964,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
           options={[
             { value: 'auto', label: followSystem(`${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
-            ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
+            ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: countryLanguageLabel(locale) }))
           ]}
           aria-label={t("媒体设备名")}
         />
