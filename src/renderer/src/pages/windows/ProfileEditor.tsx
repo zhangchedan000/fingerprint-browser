@@ -457,11 +457,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const sharedWith = libraryProxy ? libraryProxy.profileIds.filter((id) => id !== profile?.id).length : 0
   const tunnelStatus = useTunnelStatus()
   const watchedRoute = Form.useWatch('tunnel', { form, preserve: true }) as TunnelRoute | undefined
-  /** The window's 网络加速: its own, else its proxy's default (older proxies: what the old rule did). */
-  // A new window starts with it off, whatever proxy is picked; windows from before 0.5.9 keep the old rule.
-  const shownRoute = watchedRoute ?? (profile && proxyMode === 'library'
-    ? defaultTunnelRoute(tunnelStatus, libraryProxy?.tunnel, libraryProxy ? libraryProxy.check?.countryCode ?? '' : undefined)
-    : defaultTunnelRoute(tunnelStatus))
+  /**
+   * The window's 网络加速: its own, else the picked library proxy's (off when that proxy has none).
+   * A window from before 0.5.9 still on its saved proxy keeps the old rule.
+   */
+  const proxyRoute = proxyMode === 'library' ? libraryProxy?.tunnel : undefined
+  const legacyRoute = Boolean(profile && proxyMode === 'library' && proxyId === profile.proxyId && !profile.tunnel)
+  const shownRoute = watchedRoute ?? (legacyRoute
+    ? defaultTunnelRoute(tunnelStatus, proxyRoute, libraryProxy ? libraryProxy.check?.countryCode ?? '' : undefined)
+    : defaultTunnelRoute(tunnelStatus, proxyRoute))
   // An HTTPS proxy cannot go through the tunnel (its certificate is checked against its own name).
   const route = proxyProtocol === 'https' && !libraryProxy?.apiUrl ? { ...shownRoute, enabled: false } : shownRoute
   const proxyPassword = Form.useWatch(['proxy', 'password'], { form, preserve: true }) ?? ''
@@ -896,6 +900,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       // The window's own result when it is back on its saved proxy; none for another one.
       const own = profile && changed.proxyId === profile.proxyId ? profile.proxyCheck ?? null : null
       setProxyResult(own)
+      // 网络加速 follows the picked proxy; back on its saved proxy the window has its own again.
+      form.setFieldValue('tunnel', profile?.tunnel && changed.proxyId === profile.proxyId ? { ...profile.tunnel } : undefined)
       setProxyCheckedAt(own?.checkedAt)
       setProxyEdited(false)
       return

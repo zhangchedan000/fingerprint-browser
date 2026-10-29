@@ -296,22 +296,25 @@ describe('assigning extensions', () => {
     await expect(store.assignMany([a.id], { extensionId: 'bad' })).rejects.toThrow('扩展')
   })
 
-  it('keeps 网络加速 per window: own choice, off until turned on, none for older windows', async () => {
+  it('keeps 网络加速 per window: the proxy\'s when picked, then its own choice; none for direct windows', async () => {
     const path = await vault()
     const store = await open(path)
     const us = { enabled: true, mode: 'manual' as const, node: '手动节点 · US-vless' }
     const proxy = await store.createProxy({ ...PROXY, note: '', tunnel: us })
     const [a, b, old] = await store.createMany([draft('A', { proxyId: proxy.id }), draft('B', { proxyId: proxy.id, tunnel: { enabled: false, mode: 'auto' } }), draft('Old')])
-    // A starts with it off (not the proxy's default); B keeps its own; the window's route is what connections use.
-    expect(store.get(a.id).proxy.tunnel).toEqual({ enabled: false, mode: 'auto' })
+    // A starts with the proxy's 网络加速; B keeps its own; the window's route is what connections use.
+    expect(store.get(a.id).proxy.tunnel).toEqual(us)
     expect(store.get(b.id).proxy.tunnel).toEqual({ enabled: false, mode: 'auto' })
     // Changing one window does not touch the other or the proxy's default.
     await store.update(a.id, { ...draft('A', { proxyId: proxy.id }), tunnel: { enabled: true, mode: 'auto' } })
     expect(store.get(a.id).tunnel).toEqual({ enabled: true, mode: 'auto' })
     expect(store.get(b.id).tunnel).toEqual({ enabled: false, mode: 'auto' })
     expect(store.getProxy(proxy.id).tunnel).toEqual(us)
-    // A window given the proxy later starts with it off; a direct window has none.
+    // A window given the proxy later takes the proxy's too; one without 网络加速 gives it off; a direct window has none.
     await store.assignMany([old.id], { proxyId: proxy.id })
+    expect(store.get(old.id).tunnel).toEqual(us)
+    const plain = await store.createProxy({ ...PROXY, host: '198.51.100.9', note: '' })
+    await store.assignMany([old.id], { proxyId: plain.id })
     expect(store.get(old.id).tunnel).toEqual({ enabled: false, mode: 'auto' })
     await store.assignMany([old.id], { proxyId: '' })
     expect(store.get(old.id).tunnel).toBeUndefined()

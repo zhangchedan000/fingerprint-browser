@@ -648,18 +648,16 @@ export class ProfileStore {
   }
 
   /**
-   * A window's 网络加速: the one it was given, else (same proxy as before) the one it had, else the
-   * default of the library proxy it now uses. A direct window has none.
-   */
-  /**
-   * A window's 网络加速: what it was given, else what it had. A new window, or one given its first
-   * proxy, has it off until it is turned on (never a library proxy's default).
+   * A window's 网络加速: what it was given, else (same proxy as before) what it had, else the
+   * 网络加速 of the library proxy it now uses (off when that proxy has none). A direct window has none.
    */
   private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile, api = false): TunnelRoute | undefined {
     if (!api && !proxyId) return undefined
     if (draft.tunnel) return draft.tunnel
     if (current && (api ? current.apiProxy : current.proxyId === proxyId)) return current.tunnel
-    return current?.tunnel ?? { ...TUNNEL_OFF }
+    if (api) return current?.tunnel ?? { ...TUNNEL_OFF }
+    const proxyRoute = this.library.proxies.get(proxyId)?.tunnel
+    return proxyRoute ? { ...proxyRoute } : { ...TUNNEL_OFF }
   }
 
   /** Runs a change that may add library records; on failure the libraries are put back. */
@@ -920,7 +918,7 @@ export class ProfileStore {
         profile.proxyId = proxyId
         delete profile.directCheck
         delete profile.apiProxy
-        // A window given another proxy keeps its 网络加速 (off when it never had one).
+        // A window given another proxy takes that proxy's 网络加速 (off when it has none).
         const route = this.windowTunnel({}, proxyId, current.apiProxy ? undefined : current)
         if (route) profile.tunnel = route
         else delete profile.tunnel
