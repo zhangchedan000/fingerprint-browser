@@ -39,7 +39,7 @@ import {
   gpuChoices
 } from '../../../../shared/hardware-profiles'
 import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSurface } from '../../../../shared/device-identity'
-import { gpuKey, gpuLabel, kernelGpuList, kernelListLabel } from '../../../../shared/gpu-catalog'
+import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
@@ -619,8 +619,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return gpuChoices(fp.platform)
       .map((choice) => ({
         value: choice.key,
-        label: `${gpuLabel(choice)} · ${t("内核 {0}", choice.kernels.map(kernelListLabel).join('/'))}`,
-        short: choice.model,
+        label: gpuLabel(choice),
         disabled: kernelGpus ? !available.has(choice.key) : false
       }))
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
@@ -1653,7 +1652,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     { value: 'none', label: t("不指定") },
     ...cpuFamilies().map(({ family, cpus }) => ({
       label: family,
-      options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}`, short: cpu.model }))
+      options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}` }))
     }))
   ]
   const languageOptions = [
