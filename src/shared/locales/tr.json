@@ -1623,12 +1623,6 @@
   "应用到 {0} 个窗口": "{0} pencereye uygula",
   "其中 {0} 个正在运行，要关闭后重新打开才生效；Cookie 和登录状态不受影响": "{0} tanesi açık, yeniden açınca değişir; Cookie ve oturumlar korunur",
   "运行中的窗口要关闭后重新打开才生效；Cookie 和登录状态不受影响": "Açık pencereler yeniden açınca değişir; Cookie ve oturumlar korunur",
-  "自己编译内核": "Çekirdeği kendiniz derleyin",
-  "编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。": "Derleme betikleri ve yamalar projede, sürümler sabit. 32 GB RAM ve 300 GB SSD önerilir; ilk derleme 4–8 saat sürer. Sonra “Yerel çekirdek içe aktar” ile çıktı klasöründeki chrome.exe dosyasını seçin.",
-  "锁定版本": "Sabit sürüm",
-  "补丁": "Yamalar",
-  "{0} 个（tools/kernel-patches）": "{0} (tools/kernel-patches)",
-  "编译脚本": "Derleme betikleri",
   "把窗口切换到 Chromium {0}": "Pencereleri Chromium {0} sürümüne geçir",
   "当前内核": "Mevcut çekirdek",
   "切换": "Değiştir",
@@ -1995,7 +1989,6 @@
   "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Sayfalar CPU modelini okuyamaz; seçildiğinde donanım eşzamanlılığı iş parçacığı sayısına eşitlenir, böylece profil gerçek bir makine olur",
   "Prism 内核": "Prism çekirdeği",
   "Prism 内核（环境固定）": "Prism çekirdeği (bu pencereye sabit)",
-  "Prism 内核 + {0} 个指纹补丁": "Prism çekirdeği + {0} parmak izi yaması",
   "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "Tarayıcı çekirdeği bulunamadı. Önce Çekirdekler bölümünde bir Prism çekirdeği içe aktarın veya indirin",
   "Prism 内核目前只有 Windows 版": "Prism çekirdeği şimdilik yalnızca Windows için",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Artık yalnızca Prism çekirdeği destekleniyor: Çekirdekler bölümünde içe aktarın veya indirin ve pencere ayarlarında seçin",
@@ -2638,5 +2631,7 @@
   "不保留：关闭页面后删除这次检测结果": "Saklanmaz: sayfa kapanınca bu sonuç silinir",
   "取消勾选：关闭页面后删除这次检测结果": "İşareti kaldır: sayfa kapanınca bu sonucu sil",
   "勾选：保留这次检测结果": "İşaretle: bu kontrol sonucunu sakla",
-  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Bu proxy'nin proxy IP kitaplığındaki son kontrolü; onu kullanan tüm pencereler aynısını gösterir"
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Bu proxy'nin proxy IP kitaplığındaki son kontrolü; onu kullanan tüm pencereler aynısını gösterir",
+  "Prism 指纹内核 prism{0}": "Prism parmak izi çekirdeği prism{0}",
+  "Prism 指纹内核": "Prism parmak izi çekirdeği"
 }

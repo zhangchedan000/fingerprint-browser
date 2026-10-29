@@ -1623,12 +1623,6 @@
   "应用到 {0} 个窗口": "Áp dụng cho {0} cửa sổ",
   "其中 {0} 个正在运行，要关闭后重新打开才生效；Cookie 和登录状态不受影响": "{0} cửa sổ đang chạy sẽ đổi sau khi mở lại; Cookie và trạng thái đăng nhập không đổi",
   "运行中的窗口要关闭后重新打开才生效；Cookie 和登录状态不受影响": "Cửa sổ đang chạy sẽ đổi sau khi mở lại; Cookie và trạng thái đăng nhập không đổi",
-  "自己编译内核": "Tự biên dịch nhân",
-  "编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。": "Script và bản vá nằm trong dự án, phiên bản đã khóa. Nên dùng 32 GB RAM, SSD 300 GB; lần đầu mất khoảng 4–8 giờ. Xong thì bấm “Nhập nhân cục bộ” và chọn chrome.exe trong thư mục kết quả.",
-  "锁定版本": "Phiên bản khóa",
-  "补丁": "Bản vá",
-  "{0} 个（tools/kernel-patches）": "{0} (tools/kernel-patches)",
-  "编译脚本": "Script biên dịch",
   "把窗口切换到 Chromium {0}": "Chuyển cửa sổ sang Chromium {0}",
   "当前内核": "Nhân hiện tại",
   "切换": "Chuyển",
@@ -1995,7 +1989,6 @@
   "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Trang web không đọc được mẫu CPU; khi chọn, số luồng sẽ theo CPU đó để hồ sơ là một máy có thật",
   "Prism 内核": "Nhân Prism",
   "Prism 内核（环境固定）": "Nhân Prism (cố định cho cửa sổ)",
-  "Prism 内核 + {0} 个指纹补丁": "Nhân Prism + {0} bản vá vân tay",
   "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "Không tìm thấy nhân trình duyệt. Hãy nhập hoặc tải nhân Prism trong mục Nhân trước",
   "Prism 内核目前只有 Windows 版": "Nhân Prism hiện chỉ có bản Windows",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Hiện chỉ hỗ trợ nhân Prism: hãy nhập hoặc tải nhân Prism trong mục Nhân rồi chọn nó trong cài đặt cửa sổ",
@@ -2638,5 +2631,7 @@
   "不保留：关闭页面后删除这次检测结果": "Không giữ: xóa kết quả này khi đóng trang",
   "取消勾选：关闭页面后删除这次检测结果": "Bỏ chọn: xóa kết quả này khi đóng trang",
   "勾选：保留这次检测结果": "Chọn: giữ kết quả kiểm tra này",
-  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Lần kiểm tra mới nhất của proxy này trong thư viện IP proxy; mọi cửa sổ dùng nó đều hiển thị như nhau"
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Lần kiểm tra mới nhất của proxy này trong thư viện IP proxy; mọi cửa sổ dùng nó đều hiển thị như nhau",
+  "Prism 指纹内核 prism{0}": "Nhân vân tay Prism prism{0}",
+  "Prism 指纹内核": "Nhân vân tay Prism"
 }

@@ -1,3 +1,4 @@
+import { prismRevision } from '../shared/kernel-id'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -17,14 +18,7 @@ const WEBRTC_RELAY_REVISION = 7
 /** Where a local build's source shows the relay is in (patch 013 in prism7). */
 const WEBRTC_RELAY_SOURCE = { file: 'services/network/p2p/socket_udp.cc', marker: 'FingerprintUdpRelay' }
 
-/**
- * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5; app releases (v0.2.0) carry it in the
- * zip name instead ("ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip").
- */
-export function prismRevision(name: string | undefined): number | undefined {
-  const match = name?.match(/-prism(\d+)(?:_|$)/)
-  return match ? Number(match[1]) : undefined
-}
+export { prismRevision }
 
 type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; releaseTag?: string; assetName?: string }
 

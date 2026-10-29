@@ -1623,12 +1623,6 @@
   "应用到 {0} 个窗口": "Apply to {0} windows",
   "其中 {0} 个正在运行，要关闭后重新打开才生效；Cookie 和登录状态不受影响": "{0} of them are running and change after reopening; Cookie and sign-ins are kept",
   "运行中的窗口要关闭后重新打开才生效；Cookie 和登录状态不受影响": "Running windows change after reopening; Cookie and sign-ins are kept",
-  "自己编译内核": "Build the kernel yourself",
-  "编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。": "Build scripts and patches are in the project with locked versions. Use 32 GB RAM and a 300 GB SSD; the first build takes about 4–8 hours. Then click “Import local kernel” and choose chrome.exe in the output folder.",
-  "锁定版本": "Locked version",
-  "补丁": "Patches",
-  "{0} 个（tools/kernel-patches）": "{0} (tools/kernel-patches)",
-  "编译脚本": "Build scripts",
   "把窗口切换到 Chromium {0}": "Switch windows to Chromium {0}",
   "当前内核": "Current kernel",
   "切换": "Switch",
@@ -1995,7 +1989,6 @@
   "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Pages cannot read the CPU model; once chosen, hardware concurrency follows its thread count so the profile is a machine that really exists",
   "Prism 内核": "Prism kernel",
   "Prism 内核（环境固定）": "Prism kernel (pinned to this window)",
-  "Prism 内核 + {0} 个指纹补丁": "Prism kernel + {0} fingerprint patches",
   "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "No browser kernel found. Import or download a Prism kernel in Kernels first",
   "Prism 内核目前只有 Windows 版": "Prism kernels are Windows-only for now",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Only Prism kernels are supported now: import or download one in Kernels and choose it in the window settings",
@@ -2638,5 +2631,7 @@
   "不保留：关闭页面后删除这次检测结果": "Not kept: this check result is deleted when the page closes",
   "取消勾选：关闭页面后删除这次检测结果": "Untick: delete this check result when the page closes",
   "勾选：保留这次检测结果": "Tick: keep this check result",
-  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "The latest check of this proxy in the proxy IP library; every window using it shows the same"
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "The latest check of this proxy in the proxy IP library; every window using it shows the same",
+  "Prism 指纹内核 prism{0}": "Prism fingerprint kernel prism{0}",
+  "Prism 指纹内核": "Prism fingerprint kernel"
 }

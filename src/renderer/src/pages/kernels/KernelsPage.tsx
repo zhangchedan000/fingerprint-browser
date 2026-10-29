@@ -3,14 +3,13 @@ import { Alert, Button, Dropdown, Modal, Select, Space, Table, Tag, Tooltip, typ
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { KernelHealth, KernelRelease } from '../../../../shared/types'
-import kernelLock from '../../../../../tools/kernel-lock.json'
 import { ACTIVE_STATUSES } from '../../components/format'
 import { kernelUsers } from '../../data/kernels'
 import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
-import { kernelName, kernelVendor, kernelFullName } from '../../../../shared/kernel-id'
+import { kernelName, kernelVendor, kernelFullName, prismRevision } from '../../../../shared/kernel-id'
 
 const FOLLOW_DEFAULT = ''
 
@@ -220,7 +219,10 @@ export function KernelsPage({ navigate }: PageProps) {
           </div>
           <span className="fb-muted">
             {[
-              engine?.fingerprintKernel ? t("Prism 内核 + {0} 个指纹补丁", kernelLock.patches.length) : t("兼容模式"),
+              // Which prism build it is, from its release (tag or zip name); a local build has none.
+              engine?.fingerprintKernel
+                ? prismRevision(current?.tag ?? current?.assetName) ? t("Prism 指纹内核 prism{0}", prismRevision(current?.tag ?? current?.assetName)) : t("Prism 指纹内核")
+                : t("兼容模式"),
               defaultVersion && health[defaultVersion]?.status === 'healthy' ? t("文件校验正常") : '',
               t("新建窗口默认使用"),
               t("{0} 个窗口在用", users)
@@ -307,18 +309,6 @@ export function KernelsPage({ navigate }: PageProps) {
         </div>
       </section>
 
-      <section className="fb-card">
-        <div className="fb-card-title">{t("自己编译内核")}</div>
-        <p className="fb-muted fb-no-margin">{t("编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。")}</p>
-        <div className="fb-form-grid fb-compact">
-          <span>{t("锁定版本")}</span>
-          <span className="fb-mono">{kernelLock.chromiumVersion} · ungoogled-chromium-windows {kernelLock.platforms['windows-x64'].tag}</span>
-          <span>{t("补丁")}</span>
-          <span>{t("{0} 个（tools/kernel-patches）", kernelLock.patches.length)}</span>
-          <span>{t("编译脚本")}</span>
-          <span className="fb-mono">tools/windows-kernel</span>
-        </div>
-      </section>
 
       <PickWindowsModal
         open={assignTo !== null}

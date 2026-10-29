@@ -16,7 +16,7 @@
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && vitest run --fileParallelism=false && npm run kernel:verify-lock",
+    "test": "npm run typecheck && vitest run --fileParallelism=false",
     "test:lifecycle": "vitest run --fileParallelism=false src/main/app-session.test.ts src/main/browser-launcher.test.ts src/main/process-inspector.integration.test.ts",
     "test:watch": "vitest",
     "audit:fingerprint": "node tools/fingerprint-audit/run.mjs",
@@ -25,10 +25,7 @@
     "audit:network": "node tools/network-audit/run.mjs",
     "audit:profile-data": "node tools/profile-data-audit/run.mjs",
     "audit:app-e2e": "node tools/app-e2e/run.mjs",
-    "audit:editor-smoke": "node tools/app-e2e/editor-smoke.mjs",
-    "kernel:verify-lock": "node tools/kernel-maintenance/run.mjs verify-lock",
-    "kernel:probe-upstream": "node tools/kernel-maintenance/run.mjs probe-upstream --output release/kernel-upstream.json",
-    "kernel:export-kits": "node tools/kernel-maintenance/run.mjs export-kits --kits-output release/kernel-build-kits"
+    "audit:editor-smoke": "node tools/app-e2e/editor-smoke.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

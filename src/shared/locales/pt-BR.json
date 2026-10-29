@@ -1623,12 +1623,6 @@
   "应用到 {0} 个窗口": "Aplicar a {0} janelas",
   "其中 {0} 个正在运行，要关闭后重新打开才生效；Cookie 和登录状态不受影响": "{0} delas estão abertas e mudam após reabrir; Cookie e logins são mantidos",
   "运行中的窗口要关闭后重新打开才生效；Cookie 和登录状态不受影响": "Janelas abertas mudam após reabrir; Cookie e logins são mantidos",
-  "自己编译内核": "Compilar o kernel",
-  "编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。": "Scripts e patches estão no projeto, com versões travadas. Use 32 GB de RAM e SSD de 300 GB; a primeira compilação leva 4–8 horas. Depois clique em “Importar kernel local” e escolha o chrome.exe na pasta de saída.",
-  "锁定版本": "Versão travada",
-  "补丁": "Patches",
-  "{0} 个（tools/kernel-patches）": "{0} (tools/kernel-patches)",
-  "编译脚本": "Scripts",
   "把窗口切换到 Chromium {0}": "Mudar janelas para Chromium {0}",
   "当前内核": "Kernel atual",
   "切换": "Mudar",
@@ -1995,7 +1989,6 @@
   "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Os sites não leem o modelo da CPU; ao escolher, a concorrência de hardware segue o número de threads dela, para o perfil ser uma máquina real",
   "Prism 内核": "Kernel Prism",
   "Prism 内核（环境固定）": "Kernel Prism (fixado nesta janela)",
-  "Prism 内核 + {0} 个指纹补丁": "Kernel Prism + {0} patches de impressão digital",
   "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "Nenhum kernel encontrado. Importe ou baixe um kernel Prism em Kernels primeiro",
   "Prism 内核目前只有 Windows 版": "Por enquanto o kernel Prism existe só para Windows",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Agora só há suporte ao kernel Prism: importe ou baixe um em Kernels e escolha-o nas configurações da janela",
@@ -2638,5 +2631,7 @@
   "不保留：关闭页面后删除这次检测结果": "Não mantido: o resultado é apagado ao fechar a página",
   "取消勾选：关闭页面后删除这次检测结果": "Desmarcar: apagar este resultado ao fechar a página",
   "勾选：保留这次检测结果": "Marcar: manter este resultado",
-  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Última verificação deste proxy na biblioteca de IP de proxy; todas as janelas que o usam mostram a mesma"
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Última verificação deste proxy na biblioteca de IP de proxy; todas as janelas que o usam mostram a mesma",
+  "Prism 指纹内核 prism{0}": "Kernel de impressão digital Prism prism{0}",
+  "Prism 指纹内核": "Kernel de impressão digital Prism"
 }

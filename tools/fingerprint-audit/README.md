@@ -68,8 +68,7 @@ CPU 核数、屏幕、语言、时区、位置、seed、禁用的注入表面与
 Worker 发起的请求在 Chromium 中通常不携带 `Sec-CH-UA*`。审计要求 `User-Agent` 与
 `Accept-Language` 始终一致；可选 Client Hints 一旦出现，值必须与 Window 请求完全一致。
 
-本地 macOS 构建应先用 `tools/macos-kernel/Sign-Local-Build.sh` 分层签名，使 Renderer/GPU Helper 带有正确的
-开发 entitlements。`--allow-no-sandbox` 只用于定位签名故障，不属于正常开发或发布参数。
+本地 macOS 内核要先分层签名，使 Renderer/GPU Helper 带有正确的开发 entitlements（内核编译和签名脚本在私有仓库 prism-kernel）。`--allow-no-sandbox` 只用于定位签名故障，不属于正常开发或发布参数。
 发布候选包必须使用 Developer ID 签名、公证并在不带此参数时通过启动和审计；JSON 报告中的
 `auditMode.sandboxDisabled` 必须为 `false`。
 

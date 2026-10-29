@@ -141,6 +141,7 @@ export class KernelManager {
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
         executable,
+        ...(manifest.releaseTag ? { tag: manifest.releaseTag } : {}),
         windowScreen: kernelFitsWindowToScreen(manifest),
         webrtcRelay: kernelRelaysWebRtc(manifest)
       })

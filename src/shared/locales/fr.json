@@ -1623,12 +1623,6 @@
   "应用到 {0} 个窗口": "Appliquer à {0} fenêtres",
   "其中 {0} 个正在运行，要关闭后重新打开才生效；Cookie 和登录状态不受影响": "{0} sont ouvertes et changeront après réouverture ; Cookie et connexions sont conservés",
   "运行中的窗口要关闭后重新打开才生效；Cookie 和登录状态不受影响": "Les fenêtres ouvertes changeront après réouverture ; Cookie et connexions sont conservés",
-  "自己编译内核": "Compiler le noyau soi-même",
-  "编译脚本和补丁都在项目里，版本已锁定。建议 32 GB 内存、300 GB 固态硬盘，首次编译约 4–8 小时。编译完成后点“导入本地内核”，选择输出目录里的 chrome.exe。": "Scripts et correctifs sont dans le projet, versions verrouillées. Prévoyez 32 GB de RAM et un SSD de 300 GB ; la première compilation prend 4–8 heures. Cliquez ensuite sur « Importer un noyau local » et choisissez chrome.exe dans le dossier de sortie.",
-  "锁定版本": "Version verrouillée",
-  "补丁": "Correctifs",
-  "{0} 个（tools/kernel-patches）": "{0} (tools/kernel-patches)",
-  "编译脚本": "Scripts",
   "把窗口切换到 Chromium {0}": "Passer des fenêtres à Chromium {0}",
   "当前内核": "Noyau actuel",
   "切换": "Changer",
@@ -1995,7 +1989,6 @@
   "网页读不到 CPU 型号；选定后硬件并发数自动等于它的线程数，保证是一台真实存在的电脑": "Les sites ne lisent pas le modèle de CPU ; une fois choisi, la concurrence matérielle suit son nombre de threads pour décrire une machine réelle",
   "Prism 内核": "Noyau Prism",
   "Prism 内核（环境固定）": "Noyau Prism (fixé pour cette fenêtre)",
-  "Prism 内核 + {0} 个指纹补丁": "Noyau Prism + {0} correctifs d'empreinte",
   "没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核": "Aucun noyau trouvé. Importez ou téléchargez d'abord un noyau Prism dans Noyaux",
   "Prism 内核目前只有 Windows 版": "Le noyau Prism n'existe pour l'instant que sous Windows",
   "现在只支持 Prism 内核：请在“内核管理”里导入或下载 Prism 内核，并在窗口设置里选用它": "Seuls les noyaux Prism sont pris en charge : importez-en ou téléchargez-en un dans Noyaux puis choisissez-le dans les réglages de la fenêtre",
@@ -2638,5 +2631,7 @@
   "不保留：关闭页面后删除这次检测结果": "Non conservé : le résultat est supprimé à la fermeture de la page",
   "取消勾选：关闭页面后删除这次检测结果": "Décocher : supprimer ce résultat à la fermeture de la page",
   "勾选：保留这次检测结果": "Cocher : conserver ce résultat",
-  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Dernière vérification de ce proxy dans la bibliothèque d'IP proxy ; toutes les fenêtres qui l'utilisent affichent la même"
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Dernière vérification de ce proxy dans la bibliothèque d'IP proxy ; toutes les fenêtres qui l'utilisent affichent la même",
+  "Prism 指纹内核 prism{0}": "Noyau d’empreintes Prism prism{0}",
+  "Prism 指纹内核": "Noyau d’empreintes Prism"
 }
