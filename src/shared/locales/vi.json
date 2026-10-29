@@ -2625,5 +2625,17 @@
   "窗口运行中，关闭后才能查看和修改 Cookie": "Cửa sổ đang mở: đóng lại mới xem hay sửa được cookie",
   "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "Nhận ra {0} cookie; khi lưu sẽ nhập vào cửa sổ này và đồng bộ lên đám mây",
   "读取现在的 Cookie 失败：{0}": "Không đọc được cookie hiện tại: {0}",
-  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Cửa sổ này hiện có {0} cookie; sửa rồi lưu để thay thế và đồng bộ lên đám mây"
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Cửa sổ này hiện có {0} cookie; sửa rồi lưu để thay thế và đồng bộ lên đám mây",
+  "位置": "Vị trí",
+  "坐标": "Tọa độ",
+  "运营商": "Nhà mạng",
+  "定位来源": "Nguồn định vị",
+  "上次 IP": "IP trước",
+  "支持": "Hỗ trợ",
+  "不支持": "Không hỗ trợ",
+  "{0}（一致）": "{0} (khớp nhau)",
+  "保留这次检测结果": "Giữ kết quả kiểm tra này",
+  "不保留：关闭页面后删除这次检测结果": "Không giữ: xóa kết quả này khi đóng trang",
+  "取消勾选：关闭页面后删除这次检测结果": "Bỏ chọn: xóa kết quả này khi đóng trang",
+  "勾选：保留这次检测结果": "Chọn: giữ kết quả kiểm tra này"
 }

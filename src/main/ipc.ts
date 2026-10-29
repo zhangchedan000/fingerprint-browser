@@ -769,6 +769,26 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const endpoint = await resolveApiProxy(validProxyApiUrl(draft.apiUrl), draft.tunnel)
     return { ...draft, ...endpoint, passwordStored: false }
   }
+  /**
+   * The editor closed with its exit IP unticked (a typed or library proxy): nothing of that check is
+   * kept. The window, its library proxy and its IP 评分 go back to what they were before it; a check
+   * of a window not saved yet is not handed to it.
+   */
+  ipcMain.handle('profiles:forget-proxy-check', async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object') return
+    const target = input as { profileId?: unknown; windowCheck?: unknown; proxyId?: unknown; libraryCheck?: unknown; proxy?: unknown; ipSites?: unknown }
+    const profileId = typeof target.profileId === 'string' && profiles.list().some((item) => item.id === target.profileId) ? target.profileId : undefined
+    if (target.proxy && typeof target.proxy === 'object') draftChecks.delete(proxyKey(target.proxy as ProxyConfig))
+    await profiles.forgetProxyCheck({
+      ...(profileId ? { profileId, windowCheck: target.windowCheck } : {}),
+      ...(typeof target.proxyId === 'string' ? { proxyId: target.proxyId, libraryCheck: target.libraryCheck } : {})
+    })
+    if (profileId && target.ipSites !== undefined) {
+      const record = target.ipSites as Partial<IpSiteRecord> | null
+      if (record && typeof record.checkedAt === 'string' && record.baseline && typeof record.baseline === 'object') await saveIpSites(profileId, record as IpSiteRecord)
+      else await rm(ipSitesFile(profileId), { force: true }).catch(() => undefined)
+    }
+  })
   /** An editor closed: what its API links gave is forgotten (not saved, or saved into its window already). */
   ipcMain.handle('proxy:forget-draft', (_event, session: unknown) => {
     if (typeof session !== 'string' || !session) return

@@ -2625,5 +2625,17 @@
   "窗口运行中，关闭后才能查看和修改 Cookie": "A janela está aberta: feche-a para ver ou alterar os cookies",
   "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "{0} cookies encontrados; ao salvar vão para esta janela e sincronizam na nuvem",
   "读取现在的 Cookie 失败：{0}": "Não foi possível ler os cookies atuais: {0}",
-  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Esta janela tem {0} cookies agora; edite e salve para substituí-los e sincronizar"
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Esta janela tem {0} cookies agora; edite e salve para substituí-los e sincronizar",
+  "位置": "Localização",
+  "坐标": "Coordenadas",
+  "运营商": "Provedor",
+  "定位来源": "Fontes de localização",
+  "上次 IP": "IP anterior",
+  "支持": "Compatível",
+  "不支持": "Não compatível",
+  "{0}（一致）": "{0} (concordam)",
+  "保留这次检测结果": "Manter este resultado",
+  "不保留：关闭页面后删除这次检测结果": "Não mantido: o resultado é apagado ao fechar a página",
+  "取消勾选：关闭页面后删除这次检测结果": "Desmarcar: apagar este resultado ao fechar a página",
+  "勾选：保留这次检测结果": "Marcar: manter este resultado"
 }

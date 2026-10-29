@@ -150,6 +150,11 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         : await window.browserApi.profiles.create(draft)
       // API 提取 left unticked: nothing about that IP is kept (the next check or launch takes a new one).
       if (extras.apiDiscard) saved = await window.browserApi.profiles.discardApiIp(saved.id)
+      // A typed or library proxy's exit IP left unticked: the window keeps nothing of that check.
+      if (extras.forgetCheck) {
+        await window.browserApi.profiles.forgetProxyCheck({ ...extras.forgetCheck, profileId: saved.id, windowCheck: null, ipSites: null })
+        saved = { ...saved, proxyCheck: undefined }
+      }
       // A new window keeps the IP 评分 read before it was saved.
       if (!current && extras.ipSites) await window.browserApi.profiles.setIpSites(saved.id, extras.ipSites).catch(() => undefined)
       upsert(saved)

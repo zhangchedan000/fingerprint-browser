@@ -556,10 +556,15 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 /* Proxy tab: the exit IP a check found, shown as the chosen one; the identity it sets right under it. */
 .fb-fp-card-actions { display: flex; gap: 8px; margin-left: auto; align-self: center; }
 .fb-ip-card { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 12px 14px; border: 1.5px solid var(--fb-accent); border-radius: 10px; background: var(--fb-accent-soft); }
-.fb-ip-mark { display: grid; grid-row: span 3; align-self: start; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: var(--fb-on-accent); background: var(--fb-accent); font-size: 12px; }
+.fb-ip-mark { display: grid; grid-row: span 2; align-self: start; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: var(--fb-on-accent); background: var(--fb-accent); font-size: 12px; }
 .fb-ip-address { overflow: hidden; font: 600 17px/1.3 ui-monospace, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .fb-ip-place { font-weight: 600; white-space: nowrap; }
-.fb-ip-meta { display: flex; flex-wrap: wrap; grid-column: 2 / 4; gap: 2px 14px; color: var(--fb-text-secondary); font-size: 12.5px; }
+.fb-ip-version { margin-left: 8px; padding: 0 5px; border-radius: 4px; background: var(--fb-surface-muted); color: var(--fb-text-secondary); font: 500 11px/18px inherit; vertical-align: middle; }
+/* One row per finding: label, value. Long values wrap inside their own row. */
+.fb-ip-rows { display: grid; grid-column: 2 / 4; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin-top: 4px; font-size: 12.5px; line-height: 1.5; }
+.fb-ip-rows .k { color: var(--fb-text-secondary); white-space: nowrap; }
+.fb-ip-rows .v { min-width: 0; overflow-wrap: anywhere; }
+.fb-ip-row-full { grid-column: 1 / 3; min-width: 0; color: var(--fb-text-secondary); overflow-wrap: anywhere; }
 .fb-ip-card.is-stale { opacity: .6; border-style: dashed; }
 .fb-ip-card.is-warn { border-color: var(--fb-warning-strong); background: var(--fb-warning-soft); }
 .fb-ip-card.is-warn .fb-ip-mark { background: var(--fb-warning-strong); }
@@ -572,7 +577,7 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-ip-card.is-off { border-style: dashed; border-color: var(--fb-line); background: transparent; }
 .fb-ip-card.is-off .fb-ip-mark { border-color: var(--fb-text-faint); background: transparent; }
 .fb-ip-card.is-off .fb-ip-address, .fb-ip-card.is-off .fb-ip-place { color: var(--fb-text-secondary); text-decoration: line-through; }
-.fb-ip-use { flex-basis: 100%; color: var(--fb-text); font-weight: 500; }
+.fb-ip-card .fb-ip-use { color: var(--fb-text); font-weight: 500; }
 /* The exit IP card with what the IP check sites say on its right (one bordered block). */
 .fb-ip-card-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); border: 1.5px solid var(--fb-accent); border-radius: 10px; background: var(--fb-accent-soft); overflow: hidden; }
 .fb-ip-card-row > .fb-ip-card { border: 0; border-radius: 0; background: transparent; align-content: start; }

@@ -2625,5 +2625,17 @@
   "窗口运行中，关闭后才能查看和修改 Cookie": "Pencere açık: çerezleri görmek veya değiştirmek için kapatın",
   "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "{0} çerez bulundu; kaydedince bu pencereye girer ve buluta eşitlenir",
   "读取现在的 Cookie 失败：{0}": "Mevcut çerezler okunamadı: {0}",
-  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Bu pencerede şu an {0} çerez var; düzenleyip kaydedince değiştirilir ve buluta eşitlenir"
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Bu pencerede şu an {0} çerez var; düzenleyip kaydedince değiştirilir ve buluta eşitlenir",
+  "位置": "Konum",
+  "坐标": "Koordinatlar",
+  "运营商": "Sağlayıcı",
+  "定位来源": "Konum kaynakları",
+  "上次 IP": "Önceki IP",
+  "支持": "Destekleniyor",
+  "不支持": "Desteklenmiyor",
+  "{0}（一致）": "{0} (uyumlu)",
+  "保留这次检测结果": "Bu kontrol sonucunu sakla",
+  "不保留：关闭页面后删除这次检测结果": "Saklanmaz: sayfa kapanınca bu sonuç silinir",
+  "取消勾选：关闭页面后删除这次检测结果": "İşareti kaldır: sayfa kapanınca bu sonucu sil",
+  "勾选：保留这次检测结果": "İşaretle: bu kontrol sonucunu sakla"
 }

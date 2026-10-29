@@ -2625,5 +2625,17 @@
   "窗口运行中，关闭后才能查看和修改 Cookie": "The window is open: close it to see or change its cookies",
   "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "{0} cookies found; once saved they go into this window and sync to the cloud",
   "读取现在的 Cookie 失败：{0}": "Could not read the current cookies: {0}",
-  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "This window has {0} cookies now; edit and save to replace them and sync to the cloud"
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "This window has {0} cookies now; edit and save to replace them and sync to the cloud",
+  "位置": "Location",
+  "坐标": "Coordinates",
+  "运营商": "ISP",
+  "定位来源": "Location sources",
+  "上次 IP": "Previous IP",
+  "支持": "Supported",
+  "不支持": "Not supported",
+  "{0}（一致）": "{0} (agree)",
+  "保留这次检测结果": "Keep this check result",
+  "不保留：关闭页面后删除这次检测结果": "Not kept: this check result is deleted when the page closes",
+  "取消勾选：关闭页面后删除这次检测结果": "Untick: delete this check result when the page closes",
+  "勾选：保留这次检测结果": "Tick: keep this check result"
 }

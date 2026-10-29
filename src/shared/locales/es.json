@@ -2625,5 +2625,17 @@
   "窗口运行中，关闭后才能查看和修改 Cookie": "La ventana está abierta: ciérrala para ver o cambiar sus cookies",
   "识别到 {0} 条 Cookie，保存后导入此窗口并同步到云端": "Se encontraron {0} cookies; al guardar se añaden a esta ventana y se sincronizan con la nube",
   "读取现在的 Cookie 失败：{0}": "No se pudieron leer las cookies actuales: {0}",
-  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Esta ventana tiene ahora {0} cookies; edítalas y guarda para reemplazarlas y sincronizarlas"
+  "这个窗口现在有 {0} 条 Cookie；改了保存后替换并同步到云端": "Esta ventana tiene ahora {0} cookies; edítalas y guarda para reemplazarlas y sincronizarlas",
+  "位置": "Ubicación",
+  "坐标": "Coordenadas",
+  "运营商": "Proveedor",
+  "定位来源": "Fuentes de ubicación",
+  "上次 IP": "IP anterior",
+  "支持": "Compatible",
+  "不支持": "No compatible",
+  "{0}（一致）": "{0} (coinciden)",
+  "保留这次检测结果": "Conservar este resultado",
+  "不保留：关闭页面后删除这次检测结果": "No se conserva: el resultado se borra al cerrar la página",
+  "取消勾选：关闭页面后删除这次检测结果": "Desmarcar: borrar este resultado al cerrar la página",
+  "勾选：保留这次检测结果": "Marcar: conservar este resultado"
 }

@@ -509,6 +509,19 @@ export interface ProxyTestResult {
   previousIp?: string
 }
 
+/**
+ * What an unticked check is undone to. undefined leaves a thing as it is; null removes it.
+ * `proxy` is the typed proxy a window not saved yet was checked with.
+ */
+export interface ForgetProxyCheck {
+  profileId?: string
+  windowCheck?: ProxyCheckSummary | null
+  proxyId?: string
+  libraryCheck?: ProxyCheckSummary | null
+  proxy?: ProxyConfig
+  ipSites?: import('./ip-sites').IpSiteRecord | null
+}
+
 export interface ProxyCheckSummary extends ProxyTestResult {
   checkedAt: string
 }
@@ -802,6 +815,8 @@ export interface BrowserApi {
     setApiUrl: (ids: string[], url: string) => Promise<BrowserProfileView[]>
     /** API 提取, exit IP left unticked: that proxy and everything recorded about it are dropped. */
     discardApiIp: (id: string) => Promise<BrowserProfileView>
+    /** The editor closed with a typed or library proxy's exit IP unticked: put back what was there before that check. */
+    forgetProxyCheck: (target: ForgetProxyCheck) => Promise<void>
     diagnose: (id: string) => Promise<LaunchDiagnosticReport>
     crashHistory: (id: string) => Promise<BrowserCrashRecord[]>
     /** Text of a launch log listed in the crash history. */

@@ -64,6 +64,7 @@ import type {
   FingerprintCheckReport,
   FingerprintCheckRow,
   FingerprintConfig,
+  ForgetProxyCheck,
   KernelRelease,
   PlatformAccount,
   ProfileDraft,
@@ -111,6 +112,8 @@ export interface ProfileEditorExtras {
   apiDiscard?: boolean
   /** A new window's IP 评分, read before it was saved. */
   ipSites?: IpSiteRecord
+  /** A typed or library proxy's exit IP left unticked: nothing of that check is kept. */
+  forgetCheck?: ForgetProxyCheck
 }
 
 interface ProfileEditorProps {
@@ -487,6 +490,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
   // API 提取: the window opens on the IP checked (勾选); unticked, its next launch takes a new one.
   const [useApiIp, setUseApiIp] = useState(true)
+  // A typed or library proxy's exit IP: ticked, the window keeps the check; unticked, nothing of it is kept.
+  const [keepCheck, setKeepCheck] = useState(true)
+  // What the library proxies' checks were when the editor opened, to put back for an unticked one.
+  const libraryChecksAtOpen = useRef(new Map<string, ProxyRecordView['check']>())
+  const checkedHere = useRef(false)
   const draftSession = useRef('')
   const profileIdRef = useRef<string | undefined>(undefined)
   profileIdRef.current = open ? profile?.id : undefined
@@ -571,6 +579,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setShowApiLog(false)
     setApiView(profile)
     setUseApiIp(true)
+    setKeepCheck(true)
+    checkedHere.current = false
+    libraryChecksAtOpen.current = new Map(proxies.map((item) => [item.id, item.check]))
     setCurrentCookies({})
     if (profile && (profile.status === 'closed' || profile.status === 'error')) {
       setCurrentCookies({ loading: true })
@@ -1046,6 +1057,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setProxyEdited(false)
     // The IP just checked is the one in use; what the IP check sites say about it comes next.
     setUseApiIp(true)
+    setKeepCheck(true)
+    checkedHere.current = true
     if (result?.ok) void ipScore.read()
     else ipScore.reset()
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
@@ -1176,6 +1189,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const values = form.getFieldsValue(true) as EditorValues
     // API 提取 left unticked: the window keeps nothing about that IP (a new one comes next time).
     const unticked = proxyMode === 'api' && !useApiIp
+    const forget = checkForgotten()
     const draft = currentDraft()
     // The box shows the window's own cookies: unchanged, nothing to import; changed, they replace them.
     const ownCookies = currentCookies.text !== undefined
@@ -1183,14 +1197,32 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       cookieText: ownCookies && !cookiesEdited ? '' : values.cookieText ?? '',
       ...(ownCookies && cookiesEdited ? { cookieReplace: true } : {}),
       ...(unticked && profile?.apiProxy?.endpoint ? { apiDiscard: true } : {}),
+      ...(forget ? { forgetCheck: forget } : {}),
       // A new window keeps the IP 评分 read before it was saved.
-      ...(!profile && !unticked && ipScore.record ? { ipSites: ipScore.record } : {})
+      ...(!profile && !unticked && !forget && ipScore.record ? { ipSites: ipScore.record } : {})
     })
   }
 
-  /** Closed without saving: an API exit IP left unticked is dropped from the window all the same. */
+  /**
+   * A typed or library proxy's exit IP left unticked: what to undo when the editor closes. The
+   * window keeps no check and no IP 评分; a library proxy checked here gets its earlier result back.
+   */
+  function checkForgotten(): ForgetProxyCheck | undefined {
+    if (proxyMode === 'api' || keepCheck || !proxyResult?.ok || proxyEdited) return undefined
+    const libraryId = proxyMode === 'library' ? form.getFieldValue('proxyId') as string | undefined : undefined
+    const typed = proxyMode !== 'library' ? currentDraft().proxy : undefined
+    return {
+      ...(profile ? { profileId: profile.id, windowCheck: null, ipSites: null } : {}),
+      ...(libraryId && checkedHere.current ? { proxyId: libraryId, libraryCheck: libraryChecksAtOpen.current.get(libraryId) ?? null } : {}),
+      ...(typed && checkedHere.current ? { proxy: typed } : {})
+    }
+  }
+
+  /** Closed without saving: an exit IP left unticked is dropped from the window all the same. */
   function cancel(): void {
     if (proxyMode === 'api' && !useApiIp && profile?.apiProxy?.endpoint) void window.browserApi.profiles.discardApiIp(profile.id).catch(() => undefined)
+    const forget = checkForgotten()
+    if (forget) void window.browserApi.profiles.forgetProxyCheck(forget).catch(() => undefined)
     onCancel()
   }
 
@@ -1454,7 +1486,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         result={proxyResult}
         stale={proxyEdited}
         typeHint={proxyMode !== 'library' && proxyMode !== 'api'}
-        chosen={proxyMode === 'api' && proxyResult.ok && !proxyEdited ? { checked: useApiIp, onChange: setUseApiIp } : undefined}
+        chosen={!proxyResult.ok || proxyEdited ? undefined
+          : proxyMode === 'api' ? { checked: useApiIp, onChange: setUseApiIp, api: true }
+            : { checked: keepCheck, onChange: setKeepCheck }}
         aside={proxyResult.ok ? ipScore.panel(proxyResult.ip) : undefined}
         notes={[
           resultNote,

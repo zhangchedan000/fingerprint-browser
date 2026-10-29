@@ -1427,6 +1427,30 @@ export class ProfileStore {
     return this.resolve(profile)
   }
 
+  /**
+   * A check the editor's tick was taken off: the window and its library proxy are put back as they
+   * were before it (null: no check at all). Not an edit of the window.
+   */
+  async forgetProxyCheck(target: { profileId?: string; windowCheck?: unknown; proxyId?: string; libraryCheck?: unknown }): Promise<void> {
+    if (target.proxyId !== undefined && target.libraryCheck !== undefined && this.library.proxies.has(target.proxyId)) {
+      const record = { ...this.library.getProxy(target.proxyId) }
+      const check = safeProxyCheck(target.libraryCheck)
+      if (check) record.check = check
+      else delete record.check
+      this.library.proxies.set(target.proxyId, record)
+    }
+    if (target.profileId !== undefined && target.windowCheck !== undefined && this.profiles.has(target.profileId)) {
+      const profile: StoredProfile = { ...this.stored(target.profileId) }
+      const check = safeProxyCheck(target.windowCheck)
+      if (check) profile.directCheck = check
+      else delete profile.directCheck
+      this.profiles.set(target.profileId, profile)
+    }
+    await this.persist()
+    // The window list shows the change, and so do the windows on that library proxy.
+    this.notify(this.list().filter((profile) => profile.id === target.profileId || (target.proxyId !== undefined && profile.proxyId === target.proxyId)).map((profile) => profile.id))
+  }
+
   async setLibraryProxyCheck(proxyId: string, check: ProxyCheckSummary, baselineIp?: string, sourceProfileId?: string): Promise<ProxyRecord> {
     const record = this.library.getProxy(proxyId)
     // An API proxy gives a new exit every time: no "exit changed" against the last one.
