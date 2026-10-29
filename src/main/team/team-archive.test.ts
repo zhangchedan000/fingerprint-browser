@@ -22,7 +22,7 @@ async function put(path: string, content: string): Promise<void> {
 }
 
 describe('team login state archive', () => {
-  it('carries the login state and cookies only, and replaces just that on the other computer', async () => {
+  it('carries the login state, browser data, cookies and check records, and replaces just that on the other computer', async () => {
     const root = await tempRoot()
     // Outside every ANSI code page Windows tar could use for its arguments.
     const source = join(root, '源 ก user-data')
@@ -33,16 +33,20 @@ describe('team login state archive', () => {
     await put(join(source, 'Default', 'Sessions', 'Tabs_1'), 'tabs')
     await put(join(source, 'Default', 'Preferences'), '{"profile":{}}')
     await put(join(source, 'Default', 'History'), 'source history')
+    await put(join(source, 'Default', 'Bookmarks'), '{"roots":{}}')
+    await put(join(source, 'Default', 'Web Data'), 'autofill')
     await put(join(source, 'Default', 'Service Worker', 'ScriptCache', 'x'), 'scripts')
     await put(join(source, 'Default', 'Cache', 'Cache_Data', 'f_000001'), 'cache')
     await put(join(source, 'Default', 'Network', 'Cookies'), 'dpapi cookies')
     await put(join(source, 'Local State'), 'source key')
     const cookies = [{ name: 'sid', value: 'abc', domain: '.example.com', path: '/' }]
 
-    const packed = await packProfileState(source, cookies as never, join(root, 'state.tgz'))
+    const records = { fingerprintCheck: { checkedAt: '2026-10-29T00:00:00.000Z' } }
+    const packed = await packProfileState(source, cookies as never, join(root, 'state.tgz'), {}, records)
     expect(packed.size).toBeGreaterThan(0)
     expect(packed.sha256).toMatch(/^[a-f\d]{64}$/)
     expect(existsSync(join(source, '.prism-team-cookies.json'))).toBe(false)
+    expect(existsSync(join(source, '.prism-team-records.json'))).toBe(false)
 
     const target = join(root, '目标 ก user-data')
     await put(join(target, 'Local State'), 'target key')
@@ -50,14 +54,17 @@ describe('team login state archive', () => {
     await put(join(target, 'Default', 'Session Storage', 'stale'), 'signed-out leftover')
     const restored = await unpackProfileState(packed.file, target)
 
-    expect(restored).toEqual(cookies)
+    expect(restored).toEqual({ cookies, records })
     expect(await readFile(join(target, 'Default', 'Local Storage', 'leveldb', '000003.log'), 'utf8')).toBe('local storage')
     expect(await readFile(join(target, 'Default', 'IndexedDB', 'https_example.com_0.indexeddb.leveldb', 'LOG'), 'utf8')).toBe('indexeddb')
     expect(await readFile(join(target, 'Default', 'WebStorage', '1', 'IndexedDB', 'db'), 'utf8')).toBe('bucket')
     expect(await readFile(join(target, 'Default', 'Sessions', 'Tabs_1'), 'utf8')).toBe('tabs')
     expect(await readFile(join(target, 'Default', 'Preferences'), 'utf8')).toBe('{"profile":{}}')
-    // Not login state: this computer's own copy stays.
-    expect(await readFile(join(target, 'Default', 'History'), 'utf8')).toBe('target history')
+    // Bookmarks, history and autofill come along (as on the first computer).
+    expect(await readFile(join(target, 'Default', 'History'), 'utf8')).toBe('source history')
+    expect(await readFile(join(target, 'Default', 'Bookmarks'), 'utf8')).toBe('{"roots":{}}')
+    expect(await readFile(join(target, 'Default', 'Web Data'), 'utf8')).toBe('autofill')
+    // Not the window's state: this computer's own copy stays.
     expect(await readFile(join(target, 'Local State'), 'utf8')).toBe('target key')
     for (const gone of [
       ['Default', 'Session Storage', 'stale'],
@@ -65,7 +72,8 @@ describe('team login state archive', () => {
       ['Default', 'Service Worker'],
       ['Default', 'Cache'],
       ['Default', 'Network', 'Cookies'],
-      ['.prism-team-cookies.json']
+      ['.prism-team-cookies.json'],
+      ['.prism-team-records.json']
     ]) expect(existsSync(join(target, ...gone)), gone.join('/')).toBe(false)
     expect((await readdir(root)).filter((name) => /incoming|previous/.test(name))).toEqual([])
   })

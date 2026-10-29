@@ -330,6 +330,14 @@ export class FingerprintCheckStore {
   }
 }
 
+const checkStores = new Map<string, FingerprintCheckStore>()
+/** One store per file, so the editor's checks and team sync never overwrite each other's (each caches the file). */
+export function fingerprintCheckStore(path: string): FingerprintCheckStore {
+  let store = checkStores.get(path)
+  if (!store) checkStores.set(path, store = new FingerprintCheckStore(path))
+  return store
+}
+
 export interface FingerprintRunOptions {
   profile: BrowserProfile
   engine: EngineStatus

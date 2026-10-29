@@ -9,12 +9,14 @@ import { PASSWORDS_DIR, restorePasswords, stagePasswords, type KeyProtector } fr
 
 /** Cookies travel as plain JSON next to the files; the cookie database itself cannot. */
 export const COOKIES_FILE = '.prism-team-cookies.json'
+/** The window's check records (team-records.ts), beside the cookies. */
+export const RECORDS_FILE = '.prism-team-records.json'
 
 /**
- * A shared window's login state: what keeps sites signed in, plus the open tabs. Cookies are
- * not here: their database is encrypted with this computer's key (DPAPI on Windows), so they go
- * through COOKIES_FILE. History, bookmarks, caches, service worker scripts and the rest stay on
- * each computer.
+ * A shared window's state, as close to the same browser as can be: what keeps sites signed in, the
+ * open tabs, bookmarks, history and autofill. Cookies are not here: their database is encrypted
+ * with this computer's key (DPAPI on Windows), so they go through COOKIES_FILE. Caches and service
+ * worker scripts stay on each computer (they are rebuilt).
  */
 export const LOGIN_STATE_PATHS = [
   'Default/Local Storage',
@@ -25,7 +27,13 @@ export const LOGIN_STATE_PATHS = [
   // Open tabs, so the next person continues on the same pages.
   'Default/Sessions',
   // Site permissions (notifications, location…).
-  'Default/Preferences'
+  'Default/Preferences',
+  // Bookmarks, browsing history (with its icons and most visited sites) and autofill entries.
+  'Default/Bookmarks',
+  'Default/History',
+  'Default/Favicons',
+  'Default/Top Sites',
+  'Default/Web Data'
 ]
 
 const EXCLUDED_INSIDE = ['./Default/WebStorage/*/CacheStorage', './Default/Sessions/*.tmp']
@@ -81,11 +89,13 @@ export interface PasswordTransfer {
   onError?: (error: unknown) => void
 }
 
-/** Packs a closed window's login state (LOGIN_STATE_PATHS) and its cookies into `target` (.tgz). */
-export async function packProfileState(userDataPath: string, cookies: PortableCookie[], target: string, passwords: PasswordTransfer = {}): Promise<PackedState> {
+/** Packs a closed window's login state (LOGIN_STATE_PATHS), its cookies and check records into `target` (.tgz). */
+export async function packProfileState(userDataPath: string, cookies: PortableCookie[], target: string, passwords: PasswordTransfer = {}, records?: unknown): Promise<PackedState> {
   // The window is closed, so the cookies file can sit in its folder while tar reads it.
   const cookiesPath = join(userDataPath, COOKIES_FILE)
+  const recordsPath = join(userDataPath, RECORDS_FILE)
   await writeFile(cookiesPath, JSON.stringify(cookies), { encoding: 'utf8', mode: 0o600 })
+  if (records) await writeFile(recordsPath, JSON.stringify(records), { encoding: 'utf8', mode: 0o600 })
   try {
     const present: string[] = []
     for (const path of LOGIN_STATE_PATHS) if (await exists(join(userDataPath, path))) present.push(`./${path}`)
@@ -94,9 +104,10 @@ export async function packProfileState(userDataPath: string, cookies: PortableCo
       : false
     if (staged) present.push(`./${PASSWORDS_DIR}`)
     const excludes = EXCLUDED_INSIDE.flatMap((pattern) => ['--exclude', pattern])
-    await runTar(['-czf', '-', ...excludes, `./${COOKIES_FILE}`, ...present], userDataPath, { write: target })
+    await runTar(['-czf', '-', ...excludes, `./${COOKIES_FILE}`, ...(records ? [`./${RECORDS_FILE}`] : []), ...present], userDataPath, { write: target })
   } finally {
     await rm(cookiesPath, { force: true })
+    await rm(recordsPath, { force: true })
     await rm(join(userDataPath, PASSWORDS_DIR), { recursive: true, force: true })
   }
   const [info, sha256] = await Promise.all([stat(target), sha256File(target)])
@@ -105,10 +116,11 @@ export async function packProfileState(userDataPath: string, cookies: PortableCo
 
 /**
  * Replaces a closed window's login state (LOGIN_STATE_PATHS) with an archive's and returns the
- * cookies to import. Everything else in the folder (history, caches…) stays this computer's.
- * Archives of v0.3/v0.4.0 carry the whole folder; only these paths are taken from them too.
+ * cookies to import and the check records that came with it. Everything else in the folder
+ * (caches…) stays this computer's. Archives of v0.3/v0.4.0 carry the whole folder; only these
+ * paths are taken from them too.
  */
-export async function unpackProfileState(archive: string, userDataPath: string, passwords: PasswordTransfer = {}): Promise<PortableCookie[]> {
+export async function unpackProfileState(archive: string, userDataPath: string, passwords: PasswordTransfer = {}): Promise<{ cookies: PortableCookie[]; records?: unknown }> {
   const staging = `${userDataPath}.incoming-${randomUUID()}`
   const previous = `${userDataPath}.previous-${randomUUID()}`
   await mkdir(staging, { recursive: true })
@@ -122,6 +134,7 @@ export async function unpackProfileState(archive: string, userDataPath: string, 
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('登录态里的 Cookie 文件已损坏')
     }
+    const records = await readFile(join(staging, RECORDS_FILE), 'utf8').then((text) => JSON.parse(text) as unknown, () => undefined)
     // The shared copy replaces this computer's, also where it has none (a site signed out).
     const moved: string[] = []
     try {
@@ -144,7 +157,7 @@ export async function unpackProfileState(archive: string, userDataPath: string, 
     }
     // Before the cookies go in: they are written with the key that comes with the passwords.
     if (passwords.protector) await restorePasswords(staging, userDataPath, passwords.protector).catch((error) => passwords.onError?.(error))
-    return cookies
+    return { cookies, ...(records ? { records } : {}) }
   } finally {
     await Promise.all([staging, previous].map((path) => rm(path, { recursive: true, force: true })))
   }

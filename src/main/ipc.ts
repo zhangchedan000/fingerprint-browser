@@ -7,7 +7,7 @@ import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckRe
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
-import { deepCheck, evaluateFingerprint, expectedIdentity, FingerprintCheckStore, ipSiteCheck, observeFingerprint } from './fingerprint-check'
+import { deepCheck, evaluateFingerprint, expectedIdentity, fingerprintCheckStore, ipSiteCheck, observeFingerprint } from './fingerprint-check'
 import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, type IpSiteRecord } from '../shared/ip-sites'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
@@ -214,7 +214,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:storage-overview', () => storageOverview(profiles.vaultPath))
   // Fingerprint check: the draft's exact launch setup in a throwaway profile, so the window's own
   // data is never touched and an unsaved draft can be checked too.
-  const fingerprintChecks = new FingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
+  const fingerprintChecks = fingerprintCheckStore(join(profiles.vaultPath, 'fingerprint-checks.json'))
   ipcMain.handle('profiles:last-fingerprint-check', (_event, id: string) => fingerprintChecks.get(id))
   /** The check browser's settings for an editor draft: same kernel, proxy and hardware as a real launch. */
   /** `libraryProxyId`: a library proxy being edited, whose saved password fills an empty one. */

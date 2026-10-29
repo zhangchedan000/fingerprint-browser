@@ -1416,6 +1416,17 @@ export class ProfileStore {
   }
 
   /** Saves a test result for a library proxy (from the proxy library page or a window). */
+  /** A window's last proxy check as another computer left it (team sync): kept as it is, nothing else changes. */
+  async restoreProxyCheck(id: string, input: unknown): Promise<BrowserProfile> {
+    const check = safeProxyCheck(input)
+    const current = this.stored(id)
+    if (!check) return this.resolve(current)
+    const profile: StoredProfile = { ...current, directCheck: check }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
   async setLibraryProxyCheck(proxyId: string, check: ProxyCheckSummary, baselineIp?: string, sourceProfileId?: string): Promise<ProxyRecord> {
     const record = this.library.getProxy(proxyId)
     // An API proxy gives a new exit every time: no "exit changed" against the last one.

@@ -29,6 +29,8 @@ import { portableDraft } from '../profile-portable'
 import type { SecretCodec } from '../secret-codec'
 import { normalizeServer, TeamApi, TeamApiError, type Fetch, type RemoteProfile } from './team-api'
 import { packProfileState, sha256File, unpackProfileState, type PasswordTransfer } from './team-archive'
+import { applyCheckRecords, collectCheckRecords } from './team-records'
+import { fingerprintCheckStore } from '../fingerprint-check'
 import { windowsKeyProtector, type KeyProtector } from './saved-passwords'
 
 interface TeamLink {
@@ -213,6 +215,11 @@ export class TeamManager {
 
   private get workPath(): string {
     return join(this.vaultPath, 'team-transfer')
+  }
+
+  /** The windows' fingerprint check reports (the same store the editor writes). */
+  private get fingerprintChecks() {
+    return fingerprintCheckStore(join(this.vaultPath, 'fingerprint-checks.json'))
   }
 
   async initialize(): Promise<void> {
@@ -537,7 +544,9 @@ export class TeamManager {
   private async packLocal(id: string): Promise<{ file: string; size: number; sha256: string }> {
     await mkdir(this.workPath, { recursive: true })
     const cookies = await this.cookies.exportCookies(id)
-    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`), this.passwordTransfer(id))
+    // The check records go along, so the next computer shows what this one found.
+    const records = await collectCheckRecords(this.profiles, this.fingerprintChecks, id).catch(() => undefined)
+    return packProfileState(this.profiles.profileDataPath(id), cookies, join(this.workPath, `${id}-${Date.now()}.tgz`), this.passwordTransfer(id), records)
   }
 
   /** Puts a window of this computer into the cloud: its config and current login state. */
@@ -752,8 +761,11 @@ export class TeamManager {
           await api.downloadData(record, archive)
           const expected = (record as RemoteProfile & { data_sha256?: string }).data_sha256
           if (expected && await sha256File(archive) !== expected) throw new Error('下载的登录态校验失败，请重试')
-          const cookies = await unpackProfileState(archive, this.profiles.profileDataPath(id), this.passwordTransfer(id))
+          const { cookies, records } = await unpackProfileState(archive, this.profiles.profileDataPath(id), this.passwordTransfer(id))
           await this.cookies.importCookies(id, cookies, { replace: true })
+          await applyCheckRecords(this.profiles, this.fingerprintChecks, id, records).catch((error) => {
+            this.logger?.error('团队窗口的检测记录没有放好', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+          })
           link.dataRev = record.data_rev
           this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: record.data_rev, cookies: cookies.length })
         } finally {
