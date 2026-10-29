@@ -162,7 +162,7 @@ try {
   await delay(800)
 
   // 7. The 代理 IP page's edit form opens with the proxy's latest check and IP 评分.
-  await run(`(() => { const item = [...document.querySelectorAll('.ant-menu-item, a, [role="menuitem"]')].find((node) => node.innerText?.trim().startsWith('代理 IP')); item?.click(); return Boolean(item) })()`)
+  await run(`(() => { const item = [...document.querySelectorAll('.fb-sidebar .fb-nav-item')].find((node) => node.innerText?.trim().startsWith('代理 IP')); item?.click(); return Boolean(item) })()`)
   await delay(1200)
   const opened = await run(`(() => {
     const line = [...document.querySelectorAll('tr')].find((node) => node.innerText.includes('198.51.100.31'))
