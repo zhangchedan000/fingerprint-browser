@@ -157,7 +157,7 @@ try {
   await delay(800)
   const shownAfter = { system: await rowText('系统语言'), voices: await rowText('语音'), timezone: await rowText('时区') }
   console.log('     after: ', JSON.stringify(shownAfter))
-  check(/fr-FR|Français|français|法语/.test(shownAfter.system), 'system language followed the country (still 跟随)')
+  check(/^随国家 · fr\b/.test(shownAfter.system), 'system language followed the country (still 跟随)')
   check(/Europe\/Paris/.test(shownAfter.timezone), 'time zone followed the country')
   check(/fr-fr/i.test(shownAfter.voices), 'voices chosen on their own (en-gb) moved to the new country too (fr-fr)')
   await run(`(() => { [...${drawer}.querySelectorAll('button')].find((node) => node.innerText.replace(/\\s/g, '') === '取消')?.click(); return true })()`)

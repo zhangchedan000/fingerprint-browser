@@ -164,7 +164,7 @@ export function evaluateFingerprint(input: {
   const add = (item: FingerprintCheckItem) => items.push(item)
 
   if (!engine.fingerprintKernel) {
-    add({ row: 'general', status: 'bad', message: '当前不是指纹内核，指纹设置不会生效；请在内核管理里下载或导入指纹内核' })
+    add({ row: 'general', status: 'bad', message: '当前不是指纹内核，指纹设置不会生效；请在内核管理里下载或导入指纹内核', fix: 'use-prism' })
   }
 
   // System, browser brand and version: what the UA and UA-CH say.
@@ -234,7 +234,8 @@ export function evaluateFingerprint(input: {
   } else if (fp.platform === 'macos' && /Direct3D|D3D11/.test(renderer)) {
     add({ row: 'gpu', status: 'bad', message: '系统是 macOS，显卡却是 Windows 的 Direct3D', fix: 'shuffle-gpu' })
   } else if (/SwiftShader|llvmpipe/i.test(renderer)) {
-    add({ row: 'gpu', status: 'warn', message: '显卡是软件渲染，真实电脑很少见' })
+    // This computer's own card renders in software (a virtual machine): a listed card fixes it.
+    add({ row: 'gpu', status: 'warn', message: '显卡是软件渲染，真实电脑很少见', ...(gpuReal ? { fix: 'shuffle-gpu' as const } : {}) })
   } else if (observed.webgpuVendor && !renderer.toLowerCase().includes(observed.webgpuVendor.toLowerCase())) {
     add({ row: 'gpu', status: 'warn', message: `WebGPU 报告的厂商 ${observed.webgpuVendor} 与 WebGL 不一致` })
   } else {
@@ -248,7 +249,7 @@ export function evaluateFingerprint(input: {
   if (observed.memory !== undefined) {
     add(observed.memory === wantedMemory
       ? { row: 'memory', status: 'ok', message: `内存 ${observed.memory} GB` }
-      : { row: 'memory', status: 'warn', message: `页面报告内存 ${observed.memory} GB，与设置的 ${wantedMemory} GB 不同：当前内核不支持设置内存` })
+      : { row: 'memory', status: 'warn', message: `页面报告内存 ${observed.memory} GB，与设置的 ${wantedMemory} GB 不同：当前内核不支持设置内存`, fix: 'set-memory', fixValue: String(observed.memory) })
   }
 
   // Noise surfaces: stable across reads, and different from every other window.
@@ -271,7 +272,7 @@ export function evaluateFingerprint(input: {
     } else if (twin && !real) {
       add({ row: surface, status: 'bad', message: `${name} 与窗口 ${twin.label} 相同，两个窗口会被关联`, fix: 'reseed' })
     } else if (twin) {
-      add({ row: surface, status: 'warn', message: `${name} 与窗口 ${twin.label} 相同：都用本机真实值，同一台电脑上会一样` })
+      add({ row: surface, status: 'warn', message: `${name} 与窗口 ${twin.label} 相同：都用本机真实值，同一台电脑上会一样`, fix: 'use-noise' })
     } else {
       add({ row: surface, status: 'ok', message: real ? `${name} 使用本机真实值 · ${first}` : `${name} 指纹 ${first}，与其他窗口都不同` })
     }

@@ -2546,5 +2546,7 @@
   "还没检测": "Ainda não verificado",
   "这个代理还没检测，检测后按 IP 配": "Este proxy ainda não foi verificado; ao verificar, tudo segue o IP",
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Todas as fontes instaladas neste computador; iguais em todas as janelas que as usam",
-  "链接只存在这个窗口；一个 IP 用到失效才取新的": "O link fica só nesta janela; um IP é usado até parar de funcionar, depois busca outro"
+  "链接只存在这个窗口；一个 IP 用到失效才取新的": "O link fica só nesta janela; um IP é usado até parar de funcionar, depois busca outro",
+  "改为每个窗口不同": "Diferente em cada janela",
+  "改用内核 {0}": "Usar o kernel {0}"
 }

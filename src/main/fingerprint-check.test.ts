@@ -108,4 +108,18 @@ describe('fingerprint check verdicts', () => {
   it('says when the page cannot fake the screen size and suggests the real one', () => {
     expect(row(check({ observed: { screen: [2560, 1440] } }), 'screen')[0]).toMatchObject({ status: 'bad', fix: 'use-real' })
   })
+
+  it('offers a one-click change for every mismatch a setting can fix', () => {
+    // Real values shared with another window: give this one its own.
+    const twin = check({ fingerprint: { disabledSpoofing: ['canvas'] }, others: [{ label: '#2 shop', observed: seen, disabledSpoofing: ['canvas'] }] })
+    expect(row(twin, 'canvas')[0]).toMatchObject({ status: 'warn', fix: 'use-noise' })
+    // A kernel that cannot set the memory: take what pages see.
+    expect(row(check({ observed: { memory: 16 } }), 'memory')[0]).toMatchObject({ status: 'warn', fix: 'set-memory', fixValue: '16' })
+    // This computer's own card renders in software: a listed card.
+    const software = check({ fingerprint: { gpu: undefined, disabledSpoofing: ['gpu'] }, observed: { webglRenderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)' } })
+    expect(row(software, 'gpu')[0]).toMatchObject({ status: 'warn', fix: 'shuffle-gpu' })
+    // Not a fingerprint kernel: an installed Prism kernel.
+    const plain = evaluateFingerprint({ fingerprint: fp, engine: { ...engine, fingerprintKernel: false }, observed: seen, expected, proxy: proxy as unknown as Parameters<typeof evaluateFingerprint>[0]['proxy'], usesProxy: true, others: [] })
+    expect(row(plain, 'general')[0]).toMatchObject({ status: 'bad', fix: 'use-prism' })
+  })
 })

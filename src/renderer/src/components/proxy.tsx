@@ -46,7 +46,8 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
 }
 
 /** One line describing a library proxy, for pickers. */
-export function proxyLabel(proxy: ProxyRecordView) {
+/** A library proxy in a list; `short` (the chosen one in a box) leaves out the user name. */
+export function proxyLabel(proxy: ProxyRecordView, short = false) {
   const details = [
     proxy.check?.ok ? [proxy.check.countryCode, proxy.check.ip].filter(Boolean).join(' ') : '',
     proxy.note,
@@ -54,7 +55,7 @@ export function proxyLabel(proxy: ProxyRecordView) {
   ].filter(Boolean)
   return (
     <span className="fb-proxy-option">
-      <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname) : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username ? ` · ${proxy.username}` : ''}`}</span>
+      <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname) : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username && !short ? ` · ${proxy.username}` : ''}`}</span>
       <small>{details.join(' · ')}</small>
     </span>
   )

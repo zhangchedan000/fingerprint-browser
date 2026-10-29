@@ -2546,5 +2546,7 @@
   "还没检测": "Chưa kiểm tra",
   "这个代理还没检测，检测后按 IP 配": "Proxy này chưa kiểm tra; kiểm tra xong sẽ đặt theo IP",
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Tất cả phông cài trên máy này; mọi cửa sổ dùng phông của máy đều giống nhau",
-  "链接只存在这个窗口；一个 IP 用到失效才取新的": "Liên kết chỉ lưu trong cửa sổ này; dùng một IP đến khi hỏng mới lấy cái mới"
+  "链接只存在这个窗口；一个 IP 用到失效才取新的": "Liên kết chỉ lưu trong cửa sổ này; dùng một IP đến khi hỏng mới lấy cái mới",
+  "改为每个窗口不同": "Đổi thành mỗi cửa sổ khác nhau",
+  "改用内核 {0}": "Dùng nhân {0}"
 }

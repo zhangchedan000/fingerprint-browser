@@ -306,7 +306,8 @@ function FieldError({ name }: { name: Array<string | number> | string }) {
 /** A fixed value the user can open to pick another (or "real"), plus a button that rolls a new one. */
 function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, label, wide }: {
   value: string | number
-  options: Array<{ value: string | number; label: string; disabled?: boolean } | { label: string; options: Array<{ value: string | number; label: string; disabled?: boolean }> }>
+  /** `short`: what the box shows once the option is chosen (the list shows `label`). */
+  options: Array<ChoiceOption | { label: string; options: ChoiceOption[] }>
   onChange: (value: never) => void
   onShuffle?: () => void
   shuffleDisabled?: boolean
@@ -323,6 +324,9 @@ function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, lab
         options={options}
         aria-label={label}
         popupMatchSelectWidth={wide ? false : undefined}
+        labelRender={({ value: chosen, label: full }) => options
+          .flatMap((option) => 'options' in option ? option.options : [option])
+          .find((option) => option.value === chosen)?.short ?? full}
       />
       {onShuffle && (
         <Button type="link" size="small" disabled={shuffleDisabled} onClick={onShuffle} aria-label={t("换一换")}>{t("换一换")}</Button>
@@ -330,6 +334,14 @@ function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, lab
     </Space>
   )
 }
+
+/** A chosen time zone: Windows' UTC offset and the zone, without Windows' long name. */
+function zoneShort(zone: string, label: ReactNode): ReactNode {
+  const offset = typeof label === 'string' ? label.match(/^\(UTC[^)]*\)/)?.[0] : undefined
+  return offset ? `${offset} ${zone}` : zone
+}
+
+type ChoiceOption = { value: string | number; label: string; short?: string; disabled?: boolean }
 
 /** A typed value with a Shuffle button (device name, MAC address). */
 function TextWithShuffle({ value, onChange, onShuffle, label }: { value: string; onChange: (value: string) => void; onShuffle: () => void; label: string }) {
@@ -569,6 +581,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       .map((choice) => ({
         value: choice.key,
         label: `${gpuLabel(choice)} · ${t("内核 {0}", choice.kernels.map(kernelListLabel).join('/'))}`,
+        short: choice.model,
         disabled: kernelGpus ? !available.has(choice.key) : false
       }))
       .sort((a, b) => Number(a.disabled) - Number(b.disabled))
@@ -1099,6 +1112,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       case 'webrtc-replace': return fp.webrtcPolicy === 'proxy_only' ? undefined : { label: t("改为替换"), apply: () => patchFingerprint({ webrtcPolicy: 'proxy_only' }) }
       case 'reseed': return stale ? undefined : { label: t("换一组"), apply: reseedNoise }
       case 'shuffle-gpu': return stale ? undefined : { label: t("换一块显卡"), apply: shuffleGpu }
+      case 'use-noise':
+        if (stale || !(item.row === 'canvas' || item.row === 'audio' || item.row === 'clientrects' || item.row === 'font')) return undefined
+        return fp.disabledSpoofing.includes(item.row) ? { label: t("改为每个窗口不同"), apply: () => setSpoofing(item.row as SpoofSurface, true) } : undefined
+      case 'set-memory': {
+        // A kernel that cannot set the memory: the setting takes what pages see.
+        const gb = Number(item.fixValue)
+        return (DEVICE_MEMORY_CHOICES as readonly number[]).includes(gb) && fp.deviceMemory !== gb
+          ? { label: t("改成 {0}", `${gb} GB`), apply: () => patchFingerprint({ deviceMemory: gb as DeviceMemoryGb }) }
+          : undefined
+      }
+      case 'use-prism': {
+        // The newest installed Prism kernel (prism7 and later).
+        const prism = kernels.filter((kernel) => kernel.installed && kernel.webrtcRelay).map((kernel) => kernel.version).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1)
+        return prism && kernelVersion !== prism ? { label: t("改用内核 {0}", kernelName(prism)), apply: () => form.setFieldValue('kernelVersion', prism) } : undefined
+      }
       case 'use-real':
         if (item.row === 'screen') return fp.screenSource === 'host' ? undefined : { label: t("改为本机真实"), apply: () => chooseScreen('host') }
         if (item.row === 'gpu') return gpuReal ? undefined : { label: t("改为本机真实"), apply: () => chooseGpu('real') }
@@ -1299,6 +1327,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
                   label: proxyLabel(item)
                 }))}
+                labelRender={({ value, label }) => {
+                  const chosen = proxies.find((item) => item.id === value)
+                  return chosen ? proxyLabel(chosen, true) : label
+                }}
               />
             </Form.Item>
           </Row>
@@ -1554,7 +1586,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     { value: 'none', label: t("不指定") },
     ...cpuFamilies().map(({ family, cpus }) => ({
       label: family,
-      options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}` }))
+      options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}`, short: cpu.model }))
     }))
   ]
   const languageOptions = [
@@ -1597,6 +1629,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const screenFix: QuickFix | undefined = usualScreen
     ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
     : undefined
+  // Larger than this computer's monitor: the largest offered size that fits it (one desktops with this card have, when there is one).
+  const fittingScreens = screenLarger
+    ? screenChoices(floor, hostScale())
+      .filter((choice) => choice.physical.width <= hostPhysical.width && choice.physical.height <= hostPhysical.height)
+      .sort((x, y) => y.physical.width * y.physical.height - x.physical.width * x.physical.height)
+    : []
+  const fittingScreen = (gpu?.model && !gpuReal ? usualScreenFor(gpu.model, fittingScreens) : undefined) ?? fittingScreens[0]
+  // None offered fits (a monitor smaller than every common size): this computer's own.
+  const largerFix: QuickFix | undefined = !screenLarger ? undefined : fittingScreen
+    ? { label: t("改成 {0}", `${fittingScreen.physical.width} × ${fittingScreen.physical.height}`), apply: () => chooseScreen(`${fittingScreen.width}x${fittingScreen.height}`) }
+    : { label: t("改为本机真实"), apply: () => chooseScreen('host') }
 
   const fingerprint = (
     <div className="fb-editor-section">
@@ -1703,6 +1746,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               ...(!fp.region ? [{ value: 'custom', label: t("自定义") }] : []),
               ...regions.map((item) => ({ value: item.code, label: `${item.name} · ${ownLanguageName(item.locale.uiLocale)} · ${item.zone}` }))
             ]}
+            // Once chosen, the country alone: its language and time zone are the rows below.
+            labelRender={({ value, label }) => typeof value === 'string' && /^[A-Z]{2}$/.test(value) ? regionName(value) : label}
             aria-label={t("国家/地区")}
           />
           <span className={`fb-region-source${fromIp ? ' is-ip' : ''}`}>{fromIp ? t("基于 IP 生成") : t("手动选择")}</span>
@@ -1719,7 +1764,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row label={t("时区")} check={checkFor('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
-          <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} aria-label={t("时区")} />
+          <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} labelRender={({ value, label }) => zoneShort(String(value), label)} aria-label={t("时区")} />
         </Form.Item>
         {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
       </Row>
@@ -1735,6 +1780,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followUi(`${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
             ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
+          labelRender={({ value, label }) => value === 'auto' ? followUi(autoUiLocale) : label}
           aria-label={t("系统语言")}
         />
       </Row>
@@ -1760,6 +1806,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
             </span>
           )}
+          labelRender={({ value }) => value === countryLocale?.language && fp.region ? `${value} · ${t("{0}默认", regionName(fp.region))}` : String(value)}
           aria-label={t("浏览器语言")}
         />
         {languageMismatch && <RowWarning fix={languageFix}>{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</RowWarning>}
@@ -1784,6 +1831,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             className="fb-fp-select fb-fp-select-wide"
             value={fp.fontSource ?? 'language'}
             onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
+            labelRender={({ value, label }) => value === 'language' ? followSystem(windowUiLocale) : label}
             options={[
               { value: 'language', label: followSystem(`${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
               { value: 'host', label: t("本机真实字体") }
@@ -1827,6 +1875,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followSystem(voicesLabel(autoVoicesLocale)) },
             ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: voicesLabel(item.locale) }))
           ]}
+          labelRender={({ value }) => value === 'auto' ? followSystem(autoVoicesLocale) : String(value)}
           aria-label={t("语音")}
         />
         {fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale && <RowWarning fix={followSystemLanguage('voicesLocale')}>{t("真实 Windows 的语音一般和系统语言一致")}</RowWarning>}
@@ -1842,6 +1891,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             { value: 'auto', label: followSystem(`${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
             ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
+          labelRender={({ value, label }) => value === 'auto' ? followSystem(autoMediaLocale) : label}
           aria-label={t("媒体设备名")}
         />
         {fp.mediaLocale && fp.mediaLocale !== autoMediaLocale && <RowWarning fix={followSystemLanguage('mediaLocale')}>{t("真实 Windows 的设备名和系统语言一致")}</RowWarning>}
@@ -1959,7 +2009,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </RowWarning>
           ) : screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
           {screenLarger && (
-            <RowWarning>
+            <RowWarning fix={largerFix}>
               {t("这台电脑的屏幕（{0} × {1}）比所选分辨率小：最大化只能铺满这台电脑的屏幕；不要用网页全屏，全屏后网页比屏幕尺寸小，网站能看出来", hostPhysical.width, hostPhysical.height)}
             </RowWarning>
           )}
@@ -1989,6 +2039,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           className="fb-fp-select fb-fp-select-wide"
           value={fp.mediaDevices ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
+          // Once chosen, what is plugged in; the counts are in the list.
+          labelRender={({ value, label }) => {
+            const set = value === 'auto' ? autoMediaDevices(fp.seed >>> 0, gpu?.model) : String(value)
+            const setup = MEDIA_SETUPS.find((item) => item.set === set)
+            if (!setup) return label
+            return value === 'auto' ? t("自动 · {0}", t(MEDIA_KIND_LABELS[setup.kind])) : t(MEDIA_KIND_LABELS[setup.kind])
+          }}
           options={[
             { value: 'auto', label: t("自动 · {0}", mediaLabel(autoMediaDevices(fp.seed >>> 0, gpu?.model))) },
             ...MEDIA_PRESETS.map((value) => ({ value, label: mediaLabel(value) })),

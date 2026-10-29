@@ -512,6 +512,7 @@ export type FingerprintCheckRow =
 
 /** One-click fixes the editor can apply for a result. */
 export type FingerprintCheckFix = 'follow-ip' | 'set-timezone' | 'webrtc-replace' | 'reseed' | 'shuffle-gpu' | 'use-real'
+  | 'use-noise' | 'set-memory' | 'use-prism'
 
 export interface FingerprintCheckItem {
   row: FingerprintCheckRow
@@ -519,7 +520,7 @@ export interface FingerprintCheckItem {
   /** Chinese source text, translated in the renderer. */
   message: string
   fix?: FingerprintCheckFix
-  /** The value the fix sets (set-timezone: the IP's time zone). */
+  /** The value the fix sets (set-timezone: the IP's time zone; set-memory: the GB the page reports). */
   fixValue?: string
 }
 

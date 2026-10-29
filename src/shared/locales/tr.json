@@ -2546,5 +2546,7 @@
   "还没检测": "Henüz denetlenmedi",
   "这个代理还没检测，检测后按 IP 配": "Bu proxy henüz denetlenmedi; denetlenince IP’ye göre ayarlanır",
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Bu bilgisayardaki tüm yazı tipleri; bunları kullanan her pencerede aynı",
-  "链接只存在这个窗口；一个 IP 用到失效才取新的": "Bağlantı yalnızca bu pencerede kalır; bir IP çalışmayı bırakana kadar kullanılır, sonra yenisi alınır"
+  "链接只存在这个窗口；一个 IP 用到失效才取新的": "Bağlantı yalnızca bu pencerede kalır; bir IP çalışmayı bırakana kadar kullanılır, sonra yenisi alınır",
+  "改为每个窗口不同": "Her pencerede farklı yap",
+  "改用内核 {0}": "{0} çekirdeğini kullan"
 }
