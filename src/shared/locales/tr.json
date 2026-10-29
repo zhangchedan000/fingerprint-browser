@@ -2504,5 +2504,9 @@
   "待检测": "denetlenecek",
   "上面是网站读到的值 · {0}": "Yukarıda: sitelerin okuduğu değer · {0}",
   "设置已修改，值待重新检测": "Ayarlar değişti; değeri yeniden denetleyin",
-  "还没检测，检测后在上面显示网站读到的值": "Henüz denetlenmedi; denetimden sonra sitelerin okuduğu değer yukarıda görünür"
+  "还没检测，检测后在上面显示网站读到的值": "Henüz denetlenmedi; denetimden sonra sitelerin okuduğu değer yukarıda görünür",
+  "随 IP 所在国家 · {0}": "IP’nin ülkesine göre · {0}",
+  "随国家 · {0}": "Ülkeye göre · {0}",
+  "按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配": "Proxy kitaplığında bu IP’nin son denetimine göre ayarlandı ({0}); bu pencerede proxy’yi denetlemek yeni sonuca göre yeniden ayarlar",
+  "这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项": "Bu proxy’nin ülkesi henüz bilinmiyor; aşağıdakileri IP’ye göre ayarlamak için Proxy ayarlarında proxy’yi denetleyin"
 }

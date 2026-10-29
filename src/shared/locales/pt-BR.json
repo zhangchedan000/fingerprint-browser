@@ -2504,5 +2504,9 @@
   "待检测": "a verificar",
   "上面是网站读到的值 · {0}": "Acima: o valor que os sites leem · {0}",
   "设置已修改，值待重新检测": "Configurações alteradas; verifique o valor de novo",
-  "还没检测，检测后在上面显示网站读到的值": "Ainda não verificado; após verificar, o valor que os sites leem aparece acima"
+  "还没检测，检测后在上面显示网站读到的值": "Ainda não verificado; após verificar, o valor que os sites leem aparece acima",
+  "随 IP 所在国家 · {0}": "Pelo país do IP · {0}",
+  "随国家 · {0}": "Pelo país · {0}",
+  "按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配": "Definido pela última verificação deste IP na biblioteca de proxies ({0}); verificar o proxy nesta janela redefine pelo novo resultado",
+  "这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项": "O país deste proxy ainda não é conhecido; verifique o proxy em Configurações de proxy para definir os itens abaixo pelo IP"
 }

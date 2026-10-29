@@ -448,6 +448,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
   const [fontPacks, setFontPacks] = useState<FontPackStatus>()
   const [checkError, setCheckError] = useState('')
+  /** A new window's country picked by hand: a proxy picked afterwards leaves it as it is. */
+  const countryByHand = useRef(false)
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
@@ -497,6 +499,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setTab(profile ? lastTabs.get(profile.id) ?? 'basic' : 'basic')
     if (!profile) forgetScroll('editor:new:')
     proxyCheckRun.current += 1
+    countryByHand.current = false
     setTestingProxy(false)
     setProxyResult(profile?.proxyCheck ?? null)
     setProxyCheckedAt(profile?.proxyCheck?.checkedAt)
@@ -575,7 +578,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const cookiePreview = useMemo(() => countPastedCookies(cookieText), [cookieText])
   const regions = useMemo(regionChoices, [])
   // The exit country this window's last check saw (shown as its result), against the country picked by hand.
-  const lastCheck = proxyResult?.ok ? proxyResult : undefined
+  /**
+   * A new window's library proxy as last checked (on the 代理 IP page or by another window): its
+   * country fills the window in until this window checks the proxy itself; its result is not shown here.
+   */
+  const libraryCheck = !profile && libraryProxy && !libraryProxy.apiUrl && libraryProxy.check?.ok ? libraryProxy.check : undefined
+  const lastCheck = proxyResult ? (proxyResult.ok ? proxyResult : undefined) : libraryCheck
   const exitCountry = lastCheck?.countryCode
   // A rotating proxy or databases that disagree say nothing reliable about the country (its own warning shows).
   const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
@@ -602,9 +610,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       void chooseByIp()
       return
     }
-    if (value === 'custom') { patchFingerprint({ networkIdentityMode: 'manual' }); return }
+    if (value === 'custom') { countryByHand.current = true; patchFingerprint({ networkIdentityMode: 'manual' }); return }
     const item = regions.find((entry) => entry.code === value)
     if (!item) return
+    countryByHand.current = true
     patchFingerprint({
       networkIdentityMode: 'manual',
       region: item.code,
@@ -906,6 +915,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       form.setFieldValue('tunnel', profile?.tunnel && changed.proxyId === profile.proxyId ? { ...profile.tunnel } : undefined)
       setProxyCheckedAt(own?.checkedAt)
       setProxyEdited(false)
+      // A new window takes the country the picked proxy was last checked in, unless one was picked by hand.
+      const picked = proxies.find((item) => item.id === changed.proxyId)
+      if (!profile && !countryByHand.current && picked && !picked.apiUrl && picked.check?.ok) fixToIp(picked.check)
       return
     }
     setProxyEdited(true)
@@ -935,6 +947,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (!fixed) return false
     // Everything under the country follows it again (voices and device names through the system language).
     patchFingerprint({ ...fixed, voicesLocale: undefined, mediaLocale: undefined })
+    countryByHand.current = false
     return true
   }
 
@@ -1553,11 +1566,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const fontScript = windowsFontScript(windowUiLocale)
   const autoVoicesLocale = voiceLocaleForLanguage(windowUiLocale)
   const autoMediaLocale = mediaLocaleFor(windowUiLocale)
+  const countryLocale = localeForCountry(fp.region)
+  // What the language rows follow in the end: the country (from the IP or picked) while the browser
+  // language is still the country's own, else the browser language; below the system language, that
+  // language when it was picked on its own.
+  const languageFromCountry = Boolean(fp.region && countryLocale?.language === fp.language)
+  const followUi = (value: string) => languageFromCountry
+    ? fromIp ? t("随 IP 所在国家 · {0}", value) : t("随国家 · {0}", value)
+    : t("跟随浏览器语言 · {0}", value)
+  const followSystem = (value: string) => fp.uiLocale ? t("跟随系统语言 · {0}", value) : followUi(value)
   const voicesLabel = (locale: string) => `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
   // A value picked on its own that does not fit the country: pointed out, not stopped.
   const countryZones = fp.platform === 'windows' && fp.region ? countryWindowsZones(fp.region, getLocale()) : []
   const timezoneMismatch = countryZones.length > 0 && !countryZones.some((zone) => zone.iana === fp.timezone)
-  const countryLocale = localeForCountry(fp.region)
   const languageMismatch = countryLocale && fp.language && fp.region && !languageFitsCountry(fp.language, fp.region)
     ? { expected: countryLocale.language }
     : undefined
@@ -1659,11 +1680,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </div>
       <Row
         label={t("国家/地区")}
-        hint={fromIp
-          ? profile
-            ? t("按代理 IP 所在国家生成，已固定；IP 变了只提醒，不自动改")
-            : t("按检测到的代理 IP 配好下面几项；保存后固定，以后 IP 变了只提醒")
-          : t("这台电脑在哪个国家；选了它，下面几项自动配好，也能单独改")}
+        hint={!profile && libraryProxy && !libraryProxy.apiUrl && !libraryCheck && !proxyResult && !countryByHand.current
+          ? t("这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项")
+          : fromIp
+            ? profile
+              ? t("按代理 IP 所在国家生成，已固定；IP 变了只提醒，不自动改")
+              : !proxyResult && libraryCheck && libraryCheck.countryCode?.toUpperCase() === fp.region
+                ? t("按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配", relativeTime(libraryCheck.checkedAt, getLocale()))
+                : t("按检测到的代理 IP 配好下面几项；保存后固定，以后 IP 变了只提醒")
+            : t("这台电脑在哪个国家；选了它，下面几项自动配好，也能单独改")}
       >
         <div className="fb-region-line">
           <Select
@@ -1706,7 +1731,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           // Voices and device names follow the system language again.
           onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value, voicesLocale: undefined, mediaLocale: undefined })}
           options={[
-            { value: 'auto', label: t("跟随浏览器语言 · {0}", `${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
+            { value: 'auto', label: followUi(`${ownLanguageName(autoUiLocale)} · ${autoUiLocale}`) },
             ...CHROME_UI_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
           aria-label={t("系统语言")}
@@ -1759,7 +1784,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             value={fp.fontSource ?? 'language'}
             onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
             options={[
-              { value: 'language', label: t("跟随系统语言 · {0}", `${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
+              { value: 'language', label: followSystem(`${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
               { value: 'host', label: t("本机真实字体") }
             ]}
           />
@@ -1798,7 +1823,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           value={fp.voicesLocale ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
           options={[
-            { value: 'auto', label: t("跟随系统语言 · {0}", voicesLabel(autoVoicesLocale)) },
+            { value: 'auto', label: followSystem(voicesLabel(autoVoicesLocale)) },
             ...WINDOWS_VOICE_LOCALES.map((item) => ({ value: item.locale, label: voicesLabel(item.locale) }))
           ]}
           aria-label={t("语音")}
@@ -1813,7 +1838,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           value={fp.mediaLocale ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
           options={[
-            { value: 'auto', label: t("跟随系统语言 · {0}", `${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
+            { value: 'auto', label: followSystem(`${ownLanguageName(autoMediaLocale)} · ${autoMediaLocale}`) },
             ...MEDIA_LOCALES.map((locale) => ({ value: locale, label: `${ownLanguageName(locale)} · ${locale}` }))
           ]}
           aria-label={t("媒体设备名")}

@@ -2504,5 +2504,9 @@
   "待检测": "chờ kiểm tra",
   "上面是网站读到的值 · {0}": "Ở trên: giá trị trang web đọc được · {0}",
   "设置已修改，值待重新检测": "Đã đổi cài đặt; kiểm tra lại giá trị",
-  "还没检测，检测后在上面显示网站读到的值": "Chưa kiểm tra; sau khi kiểm tra, giá trị trang web đọc được hiện ở trên"
+  "还没检测，检测后在上面显示网站读到的值": "Chưa kiểm tra; sau khi kiểm tra, giá trị trang web đọc được hiện ở trên",
+  "随 IP 所在国家 · {0}": "Theo quốc gia của IP · {0}",
+  "随国家 · {0}": "Theo quốc gia · {0}",
+  "按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配": "Đặt theo lần kiểm tra gần nhất của IP này trong thư viện proxy ({0}); kiểm tra proxy trong cửa sổ này sẽ đặt lại theo kết quả mới",
+  "这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项": "Chưa biết quốc gia của proxy này; kiểm tra proxy trong Cài đặt proxy để đặt các mục dưới theo IP"
 }

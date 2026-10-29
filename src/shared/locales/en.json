@@ -2504,5 +2504,9 @@
   "待检测": "to be checked",
   "上面是网站读到的值 · {0}": "Above: the value websites read · {0}",
   "设置已修改，值待重新检测": "Settings changed; check again for the value",
-  "还没检测，检测后在上面显示网站读到的值": "Not checked yet; the value websites read appears above after a check"
+  "还没检测，检测后在上面显示网站读到的值": "Not checked yet; the value websites read appears above after a check",
+  "随 IP 所在国家 · {0}": "From the IP's country · {0}",
+  "随国家 · {0}": "From the country · {0}",
+  "按代理库里这个 IP 上次的检测结果配好（{0}）；在这个窗口点「检测代理」会按新结果再配": "Set from this IP's last check in the proxy library ({0}); checking the proxy in this window sets them again from the new result",
+  "这个代理还没检测出国家；在「代理设置」点「检测代理」后按 IP 配好下面几项": "This proxy's country is not known yet; click Check proxy under Proxy settings to set the items below from its IP"
 }
