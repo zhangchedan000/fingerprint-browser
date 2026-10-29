@@ -68,18 +68,19 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(store.get(a.id).proxy.host).toBe('198.51.100.7')
     expect(store.get(b.id).proxy).toMatchObject({ host: '198.51.100.7', password: 'new' })
 
-    // A check is the window's own: B, on the same proxy, is not checked by it; the proxy page shows it.
+    // A library proxy's latest check is every window's on it, and the proxy page's.
     await store.setProxyCheck(a.id, check('198.51.100.7'))
     expect(store.get(a.id).proxyCheck?.ip).toBe('198.51.100.7')
-    expect(store.get(b.id).proxyCheck).toBeUndefined()
+    expect(store.get(b.id).proxyCheck?.ip).toBe('198.51.100.7')
     expect(store.getProxy(a.proxyId).check?.ip).toBe('198.51.100.7')
+    expect(changed).toContain(b.id)
 
     await store.updateGroup(a.groupId, { name: 'G2' })
     expect(store.get(b.id).group).toBe('G2')
     expect(changed).toContain(b.id)
   })
 
-  it('gives a window its library proxy\'s last check once, only when no other window uses the proxy', async () => {
+  it('shows a library proxy\'s latest check, from the proxy page too, in every window using it', async () => {
     const path = await vault()
     const store = await open(path)
     const [alone] = await store.createMany([draft('Alone', { proxy: PROXY })])
@@ -90,8 +91,30 @@ describe('windows refer to the proxy and group libraries', () => {
     await store.setLibraryProxyCheck(b.proxyId, check('203.0.113.50'))
     const reopened = await open(path)
     expect(reopened.get(alone.id).proxyCheck?.ip).toBe('203.0.113.9')
-    expect(reopened.get(b.id).proxyCheck).toBeUndefined()
-    expect(reopened.get(c.id).proxyCheck).toBeUndefined()
+    expect(reopened.get(b.id).proxyCheck?.ip).toBe('203.0.113.50')
+    expect(reopened.get(c.id).proxyCheck?.ip).toBe('203.0.113.50')
+  })
+
+  it('keeps one IP 评分 per library proxy, finds typed proxies in the library, and forgets both on untick', async () => {
+    const path = await vault()
+    const store = await open(path)
+    const [a] = await store.createMany([draft('A', { proxy: PROXY })])
+    const reading = { checkedAt: '2026-10-29T08:00:00.000Z', checkIp: '203.0.113.9', baseline: { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', score: '82' } }
+    await store.setLibraryIpSites(a.proxyId, reading)
+    const reopened = await open(path)
+    expect(reopened.getProxy(a.proxyId).ipSites?.baseline.score).toBe('82')
+    expect(reopened.findLibraryProxy({ ...PROXY })?.id).toBe(a.proxyId)
+    expect(reopened.findLibraryProxy({ ...PROXY, password: 'other' })).toBeUndefined()
+
+    await reopened.setProxyCheck(a.id, check('203.0.113.9'))
+    await reopened.forgetProxyCheck({ profileId: a.id, windowCheck: null, proxyId: a.proxyId, libraryCheck: null, libraryIpSites: null })
+    expect(reopened.get(a.id).proxyCheck).toBeUndefined()
+    expect(reopened.getProxy(a.proxyId).ipSites).toBeUndefined()
+
+    // Another address: the old reading says nothing about it.
+    await reopened.setLibraryIpSites(a.proxyId, reading)
+    await reopened.updateProxy(a.proxyId, { ...PROXY, host: '198.51.100.7', note: '' })
+    expect(reopened.getProxy(a.proxyId).ipSites).toBeUndefined()
   })
 
   it('keeps the number and creation time a window has elsewhere when the number is free here', async () => {
@@ -217,7 +240,8 @@ describe('windows refer to the proxy and group libraries', () => {
     expect(store.listProxies()).toHaveLength(1)
     expect(a.proxyId).toBe(b.proxyId)
     expect(a.proxy.password).toBe('secret')
-    expect(a.proxyCheck?.ip).toBe('203.0.113.9')
+    // One proxy now: its latest check is both windows'.
+    expect(a.proxyCheck?.ip).toBe('203.0.113.10')
     expect(b.proxyCheck?.ip).toBe('203.0.113.10')
     expect(store.listGroups().map((group) => group.name)).toEqual(['美区'])
     expect(c).toMatchObject({ proxyId: '', groupId: '', proxyCheck: { ip: '192.0.2.1' } })

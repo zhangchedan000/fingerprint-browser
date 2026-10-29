@@ -163,7 +163,14 @@ const api: BrowserApi = {
     update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
     remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
     check: (id, route) => ipcRenderer.invoke('proxy:check', id, route),
-    password: (id) => ipcRenderer.invoke('proxy:password', id)
+    password: (id) => ipcRenderer.invoke('proxy:password', id),
+    match: (config) => ipcRenderer.invoke('proxy:match', config),
+    keptIpSites: (target, wait) => ipcRenderer.invoke('proxy:kept-ip-sites', target, wait),
+    onChanged: (listener: () => void) => {
+      const handler = (): void => listener()
+      ipcRenderer.on('proxy:changed', handler)
+      return () => ipcRenderer.removeListener('proxy:changed', handler)
+    }
   },
   groups: {
     list: () => ipcRenderer.invoke('groups:list'),

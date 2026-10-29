@@ -1,6 +1,7 @@
 import { Form, Input, InputNumber, Modal, Radio, Typography } from 'antd'
+import { relativeTime } from '../../components/format'
 import { useEffect, useRef, useState } from 'react'
-import { t, translateMessage as mt } from '../../../../shared/i18n'
+import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { PASTE_PLACEHOLDER, parsePastedProxy, pastedProxySummary, type PastedProxy } from '../../../../shared/proxy-paste'
 import type { ProxyDraft, ProxyRecordView, ProxyTestResult, TunnelRoute } from '../../../../shared/types'
 import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
@@ -26,11 +27,14 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
   const [pasteError, setPasteError] = useState('')
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
   const [result, setResult] = useState<ProxyTestResult | null>(null)
+  // When the shown result was checked; a saved proxy opens with its latest check from anywhere.
+  const [checkedAt, setCheckedAt] = useState<string>()
   // A check that finishes after the dialog was closed and opened again is dropped.
   const checkRun = useRef(0)
   const showResult = (run: number, next: ProxyTestResult) => {
     if (run !== checkRun.current) return
     setResult(next)
+    setCheckedAt(new Date().toISOString())
     // IP 评分 of the exit IP, as in the window editor.
     if (next.ok) void ipScore.read()
     else ipScore.reset()
@@ -75,8 +79,12 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     setPasteError('')
     setPasted(null)
     checkRun.current += 1
-    setResult(null)
-    ipScore.reset()
+    // The proxy's latest check and IP 评分, wherever they were made (a window, this page); one still being read comes in.
+    const latest = proxy && !proxy.apiUrl ? proxy.check : undefined
+    setResult(latest ?? null)
+    setCheckedAt(latest?.checkedAt)
+    if (proxy && !proxy.apiUrl) void ipScore.follow({ proxyId: proxy.id }, latest?.ip)
+    else ipScore.reset()
     return () => { current = false }
   }, [open, proxy, form])
 
@@ -181,6 +189,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
         </Form.Item>
         <ProxyTestButton
           result={result}
+          note={checkedAt ? t("检测于 {0}", relativeTime(checkedAt, getLocale(), '')) : undefined}
           aside={ipScore.panel(result?.ok ? result.ip : undefined)}
           onTest={async () => {
             const run = ++checkRun.current

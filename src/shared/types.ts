@@ -217,6 +217,8 @@ export interface ProxyRecord {
   updatedAt: string
   /** Latest check of this proxy, shared by every window that uses it. */
   check?: ProxyCheckSummary
+  /** IP 评分 of that check's exit IP, shared the same way. */
+  ipSites?: import('./ip-sites').IpSiteRecord
   /** See ProxyConfig.apiUrl. */
   apiUrl?: string
   /** 网络加速 used when this proxy is checked, and given to a window when the proxy is assigned to it. */
@@ -228,6 +230,8 @@ export type ProxyRecordView = Omit<ProxyRecord, 'password'> & {
   passwordStored: boolean
   /** Windows that use this proxy, derived from the windows' proxyId. */
   profileIds: string[]
+  /** Its IP 评分 is being read now (it carries on when the page that started it is closed). */
+  ipSitesPending?: boolean
 }
 
 export interface ProxyDraft {
@@ -507,6 +511,8 @@ export interface ProxyTestResult {
   retried?: boolean
   exitChanged?: boolean
   previousIp?: string
+  /** A typed proxy that is in the 代理 IP library already: the check was saved on that entry. */
+  libraryProxyId?: string
 }
 
 /**
@@ -520,6 +526,8 @@ export interface ForgetProxyCheck {
   libraryCheck?: ProxyCheckSummary | null
   proxy?: ProxyConfig
   ipSites?: import('./ip-sites').IpSiteRecord | null
+  /** The library proxy's IP 评分 (with proxyId). */
+  libraryIpSites?: import('./ip-sites').IpSiteRecord | null
 }
 
 export interface ProxyCheckSummary extends ProxyTestResult {
@@ -893,6 +901,15 @@ export interface BrowserApi {
     check: (id: string, route?: TunnelRoute) => Promise<ProxyRecordView>
     /** The saved password of a library proxy, shown in its edit form behind the eye button. */
     password: (id: string) => Promise<string>
+    /** The library proxy a typed one is (same address, account and password), if any. */
+    match: (config: ProxyConfig) => Promise<ProxyRecordView | null>
+    /**
+     * The IP 评分 kept for a library proxy or a window (a window on a library proxy has the proxy's).
+     * pending: one is being read now; with wait, the answer comes once it is done.
+     */
+    keptIpSites: (target: { proxyId?: string; profileId?: string }, wait?: boolean) => Promise<{ record: import('./ip-sites').IpSiteRecord | null; pending: boolean }>
+    /** A library proxy's check or IP 评分 changed (from anywhere). */
+    onChanged: (listener: () => void) => () => void
   }
   /** The group library. Windows refer to these groups by id. */
   groups: {

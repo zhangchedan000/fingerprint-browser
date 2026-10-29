@@ -29,6 +29,25 @@ export function useIpScore(source: { draft: () => ProfileDraft; profileId?: stri
     setState(record ? { record } : {})
   }
 
+  /**
+   * The reading kept for a library proxy or a window, about `checkIp` (the IP shown). One still being
+   * read (by any page, for that proxy) shows as reading and comes in when it is done.
+   */
+  async function follow(target: { proxyId?: string; profileId?: string }, checkIp?: string): Promise<void> {
+    const current = ++run.current
+    const fits = (record: IpSiteRecord | null) => record && (!checkIp || !record.checkIp || record.checkIp === checkIp) ? { record } : {}
+    try {
+      const kept = await window.browserApi.proxy.keptIpSites(target, false)
+      if (current !== run.current) return
+      setState({ ...fits(kept.record), ...(kept.pending ? { loading: true } : {}) })
+      if (!kept.pending) return
+      const done = await window.browserApi.proxy.keptIpSites(target, true)
+      if (current === run.current) setState(fits(done.record))
+    } catch {
+      if (current === run.current) setState({})
+    }
+  }
+
   /** Shows a kept reading if nothing newer started since `startedAt` (a value of `token()`). */
   function showKept(record: IpSiteRecord, startedAt: number): void {
     if (startedAt === run.current) setState({ record })
@@ -45,5 +64,5 @@ export function useIpScore(source: { draft: () => ProfileDraft; profileId?: stri
     />
   )
 
-  return { record: state.record, read, reset, showKept, token: () => run.current, panel }
+  return { record: state.record, loading: state.loading === true, read, follow, reset, showKept, token: () => run.current, panel }
 }

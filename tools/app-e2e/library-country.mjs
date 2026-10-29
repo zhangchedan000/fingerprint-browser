@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * A new window picking a library proxy that was checked before takes that IP's country (time zone,
- * languages) without a check of its own, and still shows no check result; a country picked by hand
- * first stays, with the mismatch pointed out. The language rows say what they follow (国家 · language · code).
+ * languages) without a check of its own, and shows that check and its IP 评分 (the proxy's latest,
+ * shared by every window on it); typing the same proxy does too, and so does the proxy's edit form
+ * on the 代理 IP page. A country picked by hand first stays, with the mismatch pointed out. The
+ * language rows say what they follow (国家 · language · code).
  *
  *   npm run build && node tools/app-e2e/library-country.mjs        (Linux: xvfb-run -a …)
  */
@@ -39,7 +41,10 @@ const result = (countryCode, country, timezone, latitude, longitude) => ({
   ok: true, latencyMs: 120, ip: '203.0.113.9', countryCode, country, timezone, latitude, longitude, checkedAt
 })
 for (const proxy of stored.proxies) {
-  if (proxy.id === ids.mx) proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.13)
+  if (proxy.id === ids.mx) {
+    proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.13)
+    proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', ip: '203.0.113.9', score: '82', scoreOf: '100', scoreKind: 'quality', countryCode: 'MX' } }
+  }
   if (proxy.id === ids.us) proxy.check = result('US', 'United States', 'America/Chicago', 41.88, -87.63)
 }
 await writeFile(file, JSON.stringify(stored))
@@ -88,15 +93,18 @@ try {
     await choose('选择代理', host)
   }
   const proxyCard = () => run(`${drawer}.innerText.replace(/\\s+/g, ' ')`)
-  // The select's own line names the library proxy's last IP; a result of this window would show below 检测代理.
-  const noResult = async () => { const text = await proxyCard(); return !text.slice(text.indexOf('检测代理')).includes('203.0.113.9') }
+  // The exit IP card (below 出口 IP): the proxy's latest check, marked as shared, with its IP 评分.
+  const exitCard = async () => { const text = await proxyCard(); return text.slice(text.indexOf('出口 IP')) }
 
   // 1. Nothing picked by hand: the checked proxy's country fills the window.
   await openNew()
   await pickProxy('198.51.100.31')
   const mx = await rowText('网络身份')
   check(mx.includes('基于 IP 生成') && mx.includes('墨西哥') && mx.includes('America/Mexico_City'), `墨西哥代理 → ${mx}`)
-  check(await noResult(), 'no check result shown in this window')
+  await delay(800)
+  const shared = await exitCard()
+  check(shared.includes('203.0.113.9') && shared.includes('代理 IP 库里这个代理最近一次的检测'), `shared check shown: ${shared.slice(0, 300)}`)
+  check(/评分\s*82|82\s*\/\s*100|\b82\b/.test(shared), `shared IP 评分 shown: ${shared.slice(0, 400)}`)
   await tab('指纹设置')
   const region = await rowText('国家/地区')
   check(region.includes('按代理库上次检测的 IP 配好'), `country hint: ${region}`)
@@ -139,6 +147,35 @@ try {
   await tab('指纹设置')
   const alert = await run(`${drawer}.innerText.includes('代理 IP 在墨西哥，窗口是日本')`)
   check(alert, 'mismatch alert shown')
+  await click('取 消', drawer) || await click('取消', drawer)
+  await delay(800)
+
+  // 6. The same proxy typed (pasted) into a new window: the library entry's latest check shows.
+  await openNew()
+  await tab('代理设置')
+  await run(`(() => { const box = ${drawer}.querySelector('textarea.fb-paste'); box.focus(); return true })()`)
+  await instance.client.send('Input.insertText', { text: 'socks5://a:b@198.51.100.31:1080' })
+  await delay(1500)
+  const typed = await exitCard()
+  check(typed.includes('203.0.113.9') && typed.includes('代理 IP 库里这个代理最近一次的检测'), `typed library proxy shows its check: ${typed.slice(0, 300)}`)
+  await click('取 消', drawer) || await click('取消', drawer)
+  await delay(800)
+
+  // 7. The 代理 IP page's edit form opens with the proxy's latest check and IP 评分.
+  await run(`(() => { const item = [...document.querySelectorAll('.ant-menu-item, a, [role="menuitem"]')].find((node) => node.innerText?.trim().startsWith('代理 IP')); item?.click(); return Boolean(item) })()`)
+  await delay(1200)
+  const opened = await run(`(() => {
+    const line = [...document.querySelectorAll('tr')].find((node) => node.innerText.includes('198.51.100.31'))
+    const edit = line && [...line.querySelectorAll('button')].find((node) => node.innerText.trim() === '编辑')
+    edit?.click()
+    return Boolean(edit)
+  })()`)
+  check(opened, 'edit form of the checked proxy opened')
+  await delay(1500)
+  const form = await run(`(document.querySelector('.ant-modal-wrap:not([style*="display: none"]) .ant-modal') ?? document.body).innerText.replace(/\s+/g, ' ')`)
+  const formExit = form.slice(form.indexOf('出口 IP'))
+  check(formExit.includes('203.0.113.9') && formExit.includes('检测于') && !formExit.includes('还没检测'), `edit form shows the check: ${formExit.slice(0, 300)}`)
+  check(/\b82\b/.test(formExit), `edit form shows the IP 评分: ${formExit.slice(0, 400)}`)
 } finally {
   await quitApp(instance)
   await removeTemporaryTree(userData)

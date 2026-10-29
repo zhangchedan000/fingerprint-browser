@@ -140,7 +140,10 @@ export class WorkspaceLibrary {
     else delete record.apiUrl
     if (draft.tunnel) record.tunnel = draft.tunnel
     // A check of the old connection says nothing about the new one.
-    if (connectionChanged) delete record.check
+    if (connectionChanged) {
+      delete record.check
+      delete record.ipSites
+    }
     this.proxies.set(id, record)
     return record
   }

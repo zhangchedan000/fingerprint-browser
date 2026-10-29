@@ -2637,5 +2637,6 @@
   "保留这次检测结果": "Keep this check result",
   "不保留：关闭页面后删除这次检测结果": "Not kept: this check result is deleted when the page closes",
   "取消勾选：关闭页面后删除这次检测结果": "Untick: delete this check result when the page closes",
-  "勾选：保留这次检测结果": "Tick: keep this check result"
+  "勾选：保留这次检测结果": "Tick: keep this check result",
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "The latest check of this proxy in the proxy IP library; every window using it shows the same"
 }

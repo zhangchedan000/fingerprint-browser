@@ -131,6 +131,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setProfiles((current) => current.filter((profile) => !removed.has(profile.id)))
   }, [])
 
+  // A library proxy checked or its IP 评分 read anywhere (a window, the proxy page): every page shows the latest.
+  useEffect(() => window.browserApi.proxy.onChanged(() => { void reloadLibraries().catch(() => undefined) }), [reloadLibraries])
+
   // A saved window may have added a typed proxy or a new group to a library.
   useEffect(() => {
     const proxyIds = new Set(proxyRecords.map((proxy) => proxy.id))

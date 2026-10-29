@@ -62,3 +62,9 @@ export function nextProxyCheck(check: ProxyCheckSummary, previous?: ProxyCheckSu
   }
   return next
 }
+
+/** The later of two checks (either may be missing). */
+export function newerCheck(a?: ProxyCheckSummary, b?: ProxyCheckSummary): ProxyCheckSummary | undefined {
+  if (!a || !b) return a ?? b
+  return Date.parse(a.checkedAt) >= Date.parse(b.checkedAt) ? a : b
+}

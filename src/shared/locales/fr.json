@@ -2637,5 +2637,6 @@
   "保留这次检测结果": "Conserver ce résultat",
   "不保留：关闭页面后删除这次检测结果": "Non conservé : le résultat est supprimé à la fermeture de la page",
   "取消勾选：关闭页面后删除这次检测结果": "Décocher : supprimer ce résultat à la fermeture de la page",
-  "勾选：保留这次检测结果": "Cocher : conserver ce résultat"
+  "勾选：保留这次检测结果": "Cocher : conserver ce résultat",
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Dernière vérification de ce proxy dans la bibliothèque d'IP proxy ; toutes les fenêtres qui l'utilisent affichent la même"
 }

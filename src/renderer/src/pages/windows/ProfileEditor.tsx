@@ -493,8 +493,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // A typed or library proxy's exit IP: ticked, the window keeps the check; unticked, nothing of it is kept.
   const [keepCheck, setKeepCheck] = useState(true)
   // What the library proxies' checks were when the editor opened, to put back for an unticked one.
-  const libraryChecksAtOpen = useRef(new Map<string, ProxyRecordView['check']>())
+  const libraryChecksAtOpen = useRef(new Map<string, Pick<ProxyRecordView, 'check' | 'ipSites'>>())
   const checkedHere = useRef(false)
+  // The library proxies checked in this editor (their earlier result is what an untick puts back).
+  const checkedLibrary = useRef(new Set<string>())
+  // The library entry the typed proxy is (same address, account and password), when there is one.
+  const matchedLibrary = useRef<string | undefined>(undefined)
+  // The result shown is the library proxy's latest check, made elsewhere (another window, the proxy page).
+  const [resultShared, setResultShared] = useState(false)
   const draftSession = useRef('')
   const profileIdRef = useRef<string | undefined>(undefined)
   profileIdRef.current = open ? profile?.id : undefined
@@ -519,6 +525,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const countryByHand = useRef(false)
 
   const typedProtocol = Form.useWatch(['proxy', 'protocol'], { form, preserve: true }) ?? 'direct'
+  const typedHost = String(Form.useWatch(['proxy', 'host'], { form, preserve: true }) ?? '').trim()
+  const typedPort = Form.useWatch(['proxy', 'port'], { form, preserve: true }) as number | undefined
+  const typedUsername = String(Form.useWatch(['proxy', 'username'], { form, preserve: true }) ?? '')
   const proxyId = Form.useWatch('proxyId', { form, preserve: true }) ?? ''
   const startupMode = Form.useWatch('startupMode', { form, preserve: true })
   const startUrlText = String(Form.useWatch('startUrlsText', { form, preserve: true }) ?? '')
@@ -581,7 +590,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setUseApiIp(true)
     setKeepCheck(true)
     checkedHere.current = false
-    libraryChecksAtOpen.current = new Map(proxies.map((item) => [item.id, item.check]))
+    checkedLibrary.current = new Set()
+    matchedLibrary.current = undefined
+    setResultShared(Boolean(profile?.proxyCheck && profile.proxyId && !profile.apiProxy))
+    libraryChecksAtOpen.current = new Map(proxies.map((item) => [item.id, { check: item.check, ipSites: item.ipSites }]))
     setCurrentCookies({})
     if (profile && (profile.status === 'closed' || profile.status === 'error')) {
       setCurrentCookies({ loading: true })
@@ -596,13 +608,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // This editor's own id: what its API links give belongs to this window only.
     draftSession.current = crypto.randomUUID()
     ipScore.reset()
-    if (profile) {
-      const startedAt = ipScore.token()
-      // The last reading, while it is about the IP shown.
-      void window.browserApi.profiles.lastIpSites(profile.id).then((record) => {
-        if (record && (!record.checkIp || record.checkIp === profile.proxyCheck?.ip)) ipScore.showKept(record, startedAt)
-      }).catch(() => undefined)
-    }
+    // The last reading about the IP shown (a library proxy's, wherever it was read); one still being read comes in.
+    if (profile) void ipScore.follow({ profileId: profile.id }, profile.proxyCheck?.ip)
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
@@ -706,6 +713,61 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    */
   const libraryCheck = !profile && libraryProxy && !libraryProxy.apiUrl && libraryProxy.check?.ok ? libraryProxy.check : undefined
   const lastCheck = proxyResult ? (proxyResult.ok ? proxyResult : undefined) : libraryCheck
+
+  /**
+   * A typed proxy that is in the library already (same address, account and password) shows that
+   * entry's latest check and IP 评分, as picking it would; a new window takes its country.
+   */
+  const typedMode = proxyMode !== 'library' && proxyMode !== 'api' && proxyMode !== 'direct'
+  useEffect(() => {
+    if (!open || !typedMode || !typedHost || !typedPort) {
+      matchedLibrary.current = undefined
+      return
+    }
+    let current = true
+    const timer = setTimeout(() => {
+      const typed: ProxyConfig = { protocol: typedProtocol, host: typedHost, port: Number(typedPort), username: typedUsername, password: proxyPassword }
+      void window.browserApi.proxy.match(typed).then((found) => {
+        if (!current) return
+        const id = found && !found.apiUrl ? found.id : undefined
+        if (id === matchedLibrary.current) return
+        matchedLibrary.current = id
+        if (!found || !id || !found.check || testingProxy) return
+        proxyCheckRun.current += 1
+        setProxyResult(found.check)
+        setProxyCheckedAt(found.check.checkedAt)
+        setProxyEdited(false)
+        setResultShared(true)
+        setKeepCheck(true)
+        void ipScore.follow({ proxyId: id }, found.check.ip)
+        if (!profile && !countryByHand.current && found.check.ok) fixToIp(found.check)
+      }).catch(() => undefined)
+    }, 400)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [open, typedMode, typedProtocol, typedHost, typedPort, typedUsername, proxyPassword])
+
+  /**
+   * The shown library proxy checked or read again elsewhere (another window, the proxy page) while
+   * this editor is open: the newer result and IP 评分 show here too.
+   */
+  const sharedRecord = proxyMode === 'library' ? libraryProxy : typedMode && matchedLibrary.current ? proxies.find((item) => item.id === matchedLibrary.current) : undefined
+  const sharedCheck = sharedRecord && !sharedRecord.apiUrl ? sharedRecord.check : undefined
+  useEffect(() => {
+    if (!open || !sharedRecord || sharedRecord.apiUrl || testingProxy || proxyEdited) return
+    if (sharedCheck && (!proxyCheckedAt || Date.parse(sharedCheck.checkedAt) > Date.parse(proxyCheckedAt))) {
+      setProxyResult(sharedCheck)
+      setProxyCheckedAt(sharedCheck.checkedAt)
+      setResultShared(true)
+      setKeepCheck(true)
+    }
+    const kept = sharedRecord.ipSites
+    if (!ipScore.loading && (sharedRecord.ipSitesPending || (kept && kept.checkedAt !== ipScore.record?.checkedAt))) {
+      void ipScore.follow({ proxyId: sharedRecord.id }, (sharedCheck ?? proxyResult ?? undefined)?.ip)
+    }
+  }, [open, sharedRecord?.id, sharedCheck?.checkedAt, sharedRecord?.ipSites?.checkedAt, sharedRecord?.ipSitesPending, testingProxy])
   const exitCountry = lastCheck?.countryCode
   // A rotating proxy or databases that disagree say nothing reliable about the country (its own warning shows).
   const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
@@ -1022,22 +1084,28 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /**
    * A proxy typed, pasted or picked: nothing is checked until 检测代理 is clicked (the proxy, its
    * 网络加速 or a whitelist may still be being set up). The last result stays, marked as older.
-   * A library proxy brings no result: one checked in another window or on the proxy page is not this window's.
+   * A library proxy brings its latest check and IP 评分, wherever they were made (another window, the proxy page).
    */
   function onFormChange(changed: Partial<EditorValues>): void {
     if (!('proxy' in changed) && !('proxyId' in changed)) return
     if ('proxyId' in changed) {
       proxyCheckRun.current += 1
       setTestingProxy(false)
-      // The window's own result when it is back on its saved proxy; none for another one.
-      const own = profile && changed.proxyId === profile.proxyId ? profile.proxyCheck ?? null : null
-      setProxyResult(own)
+      // The picked proxy's latest check (the window's saved proxy: the newer of its own and the proxy's).
+      const picked = proxies.find((item) => item.id === changed.proxyId)
+      const shared = picked && !picked.apiUrl ? picked.check : undefined
+      const own = profile && changed.proxyId === profile.proxyId ? profile.proxyCheck : undefined
+      const shown = own && (!shared || Date.parse(own.checkedAt) >= Date.parse(shared.checkedAt)) ? own : shared
+      setProxyResult(shown ?? null)
+      setResultShared(Boolean(shown))
+      setKeepCheck(true)
+      if (picked && !picked.apiUrl) void ipScore.follow({ proxyId: picked.id }, shown?.ip)
+      else ipScore.reset()
       // 网络加速 follows the picked proxy; back on its saved proxy the window has its own again.
       form.setFieldValue('tunnel', profile?.tunnel && changed.proxyId === profile.proxyId ? { ...profile.tunnel } : undefined)
-      setProxyCheckedAt(own?.checkedAt)
+      setProxyCheckedAt(shown?.checkedAt)
       setProxyEdited(false)
       // A new window takes the country the picked proxy was last checked in, unless one was picked by hand.
-      const picked = proxies.find((item) => item.id === changed.proxyId)
       if (!profile && !countryByHand.current && picked && !picked.apiUrl && picked.check?.ok) fixToIp(picked.check)
       return
     }
@@ -1058,7 +1126,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // The IP just checked is the one in use; what the IP check sites say about it comes next.
     setUseApiIp(true)
     setKeepCheck(true)
+    setResultShared(false)
     checkedHere.current = true
+    // A library proxy (picked, or typed and in the library): its result is the proxy's now.
+    if (result?.libraryProxyId) matchedLibrary.current = result.libraryProxyId
+    const libraryId = proxyMode === 'library' ? form.getFieldValue('proxyId') as string | undefined : result?.libraryProxyId
+    if (libraryId) checkedLibrary.current.add(libraryId)
     if (result?.ok) void ipScore.read()
     else ipScore.reset()
     // A new window takes the country of the IP it is checked with; a rotating or unclear IP changes nothing.
@@ -1209,11 +1282,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    */
   function checkForgotten(): ForgetProxyCheck | undefined {
     if (proxyMode === 'api' || keepCheck || !proxyResult?.ok || proxyEdited) return undefined
-    const libraryId = proxyMode === 'library' ? form.getFieldValue('proxyId') as string | undefined : undefined
+    const libraryId = proxyMode === 'library' ? form.getFieldValue('proxyId') as string | undefined : matchedLibrary.current
     const typed = proxyMode !== 'library' ? currentDraft().proxy : undefined
+    // Checked here: the proxy's result from before; a result from elsewhere taken off: the proxy has none.
+    const before = libraryId && checkedLibrary.current.has(libraryId) ? libraryChecksAtOpen.current.get(libraryId) : undefined
     return {
       ...(profile ? { profileId: profile.id, windowCheck: null, ipSites: null } : {}),
-      ...(libraryId && checkedHere.current ? { proxyId: libraryId, libraryCheck: libraryChecksAtOpen.current.get(libraryId) ?? null } : {}),
+      ...(libraryId ? { proxyId: libraryId, libraryCheck: before?.check ?? null, libraryIpSites: before?.ipSites ?? null } : {}),
       ...(typed && checkedHere.current ? { proxy: typed } : {})
     }
   }
@@ -1473,6 +1548,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       : keptEndpoint ? { address: `${keptEndpoint.host}:${keptEndpoint.port}`, place: keptEndpoint.place } : undefined
   const resultNote = [
     proxyCheckedAt ? t("检测于 {0}", relativeTime(proxyCheckedAt, getLocale(), '')) : '',
+    resultShared && !proxyEdited && proxyMode !== 'api' ? t("代理 IP 库里这个代理最近一次的检测，用它的窗口都一样") : '',
     proxyEdited ? t("代理已修改，未重新检测") : ''
   ].filter(Boolean).join(' · ')
   const apiTriggerLabels: Record<ApiCheckRecord['trigger'], string> = { check: t("检测代理"), refresh: t("换一个 IP"), launch: t("打开窗口") }
@@ -1947,8 +2023,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           : fromIp
             ? profile
               ? t("已固定，IP 再变只提醒，不自动改")
-              : !proxyResult && libraryCheck && libraryCheck.countryCode?.toUpperCase() === fp.region
-                ? t("按代理库上次检测的 IP 配好（{0}）", relativeTime(libraryCheck.checkedAt, getLocale()))
+              : resultShared && proxyResult?.ok && proxyCheckedAt && proxyResult.countryCode?.toUpperCase() === fp.region
+                ? t("按代理库上次检测的 IP 配好（{0}）", relativeTime(proxyCheckedAt, getLocale()))
                 : t("按检测到的 IP 配好；保存后固定，IP 再变只提醒")
             : t("窗口装成哪个国家的电脑，下面几项跟着配")}
         fix={regionMismatch && lastCheck ? { label: t("改成和 IP 一致"), apply: () => fixToIp(lastCheck) } : undefined}

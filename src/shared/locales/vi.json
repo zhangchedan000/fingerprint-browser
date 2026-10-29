@@ -2637,5 +2637,6 @@
   "保留这次检测结果": "Giữ kết quả kiểm tra này",
   "不保留：关闭页面后删除这次检测结果": "Không giữ: xóa kết quả này khi đóng trang",
   "取消勾选：关闭页面后删除这次检测结果": "Bỏ chọn: xóa kết quả này khi đóng trang",
-  "勾选：保留这次检测结果": "Chọn: giữ kết quả kiểm tra này"
+  "勾选：保留这次检测结果": "Chọn: giữ kết quả kiểm tra này",
+  "代理 IP 库里这个代理最近一次的检测，用它的窗口都一样": "Lần kiểm tra mới nhất của proxy này trong thư viện IP proxy; mọi cửa sổ dùng nó đều hiển thị như nhau"
 }

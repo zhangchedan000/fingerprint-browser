@@ -210,6 +210,8 @@ app.whenReady().then(async () => {
   profiles.onProfilesChanged((changed) => {
     for (const profile of changed) mainWindow?.webContents.send('profiles:changed', publicProfile(profile))
   })
+  // A library proxy's check or IP 评分 (from any window or the proxy page): the pages showing it reload it.
+  profiles.onLibraryChecksChanged(() => mainWindow?.webContents.send('proxy:changed'))
   launcher.setHostScreenProvider(() => {
     const { size, workArea } = screen.getPrimaryDisplay()
     // Only a taskbar along the bottom (or top) shortens the screen's available height.

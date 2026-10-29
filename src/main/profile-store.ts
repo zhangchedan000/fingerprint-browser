@@ -16,7 +16,8 @@ import { identitySecretCodec, type SecretCodec } from './secret-codec'
 import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
 import { portableDraft } from './profile-portable'
-import { nextProxyCheck, safeProxyCheck } from './proxy-check'
+import { newerCheck, nextProxyCheck, safeProxyCheck } from './proxy-check'
+import { safeIpSiteRecord, type IpSiteRecord } from '../shared/ip-sites'
 import { WorkspaceLibrary } from './workspace-library'
 
 /**
@@ -189,6 +190,7 @@ export class ProfileStore {
   private health: ProfileStoreHealth = { recoveredFromBackup: false, backupHealthy: true }
   private preservePreviousBackupOnce = false
   private changeListeners = new Set<(profiles: BrowserProfile[]) => void>()
+  private libraryListeners = new Set<() => void>()
 
   /** The kernel a new window is pinned to when it names none (the default kernel at creation). */
   private defaultKernel?: () => Promise<string | undefined>
@@ -328,6 +330,12 @@ export class ProfileStore {
 
   storageHealth(): ProfileStoreHealth {
     return { ...this.health }
+  }
+
+  /** Called when a library proxy's check or IP 评分 changed, wherever it was made. */
+  onLibraryChecksChanged(listener: () => void): () => void {
+    this.libraryListeners.add(listener)
+    return () => { this.libraryListeners.delete(listener) }
   }
 
   /** Called with the windows whose shown proxy or group changed because a library record changed. */
@@ -473,6 +481,7 @@ export class ProfileStore {
       if (config.protocol === 'direct') throw new Error('代理库包含无效记录')
       proxyIds.add(stored.id)
       const check = safeProxyCheck(stored.check)
+      const ipSites = safeIpSiteRecord(stored.ipSites)
       proxies.push({
         id: stored.id,
         protocol: config.protocol,
@@ -484,6 +493,7 @@ export class ProfileStore {
         createdAt: stored.createdAt,
         updatedAt: stored.updatedAt,
         ...(check ? { check } : {}),
+        ...(ipSites ? { ipSites } : {}),
         ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {}),
         ...(safeTunnelRoute(stored.tunnel) ? { tunnel: safeTunnelRoute(stored.tunnel) } : {})
       })
@@ -516,8 +526,9 @@ export class ProfileStore {
       ...fields,
       group: this.library.groupName(stored.groupId),
       proxy: config ? withWindowRoute(config, stored.tunnel) : { ...DIRECT },
-      // The window's own last check; a library proxy's check (from the proxy page or another window) is not it.
-      proxyCheck: directCheck
+      // A library proxy's latest check, wherever it ran (proxy page, any window using it); the
+      // window's own is kept too and counts when it is the newer one.
+      proxyCheck: newerCheck(record && !record.apiUrl ? record.check : undefined, directCheck)
     }
     if (stored.proxyId && !record) profile.proxyMissing = true
     if (!profile.proxyCheck) delete profile.proxyCheck
@@ -1431,13 +1442,20 @@ export class ProfileStore {
    * A check the editor's tick was taken off: the window and its library proxy are put back as they
    * were before it (null: no check at all). Not an edit of the window.
    */
-  async forgetProxyCheck(target: { profileId?: string; windowCheck?: unknown; proxyId?: string; libraryCheck?: unknown }): Promise<void> {
-    if (target.proxyId !== undefined && target.libraryCheck !== undefined && this.library.proxies.has(target.proxyId)) {
-      const record = { ...this.library.getProxy(target.proxyId) }
-      const check = safeProxyCheck(target.libraryCheck)
-      if (check) record.check = check
-      else delete record.check
-      this.library.proxies.set(target.proxyId, record)
+  async forgetProxyCheck(target: { profileId?: string; windowCheck?: unknown; proxyId?: string; libraryCheck?: unknown; libraryIpSites?: unknown }): Promise<void> {
+    const libraryRecord = target.proxyId !== undefined && this.library.proxies.has(target.proxyId) ? { ...this.library.getProxy(target.proxyId) } : undefined
+    if (libraryRecord && (target.libraryCheck !== undefined || target.libraryIpSites !== undefined)) {
+      if (target.libraryCheck !== undefined) {
+        const check = safeProxyCheck(target.libraryCheck)
+        if (check) libraryRecord.check = check
+        else delete libraryRecord.check
+      }
+      if (target.libraryIpSites !== undefined) {
+        const ipSites = safeIpSiteRecord(target.libraryIpSites)
+        if (ipSites) libraryRecord.ipSites = ipSites
+        else delete libraryRecord.ipSites
+      }
+      this.library.proxies.set(libraryRecord.id, libraryRecord)
     }
     if (target.profileId !== undefined && target.windowCheck !== undefined && this.profiles.has(target.profileId)) {
       const profile: StoredProfile = { ...this.stored(target.profileId) }
@@ -1449,6 +1467,32 @@ export class ProfileStore {
     await this.persist()
     // The window list shows the change, and so do the windows on that library proxy.
     this.notify(this.list().filter((profile) => profile.id === target.profileId || (target.proxyId !== undefined && profile.proxyId === target.proxyId)).map((profile) => profile.id))
+    if (libraryRecord) this.libraryChecksChanged()
+  }
+
+  /** The IP 评分 of a library proxy's exit IP (null: none), shown wherever the proxy is. */
+  async setLibraryIpSites(proxyId: string, record: IpSiteRecord | null): Promise<void> {
+    const current = this.library.proxies.get(proxyId)
+    if (!current) return
+    const next = { ...current }
+    if (record) next.ipSites = record
+    else delete next.ipSites
+    this.library.proxies.set(proxyId, next)
+    await this.persist()
+    this.notify(this.list().filter((profile) => profile.proxyId === proxyId).map((profile) => profile.id))
+    this.libraryChecksChanged()
+  }
+
+  /** The library entry a typed proxy is (same address, account and password); API links are not. */
+  findLibraryProxy(config: ProxyConfig): ProxyRecord | undefined {
+    if (config.apiUrl || config.protocol === 'direct') return undefined
+    const found = this.library.findProxy(config)
+    return found && !found.apiUrl ? { ...found } : undefined
+  }
+
+  /** Tells the pages a library proxy's check or IP 评分 changed (or started or stopped being read). */
+  libraryChecksChanged(): void {
+    for (const listener of this.libraryListeners) listener()
   }
 
   async setLibraryProxyCheck(proxyId: string, check: ProxyCheckSummary, baselineIp?: string, sourceProfileId?: string): Promise<ProxyRecord> {
@@ -1458,6 +1502,7 @@ export class ProfileStore {
     this.library.proxies.set(proxyId, next)
     await this.persist()
     this.notify(this.list().filter((profile) => profile.proxyId === proxyId && profile.id !== sourceProfileId).map((profile) => profile.id))
+    this.libraryChecksChanged()
     return { ...next }
   }
 

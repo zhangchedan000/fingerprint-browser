@@ -3,12 +3,12 @@ import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ServerPlace } from '../shared/types'
+import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecordView, ServerPlace } from '../shared/types'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
 import { deepCheck, evaluateFingerprint, expectedIdentity, fingerprintCheckStore, ipSiteCheck, observeFingerprint } from './fingerprint-check'
-import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, type IpSiteRecord } from '../shared/ip-sites'
+import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, safeIpSiteRecord, type IpSiteRecord } from '../shared/ip-sites'
 import type { DeepSiteResult } from '../shared/deep-check'
 import { checkedSettingsKey, checkProxyKey } from '../shared/fingerprint-check-key'
 import { hostHardwareSnapshot } from './host-hardware'
@@ -62,6 +62,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
     const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id, draft.draftSession))
+    if (draft.draftSession) sessionWindows.set(draft.draftSession, profile.id)
     checkNewWindow(profile.id, draft)
     team.scheduleSync()
     return profile
@@ -306,27 +307,117 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   }
   // Each reading takes the next of the other sites, so they take turns.
   let ipSiteTurn = 0
-  ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string, libraryProxyId?: string): Promise<IpSiteRecord> => {
-    const { runOptions, proxyResult } = await checkRunOptions(draft, profileId, typeof libraryProxyId === 'string' ? libraryProxyId : undefined)
+  /**
+   * IP 评分 is read here, apart from the page that asked: closing the editor, saving the window or
+   * opening it lets a reading finish, and it is kept where it belongs. A library proxy's reading is
+   * the proxy's (every window on it shows it); an API or direct window's is its own.
+   */
+  interface IpSitesTarget { key: string; libraryId?: string; profileId?: string; typed?: ProxyConfig; session?: string }
+  const ipSitesPending = new Map<string, Promise<IpSiteRecord>>()
+  // Bumped when a check is unticked: a reading still running for it is not kept.
+  const ipSitesTurns = new Map<string, number>()
+  const forgetIpSites = (key: string) => ipSitesTurns.set(key, (ipSitesTurns.get(key) ?? 0) + 1)
+  // A new window saved while its editor's reading ran: the reading is that window's.
+  const sessionWindows = new Map<string, string>()
+  const typedKey = (proxy: ProxyConfig) => `typed:${proxyKey(proxy)}|${proxy.password}`
+  /** Whose reading this is: a library proxy (picked, the window's own, or typed and in the library), else the window. */
+  function ipSitesTarget(draft: ProfileDraft, profileId?: string, libraryProxyId?: string): IpSitesTarget | undefined {
+    const library = (id: string | undefined) => {
+      const record = id ? profiles.listProxies().find((item) => item.id === id) : undefined
+      return record && !record.apiUrl ? record.id : undefined
+    }
+    const picked = library(libraryProxyId) ?? library(draft.proxyId)
+    if (picked) return { key: `lib:${picked}`, libraryId: picked }
+    const proxy = draft.proxy
+    if (!draft.proxyId && proxy && proxy.protocol !== 'direct' && !proxy.apiUrl && proxy.host) {
+      const existing = profileId ? profiles.get(profileId) : undefined
+      let typed: ProxyConfig
+      try {
+        const { tunnel: _route, ...config } = proxyForTest(validateProxyConfig(proxy), existing?.proxy)
+        typed = config
+      } catch {
+        return undefined
+      }
+      const found = profiles.findLibraryProxy(typed)
+      if (found) return { key: `lib:${found.id}`, libraryId: found.id }
+      return { key: typedKey(typed), typed, ...(profileId ? { profileId } : {}), ...(draft.draftSession ? { session: draft.draftSession } : {}) }
+    }
+    if (profileId) return { key: `win:${profileId}`, profileId }
+    return draft.draftSession ? { key: `session:${draft.draftSession}`, session: draft.draftSession } : undefined
+  }
+  async function keepIpSites(target: IpSitesTarget, record: IpSiteRecord): Promise<void> {
+    // A typed proxy saved meanwhile is in the library now.
+    const libraryId = target.libraryId ?? (target.typed ? profiles.findLibraryProxy(target.typed)?.id : undefined)
+    if (libraryId) {
+      await profiles.setLibraryIpSites(libraryId, record)
+      return
+    }
+    const owner = target.profileId ?? (target.session ? sessionWindows.get(target.session) : undefined)
+    if (owner && profiles.list().some((item) => item.id === owner)) await saveIpSites(owner, record)
+  }
+  async function readIpSites(draft: ProfileDraft, profileId?: string, libraryProxyId?: string): Promise<IpSiteRecord> {
+    const { runOptions, proxyResult } = await checkRunOptions(draft, profileId, libraryProxyId)
     const preferences = settings.get()
     const sites = preferences.ipCheckSites ?? DEFAULT_IP_CHECK_SITES
     const baseline = ipBaseline(sites, preferences.ipCheckBaseline)
     if (!baseline) throw new Error('没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc')
     const other = ipSiteInTurn(sites, baseline, ipSiteTurn++)
     const [first, second] = await ipSiteCheck(runOptions, other ? [baseline, other] : [baseline])
-    const record: IpSiteRecord = { checkedAt: new Date().toISOString(), ...(proxyResult?.ip ? { checkIp: proxyResult.ip } : {}), baseline: first, ...(second ? { other: second } : {}) }
-    if (profileId) await saveIpSites(profileId, record)
-    return record
+    return { checkedAt: new Date().toISOString(), ...(proxyResult?.ip ? { checkIp: proxyResult.ip } : {}), baseline: first, ...(second ? { other: second } : {}) }
+  }
+  ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string, libraryProxyId?: string): Promise<IpSiteRecord> => {
+    const target = ipSitesTarget(draft, profileId, typeof libraryProxyId === 'string' ? libraryProxyId : undefined)
+    if (!target) return readIpSites(draft, profileId, typeof libraryProxyId === 'string' ? libraryProxyId : undefined)
+    // The same proxy being read already (another window, the proxy page): its reading is this one too.
+    const running = ipSitesPending.get(target.key)
+    if (running) return running
+    const turn = ipSitesTurns.get(target.key) ?? 0
+    const reading = readIpSites(draft, profileId, target.libraryId ?? (typeof libraryProxyId === 'string' ? libraryProxyId : undefined))
+      .then(async (record) => {
+        if ((ipSitesTurns.get(target.key) ?? 0) === turn) {
+          await keepIpSites(target, record).catch((error: unknown) => {
+            logger.error('保存 IP 评分失败', { error: error instanceof Error ? error.message : String(error) })
+          })
+        }
+        return record
+      })
+      .finally(() => {
+        ipSitesPending.delete(target.key)
+        profiles.libraryChecksChanged()
+      })
+    ipSitesPending.set(target.key, reading)
+    if (target.libraryId) profiles.libraryChecksChanged()
+    return reading
   })
-  ipcMain.handle('profiles:last-ip-sites', async (_event, id: string): Promise<IpSiteRecord | null> => {
-    profiles.get(id)
-    return readFile(ipSitesFile(id), 'utf8').then((text) => JSON.parse(text) as IpSiteRecord).catch(() => null)
-  })
+  /** The IP 评分 kept for a library proxy, or a window (one on a library proxy: the proxy's, or its own when newer). */
+  async function keptIpSites(target: { proxyId?: unknown; profileId?: unknown }, wait: boolean): Promise<{ record: IpSiteRecord | null; pending: boolean }> {
+    const window = typeof target.profileId === 'string' ? profiles.get(target.profileId) : undefined
+    const proxyId = typeof target.proxyId === 'string' ? target.proxyId : window?.proxyId
+    const library = proxyId ? profiles.listProxies().find((item) => item.id === proxyId && !item.apiUrl) : undefined
+    const key = library ? `lib:${library.id}` : window ? `win:${window.id}` : undefined
+    if (!key) return { record: null, pending: false }
+    const running = ipSitesPending.get(key)
+    if (running && wait) await running.catch(() => undefined)
+    const own = window
+      ? safeIpSiteRecord(await readFile(ipSitesFile(window.id), 'utf8').then((text) => JSON.parse(text) as unknown).catch(() => null))
+      : undefined
+    const shared = library ? profiles.listProxies().find((item) => item.id === library.id)?.ipSites : undefined
+    const record = shared && own ? (Date.parse(shared.checkedAt) >= Date.parse(own.checkedAt) ? shared : own) : shared ?? own
+    return { record: record ?? null, pending: ipSitesPending.has(key) }
+  }
+  ipcMain.handle('proxy:kept-ip-sites', (_event, target: unknown, wait?: unknown) =>
+    keptIpSites(target && typeof target === 'object' ? target as { proxyId?: unknown; profileId?: unknown } : {}, wait === true))
+  ipcMain.handle('profiles:last-ip-sites', async (_event, id: string): Promise<IpSiteRecord | null> => (await keptIpSites({ profileId: id }, false)).record)
   ipcMain.handle('profiles:set-ip-sites', async (_event, id: string, record: unknown) => {
-    profiles.get(id)
-    const value = record as Partial<IpSiteRecord> | undefined
-    if (!value || typeof value.checkedAt !== 'string' || !value.baseline || typeof value.baseline !== 'object') throw new Error('IP 评分数据无效')
-    await saveIpSites(id, value as IpSiteRecord)
+    const profile = profiles.get(id)
+    const value = safeIpSiteRecord(record)
+    if (!value) throw new Error('IP 评分数据无效')
+    await saveIpSites(id, value)
+    // A new window's reading of its library proxy: the proxy's, unless it has a newer one.
+    const library = profile.proxyId ? profiles.listProxies().find((item) => item.id === profile.proxyId && !item.apiUrl) : undefined
+    if (library && (!library.ipSites || Date.parse(library.ipSites.checkedAt) < Date.parse(value.checkedAt))) {
+      await profiles.setLibraryIpSites(library.id, value)
+    }
   })
   ipcMain.handle('profiles:last-deep-check', async (_event, id: string): Promise<DeepCheckRecord | null> => {
     profiles.get(id)
@@ -751,6 +842,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       const kept = draftChecks.get(proxyKey(profile.proxy))
       if (!kept || kept.password !== profile.proxy.password || Date.now() - kept.at > 30 * 60_000) return profile
       draftChecks.delete(proxyKey(profile.proxy))
+      // A library proxy that has this check (or a newer one) already keeps it as it is.
+      const shared = profile.proxyId ? profiles.listProxies().find((item) => item.id === profile.proxyId)?.check : undefined
+      if (shared && Date.parse(shared.checkedAt) >= Date.parse(kept.check.checkedAt)) return profile
       return profiles.setProxyCheck(id, kept.check)
     }
     const url = draftKey(profile.apiProxy.url, session)
@@ -776,12 +870,19 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
    */
   ipcMain.handle('profiles:forget-proxy-check', async (_event, input: unknown) => {
     if (!input || typeof input !== 'object') return
-    const target = input as { profileId?: unknown; windowCheck?: unknown; proxyId?: unknown; libraryCheck?: unknown; proxy?: unknown; ipSites?: unknown }
+    const target = input as { profileId?: unknown; windowCheck?: unknown; proxyId?: unknown; libraryCheck?: unknown; libraryIpSites?: unknown; proxy?: unknown; ipSites?: unknown }
     const profileId = typeof target.profileId === 'string' && profiles.list().some((item) => item.id === target.profileId) ? target.profileId : undefined
-    if (target.proxy && typeof target.proxy === 'object') draftChecks.delete(proxyKey(target.proxy as ProxyConfig))
+    if (target.proxy && typeof target.proxy === 'object') {
+      const typed = target.proxy as ProxyConfig
+      draftChecks.delete(proxyKey(typed))
+      forgetIpSites(typedKey(typed))
+    }
+    // An IP 评分 still being read for it is not kept either.
+    if (typeof target.proxyId === 'string') forgetIpSites(`lib:${target.proxyId}`)
+    if (profileId) forgetIpSites(`win:${profileId}`)
     await profiles.forgetProxyCheck({
       ...(profileId ? { profileId, windowCheck: target.windowCheck } : {}),
-      ...(typeof target.proxyId === 'string' ? { proxyId: target.proxyId, libraryCheck: target.libraryCheck } : {})
+      ...(typeof target.proxyId === 'string' ? { proxyId: target.proxyId, libraryCheck: target.libraryCheck, libraryIpSites: target.libraryIpSites } : {})
     })
     if (profileId && target.ipSites !== undefined) {
       const record = target.ipSites as Partial<IpSiteRecord> | null
@@ -830,6 +931,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
         })
       }
     }
+    let matched: string | undefined
     if (!draftLink) {
       draftChecks.set(proxyKey(proxy), { password: proxy.password, check, at: Date.now() })
       const same = (saved: ProxyConfig) => sameProxyIdentity(saved, proxy) && saved.password === proxy.password
@@ -839,11 +941,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       if (own) {
         await profiles.setProxyCheck(window.id, check).catch(() => undefined)
       } else if (proxyId && same(profiles.getProxy(proxyId))) {
-        // A library proxy checked in a new window: its status on the proxy page; the window gets it once saved.
+        // A library proxy checked in a new window or on the proxy page: every place showing it has it.
         await profiles.setLibraryProxyCheck(proxyId, check).catch(() => undefined)
+      } else if (!proxyId) {
+        // Typed, and in the library already: that entry's latest check too.
+        matched = profiles.findLibraryProxy(proxy)?.id
+        if (matched) await profiles.setLibraryProxyCheck(matched, check).catch(() => undefined)
       }
     }
-    const shown = draftLink ? { ...result, apiAddress: `${config.host}:${config.port}`, ...(place ? { apiAddressPlace: place } : {}) } : result
+    const found = matched ? { ...result, libraryProxyId: matched } : result
+    const shown = draftLink ? { ...found, apiAddress: `${config.host}:${config.port}`, ...(place ? { apiAddressPlace: place } : {}) } : found
     // WebRTC through the proxy needs UDP; only a proxy reached directly can carry it (webrtc-relay.ts).
     if (result.ok && proxy.protocol === 'socks5' && !await localProxyFor(proxy).catch(() => undefined)) {
       return { ...shown, udp: await proxySupportsUdp(proxy) }
@@ -851,10 +958,20 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return shown
   })
   // Proxy and group libraries: windows refer to these records by id.
-  const proxyView = (id: string) => publicProxyRecord(profiles.getProxy(id), profiles.list())
+  const withPending = (view: ProxyRecordView): ProxyRecordView => ipSitesPending.has(`lib:${view.id}`) ? { ...view, ipSitesPending: true } : view
+  const proxyView = (id: string) => withPending(publicProxyRecord(profiles.getProxy(id), profiles.list()))
   ipcMain.handle('proxy:list', () => {
     const windows = profiles.list()
-    return profiles.listProxies().map((proxy) => publicProxyRecord(proxy, windows))
+    return profiles.listProxies().map((proxy) => withPending(publicProxyRecord(proxy, windows)))
+  })
+  ipcMain.handle('proxy:match', (_event, config: unknown) => {
+    if (!config || typeof config !== 'object') return null
+    try {
+      const found = profiles.findLibraryProxy(validateProxyConfig(config as ProxyConfig))
+      return found ? proxyView(found.id) : null
+    } catch {
+      return null
+    }
   })
   ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(await resolveDraft(draft as ProxyDraft))).id))
   ipcMain.handle('proxy:create-many', async (_event, drafts) => {

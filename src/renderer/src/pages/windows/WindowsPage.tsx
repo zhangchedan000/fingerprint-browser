@@ -152,14 +152,14 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       if (extras.apiDiscard) saved = await window.browserApi.profiles.discardApiIp(saved.id)
       // A typed or library proxy's exit IP left unticked: the window keeps nothing of that check.
       if (extras.forgetCheck) {
-        // A typed proxy went into the library on save: that entry keeps no record of the check either.
-        const typedInto = !extras.forgetCheck.proxyId && saved.proxyId ? saved.proxyId : undefined
+        // A typed proxy went into the library on save (a new entry): it keeps no record of the check either.
+        const typedInto = !extras.forgetCheck.proxyId && saved.proxyId && !proxies.some((item) => item.id === saved.proxyId) ? saved.proxyId : undefined
         await window.browserApi.profiles.forgetProxyCheck({
           ...extras.forgetCheck,
           profileId: saved.id,
           windowCheck: null,
           ipSites: null,
-          ...(typedInto ? { proxyId: typedInto, libraryCheck: proxies.find((item) => item.id === typedInto)?.check ?? null } : {})
+          ...(typedInto ? { proxyId: typedInto, libraryCheck: null, libraryIpSites: null } : {})
         })
         saved = { ...saved, proxyCheck: undefined }
       }

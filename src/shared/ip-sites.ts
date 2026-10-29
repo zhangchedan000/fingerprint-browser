@@ -57,6 +57,18 @@ export interface IpSiteRecord {
   other?: IpSiteReading
 }
 
+/** A kept reading as stored or handed over (team sync, the renderer): undefined unless well-formed. */
+export function safeIpSiteRecord(value: unknown): IpSiteRecord | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const record = value as Partial<IpSiteRecord>
+  const reading = (item: unknown): item is IpSiteReading => Boolean(item && typeof item === 'object'
+    && typeof (item as IpSiteReading).site === 'string' && typeof (item as IpSiteReading).name === 'string' && typeof (item as IpSiteReading).url === 'string')
+  if (typeof record.checkedAt !== 'string' || Number.isNaN(Date.parse(record.checkedAt)) || !reading(record.baseline)) return undefined
+  if (record.other !== undefined && !reading(record.other)) return undefined
+  if (record.checkIp !== undefined && typeof record.checkIp !== 'string') return undefined
+  return JSON.parse(JSON.stringify(record)) as IpSiteRecord
+}
+
 export const DEFAULT_IP_CHECK_SITES: readonly IpCheckSite[] = [
   { id: 'iplark', name: 'IPLark', url: 'https://iplark.com/', enabled: true },
   { id: 'ping0', name: 'ping0.cc', url: 'https://ping0.cc/', enabled: true }
