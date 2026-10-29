@@ -2548,5 +2548,9 @@
   "这台电脑装的所有字体，用本机字体的窗口都一样": "All fonts installed on this computer; the same for every window using them",
   "链接只存在这个窗口；一个 IP 用到失效才取新的": "The link stays in this window only; an IP is used until it stops working, then a new one is fetched",
   "改为每个窗口不同": "Make it differ per window",
-  "改用内核 {0}": "Use kernel {0}"
+  "改用内核 {0}": "Use kernel {0}",
+  "画布指纹，网站能读取到": "Canvas fingerprint, readable by sites",
+  "音频指纹，网站能读取到": "Audio fingerprint, readable by sites",
+  "元素尺寸指纹，网站能读取到": "Element size fingerprint, readable by sites",
+  "字体指纹，网站能读取到": "Font fingerprint, readable by sites"
 }

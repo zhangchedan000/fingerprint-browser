@@ -2548,5 +2548,9 @@
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Toutes les polices installées sur cet ordinateur ; identiques pour toutes les fenêtres qui les utilisent",
   "链接只存在这个窗口；一个 IP 用到失效才取新的": "Le lien reste dans cette fenêtre seulement ; une IP sert jusqu’à ce qu’elle ne marche plus, puis une nouvelle est prise",
   "改为每个窗口不同": "Différent par fenêtre",
-  "改用内核 {0}": "Utiliser le noyau {0}"
+  "改用内核 {0}": "Utiliser le noyau {0}",
+  "画布指纹，网站能读取到": "Empreinte Canvas, lisible par les sites",
+  "音频指纹，网站能读取到": "Empreinte audio, lisible par les sites",
+  "元素尺寸指纹，网站能读取到": "Empreinte de taille des éléments, lisible par les sites",
+  "字体指纹，网站能读取到": "Empreinte des polices, lisible par les sites"
 }

@@ -317,7 +317,7 @@ function ValueChoice({ value, options, onChange, onShuffle, shuffleDisabled, lab
   return (
     <Space size={8} className="fb-value-choice">
       <Select<string | number>
-        className={wide ? 'fb-wide-select' : 'fb-fp-select'}
+        className="fb-fp-select"
         showSearch={wide ? { optionFilterProp: 'label' } : undefined}
         value={value}
         onChange={onChange as (value: string | number) => void}
@@ -342,6 +342,16 @@ function zoneShort(zone: string, label: ReactNode): ReactNode {
 }
 
 type ChoiceOption = { value: string | number; label: string; short?: string; disabled?: boolean }
+
+/** What each 指纹值 row is, in the line under it. */
+function surfaceMeaning(surface: NoiseSurface): string {
+  switch (surface) {
+    case 'canvas': return t("画布指纹，网站能读取到")
+    case 'audio': return t("音频指纹，网站能读取到")
+    case 'clientrects': return t("元素尺寸指纹，网站能读取到")
+    default: return t("字体指纹，网站能读取到")
+  }
+}
 
 /** A typed value with a Shuffle button (device name, MAC address). */
 function TextWithShuffle({ value, onChange, onShuffle, label }: { value: string; onChange: (value: string) => void; onShuffle: () => void; label: string }) {
@@ -569,9 +579,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setRecheck(false)
     void runCheck()
   }, [recheck, checking, currentSettingsKey])
-  const checkFor = (...rows: FingerprintCheckRow[]) => checkReport
-    ? <CheckResults items={checkReport.items.filter((item) => rows.includes(item.row))} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} fixOf={fixOf} />
-    : undefined
+  // The 指纹值 rows show their value in the box: only a problem with it adds a line.
+  const checkFor = (...rows: FingerprintCheckRow[]) => {
+    const items = checkReport?.items.filter((item) => rows.includes(item.row) && !(NOISE_ROWS.has(item.row) && item.status === 'ok'))
+    return items?.length
+      ? <CheckResults items={items} stale={rows.every((row) => NOISE_ROWS.has(row)) ? !noiseCurrent : checkStale} fixOf={fixOf} />
+      : undefined
+  }
   const kernelGpus = kernelGpuList(windowKernelVersion, fp.platform)
   const gpu = effectiveGpu(fp, windowKernelVersion)
   const gpuMissing = Boolean(fp.gpu && kernelGpus && !kernelGpus.some((item) => gpuKey(item) === fp.gpu))
@@ -705,12 +719,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   function measuredLine(surface: NoiseSurface) {
     const value = measured(surface)
     if (checking) return <span className="fb-fp-measured fb-muted">{t("正在检测实际值…")}</span>
-    if (value) {
-      return <span className="fb-fp-measured fb-muted">{t("网站读到的值 · {0}", relativeTime(checkReport!.checkedAt, getLocale()))}</span>
-    }
+    if (value) return <span className="fb-fp-measured fb-muted">{surfaceMeaning(surface)}</span>
     return (
       <span className="fb-fp-measured fb-muted">
-        {checkReport ? t("设置改了，要重新检测") : t("还没检测")}
+        {surfaceMeaning(surface)}
         <Unlocked><Button type="link" size="small" className="fb-deep-link" onClick={() => void runCheck()}>{t("检测实际值")}</Button></Unlocked>
       </span>
     )
@@ -1604,8 +1616,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // language is still the country's own, else the browser language; below the system language, that
   // language when it was picked on its own.
   const languageFromCountry = Boolean(fp.region && countryLocale?.language === fp.language)
-  const followUi = (value: string) => languageFromCountry
-    ? fromIp ? t("随 IP 所在国家 · {0}", value) : t("随国家 · {0}", value)
+  // Following the country (from the IP or picked): the country's name says where it comes from.
+  const followUi = (value: string) => languageFromCountry && fp.region
+    ? `${regionName(fp.region)} · ${value}`
     : t("跟随浏览器语言 · {0}", value)
   const followSystem = (value: string) => fp.uiLocale ? t("跟随系统语言 · {0}", value) : followUi(value)
   const voicesLabel = (locale: string) => `${locale} · ${WINDOWS_VOICE_LOCALES.find((item) => item.locale === locale)?.voices.join(', ') ?? ''}`
@@ -1738,7 +1751,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <Select
             showSearch
             optionFilterProp="label"
-            className="fb-fp-select fb-fp-select-wide"
+            className="fb-fp-select"
             value={fp.region ?? 'custom'}
             onChange={chooseRegion}
             options={[
@@ -1764,7 +1777,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row label={t("时区")} check={checkFor('timezone')} hint={t("网页里的时间按它显示")}>
         <Form.Item name={['fingerprint', 'timezone']} noStyle>
-          <Select showSearch optionFilterProp="label" className="fb-fp-select fb-fp-select-wide" options={timezoneOptions} labelRender={({ value, label }) => zoneShort(String(value), label)} aria-label={t("时区")} />
+          <Select showSearch optionFilterProp="label" className="fb-fp-select" options={timezoneOptions} labelRender={({ value, label }) => zoneShort(String(value), label)} aria-label={t("时区")} />
         </Form.Item>
         {timezoneMismatch && <RowWarning fix={timezoneFix}>{t("这个时区不在{0}，网站可能发现时区和国家对不上", regionName(fp.region!))}</RowWarning>}
       </Row>
@@ -1772,7 +1785,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.uiLocale ?? 'auto'}
           // Voices and device names follow the system language again.
           onChange={(value: string) => patchFingerprint({ uiLocale: value === 'auto' ? undefined : value, voicesLocale: undefined, mediaLocale: undefined })}
@@ -1788,7 +1801,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.language}
           onChange={(language: string) => {
             const item = LANGUAGES.find((entry) => entry.language === language)
@@ -1806,14 +1819,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               {option.data.devices && <Tag bordered={false} color="green">{t("设备名")}</Tag>}
             </span>
           )}
-          labelRender={({ value }) => value === countryLocale?.language && fp.region ? `${value} · ${t("{0}默认", regionName(fp.region))}` : String(value)}
+          labelRender={({ value }) => value === countryLocale?.language && fp.region ? `${regionName(fp.region)} · ${value}` : String(value)}
           aria-label={t("浏览器语言")}
         />
         {languageMismatch && <RowWarning fix={languageFix}>{t("{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上", regionName(fp.region!), languageMismatch.expected, fp.language)}</RowWarning>}
       </Row>
       <Row label={t("地理位置")} hint={fp.location ? t("经纬度按代理 IP 的位置{0}", networkIdentity.latitude !== undefined ? `：${networkIdentity.latitude.toFixed(2)}, ${networkIdentity.longitude!.toFixed(2)}` : '') : undefined}>
         <Select
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.geolocationPermission ?? 'ask'}
           onChange={(geolocationPermission) => patchFingerprint({ geolocationPermission })}
           options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
@@ -1828,7 +1841,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             : t("Windows 自带字体 + 系统语言的字体包，本机另装的不显示")}
         >
           <Select
-            className="fb-fp-select fb-fp-select-wide"
+            className="fb-fp-select"
             value={fp.fontSource ?? 'language'}
             onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
             labelRender={({ value, label }) => value === 'language' ? followSystem(windowUiLocale) : label}
@@ -1868,7 +1881,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.voicesLocale ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ voicesLocale: value === 'auto' ? undefined : value })}
           options={[
@@ -1884,7 +1897,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <Select
           showSearch
           optionFilterProp="label"
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.mediaLocale ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaLocale: value === 'auto' ? undefined : value })}
           options={[
@@ -2036,7 +2049,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       )}
       <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，保存后固定；没授权的网站只看到有哪几类设备")}>
         <Select
-          className="fb-fp-select fb-fp-select-wide"
+          className="fb-fp-select"
           value={fp.mediaDevices ?? 'auto'}
           onChange={(value: string) => patchFingerprint({ mediaDevices: value === 'auto' ? undefined : value })}
           // Once chosen, what is plugged in; the counts are in the list.

@@ -2548,5 +2548,9 @@
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Tất cả phông cài trên máy này; mọi cửa sổ dùng phông của máy đều giống nhau",
   "链接只存在这个窗口；一个 IP 用到失效才取新的": "Liên kết chỉ lưu trong cửa sổ này; dùng một IP đến khi hỏng mới lấy cái mới",
   "改为每个窗口不同": "Đổi thành mỗi cửa sổ khác nhau",
-  "改用内核 {0}": "Dùng nhân {0}"
+  "改用内核 {0}": "Dùng nhân {0}",
+  "画布指纹，网站能读取到": "Dấu vân tay Canvas, trang web đọc được",
+  "音频指纹，网站能读取到": "Dấu vân tay âm thanh, trang web đọc được",
+  "元素尺寸指纹，网站能读取到": "Dấu vân tay kích thước phần tử, trang web đọc được",
+  "字体指纹，网站能读取到": "Dấu vân tay phông chữ, trang web đọc được"
 }

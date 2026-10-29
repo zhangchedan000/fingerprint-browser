@@ -2548,5 +2548,9 @@
   "这台电脑装的所有字体，用本机字体的窗口都一样": "Todas as fontes instaladas neste computador; iguais em todas as janelas que as usam",
   "链接只存在这个窗口；一个 IP 用到失效才取新的": "O link fica só nesta janela; um IP é usado até parar de funcionar, depois busca outro",
   "改为每个窗口不同": "Diferente em cada janela",
-  "改用内核 {0}": "Usar o kernel {0}"
+  "改用内核 {0}": "Usar o kernel {0}",
+  "画布指纹，网站能读取到": "Impressão de Canvas, os sites conseguem ler",
+  "音频指纹，网站能读取到": "Impressão de áudio, os sites conseguem ler",
+  "元素尺寸指纹，网站能读取到": "Impressão do tamanho dos elementos, os sites conseguem ler",
+  "字体指纹，网站能读取到": "Impressão de fontes, os sites conseguem ler"
 }

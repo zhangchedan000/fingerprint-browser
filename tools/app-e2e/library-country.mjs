@@ -101,10 +101,10 @@ try {
   const region = await rowText('国家/地区')
   check(region.includes('按代理库上次检测的 IP 配好'), `country hint: ${region}`)
   const ui = await rowText('系统语言')
-  check(ui.includes('随 IP 所在国家'), `系统语言: ${ui}`)
+  check(ui.includes('墨西哥 · es-419'), `系统语言: ${ui}`)
   for (const label of ['语音', '媒体设备名']) {
     const text = await rowText(label)
-    check(text.includes('随 IP 所在国家'), `${label}: ${text}`)
+    check(text.includes('墨西哥 · es-mx'), `${label}: ${text}`)
   }
 
   // 2. Another checked proxy: the country follows it.
@@ -132,7 +132,7 @@ try {
   await tab('指纹设置')
   await choose('国家/地区', '日本')
   const manual = await rowText('系统语言')
-  check(manual.includes('随国家'), `手动日本 系统语言: ${manual}`)
+  check(manual.includes('日本 · ja'), `手动日本 系统语言: ${manual}`)
   await pickProxy('198.51.100.31')
   const kept = await rowText('时区和语言')
   check(kept.includes('手动选择') && kept.includes('日本'), `手动日本 then 墨西哥代理 → ${kept}`)
