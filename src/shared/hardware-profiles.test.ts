@@ -9,7 +9,7 @@ import {
   hardwareProfile,
   defaultHardwareProfileId,
   refreshSeededGpuIdentity,
-  otherWindowsFonts
+  otherWindowsFonts, windows10HostFonts
 } from './hardware-profiles'
 import { gpuKey, kernelGpuList, MEASURED_KERNELS } from './gpu-catalog'
 import { validateProfileDraft } from './validation'
@@ -152,5 +152,12 @@ describe('fonts of the other Windows', () => {
     expect(otherWindowsFonts(windows('10.0.0'), host('10.0.0'), true)).toBeUndefined()
     expect(otherWindowsFonts(windows('10.0.0', { fontSource: 'host' }), host('19.0.0'), true)).toBeUndefined()
     expect(otherWindowsFonts(windows('10.0.0'), host('19.0.0'), false)).toBeUndefined()
+  })
+  it('gives a Windows 10 window on Windows 10 Sans Serif Collection, nothing else', () => {
+    expect(windows10HostFonts(windows('10.0.0'), host('10.0.0'), true)).toBe(true)
+    expect(windows10HostFonts(windows('10.0.0'), host('19.0.0'), true)).toBe(false)
+    expect(windows10HostFonts(windows('19.0.0'), host('10.0.0'), true)).toBe(false)
+    expect(windows10HostFonts(windows('10.0.0', { fontSource: 'host' }), host('10.0.0'), true)).toBe(false)
+    expect(windows10HostFonts(windows('10.0.0'), host('10.0.0'), false)).toBe(false)
   })
 })

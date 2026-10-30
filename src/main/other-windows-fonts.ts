@@ -16,12 +16,19 @@ const execFileAsync = promisify(execFile)
  * Windows 11's emoji, Nirmala, MingLiU-ExtB, variable Sitka, Segoe Fluent Icons, Segoe UI Variable,
  * Sans Serif Collection and Cascadia. Fonts Windows itself has under the same names are installed
  * renamed ("PrismW10 …" / "PrismW11 …", which the kernel asks for first, patch 007); fonts it does
- * not have keep their names (their names are only shown to windows of the other Windows).
+ * not have keep their names (their names are only shown to windows of the other Windows). A Windows 10
+ * window on a Windows 10 computer gets Sans Serif Collection from the Windows 11 fonts ("win10host",
+ * windows10HostFonts in hardware-profiles.ts).
  */
 export const PRISM_FONTS_FOLDER = 'prism-fonts'
 
+/** A set of fonts from the kernel package: the other Windows' or, on Windows 10, Windows 10's extras. */
+export type PrismFontSet = OtherWindows | 'win10host'
+
 interface FontFile { file: string; sha256: string; renamed: boolean }
-const FONT_SETS: Record<OtherWindows, { prefix: string; files: FontFile[] }> = {
+const SANS_SERIF_COLLECTION: FontFile = { file: 'SansSerifCollection.ttf', sha256: 'eb78c210d380fce7d3822b3a5ccfa808f1eb0390de6237f5460970679f393ce0', renamed: false }
+/** folder: the kernel package's folder under prism-fonts (the set's name when not given). */
+const FONT_SETS: Record<PrismFontSet, { prefix: string; folder?: OtherWindows; files: FontFile[] }> = {
   // Segoe UI Emoji 1.29 of Windows 10 LTSC 21H2.
   win10: { prefix: 'PrismW10', files: [
     { file: 'seguiemj.ttf', sha256: '7c0244dd8eeb7c6bdecdfc3f9e59833527fc18a66d0295ce47339069692a2b4f', renamed: true }
@@ -35,10 +42,12 @@ const FONT_SETS: Record<OtherWindows, { prefix: string; files: FontFile[] }> = {
     { file: 'SitkaVF-Italic.ttf', sha256: '74d4b98aabe85e16cb2fa6583c93f9f17642234d030a38462c36d1bcdde65928', renamed: true },
     { file: 'SegoeIcons.ttf', sha256: 'af496bd8ed18e8b45ea9c914bb3319204ab4fac450e0f4d3aab62bac6c02e5e9', renamed: false },
     { file: 'SegUIVar.ttf', sha256: '27ca1ab4bd5ad3b0404ee6a9a03b143408dbd7e5a4c9e4b2054639c03fc0f682', renamed: false },
-    { file: 'SansSerifCollection.ttf', sha256: 'eb78c210d380fce7d3822b3a5ccfa808f1eb0390de6237f5460970679f393ce0', renamed: false },
+    SANS_SERIF_COLLECTION,
     { file: 'CascadiaCode.ttf', sha256: 'cfb6a8d474018fe46d53a427e5fbee44b998822d0d3d8772914bd712cfc55ac4', renamed: false },
     { file: 'CascadiaMono.ttf', sha256: '0e141cb99609f6f10ad05313fd1807d5cc9e28658dcbb35ab162e52ff67dc718', renamed: false }
-  ] }
+  ] },
+  // Windows 10 computer, Windows 10 window: Sans Serif Collection, under its own name.
+  win10host: { prefix: '', folder: 'win11', files: [SANS_SERIF_COLLECTION] }
 }
 
 const windowsFolder = () => process.env.WINDIR ?? 'C:\\Windows'
@@ -46,10 +55,10 @@ const userFonts = () => join(process.env.LOCALAPPDATA ?? join(process.env.USERPR
 const USER_FONTS_KEY = 'HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'
 const exists = (path: string) => access(path).then(() => true, () => false)
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex')
-const installedName = (set: OtherWindows, font: FontFile) => font.renamed ? `${FONT_SETS[set].prefix}-${font.file}` : font.file
+const installedName = (set: PrismFontSet, font: FontFile) => font.renamed ? `${FONT_SETS[set].prefix}-${font.file}` : font.file
 
 /** Whether this user (or Windows, for fonts kept under their own names) has the set's fonts. */
-export async function otherWindowsFontsInstalled(set: OtherWindows, folder = userFonts(), systemFolder = join(windowsFolder(), 'Fonts')): Promise<boolean> {
+export async function otherWindowsFontsInstalled(set: PrismFontSet, folder = userFonts(), systemFolder = join(windowsFolder(), 'Fonts')): Promise<boolean> {
   for (const font of FONT_SETS[set].files) {
     const name = installedName(set, font)
     if (!await exists(join(folder, name)) && (font.renamed || !await exists(join(systemFolder, name)))) return false
@@ -217,8 +226,8 @@ export function prefixedFont(data: Buffer, prefix: string): Buffer {
 }
 
 /** The kernel package's font folder for this set, next to chrome.exe. */
-export function kernelFontsFolder(executable: string, set: OtherWindows): string {
-  return join(dirname(executable), PRISM_FONTS_FOLDER, set)
+export function kernelFontsFolder(executable: string, set: PrismFontSet): string {
+  return join(dirname(executable), PRISM_FONTS_FOLDER, FONT_SETS[set].folder ?? set)
 }
 
 /**
@@ -226,7 +235,7 @@ export function kernelFontsFolder(executable: string, set: OtherWindows): string
  * and HKCU's Fonts key, as for language font packs). Each file is checked against its SHA-256;
  * fonts already there are left alone.
  */
-export async function installOtherWindowsFonts(set: OtherWindows, kernelExecutable: string, logger?: AppLogger): Promise<void> {
+export async function installOtherWindowsFonts(set: PrismFontSet, kernelExecutable: string, logger?: AppLogger): Promise<void> {
   if (await otherWindowsFontsInstalled(set)) return
   const source = kernelFontsFolder(kernelExecutable, set)
   if (!await exists(source)) throw new Error('这个内核没有附带 Windows 字体（prism13 起附带）')

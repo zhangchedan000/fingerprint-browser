@@ -335,3 +335,19 @@ export function otherWindowsFonts(
   if (hostWindows11 === windowWindows11) return undefined
   return windowWindows11 ? 'win11' : 'win10'
 }
+
+/**
+ * A Windows 10 window on a Windows 10 computer that lacks Sans Serif Collection (LTSC 21H2 does):
+ * iphey reports a window that claims Windows 10 without it as an inconsistent fingerprint
+ * ("butterfly", tested by changing only that name). It comes from the kernel's Windows 11 fonts and
+ * prism14+ shows it to Windows 10 windows. Same conditions as otherWindowsFonts otherwise.
+ */
+export function windows10HostFonts(
+  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
+  host: { platform: BrowserPlatform; platformVersion: string },
+  fingerprintKernel: boolean
+): boolean {
+  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return false
+  return !isWindows11PlatformVersion(host.platformVersion) &&
+    !isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
+}

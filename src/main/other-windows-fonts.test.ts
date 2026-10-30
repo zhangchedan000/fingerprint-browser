@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fontRegistryName } from './language-fonts'
-import { otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
+import { kernelFontsFolder, otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
 
 /** A two-table font (head, name) with Windows (UTF-16BE) and Mac (Roman) name records. */
 function tinyFont(names: Array<[platform: number, nameId: number, text: string]>): Buffer {
@@ -119,6 +119,11 @@ describe('fonts of the other Windows', () => {
       // A font kept under its own name may be Windows' own (or installed by another program).
       await writeFile(join(system, 'CascadiaMono.ttf'), '')
       expect(await otherWindowsFontsInstalled('win11', folder, system)).toBe(true)
+      // Windows 10 windows on Windows 10: Sans Serif Collection alone, from the Windows 11 fonts.
+      expect(await otherWindowsFontsInstalled('win10host', folder, system)).toBe(true)
+      await rm(join(folder, 'SansSerifCollection.ttf'))
+      expect(await otherWindowsFontsInstalled('win10host', folder, system)).toBe(false)
+      expect(kernelFontsFolder(join('k', 'chrome.exe'), 'win10host')).toBe(join('k', 'prism-fonts', 'win11'))
     } finally {
       await rm(folder, { recursive: true, force: true })
       await rm(system, { recursive: true, force: true })

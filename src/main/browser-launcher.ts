@@ -16,9 +16,10 @@ import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, type OtherWindows } from '../shared/hardware-profiles'
+import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
+import type { PrismFontSet } from './other-windows-fonts'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
@@ -110,8 +111,8 @@ export interface LaunchPrerequisites {
   ensureTunnel(route: TunnelRoute): Promise<void>
   /** Installs the Windows language font pack the window's system language needs, when missing. */
   ensureFonts(uiLocale: string): Promise<void>
-  /** Installs the other Windows' fonts the kernel package ships (Windows 10's on Windows 11 and back). */
-  ensureOtherWindowsFonts?(set: OtherWindows, kernelExecutable: string): Promise<void>
+  /** Installs fonts the kernel package ships (Windows 10's on Windows 11 and back; Windows 10's extras). */
+  ensureOtherWindowsFonts?(set: PrismFontSet, kernelExecutable: string): Promise<void>
 }
 
 export interface LaunchHooks {
@@ -226,7 +227,10 @@ export class BrowserLauncher {
         this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId, error: error instanceof Error ? error.message : String(error) })
       })
     }
-    const otherFonts = otherWindowsFonts(fingerprint, hostHardwareSnapshot(), engine.fingerprintKernel === true)
+    const host = hostHardwareSnapshot()
+    const kernel = engine.fingerprintKernel === true
+    const otherFonts: PrismFontSet | undefined = otherWindowsFonts(fingerprint, host, kernel) ??
+      (windows10HostFonts(fingerprint, host, kernel) ? 'win10host' : undefined)
     if (otherFonts && this.prerequisites.ensureOtherWindowsFonts) {
       await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
         this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
