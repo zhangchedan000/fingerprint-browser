@@ -1,6 +1,6 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion } from '../shared/hardware-profiles'
-import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
+import { GPU_VENDOR_IDS, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
@@ -128,6 +128,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     '--disable-background-networking',
     '--disable-component-update'
   ]
+  // Chromium 155 and older, started elevated, relaunch themselves de-elevated only after they began
+  // writing Local State (chrome_browser_main_win.cc MaybeAutoDeElevate). The relaunch then finds the
+  // empty temporary file, takes it for Local State and shows "preferences corrupt" on a new profile
+  // (measured with Process Monitor, 当前进度.md 3.76). 156 does it before writing anything.
+  const major = kernelMajor(options.engineVersion)
+  if (major !== undefined && major < 156) args.push('--do-not-de-elevate')
 
   // Automatic size: no --window-size, so the kernel opens its own default window the way a
   // fresh Chrome does, and remembers the size the user drags it to.

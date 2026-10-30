@@ -30,6 +30,12 @@ describe('launch arguments', () => {
     expect(first).not.toContain('--restore-last-session')
     expect(first).toContain(saved.startUrls[0])
   })
+  it('keeps 155 and older from relaunching de-elevated, which leaves an empty Local State on a new profile', () => {
+    const run = (engineVersion?: string) => buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion })
+    expect(run('prism-155.0.8059.84')).toContain('--do-not-de-elevate')
+    expect(run('prism-156.0.8078.47')).not.toContain('--do-not-de-elevate')
+    expect(run(undefined)).not.toContain('--do-not-de-elevate')
+  })
   it('passes device memory, 8 GB when unset on a fingerprint kernel (without it the kernel reports the computer\'s own)', () => {
     expect(buildLaunchArgs(profile(), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-device-memory'))).toBe(false)
     expect(buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' })).toContain('--fingerprint-device-memory=8')
