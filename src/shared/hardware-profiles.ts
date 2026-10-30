@@ -294,3 +294,37 @@ export function editableFingerprint(config: FingerprintConfig): FingerprintConfi
   return { ...rest, hardwareProfileId: seeded, gpu: profile?.gpu ?? config.gpu, renderIdentityVersion: 4 }
 }
 
+
+/** Windows platform versions 13 and up are Windows 11 (Chrome reads Windows.Foundation.UniversalApiContract). */
+export function isWindows11PlatformVersion(version: string | undefined): boolean {
+  return Number.parseInt(version ?? '', 10) >= 13
+}
+
+/**
+ * The platform version a window reports. A Windows window on a computer running the same Windows
+ * (10 or 11) reports this computer's own version, as its fonts, media formats and emoji are this
+ * computer's; host hardware always does. Otherwise the window's own setting (a Windows 10 window
+ * on Windows 11: 10.0.0).
+ */
+export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId'>, hostPlatformVersion?: string): string {
+  if (!hostPlatformVersion) return config.platformVersion
+  if (hardwareProfile(config.hardwareProfileId)?.hostMatched) return hostPlatformVersion
+  if (config.platform !== 'windows' || !/^\d+\.\d+\.\d+$/.test(hostPlatformVersion)) return config.platformVersion
+  return isWindows11PlatformVersion(config.platformVersion) === isWindows11PlatformVersion(hostPlatformVersion)
+    ? hostPlatformVersion
+    : config.platformVersion
+}
+
+/**
+ * A Windows 10 window on a Windows 11 computer with the fingerprint kernel's font list: the kernel
+ * (prism13) shows it Windows 10's Segoe UI Emoji, which the launcher installs.
+ */
+export function needsWindows10Fonts(
+  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
+  host: { platform: BrowserPlatform; platformVersion: string },
+  fingerprintKernel: boolean
+): boolean {
+  return fingerprintKernel && host.platform === 'windows' && config.platform === 'windows' && config.fontSource !== 'host'
+    && isWindows11PlatformVersion(host.platformVersion)
+    && !isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
+}

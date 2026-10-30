@@ -8,7 +8,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { effectiveGpu } from '../shared/hardware-profiles'
+import { effectiveGpu, effectivePlatformVersion } from '../shared/hardware-profiles'
 import { effectiveNetworkIdentity } from '../shared/network-identity'
 import { launchedScreen } from '../shared/screen'
 import type {
@@ -141,6 +141,8 @@ export interface ExpectedIdentity {
   screen: [number, number]
   timezone: string
   language: string
+  /** UA-CH platform version the window should report (effectivePlatformVersion). */
+  platformVersion?: string
 }
 
 export interface OtherWindowCheck {
@@ -185,11 +187,12 @@ export function evaluateFingerprint(input: {
     add({ row: 'system', status: 'ok', message: `${os} · ${fp.brand}${uaMajor ? ` ${uaMajor}` : ''}，与内核一致` })
   }
   if (fp.platform === 'windows' && observed.uaPlatformVersion) {
-    const expectedMajor = fp.platformVersion.split('.')[0]
+    const want = expected.platformVersion ?? fp.platformVersion
+    const expectedMajor = want.split('.')[0]
     const seenMajor = observed.uaPlatformVersion.split('.')[0]
     add(seenMajor === expectedMajor
       ? { row: 'platformVersion', status: 'ok', message: `系统版本 ${observed.uaPlatformVersion}` }
-      : { row: 'platformVersion', status: 'bad', message: `页面报告的系统版本 ${observed.uaPlatformVersion} 与设置的 ${fp.platformVersion} 不一致` })
+      : { row: 'platformVersion', status: 'bad', message: `页面报告的系统版本 ${observed.uaPlatformVersion} 与设置的 ${want} 不一致` })
   }
 
   // Time zone and language against the settings and the proxy's location.
@@ -543,7 +546,7 @@ export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonl
 }
 
 /** Everything the page should report for this window, computed the same way the launcher does. */
-export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostScreen'> & { engine?: EngineStatus }): ExpectedIdentity {
+export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostPlatformVersion' | 'hostScreen'> & { engine?: EngineStatus }): ExpectedIdentity {
   const fp = profile.fingerprint
   const identity = effectiveNetworkIdentity(fp, options.proxy?.ok ? options.proxy : undefined, { allowGeoConflict: true })
   const size = launchedScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen, options.engine?.windowScreen).screen
@@ -552,6 +555,7 @@ export function expectedIdentity(profile: BrowserProfile, options: Pick<Fingerpr
     cores: fp.coresSource === 'host' ? options.hostHardwareConcurrency : fp.hardwareConcurrency,
     screen,
     timezone: identity.timezone,
-    language: identity.language
+    language: identity.language,
+    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion)
   }
 }

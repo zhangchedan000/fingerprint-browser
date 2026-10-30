@@ -1,6 +1,6 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
-import { FontPackDownload } from '../../components/FontPackDownload'
+import { FontPackDownload, Windows10FontsInstall } from '../../components/FontPackDownload'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
@@ -36,7 +36,8 @@ import {
   defaultHardwareProfileId,
   editableFingerprint,
   effectiveGpu,
-  gpuChoices
+  gpuChoices,
+  needsWindows10Fonts
 } from '../../../../shared/hardware-profiles'
 import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
@@ -2177,6 +2178,28 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                   <span className="fb-check-dot" />
                   <span className="fb-check-message">{t("已安装{0}字体包", fontPackLabel(fontScript, getLocale()))}</span>
                 </div>
+              )}
+            </div>
+          )}
+          {fontPacks?.windows10Fonts && needsWindows10Fonts(fp, { platform: 'windows', platformVersion: fontPacks.windows10Fonts.hostPlatformVersion }, selectedEngine?.fingerprintKernel === true) && (
+            // A Windows 10 window on this Windows 11 computer uses Windows 10's emoji font (installed
+            // renamed, from the team server); without it the emoji are Windows 11's.
+            <div className="fb-check-results">
+              {fontPacks.windows10Fonts.installed ? (
+                <div className="fb-check-item is-ok">
+                  <span className="fb-check-dot" />
+                  <span className="fb-check-message">{t("已安装 Windows 10 的表情字体")}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="fb-check-item is-bad">
+                    <span className="fb-check-dot" />
+                    <span className="fb-check-message">
+                      {t("这台电脑是 Windows 11：Windows 10 窗口要用 Windows 10 的表情字体，否则表情是 Windows 11 的。打开窗口时会自动从团队服务器下载安装（需要登录），也可以现在安装。")}
+                    </span>
+                  </div>
+                  <Windows10FontsInstall onInstalled={setFontPacks} />
+                </>
               )}
             </div>
           )}

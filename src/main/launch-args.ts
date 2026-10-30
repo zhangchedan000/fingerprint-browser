@@ -1,5 +1,5 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
-import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu } from '../shared/hardware-profiles'
+import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion } from '../shared/hardware-profiles'
 import { GPU_VENDOR_IDS, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
@@ -78,9 +78,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const hardwareConcurrency = (hardware?.hostMatched || fp.coresSource === 'host') && options.hostHardwareConcurrency
     ? options.hostHardwareConcurrency
     : fp.hardwareConcurrency
-  const platformVersion = hardware?.hostMatched && options.hostPlatformVersion
-    ? options.hostPlatformVersion
-    : fp.platformVersion
+  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion)
   const alignedSeed = options.fingerprintKernel ? effectiveFingerprintSeed(fp, options.engineVersion) : fp.seed >>> 0
   if (alignedSeed === undefined) {
     // Checked before launch (assertFingerprintKernelCompatibility); never fall back to another card.

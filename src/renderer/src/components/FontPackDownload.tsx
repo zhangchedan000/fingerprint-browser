@@ -60,3 +60,33 @@ export function FontPackDownload({ scripts, onInstalled }: { scripts: string[]; 
     </div>
   )
 }
+
+/**
+ * Installs Windows 10's Segoe UI Emoji for Windows 10 windows on this Windows 11 computer (a
+ * private file of the team server, or the vault's private-fonts folder).
+ */
+export function Windows10FontsInstall({ onInstalled }: { onInstalled: (status: FontPackStatus) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+
+  async function install(): Promise<void> {
+    setBusy(true)
+    setError(undefined)
+    try {
+      onInstalled(await window.browserApi.app.installWindows10Fonts())
+    } catch (reason) {
+      setError(humanError(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fb-font-pack-download">
+      <Button size="small" type="primary" loading={busy} onClick={() => void install()}>
+        {t("安装 Windows 10 表情字体（约 2 MB）")}
+      </Button>
+      {error && <Alert type="error" showIcon message={error} />}
+    </div>
+  )
+}

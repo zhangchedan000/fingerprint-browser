@@ -16,7 +16,7 @@ import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-profiles'
+import { hardwareProfile, hardwareProfileSummary, needsWindows10Fonts } from '../shared/hardware-profiles'
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
@@ -110,6 +110,8 @@ export interface LaunchPrerequisites {
   ensureTunnel(route: TunnelRoute): Promise<void>
   /** Installs the Windows language font pack the window's system language needs, when missing. */
   ensureFonts(uiLocale: string): Promise<void>
+  /** Installs Windows 10's Segoe UI Emoji (renamed) for Windows 10 windows on Windows 11. */
+  ensureWindows10Fonts?(): Promise<void>
 }
 
 export interface LaunchHooks {
@@ -307,6 +309,12 @@ export class BrowserLauncher {
         this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId: id, error: error instanceof Error ? error.message : String(error) })
       })
     }
+    const hostHardware = hostHardwareSnapshot()
+    if (this.prerequisites?.ensureWindows10Fonts && needsWindows10Fonts(profile.fingerprint, hostHardware, engine.fingerprintKernel === true)) {
+      await this.prerequisites.ensureWindows10Fonts().catch((error) => {
+        this.logger?.error('Windows 10 表情字体没有装上，窗口照常打开（表情是本机 Windows 11 的）', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
     if (profile.apiProxy) {
       // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
       profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true)
@@ -321,7 +329,6 @@ export class BrowserLauncher {
       if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
     }
     profile = await this.lockOnLaunch(profile, options.allowGeoConflict === true)
-    const hostHardware = hostHardwareSnapshot()
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
     if (selectedHardware?.hostMatched && selectedHardware.platform !== hostHardware.platform) {
       throw new Error(`${selectedHardware.label} 只能在对应系统上使用；请改用本机模板或成套模拟模板`)

@@ -755,6 +755,7 @@ export interface BrowserApi {
     defaultDownloadFolder: () => Promise<string>
     /** Windows language font packages on this computer. */
     fontPacks: () => Promise<FontPackStatus>
+    installWindows10Fonts: () => Promise<FontPackStatus>
     /** Downloads packages from Microsoft and installs them for this user (all missing ones by default). */
     installFontPacks: (scripts?: string[]) => Promise<FontPackStatus>
     onFontPackProgress: (listener: (progress: FontPackProgress) => void) => () => void

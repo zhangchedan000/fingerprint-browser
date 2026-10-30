@@ -37,6 +37,7 @@ const api: BrowserApi = {
     openDownloadFolder: () => ipcRenderer.invoke('app:open-download-folder'),
     defaultDownloadFolder: () => ipcRenderer.invoke('app:default-download-folder'),
     fontPacks: () => ipcRenderer.invoke('fonts:packs'),
+    installWindows10Fonts: () => ipcRenderer.invoke('fonts:install-windows10'),
     installFontPacks: (scripts?: string[]) => ipcRenderer.invoke('fonts:install-packs', scripts),
     onFontPackProgress: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, progress: FontPackProgress): void => listener(progress)

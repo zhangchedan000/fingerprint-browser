@@ -42,12 +42,12 @@ const fp: FingerprintConfig = {
 const expected: ExpectedIdentity = { cores: 8, screen: [1920, 1080], timezone: 'America/New_York', language: 'en-US' }
 const proxy = { ok: true, ip: '203.0.113.9', timezone: 'America/New_York', country: 'US' } as unknown as Record<string, unknown>
 
-function check(overrides: { observed?: Partial<FingerprintObserved>; fingerprint?: Partial<FingerprintConfig>; others?: Parameters<typeof evaluateFingerprint>[0]['others']; proxy?: unknown } = {}) {
+function check(overrides: { observed?: Partial<FingerprintObserved>; fingerprint?: Partial<FingerprintConfig>; others?: Parameters<typeof evaluateFingerprint>[0]['others']; proxy?: unknown; expected?: Partial<ExpectedIdentity> } = {}) {
   return evaluateFingerprint({
     fingerprint: { ...fp, ...overrides.fingerprint },
     engine,
     observed: { ...seen, ...overrides.observed },
-    expected,
+    expected: { ...expected, ...overrides.expected },
     proxy: (overrides.proxy ?? proxy) as Parameters<typeof evaluateFingerprint>[0]['proxy'],
     usesProxy: true,
     others: overrides.others ?? []
@@ -60,6 +60,14 @@ describe('fingerprint check verdicts', () => {
     const items = check()
     expect(items.filter((item) => item.status !== 'ok')).toEqual([])
     expect(row(items, 'gpu')[0].message).toContain('RTX 4060')
+  })
+
+  it('expects the platform version the launch gives the window (this computer\'s on the same Windows)', () => {
+    const [same] = row(check({ fingerprint: { platformVersion: '19.0.0' }, expected: { platformVersion: '15.0.0' } }), 'platformVersion')
+    expect(same.status).toBe('ok')
+    const [other] = row(check({ observed: { uaPlatformVersion: '19.0.0' }, fingerprint: { platformVersion: '10.0.0' }, expected: { platformVersion: '10.0.0' } }), 'platformVersion')
+    expect(other).toMatchObject({ status: 'bad' })
+    expect(other.message).toContain('10.0.0')
   })
 
   it('flags a time zone that does not match the proxy and offers that time zone alone', () => {

@@ -367,6 +367,30 @@ export class TeamApi {
     }
   }
 
+  /** A private file of the team server (pb_data/assets, server/team/pb_hooks/assets.pb.js). */
+  async downloadAsset(name: string, target: string): Promise<void> {
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.server}/api/team/assets/${encodeURIComponent(name)}`, {
+        headers: { Authorization: this.token },
+        signal: AbortSignal.timeout(10 * 60_000)
+      })
+    } catch (error) {
+      throw new TeamApiError(`下载 ${name} 失败（${fetchFailure(error)}）`, 0)
+    }
+    if (!response.ok || !response.body) {
+      let parsed: unknown
+      try { parsed = await response.json() } catch { parsed = undefined }
+      throw new TeamApiError(errorMessage(response.status, parsed as never), response.status)
+    }
+    try {
+      await pipeline(Readable.fromWeb(response.body as WebReadableStream), createWriteStream(target))
+    } catch (error) {
+      await rm(target, { force: true })
+      throw new TeamApiError(`下载 ${name} 失败（${error instanceof Error ? error.message : String(error)}）`, 0)
+    }
+  }
+
   async logs(query: TeamLogQuery): Promise<TeamLogPage> {
     const filters: string[] = []
     const quote = (value: string) => `"${value.replace(/["\\]/g, '')}"`

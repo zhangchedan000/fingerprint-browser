@@ -101,4 +101,6 @@ export interface FontPackStatus {
   /** Scripts of WINDOWS_FONT_PACKS still missing. */
   missing: string[]
   supported: boolean
+  /** Windows 10's Segoe UI Emoji (renamed) that Windows 10 windows use on Windows 11. */
+  windows10Fonts?: { installed: boolean; hostPlatformVersion: string }
 }

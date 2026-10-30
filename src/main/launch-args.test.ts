@@ -68,6 +68,20 @@ describe('launch arguments', () => {
     expect(args).toContain('--fingerprint-platform-version=10.0.0')
   })
 
+  it('reports this computer\'s Windows version when the window claims the same Windows, its own otherwise', () => {
+    const version = (platformVersion: string, hostPlatformVersion?: string) => buildLaunchArgs(profile({ ...WINDOWS, platformVersion }), { userDataDir: '/data', hostPlatformVersion })
+      .find((arg) => arg.startsWith('--fingerprint-platform-version='))
+    // Windows 11 window on Windows 11 25H2 (19) and on 22H2 (15): the computer's own.
+    expect(version('19.0.0', '19.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+    expect(version('19.0.0', '15.0.0')).toBe('--fingerprint-platform-version=15.0.0')
+    // Windows 10 window on Windows 10: the computer's own; on Windows 11: Windows 10's 10.
+    expect(version('10.0.0', '10.0.0')).toBe('--fingerprint-platform-version=10.0.0')
+    expect(version('10.0.0', '19.0.0')).toBe('--fingerprint-platform-version=10.0.0')
+    // Windows 11 window on Windows 10: its own setting.
+    expect(version('19.0.0', '10.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+    expect(version('19.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+  })
+
   it('tells Prism kernels what the chosen card does with AV1', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const av1 = (gpu: string) => buildLaunchArgs(profile({ ...WINDOWS, gpu }), prism).filter((arg) => arg.startsWith('--fingerprint-gpu-av1'))

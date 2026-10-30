@@ -343,6 +343,14 @@ export class TeamManager {
     return { server: this.file.server || DEFAULT_TEAM_SERVER, user: this.user, offline: this.offline }
   }
 
+  /** Downloads a private file of the team server; undefined when not signed in. */
+  async assetDownloader(): Promise<((name: string, target: string) => Promise<void>) | undefined> {
+    await this.restoring
+    const api = this.api
+    if (!api || !this.file.token || !this.user) return undefined
+    return (name, target) => api.downloadAsset(name, target)
+  }
+
   private requireApi(): TeamApi {
     if (!this.api || !this.file.token) throw new Error('请先登录')
     return this.api
