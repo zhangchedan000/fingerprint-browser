@@ -96,10 +96,13 @@ export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen, aside
     </div>
   )
   if (!aside) return card
+  // The wrapper measures the width it has: a narrow one (the 代理 IP form) puts IP 评分 below the IP.
   return (
-    <div className={`fb-ip-card-row${stale ? ' is-stale' : ''}${off ? ' is-off' : ''}`}>
-      {card}
-      <div className="fb-ip-card-aside">{aside}</div>
+    <div className="fb-ip-card-wrap">
+      <div className={`fb-ip-card-row${stale ? ' is-stale' : ''}${off ? ' is-off' : ''}`}>
+        {card}
+        <div className="fb-ip-card-aside">{aside}</div>
+      </div>
     </div>
   )
 }

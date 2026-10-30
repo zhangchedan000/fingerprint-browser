@@ -584,6 +584,12 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-ip-card-row.is-off { border-style: dashed; border-color: var(--fb-line); background: transparent; }
 .fb-ip-card-row.is-stale { opacity: .6; border-style: dashed; }
 .fb-ip-card-aside { padding: 12px 14px; border-left: 1px solid var(--fb-accent-soft-border); background: var(--fb-surface); }
+/* Too narrow for two columns (the 代理 IP form): IP 评分 goes below the IP instead of squeezing it. */
+.fb-ip-card-wrap { container-type: inline-size; }
+@container (max-width: 560px) {
+  .fb-ip-card-row { grid-template-columns: minmax(0, 1fr); }
+  .fb-ip-card-aside { border-left: 0; border-top: 1px solid var(--fb-accent-soft-border); }
+}
 .fb-ip-score { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px 10px; align-content: start; font-size: 13px; }
 .fb-ip-score .k { color: var(--fb-text-secondary); }
 .fb-ip-score .v { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }

@@ -6,9 +6,9 @@
  * on the 代理 IP page. A country picked by hand first stays, with the mismatch pointed out. The
  * language rows say what they follow (国家 · language · code).
  *
- *   npm run build && node tools/app-e2e/library-country.mjs        (Linux: xvfb-run -a …)
+ *   npm run build && node tools/app-e2e/library-country.mjs [screenshot folder]        (Linux: xvfb-run -a …)
  */
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { evaluate, launchApp, quitApp, removeTemporaryTree } from './run.mjs'
@@ -21,6 +21,8 @@ const userData = await mkdtemp(join(tmpdir(), 'prism-library-country-'))
 process.env.PRISM_E2E_TEAM_OFFLINE = '1'
 const failures = []
 const check = (ok, message) => { console.log(ok ? 'ok  ' : 'FAIL', message); if (!ok) failures.push(message) }
+const shots = process.argv[2] ? resolve(process.argv[2]) : undefined
+if (shots) await mkdir(shots, { recursive: true })
 
 // First run: three library proxies; two get a check as the 代理 IP page would have saved it.
 let instance = await launchApp({ app }, userData)
@@ -52,6 +54,7 @@ await writeFile(file, JSON.stringify(stored))
 instance = await launchApp({ app }, userData)
 try {
   const run = (expression) => evaluate(instance.client, expression)
+  await instance.client.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
   await run(`window.browserApi.uiLanguage.set('zh-CN').then(() => true)`)
   await run('location.reload(), true')
   await delay(2500)
@@ -95,6 +98,13 @@ try {
   const proxyCard = () => run(`${drawer}.innerText.replace(/\\s+/g, ' ')`)
   // The exit IP card (below 出口 IP): the proxy's latest check, marked as shared, with its IP 评分.
   const exitCard = async () => { const text = await proxyCard(); return text.slice(text.indexOf('出口 IP')) }
+  const shot = async (name) => {
+    if (!shots) return
+    await run(`(() => { document.querySelector('.fb-ip-card-wrap')?.scrollIntoView({ block: 'center' }); return true })()`)
+    await delay(400)
+    const image = await instance.client.send('Page.captureScreenshot', { format: 'png' })
+    await writeFile(join(shots, name), Buffer.from(image.data, 'base64'))
+  }
 
   // 1. Nothing picked by hand: the checked proxy's country fills the window.
   await openNew()
@@ -105,6 +115,7 @@ try {
   const shared = await exitCard()
   check(shared.includes('203.0.113.9') && shared.includes('代理 IP 库里这个代理最近一次的检测'), `shared check shown: ${shared.slice(0, 300)}`)
   check(/评分\s*82|82\s*\/\s*100|\b82\b/.test(shared), `shared IP 评分 shown: ${shared.slice(0, 400)}`)
+  await shot('exit-card-editor.png')
   await tab('指纹设置')
   const region = await rowText('国家/地区')
   check(region.includes('按代理库上次检测的 IP 配好'), `country hint: ${region}`)
@@ -180,6 +191,10 @@ try {
   const formExit = form.slice(form.indexOf('出口 IP'))
   check(formExit.includes('203.0.113.9') && formExit.includes('检测于') && !formExit.includes('还没检测'), `edit form shows the check: ${formExit.slice(0, 300)}`)
   check(/\b82\b/.test(formExit), `edit form shows the IP 评分: ${formExit.slice(0, 400)}`)
+  await shot('exit-card-proxy-form.png')
+  // Narrow (the form): IP 评分 below the IP, the IP's details as wide as the card.
+  const layout = await run(`(() => { const row = document.querySelector('.ant-modal .fb-ip-card-row'); const aside = row?.querySelector('.fb-ip-card-aside'); const card = row?.querySelector('.fb-ip-card'); return row && aside && card ? { stacked: aside.getBoundingClientRect().top >= card.getBoundingClientRect().bottom - 1, cardWidth: Math.round(card.getBoundingClientRect().width), rowWidth: Math.round(row.getBoundingClientRect().width) } : null })()`)
+  check(layout?.stacked && layout.cardWidth >= layout.rowWidth - 4, `proxy form exit card stacks: ${JSON.stringify(layout)}`)
   await click('取 消') || await click('取消')
   await delay(800)
 
