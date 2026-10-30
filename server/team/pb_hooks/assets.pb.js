@@ -8,7 +8,7 @@
 // (Route handlers run in their own VM: names they use are declared inside them.)
 
 routerAdd("GET", "/api/team/assets/{name}", (e) => {
-  const ASSET_NAMES = ["seguiemj-win10.ttf"]
+  const ASSET_NAMES = ["seguiemj-win10.ttf", "segoeui-win10.zip"]
   const name = e.request.pathValue("name")
   if (!e.auth || e.auth.getBool("disabled")) throw new ForbiddenError("账号不可用")
   if (ASSET_NAMES.indexOf(name) < 0) throw new NotFoundError("没有这个文件")
@@ -22,7 +22,7 @@ routerAdd("GET", "/api/team/assets/{name}", (e) => {
 }, $apis.requireAuth("users"))
 
 routerAdd("PUT", "/api/team/assets/{name}", (e) => {
-  const ASSET_NAMES = ["seguiemj-win10.ttf"]
+  const ASSET_NAMES = ["seguiemj-win10.ttf", "segoeui-win10.zip"]
   const MAX_BYTES = 64 * 1024 * 1024
   const name = e.request.pathValue("name")
   if (ASSET_NAMES.indexOf(name) < 0) throw new NotFoundError("没有这个文件")

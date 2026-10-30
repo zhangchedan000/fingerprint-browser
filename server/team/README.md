@@ -61,11 +61,12 @@ docker exec prism-team /pb/pocketbase superuser upsert 邮箱 密码 --dir=/pb/p
 
 ## 私有文件（`pb_hooks/assets.pb.js`）
 
-有些文件启动器要用、但不能放进公开的安装包或公开的内核发布，就放在服务器的 `pb_data/assets/`，团队成员登录后由启动器下载（`GET /api/team/assets/<名字>`，没登录 401，停用的账号 403）。现在只有一个：
+有些文件启动器要用、但不能放进公开的安装包或公开的内核发布，就放在服务器的 `pb_data/assets/`，团队成员登录后由启动器下载（`GET /api/team/assets/<名字>`，没登录 401，停用的账号 403）。现在有两个：
 
 | 文件 | 用途 | 原件 |
 | --- | --- | --- |
 | `seguiemj-win10.ttf` | Win10 的表情字体（Segoe UI Emoji 1.29，SHA-256 `7c0244dd…692a2b4f`）：Win11 电脑上开 Win10 窗口时用它画表情 | 私有仓库 `prism-kernel` 的 `private-assets/win10-emoji/` |
+| `segoeui-win10.zip` | Win10 的 Segoe UI 全家 12 个文件（正体 5.62、斜体 5.32、Black 2.02，SHA-256 `2e1bfb50…c58ccd39586a7`）：Win11 电脑上开 Win10 窗口时用它排 Segoe UI（Win11 的 5.72 字距不同） | 私有仓库 `prism-kernel` 的 `private-assets/win10-segoeui/` |
 
 `pb_data/` 整个在每天的备份 zip 里，所以从备份恢复服务器时这些文件也回来了。
 
