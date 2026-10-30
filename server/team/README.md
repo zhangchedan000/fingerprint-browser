@@ -59,6 +59,31 @@ PocketBase 自带的网页管理后台在 `/_/`，需要先在服务器上创建
 docker exec prism-team /pb/pocketbase superuser upsert 邮箱 密码 --dir=/pb/pb_data
 ```
 
+## 私有文件（`pb_hooks/assets.pb.js`）
+
+有些文件启动器要用、但不能放进公开的安装包或公开的内核发布，就放在服务器的 `pb_data/assets/`，团队成员登录后由启动器下载（`GET /api/team/assets/<名字>`，没登录 401，停用的账号 403）。现在只有一个：
+
+| 文件 | 用途 | 原件 |
+| --- | --- | --- |
+| `seguiemj-win10.ttf` | Win10 的表情字体（Segoe UI Emoji 1.29，SHA-256 `7c0244dd…692a2b4f`）：Win11 电脑上开 Win10 窗口时用它画表情 | 私有仓库 `prism-kernel` 的 `private-assets/win10-emoji/` |
+
+`pb_data/` 整个在每天的备份 zip 里，所以从备份恢复服务器时这些文件也回来了。
+
+**放上去 / 重新放上去**（换了服务器、或者 `pb_data` 丢了）：上传要一次性口令，只能在服务器上生成，用一次就作废：
+
+```bash
+cd /opt/prism-team
+T=$(head -c 24 /dev/urandom | base64 | tr -d '/+='); echo -n "$T" > pb_data/assets/.upload-token; echo "$T"
+```
+
+然后在有这个文件的电脑上（从私有仓库取）：
+
+```bash
+node upload-asset.mjs seguiemj-win10.ttf seguiemj-win10.ttf <上面的口令>
+```
+
+返回 `200 {"name":"seguiemj-win10.ttf","size":2072388}` 就好了。
+
 ## 测试
 
 `smoke-test.sh` 会在一台**全新的**服务器上依次走一遍：建账号、权限、占用锁、版本冲突、40 MB 上传下载、停用账号。它会创建测试账号，跑完要清空 `pb_data`。
