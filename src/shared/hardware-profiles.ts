@@ -315,16 +315,23 @@ export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platfo
     : config.platformVersion
 }
 
+/** Fonts of the other Windows a window needs: Windows 10's on a Windows 11 computer or the other way round. */
+export type OtherWindows = 'win10' | 'win11'
+
 /**
- * A Windows 10 window on a Windows 11 computer with the fingerprint kernel's font list: the kernel
- * (prism13) shows it Windows 10's Segoe UI Emoji, which the launcher installs.
+ * Which other Windows' fonts a Windows window needs on this computer (prism13: the kernel package
+ * ships them, the launcher installs them, patch 007 shows them): a Windows 10 window on Windows 11
+ * gets Windows 10's emoji, a Windows 11 window on Windows 10 gets Windows 11's own fonts. Undefined
+ * when the window claims this computer's Windows, uses this computer's real fonts, or not on Windows.
  */
-export function needsWindows10Fonts(
+export function otherWindowsFonts(
   config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
   host: { platform: BrowserPlatform; platformVersion: string },
   fingerprintKernel: boolean
-): boolean {
-  return fingerprintKernel && host.platform === 'windows' && config.platform === 'windows' && config.fontSource !== 'host'
-    && isWindows11PlatformVersion(host.platformVersion)
-    && !isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
+): OtherWindows | undefined {
+  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return undefined
+  const hostWindows11 = isWindows11PlatformVersion(host.platformVersion)
+  const windowWindows11 = isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
+  if (hostWindows11 === windowWindows11) return undefined
+  return windowWindows11 ? 'win11' : 'win10'
 }

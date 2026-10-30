@@ -65,7 +65,7 @@ docker exec prism-team /pb/pocketbase superuser upsert 邮箱 密码 --dir=/pb/p
 
 | 文件 | 用途 | 原件 |
 | --- | --- | --- |
-| `seguiemj-win10.ttf` | Win10 的表情字体（Segoe UI Emoji 1.29，SHA-256 `7c0244dd…692a2b4f`）：Win11 电脑上开 Win10 窗口时用它画表情 | 私有仓库 `prism-kernel` 的 `private-assets/win10-emoji/` |
+| `seguiemj-win10.ttf` | Win10 的表情字体（Segoe UI Emoji 1.29，SHA-256 `7c0244dd…692a2b4f`）。**启动器不从这里下载**：prism13 起它随内核包附带（`prism-fonts\\win10`），这里只留作备份 | 私有仓库 `prism-kernel` 的 `private-assets/win10-emoji/` |
 | `segoeui-win10.zip` | Win10 的 Segoe UI 全家 12 个文件（正体 5.62、斜体 5.32、Black 2.02，SHA-256 `2e1bfb50…c58ccd39586a7`）。**启动器不用它**：实测 Win10 原版 5.62 和 Win11 的 5.72 排出来一样（之前看到的字距差别来自那台 Win10 电脑另装的旧版 Segoe UI 5.05/5.00），只留作备份 | 私有仓库 `prism-kernel` 的 `private-assets/win10-segoeui/` |
 
 `pb_data/` 整个在每天的备份 zip 里，所以从备份恢复服务器时这些文件也回来了。

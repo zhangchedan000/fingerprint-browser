@@ -18,7 +18,7 @@ import {
 } from '../shared/windows-font-packs'
 import type { AppLogger } from './app-logger'
 import { hostHardwareSnapshot } from './host-hardware'
-import { installWindows10Fonts, windows10FontsInstalled, type Windows10FontSources } from './windows10-fonts'
+import { otherWindowsFontsInstalled } from './other-windows-fonts'
 
 const execFileAsync = promisify(execFile)
 
@@ -42,8 +42,12 @@ export async function fontPackStatus(): Promise<FontPackStatus> {
   const installed: string[] = []
   const missing: string[] = []
   for (const pack of WINDOWS_FONT_PACKS) (await packInstalled(pack) ? installed : missing).push(pack.script)
-  const windows10Fonts = { installed: await windows10FontsInstalled(), hostPlatformVersion: hostHardwareSnapshot().platformVersion }
-  return { installed, missing, supported: true, windows10Fonts }
+  const otherWindowsFonts = {
+    hostPlatformVersion: hostHardwareSnapshot().platformVersion,
+    win10: await otherWindowsFontsInstalled('win10'),
+    win11: await otherWindowsFontsInstalled('win11')
+  }
+  return { installed, missing, supported: true, otherWindowsFonts }
 }
 
 /**
@@ -156,7 +160,7 @@ export async function installFontPack(script: string, fetchImpl: Fetch, onProgre
   }
 }
 
-export function registerLanguageFontsIpc(fetchImpl: Fetch, send: (progress: FontPackProgress) => void, logger?: AppLogger, windows10Sources?: () => Promise<Windows10FontSources>): void {
+export function registerLanguageFontsIpc(fetchImpl: Fetch, send: (progress: FontPackProgress) => void, logger?: AppLogger): void {
   // One package at a time: a second click waits for the first instead of downloading twice.
   let queue: Promise<unknown> = Promise.resolve()
   ipcMain.handle('fonts:packs', () => fontPackStatus())
@@ -164,15 +168,6 @@ export function registerLanguageFontsIpc(fetchImpl: Fetch, send: (progress: Font
     const run = queue.then(async () => {
       const wanted = scripts?.length ? scripts : (await fontPackStatus()).missing
       for (const script of wanted) await installFontPack(script, fetchImpl, send, logger)
-      return fontPackStatus()
-    })
-    queue = run.catch(() => undefined)
-    return run
-  })
-  ipcMain.handle('fonts:install-windows10', () => {
-    const run = queue.then(async () => {
-      if (!windows10Sources) throw new Error('不支持')
-      await installWindows10Fonts(await windows10Sources(), logger)
       return fontPackStatus()
     })
     queue = run.catch(() => undefined)

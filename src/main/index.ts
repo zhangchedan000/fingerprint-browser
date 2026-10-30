@@ -25,7 +25,7 @@ import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
 import { fontPackStatus, installFontPack, registerLanguageFontsIpc } from './language-fonts'
-import { installWindows10Fonts, type Windows10FontSources } from './windows10-fonts'
+import { installOtherWindowsFonts } from './other-windows-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
@@ -231,12 +231,8 @@ app.whenReady().then(async () => {
   // A window from another computer opens here as it is: its kernel, 网络加速 and font pack are fetched.
   // Windows needing the same missing kernel wait for one download.
   const kernelInstalls = new Map<string, Promise<void>>()
-  // Windows 10's emoji font: a private file of the team server, a copy kept in the vault.
-  const windows10FontSources = async (): Promise<Windows10FontSources> => ({
-    folder: join(vaultPath, 'private-fonts'),
-    download: await activeTeam.assetDownloader()
-  })
-  let windows10FontInstall: Promise<void> | undefined
+  // The other Windows' fonts come with the kernel; one install at a time.
+  let otherFontsInstall: Promise<void> = Promise.resolve()
   launcher.setPrerequisites({
     installKernel: (version) => {
       const pending = kernelInstalls.get(version) ?? kernels.install(version).then(() => undefined).finally(() => kernelInstalls.delete(version))
@@ -252,11 +248,10 @@ app.whenReady().then(async () => {
       await installFontPack(script, (input, init) => net.fetch(input as string, init),
         (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined)
     },
-    ensureWindows10Fonts: () => {
-      windows10FontInstall ??= windows10FontSources()
-        .then((sources) => installWindows10Fonts(sources, logger ?? undefined))
-        .finally(() => { windows10FontInstall = undefined })
-      return windows10FontInstall
+    ensureOtherWindowsFonts: (set, kernelExecutable) => {
+      const run = otherFontsInstall.then(() => installOtherWindowsFonts(set, kernelExecutable, logger ?? undefined))
+      otherFontsInstall = run.catch(() => undefined)
+      return run
     }
   })
   // Windows keep the kernel they were created with; changing the default only affects new ones.
@@ -289,8 +284,7 @@ app.whenReady().then(async () => {
   registerLanguageFontsIpc(
     (input, init) => net.fetch(input as string, init),
     (progress) => mainWindow?.webContents.send('fonts:progress', progress),
-    logger,
-    windows10FontSources
+    logger
   )
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),

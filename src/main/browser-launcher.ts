@@ -16,7 +16,7 @@ import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { hardwareProfile, hardwareProfileSummary, needsWindows10Fonts } from '../shared/hardware-profiles'
+import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, type OtherWindows } from '../shared/hardware-profiles'
 import { applyChromePreferences } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
@@ -110,8 +110,8 @@ export interface LaunchPrerequisites {
   ensureTunnel(route: TunnelRoute): Promise<void>
   /** Installs the Windows language font pack the window's system language needs, when missing. */
   ensureFonts(uiLocale: string): Promise<void>
-  /** Installs Windows 10's Segoe UI Emoji (renamed) for Windows 10 windows on Windows 11. */
-  ensureWindows10Fonts?(): Promise<void>
+  /** Installs the other Windows' fonts the kernel package ships (Windows 10's on Windows 11 and back). */
+  ensureOtherWindowsFonts?(set: OtherWindows, kernelExecutable: string): Promise<void>
 }
 
 export interface LaunchHooks {
@@ -310,9 +310,10 @@ export class BrowserLauncher {
       })
     }
     const hostHardware = hostHardwareSnapshot()
-    if (this.prerequisites?.ensureWindows10Fonts && needsWindows10Fonts(profile.fingerprint, hostHardware, engine.fingerprintKernel === true)) {
-      await this.prerequisites.ensureWindows10Fonts().catch((error) => {
-        this.logger?.error('Windows 10 表情字体没有装上，窗口照常打开（表情是本机 Windows 11 的）', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    const otherFonts = otherWindowsFonts(profile.fingerprint, hostHardware, engine.fingerprintKernel === true)
+    if (otherFonts && this.prerequisites?.ensureOtherWindowsFonts) {
+      await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
+        this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId: id, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
       })
     }
     if (profile.apiProxy) {

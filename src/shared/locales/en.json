@@ -2642,7 +2642,6 @@
   "检测时的出口 IP 是 {0}，现在是 {1}，请重新检测": "The check went out through {0}; the exit IP is now {1}. Check again",
   "代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上": "The proxy IP's time zone is {0}, the window's is {1}; websites can tell the time does not match where the IP is",
   "代理 IP（{0}）的时区是 {1}，窗口的时区是 {2}；网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？": "The proxy IP ({0}) is in the {1} time zone, the window in {2}; websites can tell the browser's time does not match where the IP is. Click \"Match the IP\" in the window editor's Time Zone row. Launch anyway?",
-  "已安装 Windows 10 的表情字体": "Windows 10's emoji font is installed",
-  "这台电脑是 Windows 11：Windows 10 窗口要用 Windows 10 的表情字体，否则表情是 Windows 11 的。打开窗口时会自动从团队服务器下载安装（需要登录），也可以现在安装。": "This computer runs Windows 11: Windows 10 windows need Windows 10's emoji font, otherwise the emoji are Windows 11's. It is downloaded from the team server when the window opens (sign-in needed), or install it now.",
-  "安装 Windows 10 表情字体（约 2 MB）": "Install the Windows 10 emoji font (about 2 MB)"
+  "已装好 Windows {0} 窗口要用的字体": "The fonts Windows {0} windows need are installed",
+  "这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。": "This computer runs Windows {0}: Windows {1} windows need Windows {1}'s own fonts (shipped with the kernel), installed automatically when the window opens."
 }
