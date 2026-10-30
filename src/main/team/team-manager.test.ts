@@ -278,14 +278,38 @@ describe('TeamManager', () => {
     await owner.team.beforeLaunch(local.id)
 
     // Next start: the saved sign-in cannot be checked, so the app stays on the sign-in page.
+    let tries = 0
     const restarted = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined,
-      (async () => { throw new Error('getaddrinfo ENOTFOUND') }) as unknown as typeof fetch)
+      (async () => { tries += 1; throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND team.test'), { code: 'ENOTFOUND' }) }) }) as unknown as typeof fetch)
     restarted.syncDelayMs = -1
+    restarted.restoreRetryMs = [0, 0, 0]
     await restarted.initialize()
     const status = await restarted.status()
+    expect(tries).toBe(4)
     expect(status.user).toBeUndefined()
-    expect(status.offline).toContain('ENOTFOUND')
+    expect(status.offline).toBe('连不上团队服务器（fetch failed: ENOTFOUND）')
     await expect(restarted.beforeLaunch(local.id)).rejects.toThrow('请先登录')
+  })
+
+  it('tries an unreachable server again at start, so a network blip does not stop the app', async () => {
+    const server = fakeServer()
+    const owner = await computer(server)
+    await owner.team.login('http://team.test', 'boss', 'ownerpass')
+
+    let tries = 0
+    const blip = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      tries += 1
+      if (tries <= 2) throw new TypeError('fetch failed', { cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }) })
+      return server.fetcher(input, init)
+    }) as typeof fetch
+    const restarted = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined, blip)
+    restarted.syncDelayMs = -1
+    restarted.restoreRetryMs = [0, 0, 0]
+    await restarted.initialize()
+    const status = await restarted.status()
+    expect(tries).toBeGreaterThanOrEqual(3)
+    expect(status.user).toMatchObject({ username: 'boss' })
+    expect(status.offline).toBeUndefined()
   })
 
   it('puts members’ own windows in the cloud too, and deleting here keeps the cloud copy', async () => {

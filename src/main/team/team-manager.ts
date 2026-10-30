@@ -249,7 +249,7 @@ export class TeamManager {
         return
       }
       // In the background: the app must not wait for the server to start.
-      this.restoring = this.restoreSession(api)
+      this.restoring = this.restoreSession(api, this.restoreRetryMs)
     }
   }
 
@@ -258,7 +258,10 @@ export class TeamManager {
   private offline?: string
   private verifiedAt = 0
 
-  private async restoreSession(api: TeamApi): Promise<void> {
+  /** At start an unreachable server is tried again after these waits: a network blip is no error. */
+  restoreRetryMs = [2_000, 4_000, 8_000]
+
+  private async restoreSession(api: TeamApi, retryMs: number[] = []): Promise<void> {
     this.offline = undefined
     try {
       this.user = await api.refresh()
@@ -270,9 +273,15 @@ export class TeamManager {
       this.scheduleSync()
       void this.pushRewritten()
     } catch (error) {
+      const rejected = error instanceof TeamApiError && error.status > 0
+      if (!rejected && retryMs.length) {
+        this.logger?.info('团队服务器暂时连不上，稍后再试', { error: error instanceof Error ? error.message : String(error), waitMs: retryMs[0] })
+        await new Promise((resolve) => setTimeout(resolve, retryMs[0]))
+        return this.restoreSession(api, retryMs.slice(1))
+      }
       // Unreachable: keep the token so "retry" can try again; rejected (expired, disabled): sign out.
       this.user = undefined
-      if (error instanceof TeamApiError && error.status > 0) {
+      if (rejected) {
         this.api = undefined
         this.file.token = ''
         await this.save().catch(() => undefined)

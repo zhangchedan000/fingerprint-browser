@@ -7,6 +7,14 @@ import type { TeamBackup, TeamInvite, TeamLogPage, TeamLogQuery, TeamMemberDraft
 
 export type Fetch = typeof fetch
 
+/** Why a fetch failed: Node puts the network error (DNS, reset, refused, timeout) in `cause`. */
+export function fetchFailure(error: unknown): string {
+  if (!(error instanceof Error)) return String(error)
+  const cause = error.cause as { code?: unknown; message?: unknown } | undefined
+  const detail = typeof cause?.code === 'string' ? cause.code : typeof cause?.message === 'string' ? cause.message : undefined
+  return detail && !error.message.includes(detail) ? `${error.message}: ${detail}` : error.message
+}
+
 /** A record of team_profiles as the server sends it. */
 export interface RemoteProfile {
   id: string
@@ -141,8 +149,7 @@ export class TeamApi {
     try {
       response = await this.fetcher(`${this.server}${path}`, { method, headers, body: payload, signal: AbortSignal.timeout(timeoutMs) })
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      throw new TeamApiError(`连不上团队服务器（${reason}）`, 0)
+      throw new TeamApiError(`连不上团队服务器（${fetchFailure(error)}）`, 0)
     }
     const text = await response.text()
     let parsed: unknown
@@ -305,7 +312,7 @@ export class TeamApi {
     try {
       response = await this.fetcher(url, { signal: AbortSignal.timeout(30 * 60_000) })
     } catch (error) {
-      throw new TeamApiError(`下载登录态失败（${error instanceof Error ? error.message : String(error)}）`, 0)
+      throw new TeamApiError(`下载登录态失败（${fetchFailure(error)}）`, 0)
     }
     if (!response.ok || !response.body) throw new TeamApiError(`下载登录态失败（HTTP ${response.status}）`, response.status)
     await pipeline(Readable.fromWeb(response.body as WebReadableStream), createWriteStream(target))
@@ -345,7 +352,7 @@ export class TeamApi {
         signal: AbortSignal.timeout(60 * 60_000)
       })
     } catch (error) {
-      throw new TeamApiError(`下载备份失败（${error instanceof Error ? error.message : String(error)}）`, 0)
+      throw new TeamApiError(`下载备份失败（${fetchFailure(error)}）`, 0)
     }
     if (!response.ok || !response.body) {
       let parsed: unknown
