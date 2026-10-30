@@ -58,24 +58,28 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
       </div>
     )
   }
-  const base = record.baseline
-  if (base.error || !base.score) {
+  const baseline = record.baseline
+  const read = (reading: IpSiteReading | undefined): reading is IpSiteReading => Boolean(reading && !reading.error && reading.score)
+  // The baseline site not read but the other one was: the other one's verdicts are shown instead.
+  const base = read(baseline) ? baseline : read(record.other) ? record.other : undefined
+  if (!base) {
     return (
       <div className="fb-ip-score is-failed">
-        <b>{t("{0} 没读到", base.name)}</b>
-        <span className="fb-muted">{mt(base.error ?? '页面没有出结果')}</span>
+        <b>{t("{0} 没读到", baseline.name)}</b>
+        <span className="fb-muted">{mt(baseline.error ?? '页面没有出结果')}</span>
         <span className="fb-ip-score-actions">
-          {onOpen && <Button type="link" size="small" className="fb-link-start" onClick={() => onOpen(base.url)}>{t("在窗口里打开 {0} 看", base.name)}</Button>}
+          {onOpen && <Button type="link" size="small" className="fb-link-start" onClick={() => onOpen(baseline.url)}>{t("在窗口里打开 {0} 看", baseline.name)}</Button>}
           {onRetry && <Button type="link" size="small" className="fb-link-start" onClick={onRetry}>{t("重新读取")}</Button>}
         </span>
-        {base.screenshot && <Image src={base.screenshot} width={120} className="fb-ip-score-shot" />}
+        {baseline.screenshot && <Image src={baseline.screenshot} width={120} className="fb-ip-score-shot" />}
         {record.other && !record.other.error && <span className="fb-ip-score-src">{record.other.name}：{summary(record.other)}</span>}
       </div>
     )
   }
-  const scoreValue = Number.parseFloat(base.score)
+  const fallback = base !== baseline
+  const scoreValue = Number.parseFloat(base.score!)
   const scoreMax = Number.parseFloat(base.scoreOf ?? '100')
-  const other = record.other
+  const other = fallback ? undefined : record.other
   const diff = other && !other.error ? differences(base, other) : []
   const sameIp = (reading: IpSiteReading | undefined) => !reading?.ip || !checkIp || reading.ip === checkIp
   return (
@@ -97,7 +101,9 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
       <span className="k">{t("原生")}</span>
       <span className="v">{base.nativeText ? <span className={`fb-ip-tag ${base.native ? 'is-native' : 'is-broadcast'}`}>{base.nativeText}</span> : '-'}</span>
       <div className="fb-ip-score-src">
-        <span>{t("以 {0} 为准", base.name)}{other ? ` · ${t("对照 {0}：{1}", other.name, other.error ? t("没读到") : summary(other) || t("只截图"))}` : ''}</span>
+        {fallback
+          ? <span className="is-diff">{t("{0} 没读到（{1}），这次用 {2} 的结果", baseline.name, mt(baseline.error ?? '页面没有出结果'), base.name)}{onRetry && <Button type="link" size="small" className="fb-link-inline" onClick={onRetry}>{t("重新读取")}</Button>}</span>
+          : <span>{t("以 {0} 为准", base.name)}{other ? ` · ${t("对照 {0}：{1}", other.name, other.error ? t("没读到") : summary(other) || t("只截图"))}` : ''}</span>}
         {diff.length > 0 && <span className="is-diff">{t("{0} 判断为「{1}」，两边不一致", other!.name, diff.join('、'))}</span>}
         {(!sameIp(base) || !sameIp(other)) && <span className="is-diff">{t("网站看到的 IP 和检测到的不是同一个（代理在换出口 IP）")}</span>}
         <span>{relativeTime(record.checkedAt, getLocale())}</span>

@@ -30,7 +30,7 @@ let ids
 try {
   const run = (expression) => evaluate(instance.client, expression)
   ids = {}
-  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33']]) {
+  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33'], ['fb', '198.51.100.34']]) {
     ids[name] = await run(`window.browserApi.proxy.create({ protocol: 'socks5', host: '${host}', port: 1080, username: 'a', password: 'b', note: '${name}' }).then((proxy) => proxy.id)`)
   }
 } finally {
@@ -48,6 +48,15 @@ for (const proxy of stored.proxies) {
     proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', ip: '203.0.113.9', score: '82', scoreOf: '100', scoreKind: 'quality', countryCode: 'MX' } }
   }
   if (proxy.id === ids.us) proxy.check = result('US', 'United States', 'America/Chicago', 41.88, -87.63)
+  // IPLark timed out, ping0.cc was read: ping0's verdicts are shown.
+  if (proxy.id === ids.fb) {
+    proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.12)
+    proxy.ipSites = {
+      checkedAt, checkIp: '203.0.113.9',
+      baseline: { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', error: '页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）' },
+      other: { site: 'ping0', name: 'ping0.cc', url: 'https://ping0.cc/', ip: '203.0.113.9', score: '13%', scoreKind: 'risk', scoreNote: '极度纯净', country: '墨西哥', company: 'Podernet', usage: 'residential', usageText: '家庭宽带 IP', native: true, nativeText: '原生 IP' }
+    }
+  }
 }
 await writeFile(file, JSON.stringify(stored))
 
@@ -216,6 +225,22 @@ try {
     if (!formScore.includes('正在用这个窗口打开检测网站读取')) break
   }
   check(!formScore.includes('基础信息格式无效'), `edit form reading gets past the draft check: ${formScore.slice(formScore.indexOf('出口 IP'), formScore.indexOf('出口 IP') + 300)}`)
+  await click('取 消') || await click('取消')
+  await delay(800)
+
+  // 9. IPLark not read, ping0.cc read: ping0's verdicts fill the panel, with why.
+  await run(`(() => {
+    const line = [...document.querySelectorAll('tr')].find((node) => node.innerText.includes('198.51.100.34'))
+    const edit = line && [...line.querySelectorAll('button')].find((node) => node.innerText.trim() === '编辑')
+    edit?.click()
+    return Boolean(edit)
+  })()`)
+  await delay(1500)
+  const fallbackText = await run(`${modal}.innerText.replace(/\\s+/g, ' ')`)
+  const panel = fallbackText.slice(fallbackText.indexOf('出口 IP'))
+  check(/风控值 13%/.test(panel) && panel.includes('家庭宽带 IP') && panel.includes('原生 IP') && panel.includes('Podernet'), `ping0.cc shown when IPLark was not read: ${panel.slice(0, 400)}`)
+  check(panel.includes('IPLark 没读到') && panel.includes('这次用 ping0.cc 的结果') && panel.includes('重新读取'), `the panel says why: ${panel.slice(0, 500)}`)
+  await shot('exit-card-fallback.png')
 } finally {
   await quitApp(instance)
   await removeTemporaryTree(userData)

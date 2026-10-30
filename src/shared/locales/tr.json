@@ -2583,6 +2583,7 @@
   "不用这个 IP：保存后，下次启动从链接取新的": "Bu IP kullanılmıyor: kaydettikten sonra sonraki açılışta bağlantıdan yenisi alınır",
   "IP 评分": "IP puanı",
   "{0} 判断为「{1}」，两边不一致": "{0} “{1}” diyor: iki site uyuşmuyor",
+  "{0} 没读到（{1}），这次用 {2} 的结果": "{0} okunamadı ({1}); bu sefer {2} sonucu gösteriliyor",
   "{0} 没读到": "{0} okunamadı",
   "不能当基准": "Referans olamaz",
   "以 {0} 为准": "{0} esas alınır",

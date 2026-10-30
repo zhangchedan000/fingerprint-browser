@@ -2583,6 +2583,7 @@
   "不用这个 IP：保存后，下次启动从链接取新的": "Este IP não será usado: depois de salvar, a próxima abertura pega outro pelo link",
   "IP 评分": "Pontuação do IP",
   "{0} 判断为「{1}」，两边不一致": "{0} indica “{1}”: os dois sites discordam",
+  "{0} 没读到（{1}），这次用 {2} 的结果": "Não foi possível ler {0} ({1}); desta vez mostrando {2}",
   "{0} 没读到": "Não foi possível ler {0}",
   "不能当基准": "Não pode ser a referência",
   "以 {0} 为准": "Conforme {0}",
