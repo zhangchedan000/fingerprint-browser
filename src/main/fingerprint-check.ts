@@ -477,13 +477,16 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
         // placeholder is left; the last reading is the result and the picture.
         let parsed: ReturnType<typeof parseDeepSite>
         let previous: string | undefined
+        // Readings in a row that did not change: two (3 s), as CreepJS fills its WebRTC and device rows after its verdict.
+        let unchanged = 0
         let settled = false
         while (!settled && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 1500))
           const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
           const text = page?.result?.value ?? ''
           parsed = parseDeepSite(site.url, text) ?? parsed
-          settled = (Boolean(parsed) || (!known && text.length > 0)) && text === previous && !pageStillLoading(text)
+          unchanged = text === previous ? unchanged + 1 : 0
+          settled = (Boolean(parsed) || (!known && text.length > 0)) && unchanged >= 2 && !pageStillLoading(text)
           previous = text
         }
         if (parsed) Object.assign(result, parsed)

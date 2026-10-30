@@ -49,6 +49,9 @@ describe('deep check parsers', () => {
     expect(pageStillLoading(IPHEY_LOADING)).toBe(true)
     expect(pageStillLoading(BROWSERSCAN)).toBe(false)
     expect(pageStillLoading(IPHEY)).toBe(false)
+    // CreepJS before its hashes are done (10-30).
+    expect(pageStillLoading('FP ID: Computing...\nFuzzy: 0000\n0 ms\nWebRTC')).toBe(true)
+    expect(pageStillLoading(CREEPJS)).toBe(false)
   })
 
   it('reads verdicts only from the built-in sites, wherever on them', () => {

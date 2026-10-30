@@ -176,7 +176,7 @@ export function validDeepCheckSites(input: unknown): DeepCheckSite[] | undefined
  * and "--/--", iphey's "Temporary value", "Loading…" anywhere.
  */
 export function pageStillLoading(text: string): boolean {
-  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…|scanning…|Collecting Data…/i.test(text)
+  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…|scanning…|Collecting Data…|Computing\.\.\./i.test(text)
 }
 
 /**
