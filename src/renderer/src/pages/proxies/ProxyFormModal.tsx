@@ -55,7 +55,7 @@ export function ProxyFormModal({ open, proxy, busy, onSubmit, onClose }: ProxyFo
     draft: () => {
       const values = form.getFieldsValue(true) as ProxyDraft
       const config = apiMode ? { ...apiDraft(), password: '' } : { ...values, password: values.password ?? '', tunnel: route }
-      return { ...defaultProfileDraft(0), proxy: config, tunnel: route }
+      return { ...defaultProfileDraft(1), proxy: config, tunnel: route }
     },
     libraryProxyId: proxy?.id
   })

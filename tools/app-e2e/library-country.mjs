@@ -119,6 +119,10 @@ try {
   await pickProxy('198.51.100.32')
   const us = await rowText('网络身份')
   check(us.includes('基于 IP 生成') && us.includes('美国') && us.includes('America/Chicago'), `美国代理 → ${us}`)
+  // Checked but no IP 评分 kept (checked where none was read): it is read now, without a click.
+  let usCard = ''
+  for (let i = 0; i < 20 && !/正在用这个窗口打开检测网站读取|没读到|重新读取/.test(usCard); i++) { await delay(300); usCard = await exitCard() }
+  check(/正在用这个窗口打开检测网站读取|没读到|重新读取/.test(usCard) && !usCard.includes('基础信息格式无效'), `IP 评分 read by itself for a checked proxy without one: ${usCard.slice(0, 300)}`)
 
   // 3. A proxy never checked: the country stays, with a hint to check it.
   await pickProxy('198.51.100.33')
@@ -176,6 +180,27 @@ try {
   const formExit = form.slice(form.indexOf('出口 IP'))
   check(formExit.includes('203.0.113.9') && formExit.includes('检测于') && !formExit.includes('还没检测'), `edit form shows the check: ${formExit.slice(0, 300)}`)
   check(/\b82\b/.test(formExit), `edit form shows the IP 评分: ${formExit.slice(0, 400)}`)
+  await click('取 消') || await click('取消')
+  await delay(800)
+
+  // 8. The edit form reads IP 评分 itself (it used to fail before reading: 浏览器环境基础信息格式无效).
+  await run(`(() => {
+    const line = [...document.querySelectorAll('tr')].find((node) => node.innerText.includes('198.51.100.32'))
+    const edit = line && [...line.querySelectorAll('button')].find((node) => node.innerText.trim() === '编辑')
+    edit?.click()
+    return Boolean(edit)
+  })()`)
+  await delay(1500)
+  const modal = `(document.querySelector('.ant-modal-wrap:not([style*="display: none"]) .ant-modal') ?? document.body)`
+  const asked = await run(`(() => { const button = [...${modal}.querySelectorAll('button')].find((node) => ['读取 IP 评分', '重新读取'].includes(node.innerText.trim())); button?.click(); return Boolean(button) })()`)
+  check(asked, 'edit form offers 读取 IP 评分')
+  let formScore = ''
+  for (let i = 0; i < 30; i++) {
+    await delay(500)
+    formScore = await run(`${modal}.innerText.replace(/\\s+/g, ' ')`)
+    if (!formScore.includes('正在用这个窗口打开检测网站读取')) break
+  }
+  check(!formScore.includes('基础信息格式无效'), `edit form reading gets past the draft check: ${formScore.slice(formScore.indexOf('出口 IP'), formScore.indexOf('出口 IP') + 300)}`)
 } finally {
   await quitApp(instance)
   await removeTemporaryTree(userData)

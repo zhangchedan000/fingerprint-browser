@@ -11,6 +11,8 @@ import { IpScorePanel } from './IpScorePanel'
 export function useIpScore(source: { draft: () => ProfileDraft; profileId?: string; libraryProxyId?: string; onOpen?: (url: string) => void }) {
   const [state, setState] = useState<{ record?: IpSiteRecord; loading?: boolean; error?: string }>({})
   const run = useRef(0)
+  // Proxy and IP pairs read on their own already (a failed reading is not retried by itself).
+  const autoRead = useRef(new Set<string>())
 
   async function read(): Promise<void> {
     const current = ++run.current
@@ -29,20 +31,35 @@ export function useIpScore(source: { draft: () => ProfileDraft; profileId?: stri
     setState(record ? { record } : {})
   }
 
+  /** A new editing session: proxies may be read on their own again. */
+  function forgetAutoReads(): void {
+    autoRead.current.clear()
+  }
+
   /**
    * The reading kept for a library proxy or a window, about `checkIp` (the IP shown). One still being
-   * read (by any page, for that proxy) shows as reading and comes in when it is done.
+   * read (by any page, for that proxy) shows as reading and comes in when it is done. `readIfMissing`
+   * (a library proxy whose check worked): none kept about this IP, so it is read now, once.
    */
-  async function follow(target: { proxyId?: string; profileId?: string }, checkIp?: string): Promise<void> {
+  async function follow(target: { proxyId?: string; profileId?: string }, checkIp?: string, options: { readIfMissing?: boolean } = {}): Promise<void> {
     const current = ++run.current
     const fits = (record: IpSiteRecord | null) => record && (!checkIp || !record.checkIp || record.checkIp === checkIp) ? { record } : {}
     try {
       const kept = await window.browserApi.proxy.keptIpSites(target, false)
       if (current !== run.current) return
       setState({ ...fits(kept.record), ...(kept.pending ? { loading: true } : {}) })
-      if (!kept.pending) return
-      const done = await window.browserApi.proxy.keptIpSites(target, true)
-      if (current === run.current) setState(fits(done.record))
+      let record = kept.record
+      if (kept.pending) {
+        const done = await window.browserApi.proxy.keptIpSites(target, true)
+        if (current !== run.current) return
+        setState(fits(done.record))
+        record = done.record
+      }
+      const key = `${target.proxyId ?? target.profileId ?? ''}|${checkIp ?? ''}`
+      if (options.readIfMissing && checkIp && !fits(record).record && !autoRead.current.has(key)) {
+        autoRead.current.add(key)
+        await read()
+      }
     } catch {
       if (current === run.current) setState({})
     }
@@ -64,5 +81,5 @@ export function useIpScore(source: { draft: () => ProfileDraft; profileId?: stri
     />
   )
 
-  return { record: state.record, loading: state.loading === true, read, follow, reset, showKept, token: () => run.current, panel }
+  return { record: state.record, loading: state.loading === true, read, follow, reset, forgetAutoReads, showKept, token: () => run.current, panel }
 }

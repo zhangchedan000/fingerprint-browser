@@ -3,6 +3,14 @@ import { defaultProfileDraft } from './defaults'
 import { normalizeUrl, validateProfileDraft } from './validation'
 
 describe('profile validation', () => {
+  it('accepts the draft of any index, 0 included (the proxy form reads IP 评分 with one)', () => {
+    for (const index of [0, -3, 1, 2, 9, 100]) {
+      const draft = defaultProfileDraft(index)
+      expect(draft.color).toMatch(/^#[\da-f]{6}$/i)
+      expect(() => validateProfileDraft(draft)).not.toThrow()
+    }
+  })
+
   it('normalizes start pages to HTTPS URLs', () => {
     expect(normalizeUrl('example.com')).toBe('https://example.com/')
   })

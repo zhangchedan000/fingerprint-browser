@@ -611,8 +611,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // This editor's own id: what its API links give belongs to this window only.
     draftSession.current = crypto.randomUUID()
     ipScore.reset()
-    // The last reading about the IP shown (a library proxy's, wherever it was read); one still being read comes in.
-    if (profile) void ipScore.follow({ profileId: profile.id }, profile.proxyCheck?.ip)
+    ipScore.forgetAutoReads()
+    // The last reading about the IP shown (a library proxy's, wherever it was read); one still being read
+    // comes in. A window on a library proxy whose check worked and that has none about this IP reads it.
+    const onLibrary = Boolean(profile?.proxyId && proxies.some((item) => item.id === profile.proxyId && !item.apiUrl))
+    if (profile) void ipScore.follow({ profileId: profile.id }, profile.proxyCheck?.ip, { readIfMissing: onLibrary && profile.proxyCheck?.ok === true })
     void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
@@ -752,7 +755,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         setProxyEdited(false)
         setResultShared(true)
         setKeepCheck(true)
-        void ipScore.follow({ proxyId: id }, found.check.ip)
+        void ipScore.follow({ proxyId: id }, found.check.ip, { readIfMissing: found.check.ok })
         if (!profile && !countryByHand.current && found.check.ok) fixToIp(found.check)
       }).catch(() => undefined)
     }, 400)
@@ -1114,7 +1117,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       setProxyResult(shown ?? null)
       setResultShared(Boolean(shown))
       setKeepCheck(true)
-      if (picked && !picked.apiUrl) void ipScore.follow({ proxyId: picked.id }, shown?.ip)
+      // No IP 评分 kept about the IP shown (checked where none was read): read it now.
+      if (picked && !picked.apiUrl) void ipScore.follow({ proxyId: picked.id }, shown?.ip, { readIfMissing: shown?.ok === true })
       else ipScore.reset()
       // 网络加速 follows the picked proxy; back on its saved proxy the window has its own again.
       form.setFieldValue('tunnel', profile?.tunnel && changed.proxyId === profile.proxyId ? { ...profile.tunnel } : undefined)
