@@ -6,6 +6,9 @@ const IPHEY_LOADING = 'Your Digital Identity Looks\n\nBROWSER\n\nTemporary value
 const IPHEY = 'Your Digital Identity Looks\nTrustworthy\nBROWSER\n\nChrome\n\nLOCATION\n\nFrance\n\nIP ADDRESS\n\n200.36.26.36\n\nHARDWARE\n\nEverything is fine\n\nSOFTWARE\n\nEverything is fine\n\n100\nMX SCORE'
 const BROWSERSCAN = 'Bot Detection:\nNoDetection\nBrowser fingerprint authenticity: 90%\nUnexpand\nDifferent time zones\n-10%\n\nYour IP timezone does not match your local timezone.'
 const PIXELSCAN = 'Fingerprint Scan\nRestart\n\nYour Browser Fingerprint is inconsistent\n\nHow to Fix it?\n\nChrome 144.0.0.0 on Windows\n\nBrowser\n\nCheck Geo API\n\nTimezone spoofed\n\nLocation\n\nProxy detected\n\nProxy\n\nBest proxy providers\n\nMasking detected\n\nFingerprint\n\nBest antidetect browsers\n\nNo automated behavior detected\n\nBot check'
+// Pixelscan while it scans (10-30, prism13 on the Windows 11 computer): its FAQ further down already says "fingerprint is consistent".
+const PIXELSCAN_FAQ = '\n\nHow can I tell if my fingerprint is consistent across sessions using Pixelscan?\nRun the same profile through Pixelscan multiple times without changing settings. If key values like canvas hash, WebGL, and timezone stay the same, your fingerprint is consistent.'
+const PIXELSCAN_SCANNING = 'Fingerprint Scan\nYour Browser Fingerprint is scanning…\nCollecting Data…\nBrowser\nCheck Geo API\nLocation\nProxy\nFingerprint\nBot check' + PIXELSCAN_FAQ
 const CREEPJS = 'Headless543e3565\nchromium: true\n25% like headless: fafdf9d1\n0% headless: 52defe05\n0% stealth: 295d4148'
 
 describe('deep check parsers', () => {
@@ -23,6 +26,14 @@ describe('deep check parsers', () => {
   })
 
   it('reads Pixelscan consistency and the flagged checks', () => {
+    // Not its FAQ while the scan still runs, which made the screenshot early and the verdict "consistent".
+    expect(parseDeepSite('https://pixelscan.net/fingerprint-check', PIXELSCAN_SCANNING)).toBeUndefined()
+    expect(pageStillLoading(PIXELSCAN_SCANNING)).toBe(true)
+    expect(pageStillLoading(PIXELSCAN + PIXELSCAN_FAQ)).toBe(false)
+    expect(parseDeepSite('https://pixelscan.net/fingerprint-check', PIXELSCAN + PIXELSCAN_FAQ)).toEqual({
+      status: 'bad',
+      findings: ['Fingerprint is inconsistent', 'Location: Timezone spoofed', 'Proxy: Proxy detected', 'Fingerprint: Masking detected']
+    })
     expect(parseDeepSite('https://pixelscan.net/fingerprint-check', PIXELSCAN)).toEqual({
       status: 'bad',
       findings: ['Fingerprint is inconsistent', 'Location: Timezone spoofed', 'Proxy: Proxy detected', 'Fingerprint: Masking detected']

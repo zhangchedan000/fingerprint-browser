@@ -91,7 +91,8 @@ function browserscan(text: string): Parsed | undefined {
 
 /** Pixelscan: "Your Browser Fingerprint is inconsistent" and a status line above each check. */
 function pixelscan(text: string): Parsed | undefined {
-  const verdict = text.match(/Fingerprint is (consistent|inconsistent)/i)?.[1]
+  // Its headline only: the FAQ below says "…your fingerprint is consistent" while the scan still runs.
+  const verdict = text.match(/^\s*Your Browser Fingerprint is (consistent|inconsistent)\s*$/im)?.[1]
   if (!verdict) return undefined
   const all = lines(text)
   const findings: string[] = [`Fingerprint is ${verdict}`]
@@ -175,7 +176,7 @@ export function validDeepCheckSites(input: unknown): DeepCheckSite[] | undefined
  * and "--/--", iphey's "Temporary value", "Loading…" anywhere.
  */
 export function pageStillLoading(text: string): boolean {
-  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…/i.test(text)
+  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…|scanning…|Collecting Data…/i.test(text)
 }
 
 /**
