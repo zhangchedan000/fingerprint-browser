@@ -1811,7 +1811,7 @@
   "显卡 {0}，WebGL 与 WebGPU 一致": "GPU {0}, WebGL và WebGPU khớp",
   "页面报告 {0} 核，与设置的 {1} 核不一致": "Trang báo {0} lõi, khác {1} lõi đã đặt",
   "内存 {0} GB": "Bộ nhớ {0} GB",
-  "页面报告内存 {0} GB，与设置的 {1} GB 不同：当前内核不支持设置内存": "Trang báo bộ nhớ {0} GB, khác {1} GB đã đặt: kernel không đặt được bộ nhớ",
+  "页面报告内存 {0} GB，与设置的 {1} GB 不同": "Trang báo bộ nhớ {0} GB, khác {1} GB đã đặt",
   "{0} 两次读取结果不同，容易被识别为伪装": "{0} khác nhau giữa hai lần đọc, dễ bị phát hiện là giả",
   "{0} 与窗口 {1} 相同，两个窗口会被关联": "{0} giống cửa sổ {1}, hai cửa sổ sẽ bị liên kết",
   "{0} 与窗口 {1} 相同：都用本机真实值，同一台电脑上会一样": "{0} giống cửa sổ {1}: cả hai dùng giá trị thật nên giống nhau trên cùng máy",

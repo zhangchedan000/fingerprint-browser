@@ -173,8 +173,10 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
   if (fp.portScanProtection === false) args.push('--disable-features=LocalNetworkAccessChecks')
-  if (fp.deviceMemory) {
-    const memory = Math.min(fp.deviceMemory, maxDeviceMemoryGb(options.engineVersion))
+  // Unset is 8 GB (types.ts); a fingerprint kernel given nothing reports this computer's own.
+  const deviceMemory = fp.deviceMemory ?? (options.fingerprintKernel ? 8 : undefined)
+  if (deviceMemory) {
+    const memory = Math.min(deviceMemory, maxDeviceMemoryGb(options.engineVersion))
     args.push(`--fingerprint-device-memory=${memory}`)
   }
   // screen.availHeight leaves room for the taskbar; the kernel assumes 48 (Windows 11 at any scale)

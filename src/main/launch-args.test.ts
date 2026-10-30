@@ -30,8 +30,9 @@ describe('launch arguments', () => {
     expect(first).not.toContain('--restore-last-session')
     expect(first).toContain(saved.startUrls[0])
   })
-  it('passes device memory only when the window sets it', () => {
+  it('passes device memory, 8 GB when unset on a fingerprint kernel (without it the kernel reports the computer\'s own)', () => {
     expect(buildLaunchArgs(profile(), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-device-memory'))).toBe(false)
+    expect(buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' })).toContain('--fingerprint-device-memory=8')
     expect(buildLaunchArgs(profile({ deviceMemory: 4 }), { userDataDir: '/data' })).toContain('--fingerprint-device-memory=4')
   })
 

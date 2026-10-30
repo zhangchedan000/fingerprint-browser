@@ -1811,7 +1811,7 @@
   "显卡 {0}，WebGL 与 WebGPU 一致": "GPU {0}, WebGL et WebGPU concordent",
   "页面报告 {0} 核，与设置的 {1} 核不一致": "La page indique {0} cœurs au lieu de {1}",
   "内存 {0} GB": "Mémoire {0} GB",
-  "页面报告内存 {0} GB，与设置的 {1} GB 不同：当前内核不支持设置内存": "La page indique {0} GB de mémoire au lieu de {1} GB : ce kernel ne règle pas la mémoire",
+  "页面报告内存 {0} GB，与设置的 {1} GB 不同": "La page indique {0} GB de mémoire au lieu de {1} GB",
   "{0} 两次读取结果不同，容易被识别为伪装": "{0} change entre deux lectures, facile à repérer comme falsifié",
   "{0} 与窗口 {1} 相同，两个窗口会被关联": "{0} est identique à la fenêtre {1}, les deux peuvent être liées",
   "{0} 与窗口 {1} 相同：都用本机真实值，同一台电脑上会一样": "{0} est identique à la fenêtre {1} : les deux utilisent les valeurs réelles du même ordinateur",

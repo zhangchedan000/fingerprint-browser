@@ -1811,7 +1811,7 @@
   "显卡 {0}，WebGL 与 WebGPU 一致": "GPU {0}, WebGL ve WebGPU uyumlu",
   "页面报告 {0} 核，与设置的 {1} 核不一致": "Sayfa {0} çekirdek bildiriyor, ayarlanan {1} değil",
   "内存 {0} GB": "Bellek {0} GB",
-  "页面报告内存 {0} GB，与设置的 {1} GB 不同：当前内核不支持设置内存": "Sayfa {0} GB bellek bildiriyor, ayarlanan {1} GB değil: bu kernel belleği ayarlayamaz",
+  "页面报告内存 {0} GB，与设置的 {1} GB 不同": "Sayfa {0} GB bellek bildiriyor, ayarlanan {1} GB değil",
   "{0} 两次读取结果不同，容易被识别为伪装": "{0} iki okumada farklı; sahte olduğu kolayca anlaşılır",
   "{0} 与窗口 {1} 相同，两个窗口会被关联": "{0}, {1} penceresiyle aynı; iki pencere ilişkilendirilebilir",
   "{0} 与窗口 {1} 相同：都用本机真实值，同一台电脑上会一样": "{0}, {1} penceresiyle aynı: ikisi de aynı bilgisayarın gerçek değerlerini kullanıyor",

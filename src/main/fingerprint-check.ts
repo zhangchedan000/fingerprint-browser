@@ -1,3 +1,4 @@
+import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
@@ -246,11 +247,11 @@ export function evaluateFingerprint(input: {
   add(observed.cores === expected.cores
     ? { row: 'cores', status: 'ok', message: `${observed.cores} 核` }
     : { row: 'cores', status: 'bad', message: `页面报告 ${observed.cores} 核，与设置的 ${expected.cores} 核不一致` })
-  const wantedMemory = fp.deviceMemory ?? 8
+  const wantedMemory = Math.min(fp.deviceMemory ?? 8, maxDeviceMemoryGb(engine.version))
   if (observed.memory !== undefined) {
     add(observed.memory === wantedMemory
       ? { row: 'memory', status: 'ok', message: `内存 ${observed.memory} GB` }
-      : { row: 'memory', status: 'warn', message: `页面报告内存 ${observed.memory} GB，与设置的 ${wantedMemory} GB 不同：当前内核不支持设置内存`, fix: 'set-memory', fixValue: String(observed.memory) })
+      : { row: 'memory', status: 'warn', message: `页面报告内存 ${observed.memory} GB，与设置的 ${wantedMemory} GB 不同`, fix: 'set-memory', fixValue: String(observed.memory) })
   }
 
   // Noise surfaces: stable across reads, and different from every other window.
