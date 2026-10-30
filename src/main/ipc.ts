@@ -3,7 +3,8 @@ import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecordView, ServerPlace } from '../shared/types'
+import type { ApiCheckRecord, AppPreferences, BrowserProfile, FingerprintCheckReport, ProfileDraft, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecordView, RunningChecks, ServerPlace } from '../shared/types'
+import { CheckRuns } from './check-runs'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
@@ -63,6 +64,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
     const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id, draft.draftSession))
     if (draft.draftSession) sessionWindows.set(draft.draftSession, profile.id)
+    // Checks started before the first save belong to this window now.
+    await Promise.all([deepRuns.adopt(draft.draftSession, profile.id), fingerprintRuns.adopt(draft.draftSession, profile.id)])
     checkNewWindow(profile.id, draft)
     team.scheduleSync()
     return profile
@@ -253,6 +256,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     }
     const proxyResult = proxy.protocol === 'direct' ? undefined : await testProxy(proxy)
     if (proxyResult && !proxyResult.ok) throw new Error(`代理不通，无法检测：${proxyResult.error ?? '连接失败'}`)
+    // The fonts the window gets when it opens (language pack, the other Windows' fonts), so the check sees them too.
+    await launcher.prepareFonts(validated.fingerprint, engine, profileId)
     const profile = {
       ...validated,
       id: profileId ?? 'fingerprint-check',
@@ -283,20 +288,38 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
 
   /** A window's last deep check, screenshots included, lives in its runtime folder. */
   const deepCheckFile = (id: string) => join(profiles.profileRuntimePath(id), 'deep-check.json')
+  // Runs on in the background when the editor closes; saved with the window, also one saved after the check started.
+  const deepRuns = new CheckRuns<DeepSiteResult[], DeepSiteResult>(async (profileId, run) => {
+    const record: DeepCheckRecord = { checkedAt: new Date().toISOString(), ...(typeof run.settingsKey === 'string' ? { checkedSettings: run.settingsKey } : {}), results: run.result ?? [] }
+    await mkdir(profiles.profileRuntimePath(profileId), { recursive: true })
+    await writeFile(deepCheckFile(profileId), JSON.stringify(record), { mode: 0o600 }).catch((error) => {
+      logger.error('保存深度检测结果失败', { profileId, error: error instanceof Error ? error.message : String(error) })
+    })
+  })
   ipcMain.handle('profiles:deep-check', async (event, draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<DeepSiteResult[]> => {
-    const { runOptions } = await checkRunOptions(draft, profileId)
     const sites = (settings.get().deepCheckSites ?? DEFAULT_DEEP_CHECK_SITES).filter((site) => site.enabled)
     if (!sites.length) throw new Error('检测网站都关掉了，请点「检测网站」打开至少一个')
-    const results = await deepCheck(runOptions, sites, (result) => event.sender.send('profiles:deep-check-progress', result))
-    if (profileId) {
-      const record: DeepCheckRecord = { checkedAt: new Date().toISOString(), ...(typeof settingsKey === 'string' ? { checkedSettings: settingsKey } : {}), results }
-      await mkdir(profiles.profileRuntimePath(profileId), { recursive: true })
-      await writeFile(deepCheckFile(profileId), JSON.stringify(record), { mode: 0o600 }).catch((error) => {
-        logger.error('保存深度检测结果失败', { profileId, error: error instanceof Error ? error.message : String(error) })
+    return deepRuns.start(profileId, draft.draftSession, settingsKey, async (run) => {
+      const started = run.key
+      const { runOptions } = await checkRunOptions(draft, profileId)
+      return deepCheck(runOptions, sites, (result) => {
+        run.partial.push(result)
+        // Its key now and when it started: a new window saved meanwhile is found by either.
+        if (!event.sender.isDestroyed()) event.sender.send('profiles:deep-check-progress', result, [...new Set([run.key, started])])
       })
-    }
-    return results
+    })
   })
+  /** A check still running for this window (the editor was closed and opened again while it ran). */
+  ipcMain.handle('profiles:running-checks', (_event, profileId?: string, session?: string): RunningChecks => {
+    const deep = deepRuns.running(profileId, session)
+    const fingerprint = fingerprintRuns.running(profileId, session)
+    return {
+      ...(deep ? { deep: { key: deep.key, startedAt: deep.startedAt, settingsKey: deep.settingsKey, results: deep.partial } } : {}),
+      ...(fingerprint ? { fingerprint: { key: fingerprint.key, startedAt: fingerprint.startedAt } } : {})
+    }
+  })
+  ipcMain.handle('profiles:wait-deep-check', (_event, profileId?: string, session?: string) => deepRuns.running(profileId, session)?.promise ?? null)
+  ipcMain.handle('profiles:wait-fingerprint-check', (_event, profileId?: string, session?: string) => fingerprintRuns.running(profileId, session)?.promise ?? null)
   /** A window's last IP site reading (IP 评分), in its runtime folder. */
   const ipSitesFile = (id: string) => join(profiles.profileRuntimePath(id), 'ip-sites.json')
   const saveIpSites = async (id: string, record: IpSiteRecord) => {
@@ -424,6 +447,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return readFile(deepCheckFile(id), 'utf8').then((text) => JSON.parse(text) as DeepCheckRecord).catch(() => null)
   })
   ipcMain.handle('profiles:check-fingerprint', (_event, draft: ProfileDraft, profileId?: string, settingsKey?: string) => runFingerprintCheck(draft, profileId, settingsKey))
+  const fingerprintRuns = new CheckRuns<FingerprintCheckReport>((profileId, run) => run.result ? fingerprintChecks.set(profileId, run.result) : Promise.resolve())
   /**
    * A new window is checked once in the background, so its editor shows the values sites read
    * (Canvas, AudioContext, ClientRects) without a click. Nothing is shown when it cannot run.
@@ -436,7 +460,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       logger.info('新窗口的指纹检测没有完成', { profileId: id, error: error instanceof Error ? error.message : String(error) })
     })
   }
-  async function runFingerprintCheck(draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> {
+  /** One check per window at a time; it runs on (and is saved) when the editor closes. */
+  function runFingerprintCheck(draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> {
+    return fingerprintRuns.start(profileId, draft.draftSession, settingsKey, () => fingerprintCheckReport(draft, profileId, settingsKey))
+  }
+  async function fingerprintCheckReport(draft: ProfileDraft, profileId?: string, settingsKey?: string): Promise<FingerprintCheckReport> {
     const { validated, proxy, engine, proxyResult, runOptions } = await checkRunOptions(draft, profileId)
     const observed = await observeFingerprint(runOptions)
     const windows = profiles.list()
@@ -463,7 +491,6 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
         others
       })
     }
-    if (profileId) await fingerprintChecks.set(profileId, report)
     logger.info('指纹检测完成', { profileId, problems: report.items.filter((item) => item.status === 'bad').length })
     return report
   }

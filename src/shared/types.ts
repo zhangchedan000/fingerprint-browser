@@ -577,6 +577,12 @@ export interface FingerprintObserved {
   webrtcIps: string[]
 }
 
+/** Checks still running for a window in the background (main/check-runs.ts). */
+export interface RunningChecks {
+  deep?: { key: string; startedAt: string; settingsKey?: string; results: import('./deep-check').DeepSiteResult[] }
+  fingerprint?: { key: string; startedAt: string }
+}
+
 export interface FingerprintCheckReport {
   checkedAt: string
   kernelVersion?: string
@@ -796,7 +802,14 @@ export interface BrowserApi {
     lastIpSites: (id: string) => Promise<import('./ip-sites').IpSiteRecord | null>
     /** Keeps a reading made before the window was saved. */
     setIpSites: (id: string, record: import('./ip-sites').IpSiteRecord) => Promise<void>
-    onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult) => void) => () => void
+    /** A site's result as it comes in; `keys`: the run's (checkRunKey: profile:<id>, session:<editor session>). */
+    onDeepCheckProgress: (listener: (result: import('./deep-check').DeepSiteResult, keys: string[]) => void) => () => void
+    /** Checks of this window (or unsaved editor session) still running in the background. */
+    runningChecks: (profileId?: string, session?: string) => Promise<RunningChecks>
+    /** The result of the deep check still running for this window, or null when none runs. */
+    waitDeepCheck: (profileId?: string, session?: string) => Promise<import('./deep-check').DeepSiteResult[] | null>
+    /** The report of the fingerprint check still running for this window, or null when none runs. */
+    waitFingerprintCheck: (profileId?: string, session?: string) => Promise<FingerprintCheckReport | null>
     /** Last saved check of a window, or null. */
     lastFingerprintCheck: (id: string) => Promise<FingerprintCheckReport | null>
     exportBackup: (id: string) => Promise<ProfileBackupResult | null>

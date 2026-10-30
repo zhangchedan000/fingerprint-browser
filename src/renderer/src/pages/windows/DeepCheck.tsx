@@ -46,17 +46,41 @@ export function DeepCheck({ draft, profileId, settingsKey }: { draft: () => Prof
   useEffect(() => {
     if (!profileId) return
     let current = true
-    void window.browserApi.profiles.lastDeepCheck(profileId).then((record) => {
+    void (async () => {
+      // A check started before the editor was closed runs on in the background: show it and its results so far.
+      const running = (await window.browserApi.profiles.runningChecks(profileId).catch(() => undefined))?.deep
+      if (!current) return
+      if (running) {
+        setRunning(true)
+        setResults(running.results)
+        setChecked(undefined)
+        try {
+          const finished = await window.browserApi.profiles.waitDeepCheck(profileId)
+          if (current && finished) {
+            setResults(finished)
+            setChecked({ at: new Date().toISOString(), settings: running.settingsKey })
+          }
+        } catch (reason) {
+          if (current) setError(mt(reason instanceof Error ? reason.message : String(reason)))
+        } finally {
+          if (current) setRunning(false)
+        }
+        return
+      }
+      const record = await window.browserApi.profiles.lastDeepCheck(profileId).catch(() => null)
       if (!current || !record) return
       setResults(record.results)
       setChecked({ at: record.checkedAt, settings: record.checkedSettings })
-    }).catch(() => undefined)
+    })()
     return () => { current = false }
   }, [profileId])
 
-  useEffect(() => window.browserApi.profiles.onDeepCheckProgress((result) => {
+  // Only this window's check (a saved window by its id, a new one by its editor session).
+  useEffect(() => window.browserApi.profiles.onDeepCheckProgress((result, keys) => {
+    const mine = profileId ? `profile:${profileId}` : `session:${draft().draftSession ?? ''}`
+    if (!keys.includes(mine)) return
     setResults((current) => [...current.filter((item) => item.site !== result.site), result])
-  }), [])
+  }), [profileId])
 
   async function run(): Promise<void> {
     setRunning(true)

@@ -213,6 +213,27 @@ export class BrowserLauncher {
     }
   }
 
+  /**
+   * The fonts a window gets before it opens: its system language's pack (prism7+) and, on the other
+   * Windows, that Windows' fonts from the kernel (other-windows-fonts.ts). Fingerprint and deep checks
+   * call it too, so they see what the window will. Never fails: the window then uses this computer's.
+   */
+  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean }, profileId?: string): Promise<void> {
+    if (!this.prerequisites || !engine.executable) return
+    if (fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
+      // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
+      await this.prerequisites.ensureFonts(effectiveNetworkIdentity(fingerprint).uiLocale).catch((error) => {
+        this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+    const otherFonts = otherWindowsFonts(fingerprint, hostHardwareSnapshot(), engine.fingerprintKernel === true)
+    if (otherFonts && this.prerequisites.ensureOtherWindowsFonts) {
+      await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
+        this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+  }
+
   async launch(id: string, options: ProfileLaunchOptions = {}): Promise<BrowserProfile> {
     if (this.closeAllOperation) throw new Error('正在关闭全部浏览器环境，请等待操作完成后再启动')
     const existing = this.launchOperations.get(id)
@@ -303,19 +324,8 @@ export class BrowserLauncher {
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
     if (profile.proxy.tunnel?.enabled && this.prerequisites) await this.prerequisites.ensureTunnel(profile.proxy.tunnel)
-    if (this.prerequisites && profile.fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
-      // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
-      await this.prerequisites.ensureFonts(effectiveNetworkIdentity(profile.fingerprint).uiLocale).catch((error) => {
-        this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId: id, error: error instanceof Error ? error.message : String(error) })
-      })
-    }
+    await this.prepareFonts(profile.fingerprint, engine, id)
     const hostHardware = hostHardwareSnapshot()
-    const otherFonts = otherWindowsFonts(profile.fingerprint, hostHardware, engine.fingerprintKernel === true)
-    if (otherFonts && this.prerequisites?.ensureOtherWindowsFonts) {
-      await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
-        this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId: id, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
-      })
-    }
     if (profile.apiProxy) {
       // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
       profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true)

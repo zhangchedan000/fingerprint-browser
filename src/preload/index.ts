@@ -69,12 +69,15 @@ const api: BrowserApi = {
     ipSites: (draft: ProfileDraft, profileId?: string, libraryProxyId?: string) => ipcRenderer.invoke('profiles:ip-sites', draft, profileId, libraryProxyId),
     lastIpSites: (id: string) => ipcRenderer.invoke('profiles:last-ip-sites', id),
     setIpSites: (id: string, record: unknown) => ipcRenderer.invoke('profiles:set-ip-sites', id, record),
-    onDeepCheckProgress: (listener: (result: DeepSiteResult) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult): void => listener(result)
+    onDeepCheckProgress: (listener: (result: DeepSiteResult, keys: string[]) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, result: DeepSiteResult, keys: string[]): void => listener(result, keys)
       ipcRenderer.on('profiles:deep-check-progress', handler)
       return () => ipcRenderer.removeListener('profiles:deep-check-progress', handler)
     },
     lastFingerprintCheck: (id: string) => ipcRenderer.invoke('profiles:last-fingerprint-check', id),
+    runningChecks: (profileId?: string, session?: string) => ipcRenderer.invoke('profiles:running-checks', profileId, session),
+    waitDeepCheck: (profileId?: string, session?: string) => ipcRenderer.invoke('profiles:wait-deep-check', profileId, session),
+    waitFingerprintCheck: (profileId?: string, session?: string) => ipcRenderer.invoke('profiles:wait-fingerprint-check', profileId, session),
     exportBackup: (id: string) => ipcRenderer.invoke('profiles:export-backup', id),
     importBackup: () => ipcRenderer.invoke('profiles:import-backup'),
     exportWorkspace: (password: string) => ipcRenderer.invoke('profiles:export-workspace', password),

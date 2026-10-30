@@ -628,7 +628,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setCheckReport(null)
     setCheckError('')
     let current = true
-    if (profile) void window.browserApi.profiles.lastFingerprintCheck(profile.id).then((report) => { if (current) setCheckReport(report) }).catch(() => undefined)
+    if (profile) {
+      void (async () => {
+        // A check still running (started before the editor was closed, or the new window's first one): wait for it.
+        const running = (await window.browserApi.profiles.runningChecks(profile.id).catch(() => undefined))?.fingerprint
+        if (!current) return
+        if (!running) {
+          const report = await window.browserApi.profiles.lastFingerprintCheck(profile.id).catch(() => null)
+          if (current) setCheckReport(report)
+          return
+        }
+        setChecking(true)
+        try {
+          const report = await window.browserApi.profiles.waitFingerprintCheck(profile.id)
+          if (current) setCheckReport(report ?? await window.browserApi.profiles.lastFingerprintCheck(profile.id))
+        } catch (error) {
+          if (current) setCheckError(mt(error instanceof Error ? error.message : String(error)))
+        } finally {
+          if (current) setChecking(false)
+        }
+      })()
+    }
     // Saved passwords fill their boxes as dots; the eye button shows them.
     if (profile) {
       void window.browserApi.profiles.passwords(profile.id).then(({ proxy, account }) => {
