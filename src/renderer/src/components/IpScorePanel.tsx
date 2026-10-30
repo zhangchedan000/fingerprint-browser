@@ -115,6 +115,7 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
         {fallback
           ? !read(base) && base.screenshot && <span>{t("这次只有 {0} 的页面截图（点开看大图）", base.name)}<Image src={base.screenshot} width={240} className="fb-ip-score-shot" /></span>
           : <span>{t("以 {0} 为准", base.name)}{other ? ` · ${t("对照 {0}：{1}", other.name, other.error ? t("没读到") : summary(other) || t("只截图"))}` : ''}</span>}
+        {read(base) && base.screenshot && <span>{t("{0} 是按页面文字识别的，可点开截图核对", base.name)}<Image src={base.screenshot} width={96} className="fb-ip-score-shot" /></span>}
         {diff.length > 0 && <span className="is-diff">{t("{0} 判断为「{1}」，两边不一致", other!.name, diff.join('、'))}</span>}
         {(!sameIp(base) || !sameIp(other)) && <span className="is-diff">{t("网站看到的 IP 和检测到的不是同一个（代理在换出口 IP）")}</span>}
         <span>{relativeTime(record.checkedAt, getLocale())}</span>

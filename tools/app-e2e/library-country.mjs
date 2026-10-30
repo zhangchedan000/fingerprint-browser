@@ -30,7 +30,7 @@ let ids
 try {
   const run = (expression) => evaluate(instance.client, expression)
   ids = {}
-  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33'], ['fb', '198.51.100.34'], ['noscore', '198.51.100.35'], ['shot', '198.51.100.36']]) {
+  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33'], ['fb', '198.51.100.34'], ['noscore', '198.51.100.35'], ['shot', '198.51.100.36'], ['general', '198.51.100.37']]) {
     ids[name] = await run(`window.browserApi.proxy.create({ protocol: 'socks5', host: '${host}', port: 1080, username: 'a', password: 'b', note: '${name}' }).then((proxy) => proxy.id)`)
   }
 } finally {
@@ -62,6 +62,12 @@ for (const proxy of stored.proxies) {
   if (proxy.id === ids.noscore) {
     proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.12)
     proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: timedOut, other: { site: 'ping0', name: 'ping0.cc', url: 'https://ping0.cc/', ip: '203.0.113.9', country: '墨西哥', company: 'Podernet', usage: 'residential', usageText: '家庭宽带 IP', native: true, nativeText: '原生 IP' } }
+  }
+  // A site the user added, read by the general reader, as the baseline: its rows, with its page to check.
+  if (proxy.id === ids.general) {
+    proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.12)
+    const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: { site: 'mine', name: 'MyCheck', url: 'https://example.com/', ip: '203.0.113.9', score: '33', scoreOf: '100', scoreKind: 'quality', country: 'Mexico', company: 'Example Net', usage: 'datacenter', usageText: 'hosting', screenshot: pixel } }
   }
   // The other site is one the user added: only its page.
   if (proxy.id === ids.shot) {
@@ -280,6 +286,12 @@ try {
   const images = await run(`${modal}.querySelectorAll('.fb-ip-score img').length`)
   check(/IP 评分 - 地区 - 厂商 - 类型 - 原生 -/.test(onlyShot) && onlyShot.includes('这次只有 MyCheck 的页面截图') && images >= 1, `user's site: same rows, its page below: ${onlyShot.slice(0, 400)} (${images} image)`)
   await shot('exit-card-only-shot.png')
+  await click('取 消') || await click('取消')
+  await delay(800)
+
+  // 12. A site the user added as the baseline, read from its page text: the same five rows, and a note to check.
+  const general = await formPanel('198.51.100.37')
+  check(/IP 评分 33 \/100 地区 Mexico 厂商 Example Net 类型 hosting 原生 -/.test(general) && general.includes('MyCheck 是按页面文字识别的'), `general reader: same rows, checked against its page: ${general.slice(0, 400)}`)
 } finally {
   await quitApp(instance)
   await removeTemporaryTree(userData)

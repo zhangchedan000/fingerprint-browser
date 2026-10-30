@@ -31,7 +31,8 @@ export function IpCheckSites({ open, onClose }: { open: boolean; onClose: () => 
       return
     }
     const id = `site-${Date.now().toString(36)}`
-    void save({ ipCheckSites: [...sites, { id, name: name.trim() || address.hostname, url: address.href, enabled: true }] })
+    // "{ip}" stays readable in the list (the URL parser writes it as %7Bip%7D).
+    void save({ ipCheckSites: [...sites, { id, name: name.trim() || address.hostname, url: address.href.replace(/%7Bip%7D/gi, '{ip}'), enabled: true }] })
     setName('')
     setUrl('')
     setError('')
@@ -57,13 +58,13 @@ export function IpCheckSites({ open, onClose }: { open: boolean; onClose: () => 
                 <b>{site.name}</b>
                 <span className="fb-muted fb-ellipsis">{site.url}</span>
               </div>
-              <span className="fb-muted">{readable ? t("读取评分、类型、原生") : t("只截图")}</span>
+              <span className="fb-muted">{readable ? t("读取评分、类型、原生") : t("按页面文字识别（附截图）")}</span>
               <Radio
                 checked={isBaseline}
-                disabled={!readable || !site.enabled}
+                disabled={!site.enabled}
                 onChange={() => void save({ ipCheckBaseline: site.id })}
               >
-                {isBaseline ? t("基准") : readable ? t("设为基准") : t("不能当基准")}
+                {isBaseline ? t("基准") : t("设为基准")}
               </Radio>
               <Button type="link" size="small" danger disabled={isBaseline} onClick={() => void save({ ipCheckSites: sites.filter((item) => item.id !== site.id) })}>{t("删除")}</Button>
             </div>
@@ -77,7 +78,7 @@ export function IpCheckSites({ open, onClose }: { open: boolean; onClose: () => 
       </Space.Compact>
       {error && <div className="fb-deep-sites-error">{error}</div>}
       <div className="fb-deep-sites-foot">
-        <span className="fb-muted">{t("基准网站不能关、不能删，要先把别的网站设为基准。只有能读出内容的网站（IPLark、ping0.cc）能当基准；自己添加的网站只截图。")}</span>
+        <span className="fb-muted">{t("基准网站不能关、不能删，要先把别的网站设为基准。IPLark、ping0.cc 按它们的页面专门读取；自己添加的网站按页面上的标签（评分、国家、ISP、类型、原生等）识别，附页面截图核对。网址里写 {ip} 的（如 https://scamalytics.com/ip/{ip}），读取时换成检测到的出口 IP。")}</span>
         <Button size="small" onClick={() => void save({ ipCheckSites: undefined, ipCheckBaseline: undefined })}>{t("恢复默认")}</Button>
       </div>
     </Modal>

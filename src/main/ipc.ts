@@ -360,9 +360,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const preferences = settings.get()
     const sites = preferences.ipCheckSites ?? DEFAULT_IP_CHECK_SITES
     const baseline = ipBaseline(sites, preferences.ipCheckBaseline)
-    if (!baseline) throw new Error('没有能读出评分的检测网站：请在「检测网站」里打开 IPLark 或 ping0.cc')
+    if (!baseline) throw new Error('没有开着的检测网站：请在「检测网站」里打开至少一个')
     const other = ipSiteInTurn(sites, baseline, ipSiteTurn++)
-    const [first, second] = await ipSiteCheck(runOptions, other ? [baseline, other] : [baseline])
+    const [first, second] = await ipSiteCheck(runOptions, other ? [baseline, other] : [baseline], proxyResult?.ip)
     return { checkedAt: new Date().toISOString(), ...(proxyResult?.ip ? { checkIp: proxyResult.ip } : {}), baseline: first, ...(second ? { other: second } : {}) }
   }
   ipcMain.handle('profiles:ip-sites', async (_event, draft: ProfileDraft, profileId?: string, libraryProxyId?: string): Promise<IpSiteRecord> => {

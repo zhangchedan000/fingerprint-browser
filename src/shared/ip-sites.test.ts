@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, knownIpSite, parseIpSite, validIpCheckSites } from './ip-sites'
+import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, ipSiteUrl, knownIpSite, parseIpSite, validIpCheckSites } from './ip-sites'
 
 // Page text as the prism kernel read it (2026-10), the IP replaced by an example address and the
 // visitor's own other exits left out.
@@ -102,19 +102,54 @@ describe('IP check sites', () => {
     expect(parseIpSite('https://ping0.cc/', '加载中')).toBeUndefined()
   })
 
-  it('knows only its own sites; others are only shown', () => {
+  it('knows its own sites; any other is read by the general reader', () => {
     expect(knownIpSite('https://www.iplark.com/search')).toBe('iplark')
     expect(knownIpSite('https://ping0.cc/ip/1.1.1.1')).toBe('ping0')
     expect(knownIpSite('https://ipure.dev/')).toBeUndefined()
-    expect(parseIpSite('https://ipure.dev/', IPLARK)).toBeUndefined()
   })
 
-  it('picks the baseline (IPLark unless another readable one is picked) and the other site in turn', () => {
+  // Label formats as the pages showed them in the prism kernel (2026-10-30); the values are documentation ones.
+  it('reads a tab-separated page (browserleaks.com/ip)', () => {
+    const page = 'My IP Address\nIP Address\t203.0.113.9\nHostname\tn/a\nIP Address Location\nCountry\tGermany (DE)\nState/Region\tHesse\nCity\tFrankfurt am Main\nISP\tExample Hosting GmbH\nOrganization\tExample Hosting GmbH\nUsage Type\tCorporate / Hosting\nTimezone\tEurope/Berlin (CET)'
+    expect(parseIpSite('https://browserleaks.com/ip', page, '203.0.113.9')).toEqual({
+      ip: '203.0.113.9', country: 'Germany (DE)', city: 'Frankfurt am Main', company: 'Example Hosting GmbH', usage: 'datacenter', usageText: 'Corporate / Hosting'
+    })
+  })
+
+  it('reads labels with the value on the next line, and a score', () => {
+    const page = '我的IP: 203.0.113.9\n国家\n日本\n提供商:\nExample Net\nIP 类型\n住宅 IP\n原生 IP\n原生 IP\n欺诈分数\n12（低风险）'
+    expect(parseIpSite('https://example.com/', page, '203.0.113.9')).toEqual({
+      ip: '203.0.113.9', score: '12', scoreKind: 'risk', scoreOf: '100', scoreNote: '低风险', country: '日本', company: 'Example Net', usage: 'residential', usageText: '住宅 IP', native: true, nativeText: '原生 IP'
+    })
+  })
+
+  it('reads a JSON answer, and not a page about another IP (a sample on a home page)', () => {
+    const json = '{\n  "ip": "203.0.113.9",\n  "country": "Australia",\n  "city": "Brisbane",\n  "org": "AS13335 Example Inc.",\n  "usage_type": "hosting"\n}'
+    expect(parseIpSite('https://ipinfo.example/', json, '203.0.113.9')).toMatchObject({ country: 'Australia', city: 'Brisbane', company: 'AS13335 Example Inc.', usage: 'datacenter' })
+    expect(parseIpSite('https://ipinfo.example/', json, '198.51.100.7')).toBeUndefined()
+    expect(parseIpSite('https://ipure.dev/', 'Nothing about any IP here', '203.0.113.9')).toBeUndefined()
+  })
+
+  it('reads Chinese IP-property pages (ippure.com) and prefers a trust score to a threat score (ipdata.co)', () => {
+    const ippure = 'IP\n203.0.113.9\nASN\nAS64500 - Example Corp\nIP来源\n广播IP\nIP属性\n机房IP\nIPPure系数\n56%'
+    expect(parseIpSite('https://ippure.com/', ippure, '203.0.113.9')).toMatchObject({ score: '56%', scoreKind: 'quality', usage: 'datacenter', usageText: '机房IP', native: false, nativeText: '广播IP' })
+    const ipdata = '"ip": "203.0.113.9",\n"country_name": "South Korea",\n"scores": {\n"vpn_score": 100,\n"proxy_score": 1,\n"threat_score": 100,\n"trust_score": 33\n},\n6\tcompany.name\t\nExample Corp\nCOMPANY\nABOUT'
+    expect(parseIpSite('https://ipdata.co/', ipdata, '203.0.113.9')).toMatchObject({ score: '33', scoreKind: 'quality', country: 'South Korea', company: 'Example Corp' })
+  })
+
+  it('puts the exit IP into an address that asks for it', () => {
+    expect(ipSiteUrl('https://scamalytics.com/ip/{ip}', '203.0.113.9')).toBe('https://scamalytics.com/ip/203.0.113.9')
+    expect(ipSiteUrl('https://scamalytics.com/ip/%7Bip%7D', '203.0.113.9')).toBe('https://scamalytics.com/ip/203.0.113.9')
+    expect(ipSiteUrl('https://scamalytics.com/ip/{ip}')).toBeUndefined()
+    expect(ipSiteUrl('https://iplark.com/')).toBe('https://iplark.com/')
+  })
+
+  it('picks the baseline (IPLark unless another one is picked) and the other site in turn', () => {
     const sites = [...DEFAULT_IP_CHECK_SITES, { id: 'mine', name: 'Mine', url: 'https://example.com/', enabled: true }]
     expect(ipBaseline(sites, undefined)?.id).toBe('iplark')
     expect(ipBaseline(sites, 'ping0')?.id).toBe('ping0')
-    // A site that cannot be read cannot be the baseline.
-    expect(ipBaseline(sites, 'mine')?.id).toBe('iplark')
+    // Any site can be the baseline now (the general reader reads it).
+    expect(ipBaseline(sites, 'mine')?.id).toBe('mine')
     expect(ipBaseline(sites.map((site) => site.id === 'iplark' ? { ...site, enabled: false } : site), undefined)?.id).toBe('ping0')
     const baseline = ipBaseline(sites, undefined)
     expect([0, 1, 2].map((turn) => ipSiteInTurn(sites, baseline, turn)?.id)).toEqual(['ping0', 'mine', 'ping0'])

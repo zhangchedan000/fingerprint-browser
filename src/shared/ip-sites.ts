@@ -75,7 +75,7 @@ export const DEFAULT_IP_CHECK_SITES: readonly IpCheckSite[] = [
 ]
 export const DEFAULT_IP_BASELINE = 'iplark'
 
-/** The built-in site a URL belongs to: only these can be read (and be the baseline). */
+/** The built-in site a URL belongs to: read by its own parser; any other site by the general one. */
 export function knownIpSite(url: string): KnownIpSite | undefined {
   try {
     const host = new URL(url).hostname.replace(/^www\./, '')
@@ -108,11 +108,11 @@ export function validIpCheckSites(input: unknown): IpCheckSite[] | undefined {
 }
 
 /**
- * The baseline site of a list: the one picked while it is in the list, can be read and is on;
- * else the first readable site that is on. Undefined when none can be read.
+ * The baseline site of a list: the one picked while it is in the list and on; else IPLark; else
+ * the first site that is on. Any site can be it (others are read by the general reader).
  */
 export function ipBaseline(sites: readonly IpCheckSite[], picked: string | undefined): IpCheckSite | undefined {
-  const usable = sites.filter((site) => site.enabled && knownIpSite(site.url))
+  const usable = sites.filter((site) => site.enabled)
   return usable.find((site) => site.id === picked) ?? usable.find((site) => site.id === DEFAULT_IP_BASELINE) ?? usable[0]
 }
 
@@ -213,8 +213,104 @@ function parsePing0(text: string): Parsed | undefined {
 
 const PARSERS: Record<KnownIpSite, (text: string) => Parsed | undefined> = { iplark: parseIplark, ping0: parsePing0 }
 
-/** What a built-in site says, or undefined while its page has not shown it yet (or for other sites). */
-export function parseIpSite(url: string, text: string): Parsed | undefined {
+/**
+ * The panel's five rows, as other IP sites label them (checked on browserleaks.com, ipapi.is,
+ * iplocation.net, ipdata.co, ippure.com, whoer.net with the prism kernel, 2026-10-30). Scores in
+ * order of preference: a site's own verdict first, a bare "score" last; VPN and proxy scores
+ * (how likely it is a VPN) are not an IP score.
+ */
+const SCORE_LABELS = [
+  /^(?:ip\s*)?(?:评分|纯净度|质量分|风控值|风险值|风险分数?|风险评分|欺诈分数?|欺诈评分)$|系数$/i,
+  /^(?:fraud|risk|trust|ip|abuse(?:\s*confidence)?|reputation)\s*score$/i,
+  /^threat\s*score$/i,
+  /^(?:score|分数|得分)$/i
+]
+const LABELS = {
+  country: /^(?:国家\/地区|国家或地区|国家|country|country\s*name)$/i,
+  city: /^(?:城市|city)$/i,
+  company: /^(?:isp|isp\s*name|运营商|服务商|提供商|企业|组织|机构|organi[sz]ation|org|company|company\s*name|provider|as\s*name|asn\s*name|asn\s*organi[sz]ation|org\s*\/\s*isp)$/i,
+  usage: /^(?:ip\s*类型|ip\s*属性|使用场景|用途|类型|usage\s*type|connection\s*type|ip\s*type|asn\s*type|type)$/i,
+  native: /^(?:原生\s*ip|native\s*ip|ip\s*来源)$/i,
+  ip: /^(?:ip|ip\s*地址|ip\s*address|你的\s*ip|我的\s*ip|my\s*ip|your\s*ip|query)$/i
+} as const
+
+/** A label as written, made comparable: "6\tcompany.name" / "usage_type" → "company name" / "usage type". */
+const labelOf = (key: string) => key.replace(/^[#\d\s]+(?=\D)/, '').replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/**
+ * Label and value pairs of a page, surest first: JSON "key": value and "label<tab>value" /
+ * "label: value" on one line; then a short label line with its value on the next line.
+ */
+function pairs(rows: string[]): Array<[string, string]> {
+  const same: Array<[string, string]> = []
+  const next: Array<[string, string]> = []
+  rows.forEach((row, index) => {
+    const json = row.match(/^"([\w. ]{1,30})"\s*:\s*"?([^"]*?)"?,?$/)
+    if (json) { same.push([labelOf(json[1]), json[2]]); return }
+    const split = row.match(/^([^\t:：]{1,30}?)\s*(?:\t+|[:：]\s*|\s{2,})(\S.*)$/)
+    if (split) same.push([labelOf(split[1]), split[2]])
+    const label = labelOf(row.replace(/\s*[:：\t]$/, ''))
+    const value = rows[index + 1]
+    if (label.length <= 30 && value && value.length <= 80) next.push([label, value])
+  })
+  return [...same, ...next]
+}
+
+const EMPTY = /^(?:-|n\/a|null|none|unknown|未知|\[.*\]|\{)$/i
+
+/**
+ * Any other IP site: its page's labels mapped onto the panel's rows. Only the part of the page from
+ * where it shows the exit IP (`checkIp`) on is read, so a sample lookup above it, or a page about
+ * another IP, is not taken for this IP's data.
+ */
+function parseGeneral(text: string, checkIp?: string): Parsed | undefined {
+  let rows = lines(text)
+  if (checkIp) {
+    const at = rows.findIndex((row) => row.includes(checkIp))
+    if (at < 0) return undefined
+    rows = rows.slice(at)
+  }
+  const all = pairs(rows)
+  const value = (label: RegExp) => all.find(([key, found]) => label.test(key) && found.trim() && !EMPTY.test(found.trim()))?.[1].trim()
+  const parsed: Parsed = {}
+  const ip = checkIp ?? value(LABELS.ip)?.match(/(?:\d{1,3}\.){3}\d{1,3}/)?.[0]
+  if (ip) parsed.ip = ip
+  for (const label of SCORE_LABELS) {
+    const found = all.find(([key, text]) => label.test(key) && /^\D{0,3}\d/.test(text.trim()))
+    const number = found?.[1].match(/(\d{1,3}(?:\.\d+)?)\s*(%|\/\s*100)?/)
+    if (!found || !number || Number(number[1]) > 100) continue
+    parsed.score = number[2] === '%' ? `${number[1]}%` : number[1]
+    parsed.scoreKind = /风控|风险|欺诈|risk|fraud|abuse|threat/i.test(found[0]) ? 'risk' : 'quality'
+    if (number[2] !== '%') parsed.scoreOf = '100'
+    const note = found[1].slice(number.index! + number[0].length).replace(/^[\s(（]+|[)）\s]+$/g, '')
+    if (note && note.length <= 12) parsed.scoreNote = note
+    break
+  }
+  const country = value(LABELS.country)
+  if (country) parsed.country = country
+  const city = value(LABELS.city)
+  if (city) parsed.city = city
+  const company = value(LABELS.company)
+  if (company) parsed.company = company
+  const usageText = value(LABELS.usage)
+  if (usageText && usageOf(usageText) !== 'other') { parsed.usage = usageOf(usageText); parsed.usageText = usageText }
+  const nativeText = value(LABELS.native) ?? rows.find((row) => /^(?:原生|广播)\s*IP/.test(row))
+  if (nativeText && /原生|广播|native|broadcast|yes|no|是|否/i.test(nativeText)) {
+    parsed.native = /原生|native|yes|是/i.test(nativeText) && !/非原生|not\s*native|no|否/i.test(nativeText)
+    parsed.nativeText = nativeText
+  }
+  const rowsFound = [parsed.country, parsed.company, parsed.usage, parsed.nativeText].filter(Boolean).length
+  return parsed.score || rowsFound >= 2 ? parsed : undefined
+}
+
+/** What a site says: a built-in one by its own parser, any other by the general one; undefined while its page has not shown it yet. */
+export function parseIpSite(url: string, text: string, checkIp?: string): Parsed | undefined {
   const known = knownIpSite(url)
-  return known ? PARSERS[known](text) : undefined
+  return known ? PARSERS[known](text) : parseGeneral(text, checkIp)
+}
+
+/** A site's address for this IP: "{ip}" in it (sites that look an IP up by its address) becomes the exit IP. */
+export function ipSiteUrl(url: string, ip?: string): string | undefined {
+  if (!/\{ip\}|%7Bip%7D/i.test(url)) return url
+  return ip ? url.replace(/\{ip\}|%7Bip%7D/gi, ip) : undefined
 }

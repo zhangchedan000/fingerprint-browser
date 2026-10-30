@@ -2,7 +2,7 @@ import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
-import { knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
+import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -498,14 +498,21 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
  * window's kernel, proxy and fingerprint), read when its verdict shows (built-in sites) or when
  * the page settles (others: title and screenshot only).
  */
-export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonly IpCheckSite[]): Promise<IpSiteReading[]> {
+/** `checkIp`: the exit IP the check found; fills "{ip}" in a site's address, and a general page's data counts only when it shows this IP. */
+export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonly IpCheckSite[], checkIp?: string): Promise<IpSiteReading[]> {
   return withCheckBrowser(options, 'about:blank', async (client) => {
     const readings: IpSiteReading[] = []
     for (const site of sites) {
-      const reading: IpSiteReading = { site: site.id, name: site.name, url: site.url }
+      const address = ipSiteUrl(site.url, checkIp)
+      const reading: IpSiteReading = { site: site.id, name: site.name, url: address ?? site.url }
       const known = Boolean(knownIpSite(site.url))
+      if (!address) {
+        reading.error = '这个网站要填 IP，但还没检测到出口 IP'
+        readings.push(reading)
+        continue
+      }
       try {
-        await client.send('Page.navigate', { url: site.url }, 30_000)
+        await client.send('Page.navigate', { url: address }, 30_000)
         const deadline = Date.now() + 30_000
         let parsed: ReturnType<typeof parseIpSite>
         let previous: string | undefined
@@ -515,7 +522,7 @@ export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonl
           await new Promise((resolve) => setTimeout(resolve, 1500))
           const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
           const text = page?.result?.value ?? ''
-          parsed = parseIpSite(site.url, text) ?? parsed
+          parsed = parseIpSite(site.url, text, checkIp) ?? parsed
           settled = (Boolean(parsed) || (!known && text.length > 0)) && text === previous
           previous = text
         }
