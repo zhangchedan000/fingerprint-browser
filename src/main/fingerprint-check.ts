@@ -361,6 +361,9 @@ export interface FingerprintRunOptions {
  * A throwaway browser with the window's launch arguments (and proxy), off-screen or headless,
  * driven over the DevTools protocol. Nothing of the window's own data is touched.
  */
+/** Messages of the page dialogs a check browser clicked away, newest last. */
+const checkDialogs = new WeakMap<CdpClient, string[]>()
+
 async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: string, run: (client: CdpClient) => Promise<T>): Promise<T> {
   const { profile, engine } = options
   if (!engine.executable) throw new Error('没有找到浏览器内核，请先在内核管理里下载或导入')
@@ -401,6 +404,12 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     // A cold first start (antivirus scanning a fresh kernel) can take well over ten seconds.
     const { websocket } = await waitForPage(userDataDir, 30_000)
     client = await CdpClient.connect(websocket)
+    // A site's alert() would stop its page (and every read of it) until someone clicks it away.
+    const page = client
+    page.on('Page.javascriptDialogOpening', (params) => {
+      checkDialogs.set(page, [...checkDialogs.get(page) ?? [], String(params.message ?? '')])
+      void page.send('Page.handleJavaScriptDialog', { accept: true }).catch(() => undefined)
+    })
     await client.send('Page.enable')
     return await run(client)
   } finally {
@@ -459,6 +468,7 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
     for (const site of sites) {
       const result: DeepSiteResult = { site: site.id, name: site.name, url: site.url, status: 'unknown', findings: [] }
       const known = Boolean(knownDeepSite(site.url))
+      const dialogsBefore = checkDialogs.get(client)?.length ?? 0
       try {
         await client.send('Page.navigate', { url: site.url }, 30_000)
         const deadline = Date.now() + deepSiteTimeout(site.url)
@@ -489,6 +499,7 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
       } catch (error) {
         result.error = error instanceof Error ? error.message : String(error)
       }
+      for (const message of checkDialogs.get(client)?.slice(dialogsBefore) ?? []) result.findings.push(`网页弹窗：${message.slice(0, 160)}`)
       results.push(result)
       onSite(result)
     }

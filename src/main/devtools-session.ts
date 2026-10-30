@@ -15,10 +15,15 @@ export class CdpClient {
   private sequence = 0
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
 
+  private readonly listeners = new Map<string, Array<(params: Record<string, unknown>) => void>>()
+
   private constructor(private readonly socket: WebSocket) {
     socket.addEventListener('message', (event) => {
-      const message = JSON.parse(String(event.data)) as { id?: number; result?: unknown; error?: { message: string } }
-      if (!message.id) return
+      const message = JSON.parse(String(event.data)) as { id?: number; method?: string; params?: Record<string, unknown>; result?: unknown; error?: { message: string } }
+      if (!message.id) {
+        if (message.method) for (const listener of this.listeners.get(message.method) ?? []) listener(message.params ?? {})
+        return
+      }
       const request = this.pending.get(message.id)
       if (!request) return
       this.pending.delete(message.id)
@@ -47,6 +52,11 @@ export class CdpClient {
         reject(new Error('无法连接浏览器调试会话'))
       }, { once: true })
     })
+  }
+
+  /** Calls `listener` for each protocol event `method` (e.g. Page.javascriptDialogOpening). */
+  on(method: string, listener: (params: Record<string, unknown>) => void): void {
+    this.listeners.set(method, [...this.listeners.get(method) ?? [], listener])
   }
 
   send<T>(method: string, params: Record<string, unknown> = {}, timeoutMs = 15_000): Promise<T> {

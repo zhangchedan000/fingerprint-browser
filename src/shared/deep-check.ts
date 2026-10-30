@@ -200,5 +200,6 @@ export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
   [/headless/i, '像无头浏览器的特征'],
   [/^LOCATION:/, 'iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因'],
   [/^IP ADDRESS:/, 'iphey 看到的出口 IP'],
-  [/没有完全加载完/, '截图和结论可能不完整，可以打开原网页再看']
+  [/没有完全加载完/, '截图和结论可能不完整，可以打开原网页再看'],
+  [/^网页弹窗：/, '检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整']
 ]
