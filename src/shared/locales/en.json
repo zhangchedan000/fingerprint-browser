@@ -2584,6 +2584,7 @@
   "IP 评分": "IP score",
   "{0} 判断为「{1}」，两边不一致": "{0} says “{1}”: the two sites disagree",
   "{0} 没读到（{1}），这次用 {2} 的结果": "{0} could not be read ({1}); showing {2} this time",
+  "这次只有 {0} 的页面截图（点开看大图）": "Only a screenshot of {0} this time (click to enlarge)",
   "{0} 没读到": "{0} could not be read",
   "不能当基准": "Cannot be the baseline",
   "以 {0} 为准": "Going by {0}",

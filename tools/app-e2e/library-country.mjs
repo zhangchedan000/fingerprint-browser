@@ -30,7 +30,7 @@ let ids
 try {
   const run = (expression) => evaluate(instance.client, expression)
   ids = {}
-  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33'], ['fb', '198.51.100.34']]) {
+  for (const [name, host] of [['mx', '198.51.100.31'], ['us', '198.51.100.32'], ['none', '198.51.100.33'], ['fb', '198.51.100.34'], ['noscore', '198.51.100.35'], ['shot', '198.51.100.36']]) {
     ids[name] = await run(`window.browserApi.proxy.create({ protocol: 'socks5', host: '${host}', port: 1080, username: 'a', password: 'b', note: '${name}' }).then((proxy) => proxy.id)`)
   }
 } finally {
@@ -56,6 +56,18 @@ for (const proxy of stored.proxies) {
       baseline: { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', error: '页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）' },
       other: { site: 'ping0', name: 'ping0.cc', url: 'https://ping0.cc/', ip: '203.0.113.9', score: '13%', scoreKind: 'risk', scoreNote: '极度纯净', country: '墨西哥', company: 'Podernet', usage: 'residential', usageText: '家庭宽带 IP', native: true, nativeText: '原生 IP' }
     }
+  }
+  const timedOut = { site: 'iplark', name: 'IPLark', url: 'https://iplark.com/', error: '页面 30 秒内没出结果（代理太慢、网站要求验证，或页面改版）' }
+  // The other site gave no score this time, only the rest.
+  if (proxy.id === ids.noscore) {
+    proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.12)
+    proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: timedOut, other: { site: 'ping0', name: 'ping0.cc', url: 'https://ping0.cc/', ip: '203.0.113.9', country: '墨西哥', company: 'Podernet', usage: 'residential', usageText: '家庭宽带 IP', native: true, nativeText: '原生 IP' } }
+  }
+  // The other site is one the user added: only its page.
+  if (proxy.id === ids.shot) {
+    proxy.check = result('MX', 'Mexico', 'America/Mexico_City', 19.43, -99.12)
+    const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    proxy.ipSites = { checkedAt, checkIp: '203.0.113.9', baseline: timedOut, other: { site: 'mine', name: 'MyCheck', url: 'https://example.com/', screenshot: pixel } }
   }
 }
 await writeFile(file, JSON.stringify(stored))
@@ -238,9 +250,36 @@ try {
   await delay(1500)
   const fallbackText = await run(`${modal}.innerText.replace(/\\s+/g, ' ')`)
   const panel = fallbackText.slice(fallbackText.indexOf('出口 IP'))
-  check(/风控值 13%/.test(panel) && panel.includes('家庭宽带 IP') && panel.includes('原生 IP') && panel.includes('Podernet'), `ping0.cc shown when IPLark was not read: ${panel.slice(0, 400)}`)
+  check(/IP 评分 13% 风控值 · 极度纯净/.test(panel) && panel.includes('家庭宽带 IP') && panel.includes('原生 IP') && panel.includes('Podernet'), `ping0.cc shown when IPLark was not read: ${panel.slice(0, 400)}`)
   check(panel.includes('IPLark 没读到') && panel.includes('这次用 ping0.cc 的结果') && panel.includes('重新读取'), `the panel says why: ${panel.slice(0, 500)}`)
   await shot('exit-card-fallback.png')
+  await click('取 消') || await click('取消')
+  await delay(800)
+  const formPanel = async (host) => {
+    await run(`(() => {
+      const line = [...document.querySelectorAll('tr')].find((node) => node.innerText.includes('${host}'))
+      const edit = line && [...line.querySelectorAll('button')].find((node) => node.innerText.trim() === '编辑')
+      edit?.click()
+      return Boolean(edit)
+    })()`)
+    await delay(1500)
+    const text = await run(`${modal}.innerText.replace(/\\s+/g, ' ')`)
+    return text.slice(text.indexOf('出口 IP'))
+  }
+
+  // 10. The other site gave no score: what it did give fills the panel, with no score line.
+  const noScore = await formPanel('198.51.100.35')
+  // The same five rows as always; the score the site did not give is "-".
+  check(/IP 评分 - 地区 墨西哥 厂商 Podernet 类型 家庭宽带 IP 原生 原生 IP/.test(noScore), `no score: same rows, score "-": ${noScore.slice(0, 400)}`)
+  check(noScore.includes('这次用 ping0.cc 的结果'), `no score: says whose: ${noScore.slice(0, 500)}`)
+  await click('取 消') || await click('取消')
+  await delay(800)
+
+  // 11. The other site is the user's own: its page is shown in place.
+  const onlyShot = await formPanel('198.51.100.36')
+  const images = await run(`${modal}.querySelectorAll('.fb-ip-score img').length`)
+  check(/IP 评分 - 地区 - 厂商 - 类型 - 原生 -/.test(onlyShot) && onlyShot.includes('这次只有 MyCheck 的页面截图') && images >= 1, `user's site: same rows, its page below: ${onlyShot.slice(0, 400)} (${images} image)`)
+  await shot('exit-card-only-shot.png')
 } finally {
   await quitApp(instance)
   await removeTemporaryTree(userData)

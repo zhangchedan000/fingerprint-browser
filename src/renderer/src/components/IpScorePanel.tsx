@@ -59,9 +59,13 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
     )
   }
   const baseline = record.baseline
-  const read = (reading: IpSiteReading | undefined): reading is IpSiteReading => Boolean(reading && !reading.error && reading.score)
-  // The baseline site not read but the other one was: the other one's verdicts are shown instead.
-  const base = read(baseline) ? baseline : read(record.other) ? record.other : undefined
+  // Read: anything the site's page gave (a score, or only place, company, type or native).
+  const read = (reading: IpSiteReading | undefined): boolean =>
+    Boolean(reading && !reading.error && (reading.score || reading.country || reading.company || reading.usage || reading.nativeText))
+  // A site the launcher cannot read (one the user added) gives only its page.
+  const otherShot = record.other && !record.other.error && record.other.screenshot ? record.other : undefined
+  // The baseline site not read but the other one was: the other one fills the same rows instead.
+  const base: IpSiteReading | undefined = read(baseline) ? baseline : read(record.other) ? record.other : otherShot
   if (!base) {
     return (
       <div className="fb-ip-score is-failed">
@@ -77,20 +81,24 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
     )
   }
   const fallback = base !== baseline
-  const scoreValue = Number.parseFloat(base.score!)
+  const scoreValue = Number.parseFloat(base.score ?? '')
   const scoreMax = Number.parseFloat(base.scoreOf ?? '100')
   const other = fallback ? undefined : record.other
   const diff = other && !other.error ? differences(base, other) : []
   const sameIp = (reading: IpSiteReading | undefined) => !reading?.ip || !checkIp || reading.ip === checkIp
   return (
     <div className="fb-ip-score">
-      <span className="k">{base.scoreKind === 'risk' ? t("风控值") : t("IP 评分")}</span>
-      <span className="v fb-ip-score-value">
-        <b>{base.score}</b>
-        {Number.isFinite(scoreValue) && Number.isFinite(scoreMax) && scoreMax > 0 && <span className="fb-ip-score-bar"><i style={{ width: `${Math.min(100, (scoreValue / scoreMax) * 100)}%` }} /></span>}
-        {base.scoreOf && <span className="fb-muted">/{base.scoreOf}</span>}
-        {base.scoreNote && <span className="fb-muted">{base.scoreNote}</span>}
-      </span>
+      {/* The same five rows whichever site filled them; what it did not say is "-". */}
+      <span className="k">{t("IP 评分")}</span>
+      {base.score
+        ? <span className="v fb-ip-score-value">
+            <b>{base.score}</b>
+            {Number.isFinite(scoreValue) && Number.isFinite(scoreMax) && scoreMax > 0 && <span className="fb-ip-score-bar"><i style={{ width: `${Math.min(100, (scoreValue / scoreMax) * 100)}%` }} /></span>}
+            {base.scoreOf && <span className="fb-muted">/{base.scoreOf}</span>}
+            {/* A risk value reads the other way round: said so beside it, in the site's words. */}
+            {(base.scoreKind === 'risk' || base.scoreNote) && <span className="fb-muted">{[base.scoreKind === 'risk' ? t("风控值") : '', base.scoreNote].filter(Boolean).join(' · ')}</span>}
+          </span>
+        : <span className="v">-</span>}
       <span className="k">{t("地区")}</span>
       <span className="v">{[base.country, base.city].filter(Boolean).join(' · ') || '-'}</span>
       <span className="k">{t("厂商")}</span>
@@ -103,6 +111,9 @@ export function IpScorePanel({ record, loading, error, checkIp, onRetry, onOpen 
       <div className="fb-ip-score-src">
         {fallback
           ? <span className="is-diff">{t("{0} 没读到（{1}），这次用 {2} 的结果", baseline.name, mt(baseline.error ?? '页面没有出结果'), base.name)}{onRetry && <Button type="link" size="small" className="fb-link-inline" onClick={onRetry}>{t("重新读取")}</Button>}</span>
+          : null}
+        {fallback
+          ? !read(base) && base.screenshot && <span>{t("这次只有 {0} 的页面截图（点开看大图）", base.name)}<Image src={base.screenshot} width={240} className="fb-ip-score-shot" /></span>
           : <span>{t("以 {0} 为准", base.name)}{other ? ` · ${t("对照 {0}：{1}", other.name, other.error ? t("没读到") : summary(other) || t("只截图"))}` : ''}</span>}
         {diff.length > 0 && <span className="is-diff">{t("{0} 判断为「{1}」，两边不一致", other!.name, diff.join('、'))}</span>}
         {(!sameIp(base) || !sameIp(other)) && <span className="is-diff">{t("网站看到的 IP 和检测到的不是同一个（代理在换出口 IP）")}</span>}

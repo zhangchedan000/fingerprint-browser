@@ -2584,6 +2584,7 @@
   "IP 评分": "Score IP",
   "{0} 判断为「{1}」，两边不一致": "{0} indique « {1} » : les deux sites ne concordent pas",
   "{0} 没读到（{1}），这次用 {2} 的结果": "{0} n’a pas pu être lu ({1}) ; résultat de {2} affiché cette fois",
+  "这次只有 {0} 的页面截图（点开看大图）": "Cette fois, seulement une capture de {0} (cliquer pour agrandir)",
   "{0} 没读到": "{0} n’a pas pu être lu",
   "不能当基准": "Ne peut pas servir de référence",
   "以 {0} 为准": "D’après {0}",

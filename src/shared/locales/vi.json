@@ -2584,6 +2584,7 @@
   "IP 评分": "Điểm IP",
   "{0} 判断为「{1}」，两边不一致": "{0} cho là “{1}”: hai trang không khớp",
   "{0} 没读到（{1}），这次用 {2} 的结果": "Không đọc được {0} ({1}); lần này dùng kết quả của {2}",
+  "这次只有 {0} 的页面截图（点开看大图）": "Lần này chỉ có ảnh chụp trang {0} (bấm để xem lớn)",
   "{0} 没读到": "Không đọc được {0}",
   "不能当基准": "Không thể làm chuẩn",
   "以 {0} 为准": "Theo {0}",
