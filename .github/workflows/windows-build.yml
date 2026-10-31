@@ -61,6 +61,8 @@ jobs:
           npm run dist:win 2>&1 | tee build.log || { grep -v "duplicate dependency" build.log | tail -n 40 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # The fingerprint config key (src/main/encrypted-config.ts); it is not in the public source.
+          MAIN_VITE_PRISM_CONFIG_KEY: ${{ secrets.PRISM_CONFIG_KEY }}
       - name: Check there is exactly one exe
         shell: bash
         run: |
