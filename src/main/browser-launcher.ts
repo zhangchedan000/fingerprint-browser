@@ -30,6 +30,8 @@ import type { Readable, Writable } from 'node:stream'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
 import type { WriteStream } from 'node:fs'
+import { executableHidesConfig } from './kernel-features'
+import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -455,6 +457,13 @@ export class BrowserLauncher {
       await mkdir(logFiles.folder, { recursive: true })
       await pruneLaunchLogs(logFiles.folder, 9)
       args.push(...launchLogArgs(logFiles))
+      // prism17+: the fingerprint switches go in an encrypted file, not on the command line (encrypted-config.ts).
+      let configFile: string | undefined
+      if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1' && await executableHidesConfig(engine.executable)) {
+        const hidden = await hideFingerprintArgs(args, join(runtimePath, 'config'))
+        args.splice(0, args.length, ...hidden.args)
+        configFile = hidden.file
+      }
       await writeFile(
         join(runtimePath, 'last-launch.json'),
         JSON.stringify({ executable: engine.executable, args, launchedAt: new Date().toISOString() }, null, 2),
@@ -466,6 +475,11 @@ export class BrowserLauncher {
         windowsHide: false,
         env: { ...process.env }
       })
+      if (configFile) {
+        // The kernel removes it once read; this is for a browser that never got that far.
+        child.once?.('exit', () => void removeConfigFile(configFile))
+        setTimeout(() => void removeConfigFile(configFile), 60_000).unref?.()
+      }
       const stderrFile: WriteStream | undefined = captureStream(child.stderr, logFiles.stderrLog)
       let automation: BrowserControlSession | undefined
       if (pipeControlEnabled && Array.isArray(child.stdio)) {

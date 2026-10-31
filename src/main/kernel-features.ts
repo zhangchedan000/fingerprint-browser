@@ -26,9 +26,17 @@ const BUILT_IN_FONTS_REVISION = 16
 /** Where a local build's source shows its own fonts (patch 007 in prism16). */
 const BUILT_IN_FONTS_SOURCE = { file: 'components/services/font_data/font_data_service_impl.cc', marker: 'PrismFontManager' }
 
+/**
+ * Fingerprint switches in an encrypted file instead of on the command line (patch 001, prism17):
+ * --fingerprint-config=<file>, see encrypted-config.ts. Older kernels would ignore the file and
+ * run without a fingerprint, so this is only claimed for kernels that read it.
+ */
+const HIDDEN_CONFIG_REVISION = 17
+const HIDDEN_CONFIG_SOURCE = { file: 'chrome/app/chrome_main.cc', marker: 'PrismExpandConfig' }
+
 export { prismRevision }
 
-type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; releaseTag?: string; assetName?: string }
+type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; releaseTag?: string; assetName?: string }
 
 const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
 
@@ -42,6 +50,16 @@ export function kernelRelaysWebRtc(manifest: ManifestFeatures): boolean {
 
 export function kernelHasOwnFonts(manifest: ManifestFeatures): boolean {
   return manifest.builtInFonts ?? revisionOf(manifest) >= BUILT_IN_FONTS_REVISION
+}
+
+export function kernelHidesConfig(manifest: ManifestFeatures): boolean {
+  return manifest.hiddenConfig ?? revisionOf(manifest) >= HIDDEN_CONFIG_REVISION
+}
+
+/** Whether this kernel (installed or a local build) reads the encrypted --fingerprint-config file. */
+export async function executableHidesConfig(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelHidesConfig(manifest) : localBuildSourceHas(executable, HIDDEN_CONFIG_SOURCE.file, HIDDEN_CONFIG_SOURCE.marker)
 }
 
 /**

@@ -621,14 +621,14 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 
 /* Team server state on the avatar (ServerPanel.tsx). */
 .fb-brand-avatar { position: relative; padding: 0; border: 0; background: none; cursor: pointer; line-height: 0; }
-.fb-server-dot { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fb-sidebar-bg, #0f172a); background: #9ca3af; }
-.fb-server-dot-online { background: #22c55e; }
-.fb-server-dot-offline { background: #ef4444; }
-.fb-server-dot-local { background: #f59e0b; }
+.fb-server-dot { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fb-sidebar-bg); background: var(--fb-idle); }
+.fb-server-dot-online { background: var(--fb-success-dot); }
+.fb-server-dot-offline { background: var(--fb-danger); }
+.fb-server-dot-local { background: var(--fb-warning); }
 .fb-server-panel { display: grid; gap: 8px; width: 300px; }
 .fb-server-panel-row { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
 .fb-server-panel-url { font-size: 12px; word-break: break-all; }
-.fb-server-panel-muted { font-size: 12px; color: var(--fb-muted, #6b7280); word-break: break-all; }
+.fb-server-panel-muted { font-size: 12px; color: var(--fb-text-muted); word-break: break-all; }
 .fb-login-fallback { display: grid; gap: 8px; margin-bottom: 16px; }
 .fb-team-standby { display: grid; gap: 12px; margin-top: 16px; }
 .fb-team-standby-form { row-gap: 8px; }

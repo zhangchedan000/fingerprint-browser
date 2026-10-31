@@ -1,6 +1,8 @@
 import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
+import { executableHidesConfig } from './kernel-features'
+import { hideFingerprintArgs } from './encrypted-config'
 import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
 import { spawn } from 'node:child_process'
@@ -409,6 +411,11 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     if (options.headless) args.push('--headless=new', '--no-sandbox', '--enable-unsafe-swiftshader')
     if (options.extraArgs) args.push(...options.extraArgs)
     args.push(startUrl)
+    // As a real launch: a prism17+ kernel gets the fingerprint switches in an encrypted file.
+    if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1' && await executableHidesConfig(engine.executable)) {
+      const hidden = await hideFingerprintArgs(args, userDataDir)
+      args.splice(0, args.length, ...hidden.args)
+    }
     child = spawn(engine.executable, args, { stdio: 'ignore', windowsHide: true, env: { ...process.env } })
     // A cold first start (antivirus scanning a fresh kernel) can take well over ten seconds.
     const { websocket } = await waitForPage(userDataDir, 30_000)
