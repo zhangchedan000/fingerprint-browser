@@ -9,10 +9,13 @@
  *   node tools/app-e2e/config-hidden.mjs --browser E:\156\...\out\Default\chrome.exe --data E:\prism-work\fonts\ud\launcher-test --out result.json
  *
  * Everything lives under --data (a throwaway launcher data folder) and is removed at the end.
+ * --fonts <folder>: the kernel font package already on this computer (prism-system-fonts with win10 /
+ * win11), linked in as the data folder's kernel-fonts\v1 so nothing is downloaded. Only the links
+ * are removed afterwards, never the fonts.
  */
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { draft, evaluate, launchApp, quitApp } from './run.mjs'
 
@@ -21,6 +24,7 @@ const arg = (name) => { const at = argv.indexOf(name); return at >= 0 ? argv[at 
 const browser = resolve(arg('--browser') ?? '')
 const data = resolve(arg('--data') ?? '')
 const out = arg('--out')
+const fonts = arg('--fonts') ? resolve(arg('--fonts')) : undefined
 if (!arg('--browser') || !arg('--data')) throw new Error('--browser and --data are required')
 if (!/^[0-9a-f]{64}$/i.test(process.env.PRISM_CONFIG_KEY ?? '')) throw new Error('PRISM_CONFIG_KEY is not set')
 const app = resolve('node_modules/electron/dist/electron.exe')
@@ -61,6 +65,10 @@ async function run(plain) {
   const vault = join(appData, 'vault')
   await rm(appData, { recursive: true, force: true })
   await mkdir(vault, { recursive: true })
+  if (fonts) {
+    await mkdir(join(vault, 'kernel-fonts'), { recursive: true })
+    await symlink(fonts, join(vault, 'kernel-fonts', 'v1'), 'junction')
+  }
   await writeFile(join(vault, 'settings.json'), JSON.stringify({ browserExecutable: browser, fingerprintKernel: true, enginePreference: 'auto', recycleRetentionDays: 0 }))
   // Local mode: the test talks to no team server.
   await writeFile(join(vault, 'team.json'), JSON.stringify({ schemaVersion: 1, server: 'https://team.invalid', token: '', links: {}, localMode: true, userId: 'e2e', role: 'owner', userName: 'e2e' }))
@@ -90,6 +98,9 @@ async function run(plain) {
   } finally {
     await quitApp(instance).catch(() => undefined)
     await delay(2000)
+    // Links only: the kernel's prism-system-fonts link and the store link, never what they point to.
+    await rm(join(browser, '..', 'prism-system-fonts'), { force: true }).catch(() => undefined)
+    if (fonts) await rm(join(vault, 'kernel-fonts', 'v1'), { force: true }).catch(() => undefined)
   }
 }
 
