@@ -25,6 +25,9 @@ const browser = resolve(arg('--browser') ?? '')
 const data = resolve(arg('--data') ?? '')
 const out = arg('--out')
 const fonts = arg('--fonts') ? resolve(arg('--fonts')) : undefined
+// The launcher only takes Prism kernels installed under kernels\prism-<version>: the build folder is
+// linked in as one (browser\ -> out\Default) with a manifest saying what it can do.
+const kernelName = arg('--kernel-name') ?? 'prism-156.0.8078.47'
 if (!arg('--browser') || !arg('--data')) throw new Error('--browser and --data are required')
 if (!/^[0-9a-f]{64}$/i.test(process.env.PRISM_CONFIG_KEY ?? '')) throw new Error('PRISM_CONFIG_KEY is not set')
 const app = resolve('node_modules/electron/dist/electron.exe')
@@ -69,7 +72,13 @@ async function run(plain) {
     await mkdir(join(vault, 'kernel-fonts'), { recursive: true })
     await symlink(fonts, join(vault, 'kernel-fonts', 'v1'), 'junction')
   }
-  await writeFile(join(vault, 'settings.json'), JSON.stringify({ browserExecutable: browser, fingerprintKernel: true, enginePreference: 'auto', recycleRetentionDays: 0 }))
+  const kernelRoot = join(vault, 'kernels', kernelName)
+  await mkdir(kernelRoot, { recursive: true })
+  await symlink(join(browser, '..'), join(kernelRoot, 'browser'), 'junction')
+  await writeFile(join(kernelRoot, 'manifest.json'), JSON.stringify({
+    executableRelative: 'browser/chrome.exe', releaseTag: `${kernelName.replace(/^prism-/, '')}-prism17`, hiddenConfig: true, builtInFonts: true, webrtcRelay: true, windowScreen: true
+  }))
+  await writeFile(join(vault, 'settings.json'), JSON.stringify({ browserExecutable: join(kernelRoot, 'browser', 'chrome.exe'), fingerprintKernel: true, enginePreference: 'auto', recycleRetentionDays: 0 }))
   // Local mode: the test talks to no team server.
   await writeFile(join(vault, 'team.json'), JSON.stringify({ schemaVersion: 1, server: 'https://team.invalid', token: '', links: {}, localMode: true, userId: 'e2e', role: 'owner', userName: 'e2e' }))
   if (plain) process.env.PRISM_PLAIN_FINGERPRINT_ARGS = '1'
@@ -101,6 +110,7 @@ async function run(plain) {
     // Links only: the kernel's prism-system-fonts link and the store link, never what they point to.
     await rm(join(browser, '..', 'prism-system-fonts'), { force: true }).catch(() => undefined)
     if (fonts) await rm(join(vault, 'kernel-fonts', 'v1'), { force: true }).catch(() => undefined)
+    await rm(join(vault, 'kernels', kernelName, 'browser'), { force: true }).catch(() => undefined)
   }
 }
 
