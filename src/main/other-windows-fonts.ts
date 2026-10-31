@@ -120,7 +120,7 @@ const FONT_SETS: Record<PrismFontSet, { prefix: string; folder?: OtherWindows; f
     { file: 'YuGothR.ttc', sha256: '1e5a4b342c6417bb9352e8c29cb839413987a06438e7b48fd0320925827f289c', renamed: true }
   ] },
   // Every C:\Windows\Fonts file of Windows 11 25H2 that Windows 10 LTSC 21H2 has in another version or
-  // not at all, and Cascadia (private-assets/win11-fonts/SHA256-list.txt; prism13-14 kernels ship 10).
+  // not at all, and Cascadia (E:\prism-work\fonts\sets-prism15.json; prism13-14 kernels ship 10).
   win11: { prefix: 'PrismW11', files: [
     { file: 'arial.ttf', sha256: 'b3658eadae55e682b5f69eb64c439c1ecc8f196c0bb8d4756d145d13bc86476a', renamed: true },
     { file: 'arialbd.ttf', sha256: 'e8f4e3baf6cc35fed6fcce3a540e8b39e8f6cda1d22a28f2ec8f526fef7a43f5', renamed: true },
