@@ -1,6 +1,9 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { WINDOWS_FONT_PACKS, windowsFontScript } from '../shared/windows-font-packs'
-import { fontRegistryName } from './language-fonts'
+import { fontRegistryName, installKernelFontPack } from './language-fonts'
 
 /** An sfnt with only a name table holding these full names (name id 4) as Windows UTF-16BE records. */
 function face(names: string[]): Buffer {
@@ -55,5 +58,23 @@ describe('language font packages', () => {
       expect(scripts.has(windowsFontScript(language)!)).toBe(true)
     }
     expect(windowsFontScript('es-419')).toBeUndefined()
+  })
+
+  it('leaves a package the prism16 kernel already has (in its own folder) and downloads nothing', async () => {
+    const kernel = await mkdtemp(join(tmpdir(), 'kernel-fonts-'))
+    try {
+      const pack = WINDOWS_FONT_PACKS.find((p) => p.script === 'Hans')!
+      const folder = join(kernel, 'prism-system-fonts', 'win11', 'Hans')
+      await mkdir(folder, { recursive: true })
+      for (const font of pack.fonts) await writeFile(join(folder, font), '')
+      let fetched = 0
+      await installKernelFontPack('Hans', join(kernel, 'chrome.exe'), 'win11', (async () => { fetched++; throw new Error('no network') }) as unknown as typeof fetch, () => undefined)
+      expect(fetched).toBe(0)
+      // A missing package is fetched (from Microsoft); here the fake network fails.
+      await expect(installKernelFontPack('Thai', join(kernel, 'chrome.exe'), 'win11', (async () => { fetched++; throw new Error('no network') }) as unknown as typeof fetch, () => undefined)).rejects.toThrow('no network')
+      expect(fetched).toBe(1)
+    } finally {
+      await rm(kernel, { recursive: true, force: true })
+    }
   })
 })

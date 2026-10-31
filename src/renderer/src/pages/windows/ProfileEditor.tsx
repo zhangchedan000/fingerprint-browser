@@ -2188,7 +2188,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             <div className="fb-check-results">
               <div className="fb-check-item is-ok">
                 <span className="fb-check-dot" />
-                <span className="fb-check-message">{t("内核自带这个语言的 Windows 字体，不用往电脑里装")}</span>
+                <span className="fb-check-message">{t("这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑")}</span>
               </div>
             </div>
           )}

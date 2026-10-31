@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { access, copyFile, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { access, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
@@ -18,7 +18,7 @@ import {
 } from '../shared/windows-font-packs'
 import type { AppLogger } from './app-logger'
 import { hostHardwareSnapshot } from './host-hardware'
-import { otherWindowsFontsInstalled } from './other-windows-fonts'
+import { otherWindowsFontsInstalled, PRISM_SYSTEM_FONTS_FOLDER } from './other-windows-fonts'
 
 const execFileAsync = promisify(execFile)
 
@@ -155,6 +155,50 @@ export async function installFontPack(script: string, fetchImpl: Fetch, onProgre
     }
     onProgress({ script, receivedBytes: pack.size, totalBytes: pack.size, stage: 'done' })
     logger?.info('语言字体包已安装', { script })
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * prism16+: puts a language font package into the kernel's own fonts
+ * (prism-system-fonts\\<win10|win11>\\<script> next to chrome.exe), where the kernel looks for the
+ * package of the window's display language; nothing is installed into Windows. Downloaded from
+ * Microsoft like installFontPack. Packages the kernel already ships (Simplified Chinese and Arabic,
+ * in the versions Windows Update brings) are left alone.
+ */
+export async function installKernelFontPack(script: string, kernelExecutable: string, windows: 'win10' | 'win11', fetchImpl: Fetch, onProgress: (progress: FontPackProgress) => void, logger?: AppLogger): Promise<void> {
+  const pack = windowsFontPack(script)
+  if (!pack) throw new Error(`没有 ${script} 字体包`)
+  const folder = join(dirname(kernelExecutable), PRISM_SYSTEM_FONTS_FOLDER, windows, script)
+  const present = async () => {
+    for (const font of pack.fonts) if (!await exists(join(folder, font))) return false
+    return true
+  }
+  if (await present()) return
+  const work = await mkdtemp(join(tmpdir(), `prism-fonts-${script}-`))
+  try {
+    logger?.info('下载语言字体包到内核', { script, windows, bytes: pack.size })
+    const cab = join(work, 'pack.cab')
+    await downloadPack(pack, cab, fetchImpl, onProgress)
+    onProgress({ script, receivedBytes: pack.size, totalBytes: pack.size, stage: 'installing' })
+    const extracted = join(work, 'files')
+    await mkdir(extracted)
+    await execFileAsync(join(windowsFolder(), 'System32', 'expand.exe'), ['-F:*', cab, extracted], { windowsHide: true })
+    const files = await findFiles(extracted)
+    // Into a temporary folder first: a window that starts meanwhile sees the package whole or not at all.
+    const staging = `${folder}.part`
+    await rm(staging, { recursive: true, force: true })
+    await mkdir(staging, { recursive: true })
+    for (const font of pack.fonts) {
+      const source = files.get(font)
+      if (!source) throw new Error(`字体包里缺少 ${font}`)
+      await copyFile(source, join(staging, font))
+    }
+    await rm(folder, { recursive: true, force: true })
+    await rename(staging, folder)
+    onProgress({ script, receivedBytes: pack.size, totalBytes: pack.size, stage: 'done' })
+    logger?.info('语言字体包已放进内核', { script, windows })
   } finally {
     await rm(work, { recursive: true, force: true }).catch(() => undefined)
   }

@@ -16,13 +16,14 @@ import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
+import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWindows11PlatformVersion, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
 import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { kernelShipsSystemFonts, type PrismFontSet } from './other-windows-fonts'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
+import { windowsFontScript } from '../shared/windows-font-packs'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
@@ -113,6 +114,8 @@ export interface LaunchPrerequisites {
   ensureFonts(uiLocale: string): Promise<void>
   /** Installs fonts the kernel package ships (Windows 10's on Windows 11 and back; Windows 10's extras). */
   ensureOtherWindowsFonts?(set: PrismFontSet, kernelExecutable: string): Promise<void>
+  /** prism16+: puts the language font package into the kernel's own fonts for that Windows version. */
+  ensureKernelFonts?(script: string, kernelExecutable: string, windows: 'win10' | 'win11'): Promise<void>
 }
 
 export interface LaunchHooks {
@@ -221,8 +224,18 @@ export class BrowserLauncher {
    */
   async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean }, profileId?: string): Promise<void> {
     if (!this.prerequisites || !engine.executable) return
-    // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's.
-    if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) return
+    // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's:
+    // the package of the window's language is fetched into the kernel when it lacks it.
+    if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) {
+      const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
+      if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
+        const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion)) ? 'win11' : 'win10'
+        await this.prerequisites.ensureKernelFonts(script, engine.executable, windows).catch((error) => {
+          this.logger?.error('语言字体包没有放进内核，窗口照常打开（没有这个语言的字体）', { profileId, script, error: error instanceof Error ? error.message : String(error) })
+        })
+      }
+      return
+    }
     if (fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
       // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
       await this.prerequisites.ensureFonts(effectiveNetworkIdentity(fingerprint).uiLocale).catch((error) => {

@@ -24,7 +24,7 @@ import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
-import { fontPackStatus, installFontPack, registerLanguageFontsIpc } from './language-fonts'
+import { fontPackStatus, installFontPack, installKernelFontPack, registerLanguageFontsIpc } from './language-fonts'
 import { installOtherWindowsFonts } from './other-windows-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
@@ -247,6 +247,12 @@ app.whenReady().then(async () => {
       logger?.info('窗口的系统语言缺字体包，自动下载', { script })
       await installFontPack(script, (input, init) => net.fetch(input as string, init),
         (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined)
+    },
+    ensureKernelFonts: (script, kernelExecutable, windows) => {
+      const run = otherFontsInstall.then(() => installKernelFontPack(script, kernelExecutable, windows, (input, init) => net.fetch(input as string, init),
+        (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined))
+      otherFontsInstall = run.catch(() => undefined)
+      return run
     },
     ensureOtherWindowsFonts: (set, kernelExecutable) => {
       const run = otherFontsInstall.then(() => installOtherWindowsFonts(set, kernelExecutable, logger ?? undefined))

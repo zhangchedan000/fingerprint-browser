@@ -2646,5 +2646,5 @@
   "这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。": "This computer runs Windows {0}: Windows {1} windows need Windows {1}'s own fonts (shipped with the kernel), installed automatically when the window opens.",
   "网页弹窗：{0}": "Page dialog: {0}",
   "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "The site's own pop-up, clicked away during the check; usually one of its services could not be reached (Failed to fetch), so the verdict may be incomplete",
-  "内核自带这个语言的 Windows 字体，不用往电脑里装": "The kernel brings this language's Windows fonts; nothing to install on this computer"
+  "这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑": "This language's Windows fonts come with the kernel (downloaded from Microsoft when needed); nothing is installed on this computer"
 }
