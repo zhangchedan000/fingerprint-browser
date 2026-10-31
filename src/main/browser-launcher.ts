@@ -116,6 +116,8 @@ export interface LaunchPrerequisites {
   ensureOtherWindowsFonts?(set: PrismFontSet, kernelExecutable: string): Promise<void>
   /** prism16+: puts the language font package into the kernel's own fonts for that Windows version. */
   ensureKernelFonts?(script: string, kernelExecutable: string, windows: 'win10' | 'win11'): Promise<void>
+  /** prism16+: links the kernel to the shared Windows font package, downloading it once when needed. */
+  ensureKernelFontStore?(kernelExecutable: string): Promise<void>
 }
 
 export interface LaunchHooks {
@@ -222,10 +224,16 @@ export class BrowserLauncher {
    * Windows, that Windows' fonts from the kernel (other-windows-fonts.ts). Fingerprint and deep checks
    * call it too, so they see what the window will. Never fails: the window then uses this computer's.
    */
-  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean }, profileId?: string): Promise<void> {
+  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean; builtInFonts?: boolean }, profileId?: string): Promise<void> {
     if (!this.prerequisites || !engine.executable) return
     // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's:
-    // the package of the window's language is fetched into the kernel when it lacks it.
+    // the shared font package is linked into the kernel (downloaded once if no kernel brought it), and
+    // the package of the window's language is fetched into it when it lacks it.
+    if (engine.fingerprintKernel && engine.builtInFonts && this.prerequisites.ensureKernelFontStore) {
+      await this.prerequisites.ensureKernelFontStore(engine.executable).catch((error) => {
+        this.logger?.error('内核字体包没有准备好', { profileId, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
     if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) {
       const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
       if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
@@ -418,6 +426,7 @@ export class BrowserLauncher {
         proxyUrl: localProxyUrl,
         extensionPaths: this.extensions.paths(profile.extensionIds),
         engineVersion: engine.version,
+        builtInFonts: engine.builtInFonts,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostPlatformVersion: hostHardware.platformVersion,

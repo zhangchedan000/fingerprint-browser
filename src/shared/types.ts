@@ -423,6 +423,8 @@ export interface EngineStatus {
   windowScreen?: boolean
   /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism7+). */
   webrtcRelay?: boolean
+  /** The kernel uses its own Windows fonts, never this computer's (prism16+). */
+  builtInFonts?: boolean
 }
 
 export interface KernelImportResult {
@@ -455,6 +457,8 @@ export interface KernelRelease {
   windowScreen?: boolean
   /** See EngineStatus.webrtcRelay. */
   webrtcRelay?: boolean
+  /** See EngineStatus.builtInFonts. */
+  builtInFonts?: boolean
   /** An older build of its version, offered for rolling back; installing it replaces the kernel in place. */
   history?: boolean
 }

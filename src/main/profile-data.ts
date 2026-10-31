@@ -62,7 +62,8 @@ export async function storageOverview(vaultPath: string): Promise<StorageOvervie
   const [profilesBytes, recycleBytes, kernelsBytes, downloadsBytes, extensionsBytes, cacheParts] = await Promise.all([
     safePathSize(profilesRoot),
     safePathSize(join(vaultPath, 'recycle-bin')),
-    safePathSize(join(vaultPath, 'kernels')),
+    // Kernels and the Windows font package they share (kernel-fonts, linked into each kernel).
+    Promise.all([safePathSize(join(vaultPath, 'kernels')), safePathSize(join(vaultPath, 'kernel-fonts'))]).then(([kernels, fonts]) => kernels + fonts),
     safePathSize(join(vaultPath, 'downloads')),
     safePathSize(join(vaultPath, 'extensions')),
     Promise.all(profileEntries.flatMap((id) => CACHE_PATHS.map((segments) => safePathSize(join(profilesRoot, id, 'user-data', ...segments)))))

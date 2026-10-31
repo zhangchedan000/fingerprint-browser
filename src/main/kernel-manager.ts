@@ -20,7 +20,8 @@ import type { SettingsStore } from './settings-store'
 import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
-import { kernelFitsWindowToScreen, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, kernelRelaysWebRtc } from './kernel-features'
+import { detachKernelFolderFonts, ensureKernelFonts } from './kernel-fonts'
+import { kernelFitsWindowToScreen, kernelHasOwnFonts, localBuildFitsWindowToScreen, localBuildHasOwnFonts, localBuildRelaysWebRtc, kernelRelaysWebRtc } from './kernel-features'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -49,6 +50,8 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   windowScreen?: boolean
   /** Local builds: built with patch 016 (webrtc-relay). */
   webrtcRelay?: boolean
+  /** Local builds: their own Windows fonts (patch 007, prism16). */
+  builtInFonts?: boolean
 }
 
 interface KernelActivationBackup {
@@ -143,7 +146,8 @@ export class KernelManager {
         executable,
         ...(manifest.releaseTag ? { tag: manifest.releaseTag } : {}),
         windowScreen: kernelFitsWindowToScreen(manifest),
-        webrtcRelay: kernelRelaysWebRtc(manifest)
+        webrtcRelay: kernelRelaysWebRtc(manifest),
+        builtInFonts: kernelHasOwnFonts(manifest)
       })
     }
     return releases.sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
@@ -207,6 +211,7 @@ export class KernelManager {
         tag: release.tag,
         windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
         webrtcRelay: manifest ? kernelRelaysWebRtc(manifest) : kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
+        builtInFonts: manifest ? kernelHasOwnFonts(manifest) : kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.asset.name }),
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
@@ -232,6 +237,7 @@ export class KernelManager {
         tag: release.tag,
         windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
         webrtcRelay: kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
+        builtInFonts: kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.asset.name }),
         history: true
       })
     }
@@ -249,7 +255,8 @@ export class KernelManager {
         origin: manifest.source ?? 'release',
         executable: join(this.kernelPath(manifest.version), manifest.executableRelative),
         windowScreen: kernelFitsWindowToScreen(manifest),
-        webrtcRelay: kernelRelaysWebRtc(manifest)
+        webrtcRelay: kernelRelaysWebRtc(manifest),
+        builtInFonts: kernelHasOwnFonts(manifest)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
   }
@@ -310,6 +317,7 @@ export class KernelManager {
       if (process.platform === 'darwin') await this.installMac(release, archivePath)
       else await this.installWindows(release, archivePath)
       await rm(archivePath, { force: true })
+      await this.prepareKernelFonts(release)
       await this.makeDefaultIfNone(version)
       this.logger?.info('浏览器内核安装完成', { version })
       this.emit(release, 'ready', release.size, release.size, replacing ? '内核已更新，使用它的窗口下次启动即用新版' : '内核安装完成')
@@ -404,7 +412,8 @@ export class KernelManager {
         source: 'local-build',
         target: `${process.platform}-${process.arch}`,
         windowScreen: await localBuildFitsWindowToScreen(executable),
-        webrtcRelay: await localBuildRelaysWebRtc(executable)
+        webrtcRelay: await localBuildRelaysWebRtc(executable),
+        builtInFonts: await localBuildHasOwnFonts(executable)
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
       await rename(stagingPath, destination)
@@ -540,6 +549,7 @@ export class KernelManager {
     const repairedWasActive = Boolean(previousSettings.browserExecutable)
       && resolve(previousSettings.browserExecutable).startsWith(`${resolve(currentPath)}${sep}`)
     await mkdir(recycleRoot, { recursive: true })
+    await detachKernelFolderFonts(currentPath)
     await rename(currentPath, backupPath)
     try {
       let engine = await this.install(version)
@@ -574,6 +584,7 @@ export class KernelManager {
     }
     const recycle = join(this.vaultPath, 'recycle-bin', 'kernels')
     await mkdir(recycle, { recursive: true })
+    await detachKernelFolderFonts(this.kernelPath(version))
     await rename(this.kernelPath(version), join(recycle, `${version}-${Date.now()}`))
     this.logger?.info('浏览器内核已移入回收目录', { version })
   }
@@ -721,6 +732,23 @@ export class KernelManager {
     }
   }
 
+  /**
+   * prism16+: the kernel's Windows fonts go to the shared font package (kept across kernel updates) and
+   * the kernel gets a link to it; the package is downloaded once when no kernel brought it along.
+   */
+  private async prepareKernelFonts(release: KernelRelease): Promise<void> {
+    if (process.platform !== 'win32' || !kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.assetName })) return
+    const manifest = await this.readManifest(release.version)
+    if (!manifest) return
+    // The kernel is in either way: a font package that did not come down is fetched again when a window opens.
+    await ensureKernelFonts(true, join(this.kernelPath(release.version), manifest.executableRelative), this.vaultPath, this.fetchImpl,
+      (progress) => this.emit(release, progress.stage === 'downloading' ? 'downloading' : 'installing', progress.receivedBytes, progress.totalBytes,
+        progress.stage === 'downloading' ? '正在下载内核字体包（只需下载一次，以后更新内核不用再下）…' : '正在安装内核字体包…'),
+      this.installAbort?.signal, this.logger).catch((error) => {
+      this.logger?.error('内核字体包没有准备好，打开窗口时再试', { version: release.version, error: error instanceof Error ? error.message : String(error) })
+    })
+  }
+
   /** Moves a staged kernel into place; an installed one is kept aside until the new one is in. */
   private async replaceKernelFolder(staging: string, version: string): Promise<void> {
     const target = this.kernelPath(version)
@@ -736,6 +764,7 @@ export class KernelManager {
       await rename(previous, target).catch(() => undefined)
       throw error
     }
+    await detachKernelFolderFonts(previous)
     await rm(previous, { recursive: true, force: true })
   }
 

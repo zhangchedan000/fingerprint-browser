@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import type { AppSettings, EngineStatus } from '../shared/types'
 import type { SettingsStore } from './settings-store'
-import { executableFitsWindowToScreen, executableRelaysWebRtc, kernelRelaysWebRtc, kernelFitsWindowToScreen } from './kernel-features'
+import { executableFitsWindowToScreen, executableHasOwnFonts, executableRelaysWebRtc, kernelHasOwnFonts, kernelRelaysWebRtc, kernelFitsWindowToScreen } from './kernel-features'
 import {
   validateKernelIntegrityFields,
   verifyKernelIntegrity,
@@ -54,6 +54,7 @@ interface ManagedKernelManifest {
   assetName?: string
   windowScreen?: boolean
   webrtcRelay?: boolean
+  builtInFonts?: boolean
 }
 
 interface ProfileBrowserRuntime {
@@ -130,7 +131,8 @@ export async function locateBrowserForProfile(
                 : 'Prism 内核（环境固定）',
               version,
               windowScreen: kernelFitsWindowToScreen(manifest),
-              webrtcRelay: kernelRelaysWebRtc(manifest)
+              webrtcRelay: kernelRelaysWebRtc(manifest),
+              builtInFonts: kernelHasOwnFonts(manifest)
             }
           }
         }
@@ -288,7 +290,8 @@ export async function locateBrowserSelection(settings: AppSettings, resourcesPat
       label: settings.fingerprintKernel ? 'Prism 内核' : '自定义 Chromium（兼容模式）',
       version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined,
       windowScreen: settings.fingerprintKernel ? await executableFitsWindowToScreen(settings.browserExecutable) : undefined,
-      webrtcRelay: settings.fingerprintKernel ? await executableRelaysWebRtc(settings.browserExecutable) : undefined
+      webrtcRelay: settings.fingerprintKernel ? await executableRelaysWebRtc(settings.browserExecutable) : undefined,
+      builtInFonts: settings.fingerprintKernel ? await executableHasOwnFonts(settings.browserExecutable) : undefined
     }
   }
 

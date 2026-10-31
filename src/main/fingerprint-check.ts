@@ -1,4 +1,4 @@
-import { kernelHasBuiltInFonts, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
+import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
@@ -384,6 +384,7 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       userDataDir,
       proxyUrl,
       engineVersion: engine.version,
+      builtInFonts: engine.builtInFonts,
       fingerprintKernel: engine.fingerprintKernel,
       hostHardwareConcurrency: options.hostHardwareConcurrency,
       hostPlatformVersion: options.hostPlatformVersion,
@@ -573,6 +574,6 @@ export function expectedIdentity(profile: BrowserProfile, options: Pick<Fingerpr
     screen,
     timezone: identity.timezone,
     language: identity.language,
-    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion, options.engine?.fingerprintKernel === true && kernelHasBuiltInFonts(options.engine.version))
+    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion, options.engine?.fingerprintKernel === true && options.engine.builtInFonts === true)
   }
 }

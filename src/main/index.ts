@@ -26,6 +26,7 @@ import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
 import { fontPackStatus, installFontPack, installKernelFontPack, registerLanguageFontsIpc } from './language-fonts'
 import { installOtherWindowsFonts } from './other-windows-fonts'
+import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { registerTeamIpc } from './team/team-ipc'
@@ -247,6 +248,12 @@ app.whenReady().then(async () => {
       logger?.info('窗口的系统语言缺字体包，自动下载', { script })
       await installFontPack(script, (input, init) => net.fetch(input as string, init),
         (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined)
+    },
+    ensureKernelFontStore: (kernelExecutable) => {
+      const run = otherFontsInstall.then(() => ensureKernelFonts(true, kernelExecutable, vaultPath, (input, init) => net.fetch(input as string, init),
+        (progress) => mainWindow?.webContents.send('fonts:progress', { script: KERNEL_FONT_PROGRESS, ...progress }), undefined, logger ?? undefined))
+      otherFontsInstall = run.catch(() => undefined)
+      return run
     },
     ensureKernelFonts: (script, kernelExecutable, windows) => {
       const run = otherFontsInstall.then(() => installKernelFontPack(script, kernelExecutable, windows, (input, init) => net.fetch(input as string, init),

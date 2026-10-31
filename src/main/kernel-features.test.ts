@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelRelaysWebRtc, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelRelaysWebRtc, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -60,4 +60,13 @@ it('finds the WebRTC relay in a local build\'s source', async () => {
   expect(await localBuildRelaysWebRtc(exe)).toBe(false)
   await writeFile(join(src, 'services', 'network', 'p2p', 'socket_udp.cc'), 'std::string FingerprintUdpRelay() {}')
   expect(await localBuildRelaysWebRtc(exe)).toBe(true)
+})
+
+it('knows the kernels with their own Windows fonts (prism16+) by release tag or asset name, not by kernel id', () => {
+  expect(kernelHasOwnFonts({ releaseTag: 'prism16', assetName: 'ungoogled-chromium_156.0.8078.47-prism16_windows_x64.zip' })).toBe(true)
+  expect(kernelHasOwnFonts({ releaseTag: '155.0.8059.84-prism16' })).toBe(true)
+  expect(kernelHasOwnFonts({ releaseTag: 'prism15', assetName: 'ungoogled-chromium_156.0.8078.47-prism15_windows_x64.zip' })).toBe(false)
+  expect(kernelHasOwnFonts({ releaseTag: 'prism17' })).toBe(true)
+  expect(kernelHasOwnFonts({ assetName: 'local-build-win32-x64', builtInFonts: true })).toBe(true)
+  expect(kernelHasOwnFonts({})).toBe(false)
 })

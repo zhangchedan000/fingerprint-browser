@@ -43,7 +43,7 @@ import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSu
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
-import { kernelHasBuiltInFonts, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
+import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
@@ -669,12 +669,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         label: pinnedKernel ? t("Prism 内核（环境固定）") : t("固定内核未安装"),
         version: kernelVersion,
         windowScreen: pinnedKernel?.windowScreen,
-        webrtcRelay: pinnedKernel?.webrtcRelay
+        webrtcRelay: pinnedKernel?.webrtcRelay,
+        builtInFonts: pinnedKernel?.builtInFonts
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
   // prism16+: the kernel brings a clean Windows' fonts and language packages; nothing to install here.
-  const builtInFonts = selectedEngine?.fingerprintKernel === true && kernelHasBuiltInFonts(selectedEngine.version)
+  const builtInFonts = selectedEngine?.fingerprintKernel === true && selectedEngine.builtInFonts === true
   const otherFonts = !builtInFonts && fontPacks?.otherWindowsFonts
     ? otherWindowsFonts(fp, { platform: 'windows', platformVersion: fontPacks.otherWindowsFonts.hostPlatformVersion }, selectedEngine?.fingerprintKernel === true)
     : undefined

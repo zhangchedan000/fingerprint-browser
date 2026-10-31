@@ -1,6 +1,6 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion, isWindows11PlatformVersion } from '../shared/hardware-profiles'
-import { GPU_VENDOR_IDS, kernelHasBuiltInFonts, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
+import { GPU_VENDOR_IDS, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
@@ -30,6 +30,8 @@ export interface LaunchArgumentOptions {
   extensionPaths?: string[]
   engineVersion?: string
   fingerprintKernel?: boolean
+  /** The kernel uses its own Windows fonts (EngineStatus.builtInFonts, prism16+). */
+  builtInFonts?: boolean
   hostHardwareConcurrency?: number
   hostPlatformVersion?: string
   proxyIdentity?: ProxyCheckSummary
@@ -80,7 +82,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const hardwareConcurrency = (hardware?.hostMatched || fp.coresSource === 'host') && options.hostHardwareConcurrency
     ? options.hostHardwareConcurrency
     : fp.hardwareConcurrency
-  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion, options.fingerprintKernel === true && kernelHasBuiltInFonts(options.engineVersion))
+  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion, options.fingerprintKernel === true && options.builtInFonts === true)
   const alignedSeed = options.fingerprintKernel ? effectiveFingerprintSeed(fp, options.engineVersion) : fp.seed >>> 0
   if (alignedSeed === undefined) {
     // Checked before launch (assertFingerprintKernelCompatibility); never fall back to another card.

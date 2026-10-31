@@ -17,10 +17,18 @@ const WINDOW_SCREEN_PATCH = '015-window-screen'
 const WEBRTC_RELAY_REVISION = 7
 /** Where a local build's source shows the relay is in (patch 013 in prism7). */
 const WEBRTC_RELAY_SOURCE = { file: 'services/network/p2p/socket_udp.cc', marker: 'FingerprintUdpRelay' }
+/**
+ * Windows fonts of its own (patch 007, prism16): the kernel reads `prism-system-fonts` next to chrome.exe
+ * and never this computer's fonts, so nothing is installed into Windows (kernel-fonts.ts links the shared
+ * font package there).
+ */
+const BUILT_IN_FONTS_REVISION = 16
+/** Where a local build's source shows its own fonts (patch 007 in prism16). */
+const BUILT_IN_FONTS_SOURCE = { file: 'components/services/font_data/font_data_service_impl.cc', marker: 'PrismFontManager' }
 
 export { prismRevision }
 
-type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; releaseTag?: string; assetName?: string }
+type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; releaseTag?: string; assetName?: string }
 
 const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
 
@@ -30,6 +38,10 @@ export function kernelFitsWindowToScreen(manifest: ManifestFeatures): boolean {
 
 export function kernelRelaysWebRtc(manifest: ManifestFeatures): boolean {
   return manifest.webrtcRelay ?? revisionOf(manifest) >= WEBRTC_RELAY_REVISION
+}
+
+export function kernelHasOwnFonts(manifest: ManifestFeatures): boolean {
+  return manifest.builtInFonts ?? revisionOf(manifest) >= BUILT_IN_FONTS_REVISION
 }
 
 /**
@@ -45,6 +57,11 @@ export async function executableFitsWindowToScreen(executable: string): Promise<
 export async function executableRelaysWebRtc(executable: string): Promise<boolean> {
   const manifest = await installedManifestOf(executable)
   return manifest ? kernelRelaysWebRtc(manifest) : localBuildRelaysWebRtc(executable)
+}
+
+export async function executableHasOwnFonts(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelHasOwnFonts(manifest) : localBuildHasOwnFonts(executable)
 }
 
 async function installedManifestOf(executable: string): Promise<ManifestFeatures | undefined> {
@@ -71,6 +88,10 @@ export async function localBuildFitsWindowToScreen(executable: string): Promise<
 
 export async function localBuildRelaysWebRtc(executable: string): Promise<boolean> {
   return localBuildSourceHas(executable, WEBRTC_RELAY_SOURCE.file, WEBRTC_RELAY_SOURCE.marker)
+}
+
+export async function localBuildHasOwnFonts(executable: string): Promise<boolean> {
+  return localBuildSourceHas(executable, BUILT_IN_FONTS_SOURCE.file, BUILT_IN_FONTS_SOURCE.marker)
 }
 
 /** A local build's own source tree (src\out\Default\chrome.exe → src) contains the marker. */

@@ -89,7 +89,7 @@ describe('launch arguments', () => {
   })
 
   it('reports the version of its own Windows fonts on a prism16 kernel, whatever this computer runs', () => {
-    const prism16 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47-prism16' }
+    const prism16 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', builtInFonts: true }
     const version = (platformVersion: string, hostPlatformVersion?: string) => buildLaunchArgs(profile({ ...WINDOWS, platformVersion }), { ...prism16, hostPlatformVersion })
       .find((arg) => arg.startsWith('--fingerprint-platform-version='))
     // Windows 11 on 22H2 (15) or Windows 10: 19.0.0, the 25H2 fonts the kernel carries.
