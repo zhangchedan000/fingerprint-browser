@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fontRegistryName } from './language-fonts'
-import { kernelFontsFolder, otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
+import { fontSetInstalledNames, kernelFontsFolder, otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
 
 /** A two-table font (head, name) with Windows (UTF-16BE) and Mac (Roman) name records. */
 function tinyFont(names: Array<[platform: number, nameId: number, text: string]>): Buffer {
@@ -111,10 +111,19 @@ describe('fonts of the other Windows', () => {
     const system = await mkdtemp(join(tmpdir(), 'other-fonts-system-'))
     try {
       expect(await otherWindowsFontsInstalled('win10', folder, system)).toBe(false)
-      await writeFile(join(folder, 'PrismW10-seguiemj.ttf'), '')
+      const win10 = fontSetInstalledNames('win10')
+      // Every Windows 10 file that differs from Windows 11's, all renamed (prism15).
+      expect(win10).toHaveLength(85)
+      expect(win10.every((font) => font.renamed && font.name.startsWith('PrismW10-'))).toBe(true)
+      expect(win10.map((font: { name: string }) => font.name)).toEqual(expect.arrayContaining(['PrismW10-arial.ttf', 'PrismW10-malgun.ttf', 'PrismW10-seguiemj.ttf', 'PrismW10-Sitka.ttc']))
+      for (const { name } of win10.slice(1)) await writeFile(join(folder, name), '')
+      expect(await otherWindowsFontsInstalled('win10', folder, system)).toBe(false)
+      await writeFile(join(folder, win10[0].name), '')
       expect(await otherWindowsFontsInstalled('win10', folder, system)).toBe(true)
-      for (const file of ['seguiemj.ttf', 'Nirmala.ttc', 'mingliub.ttc', 'SitkaVF.ttf', 'SitkaVF-Italic.ttf']) await writeFile(join(folder, `PrismW11-${file}`), '')
-      for (const file of ['SegoeIcons.ttf', 'SegUIVar.ttf', 'SansSerifCollection.ttf', 'CascadiaCode.ttf']) await writeFile(join(folder, file), '')
+      const win11 = fontSetInstalledNames('win11')
+      expect(win11).toHaveLength(87)
+      expect(win11.filter((font: { renamed: boolean }) => !font.renamed).map((font: { name: string }) => font.name).sort()).toEqual(['CascadiaCode.ttf', 'CascadiaMono.ttf', 'SansSerifCollection.ttf', 'SegUIVar.ttf', 'SegoeIcons.ttf'])
+      for (const { name } of win11) if (name !== 'CascadiaMono.ttf') await writeFile(join(folder, name), '')
       expect(await otherWindowsFontsInstalled('win11', folder, system)).toBe(false)
       // A font kept under its own name may be Windows' own (or installed by another program).
       await writeFile(join(system, 'CascadiaMono.ttf'), '')
