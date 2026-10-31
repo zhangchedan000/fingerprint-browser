@@ -8,10 +8,13 @@
 // The owner sets the bucket and its key in the app (r2.pb.js); they are kept in pb_data/r2.env.
 // Hook handlers run in their own VMs, so state lives in $app.store().
 
-const DATA = "/pb/pb_data"
+// TEAM_DATA_DIR only for running the server outside its container (tests).
+const DATA = $os.getenv("TEAM_DATA_DIR") || "/pb/pb_data"
 const WORK = DATA + "/.r2"
 const CONFIG = DATA + "/r2.env"
 const KEEP_DAYS = 7
+// The daily zip of pb_data (PocketBase's own backup, 1761600003_backups.js) is also kept in R2, longer.
+const DAILY_KEEP_DAYS = 15
 const KEY = { db: "r2.dbDirty", files: "r2.filesDirty", status: "r2.status", running: "r2.running", started: "r2.started" }
 
 /** Only these shapes are accepted, so the values are safe inside the shell lines below. */
@@ -95,11 +98,23 @@ function pushFiles(r) {
   sh(r.env + "[ -d " + DATA + "/storage ] || exit 0; rclone copy --max-age 2h --no-traverse " + DATA + "/storage " + r.target + "/storage")
 }
 
-function fullPass(r) {
-  pushDb(r)
+function pushStorage(r) {
   const day = stamp().slice(0, 8)
   sh(r.env + "[ -d " + DATA + "/storage ] || exit 0; rclone sync " + DATA + "/storage " + r.target + "/storage --backup-dir " + r.target + "/deleted/" + day)
+  // Files the server hands out (assets.pb.js), so a standby server has them after a restore too.
+  sh(r.env + "[ -d " + DATA + "/assets ] || exit 0; rclone sync " + DATA + "/assets " + r.target + "/assets")
+}
+
+function fullPass(r) {
+  pushDb(r)
+  pushStorage(r)
   sh(r.env + "rclone delete --min-age " + KEEP_DAYS + "d " + r.target + "/deleted; rclone delete --min-age " + KEEP_DAYS + "d " + r.target + "/db")
+}
+
+/** The newest daily zip of pb_data goes to daily/ too; zips older than DAILY_KEEP_DAYS are removed there. */
+function pushDailyZip(r) {
+  sh(r.env + "[ -d " + DATA + "/backups ] || exit 0; latest=$(ls -1t " + DATA + "/backups/*.zip 2>/dev/null | head -1); [ -n \"$latest\" ] || exit 0; "
+    + "rclone copy \"$latest\" " + r.target + "/daily && rclone delete --min-age " + DAILY_KEEP_DAYS + "d " + r.target + "/daily")
 }
 
 /** Writes and removes a small file, so a wrong address or key shows before it is saved. */
@@ -138,10 +153,17 @@ function guarded(work) {
   try { work() } finally { store.remove(KEY.running) }
 }
 
+/** A standby server (control_utils.js) must not write its old data over the active server's copy. */
+function standby() {
+  if (require(`${__hooks}/control_utils.js`).role() !== "active") return true
+  // A server without accounts (a fresh standby before the marker names it) has nothing to keep.
+  return !require(`${__hooks}/team_utils.js`).findOrNull($app, "users", 'role = "owner"', {})
+}
+
 /** Every minute: whatever changed since the last run. */
 function tick() {
   const target = remote()
-  if (!target) return
+  if (!target || standby()) return
   const store = $app.store()
   if (!store.get(KEY.started)) {
     daily()
@@ -173,7 +195,7 @@ function tick() {
 
 function daily() {
   const target = remote()
-  if (!target) return
+  if (!target || standby()) return
   guarded(() => {
     const store = $app.store()
     // Changes made while the pass runs set the flags again for the next minute.
@@ -181,6 +203,7 @@ function daily() {
     store.remove(KEY.files)
     try {
       fullPass(target)
+      try { pushDailyZip(target) } catch (err) { setStatus({ lastError: "每日整包备份失败：" + err.message, lastErrorAt: Date.now() }) }
       const now = Date.now()
       store.set(KEY.started, true)
       setStatus({ lastDb: now, lastFiles: now, lastFull: now })
@@ -206,4 +229,4 @@ function summary() {
   }, status())
 }
 
-module.exports = { markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, check, saveConfig, removeConfig, KEEP_DAYS }
+module.exports = { DATA, markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, readConfig, check, saveConfig, removeConfig, remote, sh, stamp, pushDb, pushStorage, KEEP_DAYS, DAILY_KEEP_DAYS }

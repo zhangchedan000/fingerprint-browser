@@ -8,7 +8,10 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:8090:8090"
+    # start.sh swaps in the data a takeover pulled from R2 (control.pb.js) before PocketBase starts.
+    entrypoint: ["/bin/sh", "/pb/start.sh"]
     volumes:
+      - ./start.sh:/pb/start.sh:ro
       - ./pb_data:/pb/pb_data
       - ./pb_migrations:/pb/pb_migrations:ro
       - ./pb_hooks:/pb/pb_hooks:ro

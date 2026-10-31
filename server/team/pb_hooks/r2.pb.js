@@ -17,14 +17,14 @@ onModelAfterCreateSuccess((e) => {
   const r2 = require(`${__hooks}/r2_utils.js`)
   r2.markDb()
   if (e.model.tableName() === "team_profiles") r2.markFiles()
-}, "users", "team_profiles", "team_logs")
+}, "users", "team_profiles", "team_logs", "team_workspaces")
 
 onModelAfterUpdateSuccess((e) => {
   e.next()
   const r2 = require(`${__hooks}/r2_utils.js`)
   r2.markDb()
   if (e.model.tableName() === "team_profiles") r2.markFiles()
-}, "users", "team_profiles")
+}, "users", "team_profiles", "team_workspaces")
 
 onModelAfterDeleteSuccess((e) => {
   e.next()

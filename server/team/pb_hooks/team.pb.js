@@ -5,7 +5,8 @@
 routerAdd("GET", "/api/team/status", (e) => {
   const t = require(`${__hooks}/team_utils.js`)
   const owner = t.findOrNull($app, "users", 'role = "owner"', {})
-  return e.json(200, { ready: !!owner, lockMs: t.LOCK_MS })
+  // role / active / servers: which server is in use (control_utils.js), for the apps to follow.
+  return e.json(200, Object.assign({ ready: !!owner, lockMs: t.LOCK_MS }, require(`${__hooks}/control_utils.js`).view()))
 })
 
 // Creates the owner account once, with the setup code from the server's .env.
