@@ -46,12 +46,21 @@ export interface DeepSiteSpec {
   timeoutMs: number
 }
 
+/**
+ * After the verdict shows, how much longer the rest of the page may take to settle before the
+ * screenshot. Measured 2026-10-31 (direct, Win11): every site settled within 6 s of its verdict;
+ * through a proxy BrowserScan kept filling rows past 45 s.
+ */
+export const DEEP_SETTLE_AFTER_VERDICT_MS = 30_000
+
 /** The sites whose verdict the parsers below can read. */
+// Verdicts came after 2 s (CreepJS), 3 s (BrowserScan), 13 s (iphey) and 21 s (Pixelscan) on a direct
+// connection (2026-10-31); a slow proxy takes several times that, so each gets two minutes.
 export const DEEP_SITES: readonly DeepSiteSpec[] = [
-  { site: 'iphey', name: 'iphey', url: 'https://iphey.com/', timeoutMs: 60_000 },
-  { site: 'browserscan', name: 'BrowserScan', url: 'https://www.browserscan.net/', timeoutMs: 45_000 },
-  { site: 'pixelscan', name: 'Pixelscan', url: 'https://pixelscan.net/fingerprint-check', timeoutMs: 45_000 },
-  { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 45_000 }
+  { site: 'iphey', name: 'iphey', url: 'https://iphey.com/', timeoutMs: 120_000 },
+  { site: 'browserscan', name: 'BrowserScan', url: 'https://www.browserscan.net/', timeoutMs: 120_000 },
+  { site: 'pixelscan', name: 'Pixelscan', url: 'https://pixelscan.net/fingerprint-check', timeoutMs: 120_000 },
+  { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 120_000 }
 ]
 type Parsed = Pick<DeepSiteResult, 'status' | 'score' | 'findings'>
 

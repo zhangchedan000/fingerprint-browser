@@ -1933,7 +1933,7 @@
   "有风险": "Có rủi ro",
   "不通过": "Không đạt",
   "未读到结果": "Chưa đọc được kết quả",
-  "正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…": "Đang lần lượt mở {0} trang kiểm tra, khoảng 1–3 phút…",
+  "正在依次打开 {0} 个检测网站，大约需要 1–5 分钟…": "Đang lần lượt mở {0} trang kiểm tra, khoảng 1–5 phút…",
   "让 iphey、BrowserScan、Pixelscan、CreepJS 这些持续更新的检测网站来评判这个窗口": "Để iphey, BrowserScan, Pixelscan, CreepJS — các trang luôn cập nhật — đánh giá cửa sổ này",
   "重新深度检测": "Kiểm tra sâu lại",
   "深度检测": "Kiểm tra sâu",

@@ -103,7 +103,7 @@ export function DeepCheck({ draft, profileId, settingsKey }: { draft: () => Prof
       <div className="fb-check-head">
         <span className="fb-check-summary">
           {running
-            ? t("正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…", sites.length)
+            ? t("正在依次打开 {0} 个检测网站，大约需要 1–5 分钟…", sites.length)
             : sites.length
               ? t("让 {0} 这些持续更新的检测网站来评判这个窗口", formatList(sites.map((site) => site.name)))
               : t("没有打开的检测网站")}

@@ -1933,7 +1933,7 @@
   "有风险": "Con riesgo",
   "不通过": "No superado",
   "未读到结果": "Sin resultado",
-  "正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…": "Abriendo {0} sitios de detección uno a uno; unos 1–3 minutos…",
+  "正在依次打开 {0} 个检测网站，大约需要 1–5 分钟…": "Abriendo {0} sitios de detección uno a uno; unos 1–5 minutos…",
   "让 iphey、BrowserScan、Pixelscan、CreepJS 这些持续更新的检测网站来评判这个窗口": "Deja que iphey, BrowserScan, Pixelscan y CreepJS, que actualizan sus pruebas, evalúen esta ventana",
   "重新深度检测": "Repetir comprobación profunda",
   "深度检测": "Comprobación profunda",

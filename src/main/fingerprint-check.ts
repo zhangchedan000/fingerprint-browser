@@ -1,7 +1,7 @@
 import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
-import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
+import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -378,9 +378,11 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     await answerBlankPasswordCheck(userDataDir)
     proxyUrl = await openProxyBridge(profile.proxy)
     webrtcRelay = await windowWebRtcRelay(profile, engine)
-    // Same window size as a real launch, just placed off-screen.
+    // Off-screen, the size of a maximized window: the screen's width and its height above the taskbar.
+    // A window exactly the screen's size is what headless browsers have (CreepJS counts it "like
+    // headless": 31% instead of the 25% every desktop Chrome gets, measured 2026-10-31).
     const size = expectedIdentity(profile, options).screen
-    const args = buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height: size[1] } }, {
+    const checkArgs = (height: number) => buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height } }, {
       userDataDir,
       proxyUrl,
       engineVersion: engine.version,
@@ -398,6 +400,9 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       seededAudioRects: engine.webrtcRelay,
       webrtcRelayPort: webrtcRelay?.port
     }).filter((arg) => !arg.startsWith('--window-name='))
+    let args = checkArgs(size[1])
+    const availHeight = Number(args.find((arg) => arg.startsWith('--fingerprint-screen-avail-height='))?.split('=')[1])
+    if (Number.isInteger(availHeight) && availHeight > 0 && availHeight < size[1]) args = checkArgs(availHeight)
     args.push('--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--disable-extensions')
     // The window sits off-screen: keep its timers and painting at full speed, as for a visible one.
     args.push('--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling')
@@ -475,10 +480,11 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
       const dialogsBefore = checkDialogs.get(client)?.length ?? 0
       try {
         await client.send('Page.navigate', { url: site.url }, 30_000)
-        const deadline = Date.now() + deepSiteTimeout(site.url)
-        // The verdict often shows before the rest of the page (BrowserScan's score comes ahead of
-        // its IP and system rows), so read on until the page text stops changing and no
-        // placeholder is left; the last reading is the result and the picture.
+        // Wait for the site's verdict (up to its time limit), then for the rest of the page: the
+        // verdict often shows before the rest (BrowserScan's score comes ahead of its IP and system
+        // rows), so read on until the page text stops changing and no placeholder is left, at most
+        // DEEP_SETTLE_AFTER_VERDICT_MS more. The screenshot is taken after that, never before the verdict.
+        let deadline = Date.now() + deepSiteTimeout(site.url)
         let parsed: ReturnType<typeof parseDeepSite>
         let previous: string | undefined
         // Readings in a row that did not change: two (3 s), as CreepJS fills its WebRTC and device rows after its verdict.
@@ -488,7 +494,9 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
           await new Promise((resolve) => setTimeout(resolve, 1500))
           const page = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }).catch(() => undefined)
           const text = page?.result?.value ?? ''
-          parsed = parseDeepSite(site.url, text) ?? parsed
+          const reading = parseDeepSite(site.url, text)
+          if (reading && !parsed && known) deadline = Date.now() + DEEP_SETTLE_AFTER_VERDICT_MS
+          parsed = reading ?? parsed
           unchanged = text === previous ? unchanged + 1 : 0
           settled = (Boolean(parsed) || (!known && text.length > 0)) && unchanged >= 2 && !pageStillLoading(text)
           previous = text
@@ -499,7 +507,8 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
           const title = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.title', returnByValue: true }).catch(() => undefined)
           if (title?.result?.value) result.findings.push(title.result.value.slice(0, 120))
         }
-        if (!settled) result.findings.push('页面在限定时间内没有完全加载完')
+        // With the verdict read, rows still filling in below it do not change it: no warning then.
+        if (!settled && !parsed) result.findings.push('页面在限定时间内没有完全加载完')
         await client.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' }).catch(() => undefined)
         const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
         if (shot?.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`

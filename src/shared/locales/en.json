@@ -1933,7 +1933,7 @@
   "有风险": "At risk",
   "不通过": "Failed",
   "未读到结果": "No result read",
-  "正在依次打开 {0} 个检测网站，大约需要 1–3 分钟…": "Opening {0} detection sites one by one; about 1–3 minutes…",
+  "正在依次打开 {0} 个检测网站，大约需要 1–5 分钟…": "Opening {0} detection sites one by one; about 1–5 minutes…",
   "让 iphey、BrowserScan、Pixelscan、CreepJS 这些持续更新的检测网站来评判这个窗口": "Let iphey, BrowserScan, Pixelscan and CreepJS, which keep updating their tests, judge this window",
   "重新深度检测": "Deep check again",
   "深度检测": "Deep check",
