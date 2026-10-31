@@ -181,8 +181,15 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     if (!disabledSpoofing.includes('audio')) args.push('--fingerprinting-audio-noise')
     if (!disabledSpoofing.includes('clientrects')) args.push('--fingerprinting-client-rects-noise')
   }
+  // A window covered by other windows keeps running like the one in front: Chrome otherwise treats it as
+  // hidden (Windows occlusion tracking) and slows its timers and drawing, so pages behind other windows stall
+  // (uploads, chats, keep-alive checks) while many windows are open.
+  args.push('--disable-backgrounding-occluded-windows')
+  const disabledFeatures = ['CalculateNativeWinOcclusion']
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
-  if (fp.portScanProtection === false) args.push('--disable-features=LocalNetworkAccessChecks')
+  if (fp.portScanProtection === false) disabledFeatures.push('LocalNetworkAccessChecks')
+  // One switch: Chrome only reads the last --disable-features.
+  args.push(`--disable-features=${disabledFeatures.join(',')}`)
   // Unset is 8 GB (types.ts); a fingerprint kernel given nothing reports this computer's own.
   const deviceMemory = fp.deviceMemory ?? (options.fingerprintKernel ? 8 : undefined)
   if (deviceMemory) {
