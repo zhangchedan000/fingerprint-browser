@@ -88,6 +88,36 @@ describe('launch arguments', () => {
     expect(version('19.0.0')).toBe('--fingerprint-platform-version=19.0.0')
   })
 
+  it('reports the version of its own Windows fonts on a prism16 kernel, whatever this computer runs', () => {
+    const prism16 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47-prism16' }
+    const version = (platformVersion: string, hostPlatformVersion?: string) => buildLaunchArgs(profile({ ...WINDOWS, platformVersion }), { ...prism16, hostPlatformVersion })
+      .find((arg) => arg.startsWith('--fingerprint-platform-version='))
+    // Windows 11 on 22H2 (15) or Windows 10: 19.0.0, the 25H2 fonts the kernel carries.
+    expect(version('19.0.0', '15.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+    expect(version('15.0.0', '19.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+    expect(version('19.0.0', '10.0.0')).toBe('--fingerprint-platform-version=19.0.0')
+    expect(version('10.0.0', '19.0.0')).toBe('--fingerprint-platform-version=10.0.0')
+    expect(version('10.0.0')).toBe('--fingerprint-platform-version=10.0.0')
+  })
+
+  it('gives a window of its own screen its own scale, not this computer\'s', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
+    const scale = (width: number, height: number, scaleFactor?: number) => buildLaunchArgs(profile({ platform: 'windows', screenWidth: width, screenHeight: height }), { ...kernel, hostScreen: { width: 2560, height: 1440, scaleFactor } })
+      .filter((arg) => arg.startsWith('--force-device-scale-factor'))
+    // 1920 × 1080 is 100%: forced only on a computer at another scale.
+    expect(scale(1920, 1080, 1)).toEqual([])
+    expect(scale(1920, 1080)).toEqual([])
+    expect(scale(1920, 1080, 1.25)).toEqual(['--force-device-scale-factor=1'])
+    // 4K is 150%: nothing to force on a computer at 150%.
+    expect(scale(3840, 2160, 1)).toEqual(['--force-device-scale-factor=1.5'])
+    expect(scale(3840, 2160, 1.5)).toEqual([])
+    // A fixed window keeps its place on this monitor: 1000 × 800 at 125% is 1250 × 1000 at 100%.
+    const base = profile({ platform: 'windows', screenWidth: 1920, screenHeight: 1080 })
+    const fixed = buildLaunchArgs({ ...base, window: { ...base.window, mode: 'custom', width: 1000, height: 800, x: 100, y: 40 } }, { ...kernel, hostScreen: { width: 2560, height: 1440, scaleFactor: 1.25 } })
+    expect(fixed).toContain('--window-size=1250,1000')
+    expect(fixed).toContain('--window-position=125,50')
+  })
+
   it('tells Prism kernels what the chosen card does with AV1', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const av1 = (gpu: string) => buildLaunchArgs(profile({ ...WINDOWS, gpu }), prism).filter((arg) => arg.startsWith('--fingerprint-gpu-av1'))

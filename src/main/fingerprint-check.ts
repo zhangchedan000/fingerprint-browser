@@ -1,4 +1,4 @@
-import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
+import { kernelHasBuiltInFonts, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
@@ -573,6 +573,6 @@ export function expectedIdentity(profile: BrowserProfile, options: Pick<Fingerpr
     screen,
     timezone: identity.timezone,
     language: identity.language,
-    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion)
+    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion, options.engine?.fingerprintKernel === true && kernelHasBuiltInFonts(options.engine.version))
   }
 }

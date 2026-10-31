@@ -113,7 +113,12 @@ export function effectiveScreen(
   return own
 }
 
-/** The screen and scale the kernel is told: the claimed screen, a 4K one of the window's own at 150% (scaledScreen). */
+/**
+ * The screen and scale the kernel is told: the claimed screen, a 4K one of the window's own at 150%
+ * (scaledScreen). A window's own screen always has its own scale (100% below 4K), never this computer's:
+ * a 1920 × 1080 window on a computer at 125% would otherwise report devicePixelRatio 1.25 with a screen
+ * that a real 125% computer reports as 1536 × 864.
+ */
 export function launchedScreen(
   fp: Pick<FingerprintConfig, 'screenSource' | 'screenWidth' | 'screenHeight'>,
   kernelVersion: string | null | undefined,
@@ -123,5 +128,5 @@ export function launchedScreen(
   const claimed = effectiveScreen(fp, kernelVersion, host, windowScreen)
   const own = kernelSpoofsScreen(kernelVersion) && fp.screenSource !== 'host' &&
     claimed.width === fp.screenWidth && claimed.height === fp.screenHeight
-  return own ? scaledScreen(claimed) : { screen: claimed }
+  return own ? { scale: 1, ...scaledScreen(claimed) } : { screen: claimed }
 }

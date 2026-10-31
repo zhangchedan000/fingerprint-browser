@@ -1,6 +1,6 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion, isWindows11PlatformVersion } from '../shared/hardware-profiles'
-import { GPU_VENDOR_IDS, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
+import { GPU_VENDOR_IDS, kernelHasBuiltInFonts, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
@@ -15,6 +15,8 @@ export interface HostScreen {
   height: number
   /** Height of this computer's taskbar at the bottom (display size minus work area), in CSS pixels. */
   taskbarHeight?: number
+  /** This computer's display scale (1.25 at 125%). */
+  scaleFactor?: number
 }
 
 export interface LaunchArgumentOptions {
@@ -78,7 +80,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const hardwareConcurrency = (hardware?.hostMatched || fp.coresSource === 'host') && options.hostHardwareConcurrency
     ? options.hostHardwareConcurrency
     : fp.hardwareConcurrency
-  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion)
+  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion, options.fingerprintKernel === true && kernelHasBuiltInFonts(options.engineVersion))
   const alignedSeed = options.fingerprintKernel ? effectiveFingerprintSeed(fp, options.engineVersion) : fp.seed >>> 0
   if (alignedSeed === undefined) {
     // Checked before launch (assertFingerprintKernelCompatibility); never fall back to another card.
@@ -137,10 +139,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
 
   // Automatic size: no --window-size, so the kernel opens its own default window the way a
   // fresh Chrome does, and remembers the size the user drags it to.
-  if (forcedScale) args.push(`--force-device-scale-factor=${forcedScale}`)
+  // The window's own scale (100%, a 4K screen 150%), not this computer's; nothing to force when they agree.
+  const hostScale = options.hostScreen?.scaleFactor && options.hostScreen.scaleFactor > 0 ? options.hostScreen.scaleFactor : 1
+  if (forcedScale && forcedScale !== hostScale) args.push(`--force-device-scale-factor=${forcedScale}`)
   if (profile.window.mode === 'custom') {
-    // Sizes are in CSS pixels, which the forced scale makes larger: the same place on this monitor.
-    const css = (value: number) => Math.round(value / (forcedScale ?? 1))
+    // Sizes are this computer's (CSS pixels at its scale); the window's scale changes them: the same place on this monitor.
+    const css = (value: number) => Math.round(value * (forcedScale ? hostScale / forcedScale : 1))
     args.push(`--window-size=${css(profile.window.width)},${css(profile.window.height)}`)
     args.push(`--window-position=${css(profile.window.x)},${css(profile.window.y)}`)
   }

@@ -214,10 +214,10 @@ app.whenReady().then(async () => {
   // A library proxy's check or IP 评分 (from any window or the proxy page): the pages showing it reload it.
   profiles.onLibraryChecksChanged(() => mainWindow?.webContents.send('proxy:changed'))
   launcher.setHostScreenProvider(() => {
-    const { size, workArea } = screen.getPrimaryDisplay()
+    const { size, workArea, scaleFactor } = screen.getPrimaryDisplay()
     // Only a taskbar along the bottom (or top) shortens the screen's available height.
     const taskbarHeight = workArea.width === size.width ? size.height - workArea.height : 0
-    return { width: size.width, height: size.height, taskbarHeight }
+    return { width: size.width, height: size.height, taskbarHeight, scaleFactor }
   })
   await launcher.initialize()
   const kernels = new KernelManager(

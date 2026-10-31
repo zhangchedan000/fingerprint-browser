@@ -301,14 +301,17 @@ export function isWindows11PlatformVersion(version: string | undefined): boolean
 }
 
 /**
- * The platform version a window reports. A Windows window on a computer running the same Windows
- * (10 or 11) reports this computer's own version, as its fonts, media formats and emoji are this
- * computer's; host hardware always does. Otherwise the window's own setting (a Windows 10 window
- * on Windows 11: 10.0.0).
+ * The platform version a window reports. Host hardware reports this computer's own. On a kernel with
+ * its own Windows fonts (prism16+, builtInFonts) a Windows window reports the version of those fonts,
+ * whatever this computer runs: 19.0.0 (Windows 11 24H2 / 25H2) or 10.0.0 (Windows 10 2004 and later).
+ * On older kernels, whose fonts, media formats and emoji are this computer's, a Windows window on a
+ * computer running the same Windows (10 or 11) reports this computer's own version; otherwise the
+ * window's own setting (a Windows 10 window on Windows 11: 10.0.0).
  */
-export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId'>, hostPlatformVersion?: string): string {
+export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId'>, hostPlatformVersion?: string, builtInFonts = false): string {
+  if (hostPlatformVersion && hardwareProfile(config.hardwareProfileId)?.hostMatched) return hostPlatformVersion
+  if (builtInFonts && config.platform === 'windows') return isWindows11PlatformVersion(config.platformVersion) ? '19.0.0' : '10.0.0'
   if (!hostPlatformVersion) return config.platformVersion
-  if (hardwareProfile(config.hardwareProfileId)?.hostMatched) return hostPlatformVersion
   if (config.platform !== 'windows' || !/^\d+\.\d+\.\d+$/.test(hostPlatformVersion)) return config.platformVersion
   return isWindows11PlatformVersion(config.platformVersion) === isWindows11PlatformVersion(hostPlatformVersion)
     ? hostPlatformVersion

@@ -229,7 +229,7 @@ export class BrowserLauncher {
     if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) {
       const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
       if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
-        const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion)) ? 'win11' : 'win10'
+        const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion, true)) ? 'win11' : 'win10'
         await this.prerequisites.ensureKernelFonts(script, engine.executable, windows).catch((error) => {
           this.logger?.error('语言字体包没有放进内核，窗口照常打开（没有这个语言的字体）', { profileId, script, error: error instanceof Error ? error.message : String(error) })
         })
