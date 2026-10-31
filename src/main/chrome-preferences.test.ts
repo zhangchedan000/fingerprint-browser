@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyChromePreferences, GOOGLE_SEARCH, patchChromePreferences } from './chrome-preferences'
+import { answerBlankPasswordCheck, applyChromePreferences, GOOGLE_SEARCH, patchChromePreferences } from './chrome-preferences'
 
 const ALWAYS = { https_only_mode_enabled: true, default_search_provider_data: { template_url_data: GOOGLE_SEARCH } }
 
@@ -67,5 +67,35 @@ describe('chrome preferences', () => {
     expect((next.download as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
     expect((next.savefile as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
     expect(patchChromePreferences({}, {})!.download).toBeUndefined()
+  })
+
+  it("answers Chrome's blank Windows password check before a new profile starts, once", async () => {
+    const ANSWER = { os_password_blank: false, os_password_last_changed: '13427226677000000' }
+    const check = { answer: async () => ANSWER }
+    const dir = await userData()
+    expect(await answerBlankPasswordCheck(dir, check)).toBe(true)
+    expect(JSON.parse(await readFile(join(dir, 'Local State'), 'utf8'))).toEqual({ password_manager: ANSWER })
+    expect(await answerBlankPasswordCheck(dir, check)).toBe(false)
+
+    // Keeps the rest of Local State (the saved-password key) and an answer Chrome already stored.
+    const used = await userData()
+    await writeFile(join(used, 'Local State'), JSON.stringify({ os_crypt: { encrypted_key: 'k' }, password_manager: { other: 1 } }))
+    expect(await answerBlankPasswordCheck(used, check)).toBe(true)
+    expect(JSON.parse(await readFile(join(used, 'Local State'), 'utf8'))).toEqual({ os_crypt: { encrypted_key: 'k' }, password_manager: { other: 1, ...ANSWER } })
+    const answered = await userData()
+    const own = JSON.stringify({ password_manager: { os_password_blank: true, os_password_last_changed: '13300000000000000' } })
+    await writeFile(join(answered, 'Local State'), own)
+    expect(await answerBlankPasswordCheck(answered, check)).toBe(false)
+    expect(await readFile(join(answered, 'Local State'), 'utf8')).toBe(own)
+
+    const corrupt = await userData()
+    await writeFile(join(corrupt, 'Local State'), '{not json')
+    expect(await answerBlankPasswordCheck(corrupt, check)).toBe(false)
+    expect(await readFile(join(corrupt, 'Local State'), 'utf8')).toBe('{not json')
+
+    // No answer (not Windows, a domain user): nothing is written and Chrome checks as before.
+    const unknown = await userData()
+    expect(await answerBlankPasswordCheck(unknown, { answer: async () => undefined })).toBe(false)
+    await expect(readFile(join(unknown, 'Local State'), 'utf8')).rejects.toThrow()
   })
 })

@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserProfile, FingerprintConfig } from '../shared/types'
+import { osPasswordCheck, type OsPasswordCheck } from './os-password'
 
 type Json = Record<string, unknown>
 
@@ -97,6 +98,34 @@ export async function applyChromePreferences(
   const next = patchChromePreferences(current, fingerprint, startupMode, downloadFolder)
   if (!next) return false
   await mkdir(directory, { recursive: true })
+  const temporary = `${path}.fb-tmp`
+  await writeFile(temporary, JSON.stringify(next), { encoding: 'utf8', mode: 0o600 })
+  await rename(temporary, path)
+  return true
+}
+
+/**
+ * Writes this computer's answer to Chrome's blank Windows password check (os-password.ts) into the
+ * profile's Local State before Chromium starts, keeping everything else, so a new profile does not
+ * log on to Windows with an empty password. A profile whose Chrome already answered keeps its own
+ * answer; a Local State Chromium cannot have written (invalid JSON) is left untouched.
+ */
+export async function answerBlankPasswordCheck(userDataDir: string, check: Pick<OsPasswordCheck, 'answer'> = osPasswordCheck): Promise<boolean> {
+  const path = join(userDataDir, 'Local State')
+  let current: Json = {}
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
+    current = parsed as Json
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
+  }
+  const passwordManager = current.password_manager as Json | undefined
+  if (passwordManager && typeof passwordManager === 'object' && 'os_password_last_changed' in passwordManager) return false
+  const answer = await check.answer()
+  if (!answer) return false
+  const next = { ...current, password_manager: { ...(passwordManager ?? {}), ...answer } }
+  await mkdir(userDataDir, { recursive: true })
   const temporary = `${path}.fb-tmp`
   await writeFile(temporary, JSON.stringify(next), { encoding: 'utf8', mode: 0o600 })
   await rename(temporary, path)

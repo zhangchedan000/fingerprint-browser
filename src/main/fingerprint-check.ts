@@ -22,6 +22,7 @@ import type {
 } from '../shared/types'
 import type { Logger } from './app-logger'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
+import { answerBlankPasswordCheck } from './chrome-preferences'
 import { buildLaunchArgs } from './launch-args'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
 import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
@@ -373,6 +374,8 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
   let client: CdpClient | undefined
   let webrtcRelay: WebRtcRelay | undefined
   try {
+    // Every check is a new profile: without this, each one logs on to Windows with an empty password.
+    await answerBlankPasswordCheck(userDataDir)
     proxyUrl = await openProxyBridge(profile.proxy)
     webrtcRelay = await windowWebRtcRelay(profile, engine)
     // Same window size as a real launch, just placed off-screen.

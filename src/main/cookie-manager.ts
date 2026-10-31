@@ -8,6 +8,7 @@ import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
+import { answerBlankPasswordCheck } from './chrome-preferences'
 
 export class CookieManager {
   private readonly busyProfiles = new Set<string>()
@@ -67,6 +68,8 @@ export class CookieManager {
       await assertKernelCanOpenProfileData(userDataPath, engine.version)
       const activePort = join(userDataPath, 'DevToolsActivePort')
       await rm(activePort, { force: true })
+      // Cookies can come before the window's first start: answer Chrome's blank-password logon here too.
+      await answerBlankPasswordCheck(userDataPath)
       const child = spawn(engine.executable, [
         `--user-data-dir=${userDataPath}`,
         '--headless=new',

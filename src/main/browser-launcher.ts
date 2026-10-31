@@ -17,7 +17,7 @@ import { findManagedProcess, SystemProcessInspector, type ProcessInspector } fro
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
 import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
-import { applyChromePreferences } from './chrome-preferences'
+import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import type { PrismFontSet } from './other-windows-fonts'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
@@ -386,6 +386,14 @@ export class BrowserLauncher {
         await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile))
       } catch (error) {
         this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      try {
+        await answerBlankPasswordCheck(this.profiles.profileDataPath(id))
+      } catch (error) {
+        this.logger?.error('写入 Windows 空密码检查结果失败', {
           profileId: id,
           error: error instanceof Error ? error.message : String(error)
         })
