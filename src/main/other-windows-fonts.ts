@@ -22,6 +22,8 @@ const execFileAsync = promisify(execFile)
  * windows10HostFonts in hardware-profiles.ts).
  */
 export const PRISM_FONTS_FOLDER = 'prism-fonts'
+/** prism16+: a clean Windows 10 and 11's fonts the kernel uses itself (patch 007), next to chrome.exe. */
+export const PRISM_SYSTEM_FONTS_FOLDER = 'prism-system-fonts'
 
 /** A set of fonts from the kernel package: the other Windows' or, on Windows 10, Windows 10's extras. */
 export type PrismFontSet = OtherWindows | 'win10host'
@@ -423,4 +425,9 @@ export async function installOtherWindowsFonts(set: PrismFontSet, kernelExecutab
     installed++
   }
   logger?.info('已安装另一版 Windows 的字体', { set, files: installed })
+}
+
+/** Whether the kernel brings its own Windows fonts (prism16+), so nothing is installed into Windows. */
+export async function kernelShipsSystemFonts(executable: string): Promise<boolean> {
+  return exists(join(dirname(executable), PRISM_SYSTEM_FONTS_FOLDER, 'win11', 'base'))
 }

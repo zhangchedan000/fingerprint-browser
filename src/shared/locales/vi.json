@@ -2645,5 +2645,6 @@
   "已装好 Windows {0} 窗口要用的字体": "Đã cài các phông mà cửa sổ Windows {0} cần",
   "这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。": "Máy này chạy Windows {0}: cửa sổ Windows {1} cần phông riêng của Windows {1} (đi kèm nhân), tự cài khi mở cửa sổ.",
   "网页弹窗：{0}": "Hộp thoại của trang: {0}",
-  "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "Cửa sổ bật lên của chính trang web, đã được đóng trong lúc kiểm tra; thường là do một dịch vụ của trang không truy cập được (Failed to fetch), nên kết luận có thể chưa đầy đủ"
+  "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "Cửa sổ bật lên của chính trang web, đã được đóng trong lúc kiểm tra; thường là do một dịch vụ của trang không truy cập được (Failed to fetch), nên kết luận có thể chưa đầy đủ",
+  "内核自带这个语言的 Windows 字体，不用往电脑里装": "Nhân có sẵn phông chữ Windows của ngôn ngữ này; không cần cài vào máy"
 }

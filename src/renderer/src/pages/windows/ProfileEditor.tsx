@@ -43,7 +43,7 @@ import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSu
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
-import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
+import { kernelHasBuiltInFonts, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
 import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
@@ -673,7 +673,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
-  const otherFonts = fontPacks?.otherWindowsFonts
+  // prism16+: the kernel brings a clean Windows' fonts and language packages; nothing to install here.
+  const builtInFonts = selectedEngine?.fingerprintKernel === true && kernelHasBuiltInFonts(selectedEngine.version)
+  const otherFonts = !builtInFonts && fontPacks?.otherWindowsFonts
     ? otherWindowsFonts(fp, { platform: 'windows', platformVersion: fontPacks.otherWindowsFonts.hostPlatformVersion }, selectedEngine?.fingerprintKernel === true)
     : undefined
   // The GPU list depends on the kernel this window will actually run.
@@ -2182,7 +2184,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               { value: 'host', label: t("本机真实字体") }
             ]}
           />
-          {fp.fontSource !== 'host' && fontScript && fontPacks?.supported && (
+          {fp.fontSource !== 'host' && builtInFonts && (
+            <div className="fb-check-results">
+              <div className="fb-check-item is-ok">
+                <span className="fb-check-dot" />
+                <span className="fb-check-message">{t("内核自带这个语言的 Windows 字体，不用往电脑里装")}</span>
+              </div>
+            </div>
+          )}
+          {fp.fontSource !== 'host' && !builtInFonts && fontScript && fontPacks?.supported && (
             // Whether this computer has the package the window's language needs: red until it is
             // downloaded, since the window would lack fonts every Windows in that language has.
             <div className="fb-check-results">

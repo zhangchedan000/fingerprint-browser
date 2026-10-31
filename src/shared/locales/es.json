@@ -2645,5 +2645,6 @@
   "已装好 Windows {0} 窗口要用的字体": "Las fuentes que necesitan las ventanas de Windows {0} están instaladas",
   "这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。": "Este equipo usa Windows {0}: las ventanas de Windows {1} necesitan las fuentes propias de Windows {1} (incluidas en el kernel), que se instalan solas al abrir la ventana.",
   "网页弹窗：{0}": "Diálogo de la página: {0}",
-  "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "Ventana emergente del propio sitio, cerrada durante la comprobación; suele indicar que no se pudo acceder a uno de sus servicios (Failed to fetch), así que el resultado puede estar incompleto"
+  "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "Ventana emergente del propio sitio, cerrada durante la comprobación; suele indicar que no se pudo acceder a uno de sus servicios (Failed to fetch), así que el resultado puede estar incompleto",
+  "内核自带这个语言的 Windows 字体，不用往电脑里装": "El núcleo incluye las fuentes de Windows de este idioma; no hay que instalar nada en este equipo"
 }

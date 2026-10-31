@@ -19,7 +19,7 @@ import { safeErrorText } from './redaction'
 import { hardwareProfile, hardwareProfileSummary, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
 import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
-import type { PrismFontSet } from './other-windows-fonts'
+import { kernelShipsSystemFonts, type PrismFontSet } from './other-windows-fonts'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
@@ -221,6 +221,8 @@ export class BrowserLauncher {
    */
   async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean }, profileId?: string): Promise<void> {
     if (!this.prerequisites || !engine.executable) return
+    // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's.
+    if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) return
     if (fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
       // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
       await this.prerequisites.ensureFonts(effectiveNetworkIdentity(fingerprint).uiLocale).catch((error) => {

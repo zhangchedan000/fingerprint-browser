@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fontRegistryName } from './language-fonts'
-import { fontSetInstalledNames, kernelFontsFolder, otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
+import { fontSetInstalledNames, kernelFontsFolder, kernelShipsSystemFonts, otherWindowsFontsInstalled, prefixedFont } from './other-windows-fonts'
+import { kernelHasBuiltInFonts } from '../shared/kernel-capabilities'
 
 /** A two-table font (head, name) with Windows (UTF-16BE) and Mac (Roman) name records. */
 function tinyFont(names: Array<[platform: number, nameId: number, text: string]>): Buffer {
@@ -136,6 +137,20 @@ describe('fonts of the other Windows', () => {
     } finally {
       await rm(folder, { recursive: true, force: true })
       await rm(system, { recursive: true, force: true })
+    }
+  })
+
+  it('knows a prism16+ kernel brings its own Windows fonts (nothing is installed into Windows)', async () => {
+    expect(kernelHasBuiltInFonts('156.0.8078.47-prism16')).toBe(true)
+    expect(kernelHasBuiltInFonts('156.0.8078.47-prism15')).toBe(false)
+    expect(kernelHasBuiltInFonts(undefined)).toBe(false)
+    const kernel = await mkdtemp(join(tmpdir(), 'kernel-'))
+    try {
+      expect(await kernelShipsSystemFonts(join(kernel, 'chrome.exe'))).toBe(false)
+      await mkdir(join(kernel, 'prism-system-fonts', 'win11', 'base'), { recursive: true })
+      expect(await kernelShipsSystemFonts(join(kernel, 'chrome.exe'))).toBe(true)
+    } finally {
+      await rm(kernel, { recursive: true, force: true })
     }
   })
 })

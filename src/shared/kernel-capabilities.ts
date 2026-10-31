@@ -1,4 +1,4 @@
-import { kernelChromiumVersion, kernelVendor } from './kernel-id'
+import { kernelChromiumVersion, kernelVendor, prismRevision } from './kernel-id'
 
 /** What a kernel can be told on its command line. */
 export function kernelMajor(version: string | null | undefined): number | undefined {
@@ -17,6 +17,14 @@ export function kernelTakesExplicitGpu(version: string | null | undefined): bool
  */
 export function maxDeviceMemoryGb(version: string | null | undefined): 8 | 32 {
   return (kernelMajor(version) ?? 0) >= 147 ? 32 : 8
+}
+
+/**
+ * The kernel ships a clean Windows 10 and 11's fonts and language font packages and windows use only
+ * those (prism16, patch 007): nothing has to be installed into this computer's Windows.
+ */
+export function kernelHasBuiltInFonts(version: string | null | undefined): boolean {
+  return (prismRevision(version ?? undefined) ?? 0) >= 16
 }
 
 /** PCI vendor ids, as ANGLE names them (src/libANGLE/renderer/driver_utils.cpp). */
