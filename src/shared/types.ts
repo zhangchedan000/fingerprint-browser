@@ -953,6 +953,15 @@ export interface BrowserApi {
     status: () => Promise<import('./team').TeamStatus>
     /** Checks the saved sign-in with the server again (after it was unreachable). */
     retry: () => Promise<import('./team').TeamStatus>
+    /** The server cannot be reached: work on this computer without it (an account that signed in here before). */
+    enterLocalMode: () => Promise<import('./team').TeamStatus>
+    /** Another server of the team; one not in use yet takes over with its activation code (owner). */
+    connectServer: (server: string, code?: string) => Promise<import('./team').TeamStatus>
+    serverPair: () => Promise<import('./team').TeamServerPair>
+    /** Owner: makes the server the standby of the one in use (with its activation code). */
+    setStandby: (server: string, code: string) => Promise<import('./team').TeamServerPair>
+    /** Owner: the whole team moves to the server (批量切换). */
+    switchServer: (server: string, code?: string) => Promise<import('./team').TeamStatus>
     /** Checks the address; ready = the server already has an owner account. */
     probe: (server: string) => Promise<{ server: string; ready: boolean }>
     /** Creates the owner account with the server's setup code, then signs in. */

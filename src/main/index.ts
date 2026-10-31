@@ -30,6 +30,7 @@ import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { TEAM_FEATURE_ENABLED } from '../shared/team'
+import type { ProxyDraft } from '../shared/types'
 import { registerTeamIpc } from './team/team-ipc'
 import { readWindowState, windowPlacement, writeWindowState } from './window-state'
 
@@ -288,6 +289,22 @@ app.whenReady().then(async () => {
   // A window's 网络加速 nodes go to the cloud with it, and come along to other computers.
   activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
   activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)
+  // The account's whole proxy library and 网络加速 node sources are kept on the team server too
+  // (team_workspaces): a new computer, or the standby server after a switch, brings them back.
+  activeTeam.workspaceExport = async () => ({
+    proxies: profiles.listProxies().map(({ protocol, host, port, username, password, note, apiUrl, tunnel }) => ({ protocol, host, port, username, password, note, apiUrl, tunnel })),
+    tunnelSources: activeTunnel.sourcesFor({ enabled: true, mode: 'auto' })
+  })
+  activeTeam.workspaceImport = async (data) => {
+    const value = (data && typeof data === 'object' ? data : {}) as { proxies?: unknown; tunnelSources?: unknown }
+    if (Array.isArray(value.proxies) && value.proxies.length) {
+      const result = await profiles.createProxies(value.proxies as ProxyDraft[])
+      if (result.created.length) logger?.info('从团队服务器补回代理', { added: result.created.length })
+    }
+    await activeTunnel.adoptSources(value.tunnelSources)
+  }
+  // Library and node changes do not go through a window sync: look every 10 minutes.
+  setInterval(() => { void activeTeam.pushWorkspace().catch(() => undefined) }, 10 * 60_000).unref()
   // A window's extensions go to other computers with its login state.
   activeTeam.extensions = extensions
   activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))

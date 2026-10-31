@@ -4,6 +4,7 @@ import { t, translateMessage as mt } from '../../../shared/i18n'
 import { useWorkspace } from '../data/workspace'
 import { useEffect, useState } from 'react'
 import { PAGES, SECTIONS, type PageKey, type PageParams } from '../pages/registry'
+import { ServerAvatar } from './ServerPanel'
 
 /** The side menu, built from the page registry. */
 export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (key: PageKey, params?: PageParams) => void }) {
@@ -17,11 +18,13 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
   return (
     <nav className="fb-sidebar" aria-label={t("主导航")}>
       <div className="fb-brand">
-        <span className="fb-brand-mark" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M12 4a8 8 0 0 0-8 8M12 8a4 4 0 0 0-4 4v2M20 12a8 8 0 0 0-3-6.2M16 12v1a8 8 0 0 1-2 5.3M12 12v2a4 4 0 0 1-1.5 3.1" />
-          </svg>
-        </span>
+        <ServerAvatar>
+          <span className="fb-brand-mark" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M12 4a8 8 0 0 0-8 8M12 8a4 4 0 0 0-4 4v2M20 12a8 8 0 0 0-3-6.2M16 12v1a8 8 0 0 1-2 5.3M12 12v2a4 4 0 0 1-1.5 3.1" />
+            </svg>
+          </span>
+        </ServerAvatar>
         <span>
           <strong>{t("指纹浏览器")}</strong>
           <small>

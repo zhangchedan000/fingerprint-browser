@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { t } from '../../../shared/i18n'
 import type { TeamRegistration, TeamStatus } from '../../../shared/team'
 import { humanError } from './format'
+import { ConnectServerModal } from './ServerPanel'
 
 /**
  * The app is only used signed in: until the team server confirms the account, this page is all
@@ -15,6 +16,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [form] = Form.useForm()
+  const [connectOpen, setConnectOpen] = useState(false)
 
   async function probe(address: string): Promise<void> {
     setError(undefined)
@@ -90,6 +92,19 @@ export function LoginGate({ children }: { children: ReactNode }) {
             description={status.offline}
             action={<Button size="small" loading={busy} onClick={() => void retry()}>{t("重试")}</Button>}
           />
+        )}
+        {status.offline && (
+          // The server is down: work without it (an account that signed in here before), or go to the team's other server.
+          <div className="fb-login-fallback">
+            {status.canLocal && (
+              <Button type="primary" block loading={busy} onClick={() => void (async () => {
+                setBusy(true)
+                try { setStatus(await window.browserApi.team.enterLocalMode()) } catch (reason) { setError(humanError(reason)) } finally { setBusy(false) }
+              })()}>进入本地模式</Button>
+            )}
+            <Button block onClick={() => setConnectOpen(true)}>连接其它服务器</Button>
+            <ConnectServerModal open={connectOpen} servers={status.servers} onClose={() => setConnectOpen(false)} onDone={setStatus} />
+          </div>
         )}
         {error && (
           <Alert type="error" showIcon className="fb-team-alert" title={error}

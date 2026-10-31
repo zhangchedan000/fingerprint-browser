@@ -15,8 +15,9 @@ export interface TeamUser {
  * The team cloud (sign-in, shared windows, login-state sync). Off: the app opens without signing in
  * and talks to no team server; every window is a plain local window. The code and the windows'
  * links to their cloud copies stay, so turning it on again (with a server) carries on from there.
+ * On (from v0.5.50): a server that cannot be reached leaves the choice of local mode instead.
  */
-export const TEAM_FEATURE_ENABLED = false
+export const TEAM_FEATURE_ENABLED = true
 
 export interface TeamStatus {
   /** The team feature is switched off (TEAM_FEATURE_ENABLED): no sign-in, no server. */
@@ -27,6 +28,28 @@ export interface TeamStatus {
   user?: TeamUser
   /** The saved sign-in could not be checked because the server was unreachable. */
   offline?: string
+  /** Working without the server (it could not be reached): windows open here, team ones go up later. */
+  localMode?: boolean
+  /** This computer may enter local mode now (an account signed in here before, the server unreachable). */
+  canLocal?: boolean
+  /** The team's servers: the one in use and its standby. */
+  servers?: string[]
+}
+
+/** One of the team's servers as this computer sees it (服务器 page, avatar panel). */
+export interface TeamServerView {
+  url: string
+  reachable: boolean
+  role?: 'active' | 'standby'
+  ready: boolean
+  /** The owner's computer keeps its activation code, so 批量切换 needs no typing. */
+  codeSaved: boolean
+}
+
+export interface TeamServerPair {
+  /** The server this computer works with. */
+  current: string
+  servers: TeamServerView[]
 }
 
 /** Who holds a shared window right now. */

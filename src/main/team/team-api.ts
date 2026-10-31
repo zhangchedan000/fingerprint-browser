@@ -88,6 +88,30 @@ export class TeamApiError extends Error {
   }
 }
 
+/** A standby server's answer (control.pb.js): the team now works on movedTo ('' while switching). */
+export class TeamMovedError extends TeamApiError {
+  constructor(message: string, readonly movedTo: string) {
+    super(message, 409)
+  }
+}
+
+/** What /api/team/status says: role, own address and the pair are there from the standby release on. */
+export interface TeamServerStatus {
+  ready: boolean
+  lockMs: number
+  role?: 'active' | 'standby'
+  self?: string
+  active?: string
+  servers?: string[]
+}
+
+/** The R2 bucket and key, from the active server to a new standby one (owner only). */
+export interface TeamOffsiteKey {
+  url: string
+  accessKeyId: string
+  secretAccessKey: string
+}
+
 /** Server messages are Chinese from our hooks, English from PocketBase itself. */
 function errorMessage(status: number, body: { message?: string; data?: Record<string, { code?: string }> } | undefined): string {
   const fields = Object.entries(body?.data ?? {})
@@ -158,13 +182,53 @@ export class TeamApi {
     } catch {
       parsed = undefined
     }
+    if (response.status === 409 && parsed && typeof parsed === 'object' && 'movedTo' in parsed) {
+      const movedTo = String((parsed as { movedTo?: unknown }).movedTo ?? '')
+      throw new TeamMovedError(movedTo ? `团队服务器已切换到 ${movedTo}` : '团队服务器正在切换，请稍后再试', movedTo)
+    }
     if (!response.ok) throw new TeamApiError(errorMessage(response.status, parsed as never), response.status)
     if (parsed === undefined && text) throw new TeamApiError('团队服务器返回的不是有效数据，请检查服务器地址', response.status)
     return parsed as T
   }
 
-  status(): Promise<{ ready: boolean; lockMs: number }> {
+  status(): Promise<TeamServerStatus> {
     return this.request('GET', '/api/team/status', undefined, 10_000)
+  }
+
+  /** Owner, on the active server: names the standby server ('' for none). */
+  setServers(standby: string): Promise<TeamServerStatus> {
+    return this.request('POST', '/api/team/servers', { standby }, 30_000)
+  }
+
+  offsiteKey(): Promise<TeamOffsiteKey> {
+    return this.request('GET', '/api/team/offsite/key')
+  }
+
+  /** Owner, on the active server: stops writing and puts everything in R2 for the next one. */
+  handover(): Promise<{ ok: boolean }> {
+    return this.request('POST', '/api/team/handover', undefined, 5 * 60_000)
+  }
+
+  /** On a new standby server, with its activation code: the R2 bucket to take over from. */
+  standbySetup(code: string, key: TeamOffsiteKey): Promise<TeamServerStatus> {
+    return this.request('POST', '/api/team/standby/setup', { code, ...key }, 60_000)
+  }
+
+  /** On a standby server, with its activation code: pull everything from R2 and become active. */
+  activate(code: string): Promise<TeamServerStatus & { ok: boolean; restarting: boolean }> {
+    return this.request('POST', '/api/team/activate', { code }, 5 * 60_000)
+  }
+
+  async getWorkspace(): Promise<{ id: string; data: unknown } | undefined> {
+    const page = await this.request<{ items: Array<{ id: string; data: unknown }> }>('GET', '/api/collections/team_workspaces/records?perPage=1')
+    return page.items[0]
+  }
+
+  async saveWorkspace(id: string | undefined, userId: string, data: unknown): Promise<string> {
+    const record = id
+      ? await this.request<{ id: string }>('PATCH', `/api/collections/team_workspaces/records/${encodeURIComponent(id)}`, { data })
+      : await this.request<{ id: string }>('POST', '/api/collections/team_workspaces/records', { user: userId, data })
+    return record.id
   }
 
   setup(code: string, username: string, name: string, password: string): Promise<{ ok: boolean }> {

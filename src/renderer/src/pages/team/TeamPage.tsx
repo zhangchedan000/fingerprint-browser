@@ -1,8 +1,8 @@
 import { CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined, DownloadOutlined, KeyOutlined, LogoutOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, UnlockOutlined, UserAddOutlined, UserSwitchOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Dropdown, Form, Input, Modal, Radio, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
+import { Alert, Button, Descriptions, Popconfirm, Dropdown, Form, Input, Modal, Radio, Select, Space, Tabs, Tag, Tooltip, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { getLocale, t } from '../../../../shared/i18n'
-import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamStatus, TeamUser } from '../../../../shared/team'
+import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamServerPair, TeamStatus, TeamUser } from '../../../../shared/team'
 import { formatBytes, shortDateTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
 import { StatusPill } from '../../components/StatusPill'
@@ -888,6 +888,85 @@ function OffsiteStatus({ offsite, onEdit, onRemove }: { offsite?: TeamOffsite; o
   )
 }
 
+/**
+ * The team's two servers: the one in use and its standby. The owner names the standby once (its
+ * address and activation code, TEAM_SETUP_CODE in its .env); every app learns it, so 批量切换 moves
+ * the whole team even when the server in use is already down.
+ */
+function StandbyPanel() {
+  const ws = useWorkspace()
+  const [pair, setPair] = useState<TeamServerPair>()
+  const [busy, setBusy] = useState<string>()
+  const [form] = Form.useForm<{ server: string; code: string }>()
+
+  async function reload(): Promise<void> {
+    try { setPair(await window.browserApi.team.serverPair()) } catch (error) { ws.fail(error) }
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once
+  useEffect(() => { void reload() }, [])
+
+  async function save(values: { server: string; code: string }): Promise<void> {
+    setBusy('standby')
+    try {
+      setPair(await window.browserApi.team.setStandby(values.server, values.code))
+      form.resetFields()
+      ws.notify.success('备用服务器已设置，所有成员的启动器会自动记住它')
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(undefined)
+    }
+  }
+
+  async function switchTo(url: string): Promise<void> {
+    setBusy(url)
+    try {
+      await window.browserApi.team.switchServer(url)
+      ws.notify.success(`已切换到 ${url}，成员的启动器会自动跟过去`)
+      await reload()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(undefined)
+    }
+  }
+
+  const others = pair?.servers.filter((server) => server.url !== pair.current) ?? []
+  return (
+    <div className="fb-team-standby">
+      <Descriptions size="small" bordered column={1} items={(pair?.servers ?? []).map((server) => ({
+        key: server.url,
+        label: server.url === pair?.current ? '正在用' : '备用',
+        children: (
+          <Space wrap>
+            <span className="fb-mono">{server.url}</span>
+            {!server.reachable ? <Tag color="error">连不上</Tag> : server.role === 'standby' ? <Tag>待命</Tag> : server.ready ? <Tag color="success">当班</Tag> : <Tag>未初始化</Tag>}
+            {server.url !== pair?.current && (
+              <Popconfirm
+                title={`把整个团队切换到 ${server.url}？`}
+                description="正在用的服务器会停止写入并把最后的数据存到 R2（连不上就跳过），这台从 R2 拉回全部数据后接班，所有成员的启动器自动跟过去。大约 1～2 分钟。"
+                okText="切换" cancelText="取消" onConfirm={() => void switchTo(server.url)}>
+                <Button size="small" type="primary" danger loading={busy === server.url} disabled={!server.codeSaved}>批量切换到这台</Button>
+              </Popconfirm>
+            )}
+            {server.url !== pair?.current && !server.codeSaved && <span className="fb-muted">这台电脑没记激活码：在左上角头像「连接其它服务器」里填激活码切换</span>}
+          </Space>
+        )
+      }))} />
+      {!others.length && <Alert type="info" showIcon title="还没有备用服务器。设置后，正在用的服务器挂了，可以一键把整个团队切过去。" />}
+      <Form form={form} layout="inline" requiredMark={false} onFinish={(values) => void save(values)} className="fb-team-standby-form">
+        <Form.Item name="server" rules={[{ required: true, message: '请填写备用服务器地址' }]}>
+          <Input placeholder="备用服务器地址，例如 https://b.example.com" style={{ width: 320 }} />
+        </Form.Item>
+        <Form.Item name="code" rules={[{ required: true, message: '请填写激活码' }]}>
+          <Input.Password placeholder="备用服务器的激活码" autoComplete="off" style={{ width: 200 }} />
+        </Form.Item>
+        <Button htmlType="submit" loading={busy === 'standby'}>{others.length ? '更换备用服务器' : '设为备用服务器'}</Button>
+      </Form>
+    </div>
+  )
+}
+
 function ServerTab() {
   const ws = useWorkspace()
   const [info, setInfo] = useState<TeamServerInfo>()
@@ -1035,12 +1114,13 @@ function ServerTab() {
             {info?.autoBackup.cron
               ? `服务器${scheduleText(info.autoBackup.cron)}自动备份一次，保留最近 ${info.autoBackup.keep} 份；手动备份不会自动删除。`
               : '服务器没有开启自动备份。'}
-            另外每次有改动（窗口关闭、改配置、改成员），1 分钟内会同步一份到 Cloudflare R2，保留 7 天。
+            另外每次有改动（窗口关闭、改配置、改成员），1 分钟内会同步一份到 Cloudflare R2，保留 7 天；每天的整包也存一份到 R2，保留 15 天。
             备份里有全部窗口的配置（含代理和平台账号密码）和登录态，下载后请妥善保管。
           </>
         )}
       />
       <OffsiteModal open={offsiteOpen} onClose={() => setOffsiteOpen(false)} onSaved={() => void reload()} />
+      <StandbyPanel />
     </>
   )
 }

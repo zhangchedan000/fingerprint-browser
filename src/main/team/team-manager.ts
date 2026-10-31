@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { hostname } from 'node:os'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -15,6 +16,7 @@ import type {
   TeamRegistration,
   TeamRole,
   TeamServerInfo,
+  TeamServerPair,
   TeamStatus,
   TeamSyncEvent,
   TeamUser
@@ -27,7 +29,7 @@ import type { CookieManager } from '../cookie-manager'
 import type { ProfileStore } from '../profile-store'
 import { portableDraft } from '../profile-portable'
 import type { SecretCodec } from '../secret-codec'
-import { normalizeServer, TeamApi, TeamApiError, type Fetch, type RemoteProfile } from './team-api'
+import { normalizeServer, TeamApi, TeamApiError, TeamMovedError, type Fetch, type RemoteProfile, type TeamServerStatus } from './team-api'
 import { packProfileState, sha256File, unpackProfileState, type PasswordTransfer } from './team-archive'
 import { applyCheckRecords, collectCheckRecords } from './team-records'
 import { adoptWindowExtensions, windowExtensions } from './team-extensions'
@@ -62,9 +64,24 @@ interface TeamFile {
    * again, and restoring one from the recycle bin links it back.
    */
   removed?: Record<string, TeamLink>
+  /** The account last signed in here, shown in local mode. */
+  userName?: string
+  displayName?: string
+  /** The team's servers (the active one and its standby), as the server last said. */
+  servers?: string[]
+  /** Working without the server (it could not be reached); see enterLocalMode. */
+  localMode?: boolean
+  /** Team windows opened, closed or changed in local mode: they go up when a server is back. */
+  localTouched?: string[]
+  /** Activation codes of standby servers (the owner's computer), encrypted like the token. */
+  activationCodes?: Record<string, string>
+  /** The last proxy library and 网络加速 sent to the server (a hash of it). */
+  workspaceHash?: string
 }
 
 const HEARTBEAT_MS = 30_000
+/** How long a standby server may take to pull the data from R2 and restart as the active one. */
+const TAKEOVER_WAIT_MS = 3 * 60_000
 
 /** The team server this build signs in to unless another address is entered. */
 export const DEFAULT_TEAM_SERVER = 'https://temu.orenge.ccwu.cc'
@@ -265,10 +282,16 @@ export class TeamManager {
   /** At start an unreachable server is tried again after these waits: a network blip is no error. */
   restoreRetryMs = [2_000, 4_000, 8_000]
 
-  private async restoreSession(api: TeamApi, retryMs: number[] = []): Promise<void> {
+  private async restoreSession(api: TeamApi, retryMs: number[] = [], failover = true): Promise<void> {
     this.offline = undefined
     try {
       this.user = await api.refresh()
+      this.rememberUser(this.user)
+      if (this.file.localMode) {
+        // A server answers again: back from local mode (what was used there goes up in afterOnline).
+        this.file.localMode = false
+        this.logger?.info('团队服务器连上了，退出本地模式', { server: api.server })
+      }
       this.verifiedAt = Date.now()
       this.file.role = this.user.role
       this.file.userId = this.user.id
@@ -276,8 +299,17 @@ export class TeamManager {
       await this.save()
       this.scheduleSync()
       void this.pushRewritten()
+      void this.afterOnline()
     } catch (error) {
-      const rejected = error instanceof TeamApiError && error.status > 0
+      // The server moved, or is gone: the team's other server may be the one in use now.
+      if (failover && (error instanceof TeamMovedError || (error instanceof TeamApiError && error.status === 0))) {
+        const next = await this.findActiveServer(api.server, error instanceof TeamMovedError ? error.movedTo : '')
+        if (next) {
+          this.logger?.info('团队服务器换了，改连另一台', { from: api.server, to: next })
+          return this.restoreSession(this.useServer(next, api.token), [], false)
+        }
+      }
+      const rejected = error instanceof TeamApiError && error.status > 0 && !(error instanceof TeamMovedError)
       if (!rejected && retryMs.length) {
         this.logger?.info('团队服务器暂时连不上，稍后再试', { error: error instanceof Error ? error.message : String(error), waitMs: retryMs[0] })
         await new Promise((resolve) => setTimeout(resolve, retryMs[0]))
@@ -320,15 +352,233 @@ export class TeamManager {
       this.file.token = this.secrets.encode(api.token)
       await this.save()
     } catch (error) {
-      if (error instanceof TeamApiError && error.status > 0) {
+      if (error instanceof TeamMovedError || (error instanceof TeamApiError && error.status === 0)) {
+        const next = await this.findActiveServer(api.server, error instanceof TeamMovedError ? error.movedTo : '')
+        if (next) {
+          this.logger?.info('团队服务器换了，改连另一台', { from: api.server, to: next })
+          const moved = this.useServer(next, api.token)
+          this.user = await moved.refresh()
+          this.verifiedAt = Date.now()
+          this.file.token = this.secrets.encode(moved.token)
+          await this.save()
+          return
+        }
+      }
+      if (error instanceof TeamApiError && error.status > 0 && !(error instanceof TeamMovedError)) {
         this.api = undefined
         this.user = undefined
         this.file.token = ''
         await this.save().catch(() => undefined)
         throw new Error('登录已失效（账号可能已被停用），请重新登录')
       }
-      throw new Error(`连不上团队服务器，暂时不能打开窗口（${error instanceof Error ? error.message : String(error)}）`)
+      throw new Error(`连不上团队服务器，暂时不能打开窗口；服务器修好前可以点左上角头像进入本地模式（${error instanceof Error ? error.message : String(error)}）`)
     }
+  }
+
+  // ---- the team's two servers and local mode ------------------------------------------
+
+  /** Works through `server` from now on, with the sign-in this computer has. */
+  private useServer(server: string, token: string): TeamApi {
+    const api = new TeamApi(server, this.fetcher)
+    api.token = token
+    this.api = api
+    this.file.server = server
+    return api
+  }
+
+  /** The server of the team that is in use (active and set up), other than `current`. */
+  private async findActiveServer(current: string, hint: string): Promise<string | undefined> {
+    const candidates = [hint, ...(this.file.servers ?? [])].filter((url, index, all) => url && url !== current && all.indexOf(url) === index)
+    for (const url of candidates) {
+      const status = await new TeamApi(url, this.fetcher).status().catch(() => undefined)
+      if (status?.ready && status.role === 'active') return url
+    }
+    return undefined
+  }
+
+  private rememberUser(user: TeamUser): void {
+    this.file.userName = user.username
+    this.file.displayName = user.name
+  }
+
+  /** Signed in and reachable: learn the team's servers, bring back what local mode left, sync the workspace. */
+  private async afterOnline(): Promise<void> {
+    try {
+      const status = await this.requireApi().status()
+      if (status.servers?.length) this.file.servers = status.servers
+      await this.save()
+      await this.flushLocalChanges()
+      await this.pullWorkspace()
+    } catch (error) {
+      this.logger?.error('连上团队服务器后的同步没做完', { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  private get online(): boolean {
+    return this.enabled && !this.file.localMode
+  }
+
+  /** A team window used in local mode, to go up once a server is reachable. */
+  private async touch(id: string): Promise<void> {
+    if (!this.file.links[id]) return
+    const touched = this.file.localTouched ?? []
+    if (touched.includes(id)) return
+    this.file.localTouched = [...touched, id]
+    await this.save()
+  }
+
+  /** Sends what local mode changed: config, then the login state (each only if nobody changed it in the cloud since). */
+  private async flushLocalChanges(): Promise<void> {
+    const touched = [...(this.file.localTouched ?? [])]
+    for (const id of touched) {
+      try {
+        await this.afterLocalEdit(id)
+        await this.pushLoginState(id)
+        this.logger?.info('本地模式下用过的团队窗口已传到云端', { profileId: id })
+      } catch (error) {
+        this.logger?.error('本地模式下用过的团队窗口没传上去', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      }
+      this.file.localTouched = (this.file.localTouched ?? []).filter((item) => item !== id)
+      await this.save()
+    }
+  }
+
+  /**
+   * The server cannot be reached (not: the account is stopped): work on this computer's windows
+   * without it. Only an account that signed in here before; team windows go up once a server is back.
+   */
+  async enterLocalMode(): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
+    await this.restoring
+    if (!this.file.userId || !this.file.token) throw new Error('这台电脑还没登录过团队账号，不能进入本地模式')
+    if (this.user && !this.offline) throw new Error('团队服务器连得上，不用进入本地模式')
+    this.file.localMode = true
+    await this.save()
+    this.logger?.info('进入本地模式')
+    return this.status()
+  }
+
+  /**
+   * Connects to another server of the team (the panel's "连接其它服务器"). A server that is not in use
+   * yet takes over first when the owner gives its activation code.
+   */
+  async connectServer(server: string, code?: string): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
+    const url = normalizeServer(server)
+    let status = await new TeamApi(url, this.fetcher).status()
+    if (!(status.ready && status.role === 'active')) {
+      const activation = code?.trim() || this.storedCode(url)
+      if (!activation) throw new Error('这台服务器还没接班，需要主账号填它的激活码切换过去')
+      status = await this.takeOver(url, activation)
+    }
+    if (!this.file.token) throw new Error('请先登录')
+    const api = this.useServer(url, this.secrets.decode(this.file.token))
+    if (!(this.file.servers ?? []).includes(url)) this.file.servers = [...(this.file.servers ?? []), url]
+    await this.save()
+    this.restoring = this.restoreSession(api, [], false)
+    await this.restoring
+    if (!this.user) throw new Error(this.offline ? `连不上这台服务器（${this.offline}）` : '这台服务器上登录不了，请重新登录')
+    return this.status()
+  }
+
+  private storedCode(url: string): string | undefined {
+    const stored = this.file.activationCodes?.[url]
+    if (!stored) return undefined
+    try { return this.secrets.decode(stored) } catch { return undefined }
+  }
+
+  /** Has `url` pull the team's data from R2 and become the server in use; waits until it answers. */
+  private async takeOver(url: string, code: string): Promise<TeamServerStatus> {
+    const target = new TeamApi(url, this.fetcher)
+    await target.activate(code)
+    const deadline = Date.now() + TAKEOVER_WAIT_MS
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, this.takeoverPollMs))
+      const status = await target.status().catch(() => undefined)
+      if (status?.ready && status.role === 'active') return status
+    }
+    throw new Error('备用服务器接班超时，请稍后重试')
+  }
+
+  /** Tests make the wait for a server's restart short. */
+  takeoverPollMs = 3000
+
+  /** The team's servers as the active one sees them, for the 服务器 page. */
+  async serverPair(): Promise<TeamServerPair> {
+    const current = this.file.server || DEFAULT_TEAM_SERVER
+    const urls = [current, ...(this.file.servers ?? [])].filter((url, index, all) => url && all.indexOf(url) === index)
+    const servers = await Promise.all(urls.map(async (url) => {
+      const status = await new TeamApi(url, this.fetcher).status().catch(() => undefined)
+      return { url, reachable: Boolean(status), role: status?.role, ready: status?.ready ?? false, codeSaved: Boolean(this.file.activationCodes?.[url]) }
+    }))
+    return { current, servers }
+  }
+
+  /**
+   * Owner: makes `server` the standby of the active one. The active server names it (and checks it
+   * answers), then the standby gets the R2 bucket with its activation code, kept here for a switch.
+   */
+  async setStandby(server: string, code: string): Promise<TeamServerPair> {
+    const api = await this.requireOwner()
+    const url = normalizeServer(server)
+    if (url === api.server) throw new Error('备用服务器不能是正在用的这台')
+    if (!code.trim()) throw new Error('请填写备用服务器的激活码')
+    const key = await api.offsiteKey()
+    const named = await api.setServers(url)
+    await new TeamApi(url, this.fetcher).standbySetup(code.trim(), key)
+    this.file.servers = named.servers?.length ? named.servers : [api.server, url]
+    this.file.activationCodes = { ...(this.file.activationCodes ?? {}), [url]: this.secrets.encode(code.trim()) }
+    await this.save()
+    this.logger?.info('备用服务器已设置', { standby: url })
+    return this.serverPair()
+  }
+
+  /**
+   * Owner: the whole team moves to `server` (批量切换). The server in use stops writing and leaves
+   * everything in R2 (skipped when it is down), the other one takes over from R2, and every app
+   * follows it (they know its address, and the old server points to it).
+   */
+  async switchServer(server: string, code?: string): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
+    if (this.file.role !== 'owner') throw new Error('只有主账号可以切换服务器')
+    const url = normalizeServer(server)
+    const activation = code?.trim() || this.storedCode(url)
+    if (!activation) throw new Error('请填写这台服务器的激活码')
+    if (this.api && this.user && this.api.server !== url) {
+      await this.api.handover().catch((error: unknown) => {
+        // Down or unreachable: it cannot write either; anything else stops the switch.
+        if (!(error instanceof TeamApiError && error.status === 0)) throw error
+      })
+    }
+    return this.connectServer(url, activation)
+  }
+
+  // ---- proxy library and 网络加速 of the account ------------------------------------
+
+  /** Set by the app: this computer's proxy library and node sources, and how to add missing ones. */
+  workspaceExport?: () => Promise<unknown>
+  workspaceImport?: (data: unknown) => Promise<void>
+  private workspaceId?: string
+
+  /** Sends the proxy library and 网络加速 when they changed since the last time. */
+  async pushWorkspace(): Promise<void> {
+    if (!this.online || !this.api || !this.user || !this.workspaceExport) return
+    const data = await this.workspaceExport()
+    const hash = createHash('sha256').update(JSON.stringify(data)).digest('hex')
+    if (hash === this.file.workspaceHash) return
+    if (!this.workspaceId) this.workspaceId = (await this.api.getWorkspace())?.id
+    this.workspaceId = await this.api.saveWorkspace(this.workspaceId, this.user.id, data)
+    this.file.workspaceHash = hash
+    await this.save()
+  }
+
+  /** Adds what the server has and this computer misses (a new computer, or after a switch). */
+  private async pullWorkspace(): Promise<void> {
+    if (!this.online || !this.api || !this.workspaceImport) return
+    const record = await this.api.getWorkspace()
+    this.workspaceId = record?.id
+    if (record?.data) await this.workspaceImport(record.data)
+    await this.pushWorkspace()
   }
 
   private async save(): Promise<void> {
@@ -340,16 +590,30 @@ export class TeamManager {
 
   async status(): Promise<TeamStatus> {
     if (!this.enabled) return { server: this.file.server || DEFAULT_TEAM_SERVER, disabled: true }
+    if (this.file.localMode) {
+      // The account this computer signed in with last; the app is used without the server.
+      const user = this.user ?? (this.file.userId ? {
+        id: this.file.userId, username: this.file.userName ?? '', name: this.file.displayName ?? '', role: this.file.role ?? 'member', disabled: false, created: ''
+      } : undefined)
+      return { server: this.file.server || DEFAULT_TEAM_SERVER, user, offline: this.offline, localMode: true, servers: this.file.servers, canLocal: true }
+    }
     await this.restoring
     // App checks (tools/app-e2e) run the UI without a team server: a signed-in user, offline.
     if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_TEAM_OFFLINE === '1' && !this.user) {
       return { server: DEFAULT_TEAM_SERVER, user: { id: 'e2e', username: 'e2e', name: 'E2E', role: 'owner', disabled: false, created: '' }, offline: 'app check without a team server' }
     }
-    return { server: this.file.server || DEFAULT_TEAM_SERVER, user: this.user, offline: this.offline }
+    return {
+      server: this.file.server || DEFAULT_TEAM_SERVER,
+      user: this.user,
+      offline: this.offline,
+      servers: this.file.servers,
+      canLocal: Boolean(this.file.userId && this.file.token && this.offline)
+    }
   }
 
   private requireApi(): TeamApi {
     if (!this.enabled) throw new Error('团队功能已停用')
+    if (this.file.localMode) throw new Error('现在是本地模式，团队服务器连上后再做')
     if (!this.api || !this.file.token) throw new Error('请先登录')
     return this.api
   }
@@ -393,8 +657,10 @@ export class TeamManager {
     this.file.token = this.secrets.encode(api.token)
     this.file.role = user.role
     this.file.userId = user.id
+    this.rememberUser(user)
     await this.save()
     this.scheduleSync()
+    void this.afterOnline()
     this.logger?.info('团队已登录', { server: normalized, user: user.username, role: user.role })
     return this.status()
   }
@@ -608,7 +874,7 @@ export class TeamManager {
 
   /** Runs sync() soon; several changes in a row make one pass. */
   scheduleSync(): void {
-    if (!this.enabled || this.syncDelayMs < 0) return
+    if (!this.online || this.syncDelayMs < 0) return
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = setTimeout(() => {
       this.syncTimer = undefined
@@ -624,7 +890,7 @@ export class TeamManager {
    * go up. Windows deleted here stay in the cloud and are not pulled again.
    */
   async sync(): Promise<{ added: number; uploaded: number }> {
-    if (!this.enabled) return { added: 0, uploaded: 0 }
+    if (!this.online) return { added: 0, uploaded: 0 }
     if (this.syncing) {
       await this.syncing
       return this.sync()
@@ -660,6 +926,10 @@ export class TeamManager {
         }
       }
       await this.save()
+      // The proxy library and 网络加速 go along with every sync (only when they changed).
+      await this.pushWorkspace().catch((error: unknown) => {
+        this.logger?.error('代理库和网络加速备份失败', { error: error instanceof Error ? error.message : String(error) })
+      })
     })()
     try {
       await this.syncing
@@ -728,6 +998,7 @@ export class TeamManager {
   /** A window changed here: send the new config to the cloud (the owner's, or a member's own). */
   async afterLocalEdit(id: string): Promise<void> {
     const link = this.file.links[id]
+    if (this.enabled && this.file.localMode) return this.touch(id)
     if (!this.enabled || !link || !this.api || this.isReadOnly(link)) return
     const profile = this.profiles.get(id)
     try {
@@ -757,6 +1028,7 @@ export class TeamManager {
   /** Before a linked window starts: take the lock, then bring config and login state up to date. */
   async beforeLaunch(id: string): Promise<void> {
     if (!this.enabled) return
+    if (this.file.localMode) return this.touch(id)
     await this.verifySession()
     const link = this.file.links[id]
     if (!link) return
@@ -825,7 +1097,7 @@ export class TeamManager {
 
   /** The launch failed after beforeLaunch: give the lock back without uploading. */
   async launchFailed(id: string): Promise<void> {
-    if (!this.enabled) return
+    if (!this.online) return
     // A browser that started and died uploads through afterExit, which releases by itself.
     if (this.file.links[id] && !this.pushes.has(id)) await this.release(id)
   }
@@ -836,6 +1108,7 @@ export class TeamManager {
    */
   async pushLoginState(id: string): Promise<void> {
     const link = this.file.links[id]
+    if (this.enabled && this.file.localMode) return this.touch(id)
     if (!this.enabled || !link || !this.api) return
     const pending = this.pushes.get(id)
     if (pending) await pending
@@ -852,6 +1125,7 @@ export class TeamManager {
   /** After a linked window exits: upload its login state, then give the lock back. */
   afterExit(id: string): Promise<void> {
     if (!this.enabled) return Promise.resolve()
+    if (this.file.localMode) return this.touch(id)
     const link = this.file.links[id]
     // A window that was not in the cloud yet (opened before it went up) goes up now.
     if (!link) this.scheduleSync()

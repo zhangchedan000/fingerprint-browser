@@ -448,3 +448,137 @@ describe('TeamManager', () => {
     expect(owner.profiles.get(local.id).extensionIds).toEqual([wallet.id])
   })
 })
+
+/**
+ * Two servers of one team sharing the data (as after a takeover from R2): each is up and active,
+ * up and standby (409 movedTo for everything but status), or down. Activation and handover flip them.
+ */
+function serverPair(data = fakeServer()) {
+  const A = 'https://a.team.test'
+  const B = 'https://b.team.test'
+  const state: Record<string, 'active' | 'standby' | 'down'> = { [A]: 'active', [B]: 'standby' }
+  const calls: string[] = []
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  const activeOne = () => Object.keys(state).find((url) => state[url] === 'active') ?? ''
+  const fetcher = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init)
+    const url = new URL(request.url)
+    const origin = url.origin
+    calls.push(`${origin} ${request.method} ${url.pathname}`)
+    if (state[origin] === 'down' || !(origin in state)) throw new TypeError('fetch failed')
+    if (url.pathname === '/api/team/status') {
+      return json(200, { ready: true, lockMs: 90_000, role: state[origin], self: origin, active: activeOne(), servers: [A, B] })
+    }
+    if (url.pathname === '/api/team/activate') {
+      const body = await request.json() as { code: string }
+      if (body.code !== 'CODE-' + origin) return json(403, { message: '这台服务器的激活码不对' })
+      for (const key of Object.keys(state)) if (state[key] === 'active') state[key] = 'standby'
+      state[origin] = 'active'
+      return json(200, { ok: true, restarting: true, role: 'active' })
+    }
+    if (url.pathname === '/api/team/standby/setup') return json(200, { role: 'standby', self: origin, active: activeOne(), servers: [A, B] })
+    if (state[origin] === 'standby') {
+      const target = activeOne()
+      return json(409, { status: 409, message: 'moved', movedTo: target === origin ? '' : target, data: {} })
+    }
+    if (url.pathname === '/api/team/handover') {
+      state[origin] = 'standby'
+      return json(200, { ok: true })
+    }
+    if (url.pathname === '/api/team/offsite/key') return json(200, { url: 'https://x.r2.cloudflarestorage.com/bucket', accessKeyId: 'AAAAAAAAAAAAAAAA', secretAccessKey: 'BBBBBBBBBBBBBBBB' })
+    if (url.pathname === '/api/team/servers') return json(200, { role: 'active', self: origin, active: origin, servers: [A, B] })
+    if (url.pathname.startsWith('/api/collections/team_workspaces/records')) {
+      return request.method === 'GET' ? json(200, { items: [], page: 1, totalItems: 0 }) : json(200, { id: 'ws1' })
+    }
+    return data.fetcher(request)
+  }
+  return { A, B, state, calls, data, fetcher: fetcher as typeof fetch }
+}
+
+describe('TeamManager with a standby server', () => {
+  async function owned(pair: ReturnType<typeof serverPair>) {
+    const pc = await computer({ fetcher: pair.fetcher } as ReturnType<typeof fakeServer>)
+    pc.team.takeoverPollMs = 1
+    await pc.team.login(pair.A, 'boss', 'ownerpass')
+    // login learns the pair in the background (afterOnline)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    return pc
+  }
+
+  it('follows the team to the other server when the one in use is down or points elsewhere', async () => {
+    const pair = serverPair()
+    const pc = await owned(pair)
+    expect((await pc.team.status()).servers).toEqual([pair.A, pair.B])
+    const local = await pc.profiles.create({ ...defaultProfileDraft(), name: 'shop' })
+    await pc.team.sync()
+
+    // A goes down and B took over: the next launch check moves to B by itself.
+    pair.state[pair.A] = 'down'
+    pair.state[pair.B] = 'active'
+    ;(pc.team as unknown as { verifiedAt: number }).verifiedAt = 0
+    await pc.team.beforeLaunch(local.id)
+    expect((await pc.team.status()).server).toBe(pair.B)
+    await pc.team.launchFailed(local.id)
+
+    // B hands back to A (A answers again, B says movedTo A): a restart finds A.
+    pair.state[pair.A] = 'active'
+    pair.state[pair.B] = 'standby'
+    const restarted = new TeamManager(pc.vault, pc.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined, pair.fetcher)
+    restarted.syncDelayMs = -1
+    restarted.restoreRetryMs = []
+    await restarted.initialize()
+    const status = await restarted.status()
+    expect(status.server).toBe(pair.A)
+    expect(status.user?.username).toBe('boss')
+  })
+
+  it('works in local mode while no server answers and sends the windows used there once one is back', async () => {
+    const pair = serverPair()
+    const pc = await owned(pair)
+    const local = await pc.profiles.create({ ...defaultProfileDraft(), name: 'shop' })
+    await mkdir(join(pc.profiles.profileDataPath(local.id), 'Default'), { recursive: true })
+    await pc.team.sync()
+    const teamId = pc.team.links()[0].teamId
+    expect(pair.data.records.get(teamId)!.data_rev).toBe(1)
+
+    pair.state[pair.A] = 'down'
+    pair.state[pair.B] = 'down'
+    const offline = new TeamManager(pc.vault, pc.profiles, { exportCookies: async () => [] } as unknown as CookieManager, identitySecretCodec, () => undefined, undefined, pair.fetcher)
+    offline.syncDelayMs = -1
+    offline.restoreRetryMs = []
+    await offline.initialize()
+    const down = await offline.status()
+    expect(down.user).toBeUndefined()
+    expect(down.canLocal).toBe(true)
+
+    const local1 = await offline.enterLocalMode()
+    expect(local1).toMatchObject({ localMode: true, user: { username: 'boss', role: 'owner' } })
+    const before = pair.calls.length
+    await offline.beforeLaunch(local.id)
+    await offline.afterExit(local.id)
+    expect(pair.calls.length).toBe(before)
+
+    // B takes over; "重试" finds it, leaves local mode and uploads the window used meanwhile.
+    pair.state[pair.B] = 'active'
+    const back = await offline.retry()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(back.localMode).toBeFalsy()
+    expect((await offline.status()).server).toBe(pair.B)
+    expect(pair.data.records.get(teamId)!.data_rev).toBe(2)
+  })
+
+  it('lets the owner name the standby and move the whole team to it', async () => {
+    const pair = serverPair()
+    const pc = await owned(pair)
+    const view = await pc.team.setStandby(pair.B, 'CODE-' + pair.B)
+    expect(view.servers.map((server) => [server.url, server.role, server.codeSaved])).toEqual([[pair.A, 'active', false], [pair.B, 'standby', true]])
+    expect(pair.calls).toContain(`${pair.B} POST /api/team/standby/setup`)
+
+    // 批量切换 with the kept code: A hands over, B takes over, this computer follows.
+    const status = await pc.team.switchServer(pair.B)
+    expect(status.server).toBe(pair.B)
+    expect(pair.calls).toContain(`${pair.A} POST /api/team/handover`)
+    expect(pair.state).toEqual({ [pair.A]: 'standby', [pair.B]: 'active' })
+    await expect(pc.team.connectServer(pair.A, 'wrong')).rejects.toThrow('激活码不对')
+  })
+})
