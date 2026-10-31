@@ -1,5 +1,5 @@
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
-import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion } from '../shared/hardware-profiles'
+import { effectiveDisabledSpoofing, effectiveFingerprintSeed, effectiveGpu, effectivePlatformVersion, isWindows11PlatformVersion } from '../shared/hardware-profiles'
 import { GPU_VENDOR_IDS, kernelMajor, kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { hardwareProfile } from '../shared/hardware-profiles'
 import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistency'
@@ -183,10 +183,15 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     const memory = Math.min(deviceMemory, maxDeviceMemoryGb(options.engineVersion))
     args.push(`--fingerprint-device-memory=${memory}`)
   }
-  // screen.availHeight leaves room for the taskbar; the kernel assumes 48 (Windows 11 at any scale)
-  // unless told this computer's own, which a small or auto-hidden taskbar changes.
-  const taskbar = options.hostScreen?.taskbarHeight
-  if (options.fingerprintKernel && fp.platform === 'windows' && taskbar !== undefined && Number.isInteger(taskbar) && taskbar >= 0 && taskbar <= 200) {
+  // screen.availHeight leaves room for the default taskbar of the window's Windows, not this computer's
+  // (an auto-hidden, small or side taskbar would show): 40 on Windows 10, 48 on Windows 11, in CSS pixels
+  // (measured at 100% on both test computers, 2026-10-31; Windows scales it with the display). A window
+  // matched to this computer keeps this computer's own.
+  const hostTaskbar = options.hostScreen?.taskbarHeight
+  const taskbar = hardwareProfile(fp.hardwareProfileId)?.hostMatched
+    ? (hostTaskbar !== undefined && Number.isInteger(hostTaskbar) && hostTaskbar >= 0 && hostTaskbar <= 200 ? hostTaskbar : undefined)
+    : isWindows11PlatformVersion(platformVersion) ? 48 : 40
+  if (options.fingerprintKernel && fp.platform === 'windows' && taskbar !== undefined) {
     args.push(`--fingerprint-screen-avail-height=${screenHeight - taskbar}`)
   }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)

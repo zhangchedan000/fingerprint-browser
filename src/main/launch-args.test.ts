@@ -258,12 +258,14 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(profile({ mediaDevices: '2,1,1' }), { userDataDir: '/data' }).some((arg) => arg.startsWith('--fingerprint-media'))).toBe(false)
   })
 
-  it('leaves room for this computer\'s taskbar in screen.availHeight', () => {
+  it('leaves room for the default taskbar of the window\'s Windows in screen.availHeight', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
-    const windows = profile({ platform: 'windows', screenWidth: 1920, screenHeight: 1080 })
-    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 48 } })).toContain('--fingerprint-screen-avail-height=1032')
-    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1080')
-    expect(buildLaunchArgs(windows, { ...kernel, hostScreen: { width: 2560, height: 1440 } }).some((arg) => arg.startsWith('--fingerprint-screen-avail-height'))).toBe(false)
+    const win11 = profile({ platform: 'windows', platformVersion: '19.0.0', screenWidth: 1920, screenHeight: 1080 })
+    const win10 = profile({ platform: 'windows', platformVersion: '10.0.0', screenWidth: 1920, screenHeight: 1080 })
+    // This computer's taskbar (auto-hidden here) never shows.
+    expect(buildLaunchArgs(win11, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1032')
+    expect(buildLaunchArgs(win10, { ...kernel, hostScreen: { width: 2560, height: 1440, taskbarHeight: 0 } })).toContain('--fingerprint-screen-avail-height=1040')
+    expect(buildLaunchArgs(win10, kernel)).toContain('--fingerprint-screen-avail-height=1040')
   })
 
   it('gives each window its own audio and rects on prism7 unless set to real', () => {
