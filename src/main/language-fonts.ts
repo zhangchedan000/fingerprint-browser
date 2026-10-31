@@ -171,8 +171,13 @@ export async function installKernelFontPack(script: string, kernelExecutable: st
   const pack = windowsFontPack(script)
   if (!pack) throw new Error(`没有 ${script} 字体包`)
   const folder = join(dirname(kernelExecutable), PRISM_SYSTEM_FONTS_FOLDER, windows, script)
+  // A file the base fonts already have (MS Gothic of the Japanese package) is left out: one copy only, as
+  // the kernel package does (build-system-fonts.py).
+  const base = join(dirname(folder), 'base')
+  const fonts: string[] = []
+  for (const font of pack.fonts) if (!await exists(join(base, font))) fonts.push(font)
   const present = async () => {
-    for (const font of pack.fonts) if (!await exists(join(folder, font))) return false
+    for (const font of fonts) if (!await exists(join(folder, font))) return false
     return true
   }
   if (await present()) return
@@ -190,7 +195,7 @@ export async function installKernelFontPack(script: string, kernelExecutable: st
     const staging = `${folder}.part`
     await rm(staging, { recursive: true, force: true })
     await mkdir(staging, { recursive: true })
-    for (const font of pack.fonts) {
+    for (const font of fonts) {
       const source = files.get(font)
       if (!source) throw new Error(`字体包里缺少 ${font}`)
       await copyFile(source, join(staging, font))

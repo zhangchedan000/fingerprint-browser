@@ -73,6 +73,14 @@ describe('language font packages', () => {
       // A missing package is fetched (from Microsoft); here the fake network fails.
       await expect(installKernelFontPack('Thai', join(kernel, 'chrome.exe'), 'win11', (async () => { fetched++; throw new Error('no network') }) as unknown as typeof fetch, () => undefined)).rejects.toThrow('no network')
       expect(fetched).toBe(1)
+      // A file the base fonts have (MS Gothic) is not wanted twice: the Japanese package is whole without it.
+      const jpan = WINDOWS_FONT_PACKS.find((p) => p.script === 'Jpan')!
+      await mkdir(join(kernel, 'prism-system-fonts', 'win11', 'base'), { recursive: true })
+      await writeFile(join(kernel, 'prism-system-fonts', 'win11', 'base', 'msgothic.ttc'), '')
+      await mkdir(join(kernel, 'prism-system-fonts', 'win11', 'Jpan'), { recursive: true })
+      for (const font of jpan.fonts) if (font !== 'msgothic.ttc') await writeFile(join(kernel, 'prism-system-fonts', 'win11', 'Jpan', font), '')
+      await installKernelFontPack('Jpan', join(kernel, 'chrome.exe'), 'win11', (async () => { fetched++; throw new Error('no network') }) as unknown as typeof fetch, () => undefined)
+      expect(fetched).toBe(1)
     } finally {
       await rm(kernel, { recursive: true, force: true })
     }
