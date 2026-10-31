@@ -291,6 +291,38 @@ describe('TeamManager', () => {
     await expect(restarted.beforeLaunch(local.id)).rejects.toThrow('请先登录')
   })
 
+  it('with the team feature off, never reaches the server: no sign-in, windows open and edit as local ones', async () => {
+    const server = fakeServer()
+    const owner = await computer(server)
+    await owner.team.login('http://team.test', 'boss', 'ownerpass')
+    const local = await owner.profiles.create({ ...defaultProfileDraft(), name: 'shop' })
+    await owner.team.sync()
+    expect(owner.team.links().length).toBe(1)
+
+    // Next start with the feature off: the saved sign-in and the link stay, nothing is fetched.
+    let calls = 0
+    const counting = (async (input: RequestInfo | URL, init?: RequestInit) => { calls += 1; return server.fetcher(input, init) }) as typeof fetch
+    const off = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined, counting)
+    off.syncDelayMs = -1
+    off.enabled = false
+    await off.initialize()
+    const status = await off.status()
+    expect(status.disabled).toBe(true)
+    expect(status.user).toBeUndefined()
+    await off.beforeLaunch(local.id)
+    off.assertEditable(local.id)
+    await off.afterLocalEdit(local.id)
+    await off.pushLoginState(local.id)
+    await off.afterExit(local.id)
+    await off.launchFailed(local.id)
+    expect(await off.sync()).toEqual({ added: 0, uploaded: 0 })
+    await expect(off.login('http://team.test', 'boss', 'ownerpass')).rejects.toThrow('团队功能已停用')
+    await expect(off.probe('http://team.test')).rejects.toThrow('团队功能已停用')
+    await expect(off.listMembers()).rejects.toThrow('团队功能已停用')
+    expect(calls).toBe(0)
+    expect(off.links().length).toBe(1)
+  })
+
   it('tries an unreachable server again at start, so a network blip does not stop the app', async () => {
     const server = fakeServer()
     const owner = await computer(server)

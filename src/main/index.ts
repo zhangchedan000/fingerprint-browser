@@ -29,6 +29,7 @@ import { installOtherWindowsFonts } from './other-windows-fonts'
 import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
+import { TEAM_FEATURE_ENABLED } from '../shared/team'
 import { registerTeamIpc } from './team/team-ipc'
 import { readWindowState, windowPlacement, writeWindowState } from './window-state'
 
@@ -282,6 +283,8 @@ app.whenReady().then(async () => {
     mainWindow?.webContents.send('team:sync', event)
   }, logger)
   team = activeTeam
+  // Team off (TEAM_FEATURE_ENABLED): no sign-in and no server, windows stay plain local windows.
+  activeTeam.enabled = TEAM_FEATURE_ENABLED
   // A window's 网络加速 nodes go to the cloud with it, and come along to other computers.
   activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
   activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)

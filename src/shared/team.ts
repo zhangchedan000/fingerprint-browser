@@ -11,7 +11,16 @@ export interface TeamUser {
   created: string
 }
 
+/**
+ * The team cloud (sign-in, shared windows, login-state sync). Off: the app opens without signing in
+ * and talks to no team server; every window is a plain local window. The code and the windows'
+ * links to their cloud copies stay, so turning it on again (with a server) carries on from there.
+ */
+export const TEAM_FEATURE_ENABLED = false
+
 export interface TeamStatus {
+  /** The team feature is switched off (TEAM_FEATURE_ENABLED): no sign-in, no server. */
+  disabled?: boolean
   /** The server address saved on this computer; '' before the first connection. */
   server: string
   /** Signed in as; undefined when signed out. The app is only usable signed in. */

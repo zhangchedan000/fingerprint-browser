@@ -29,7 +29,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     void window.browserApi.team.status().then((next) => {
       setStatus(next)
-      if (!next.user) void probe(next.server)
+      if (!next.user && !next.disabled) void probe(next.server)
     }).catch((reason) => setError(humanError(reason)))
   }, [])
 
@@ -38,7 +38,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
     try {
       const next = await window.browserApi.team.retry()
       setStatus(next)
-      if (!next.user) await probe(next.server)
+      if (!next.user && !next.disabled) await probe(next.server)
     } finally {
       setBusy(false)
     }
@@ -65,7 +65,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
     form.resetFields(['password', 'confirm'])
   }
 
-  if (status?.user) return <>{children}</>
+  if (status?.user || status?.disabled) return <>{children}</>
   if (!status) return <div className="fb-login"><Spin /></div>
 
   const signingUp = ready === false || mode === 'register'

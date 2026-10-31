@@ -227,6 +227,9 @@ export class TeamManager {
     return fingerprintCheckStore(join(this.vaultPath, 'fingerprint-checks.json'))
   }
 
+  /** False: the team feature is off (TEAM_FEATURE_ENABLED): nothing here reaches a server. */
+  enabled = true
+
   async initialize(): Promise<void> {
     try {
       const parsed = JSON.parse(await readFile(this.filePath, 'utf8')) as TeamFile
@@ -239,6 +242,7 @@ export class TeamManager {
       if (!this.profiles.list().some((profile) => profile.id === id)) delete this.file.links[id]
     }
     await rm(this.workPath, { recursive: true, force: true })
+    if (!this.enabled) return
     if (this.file.server && this.file.token) {
       const api = new TeamApi(this.file.server, this.fetcher)
       try {
@@ -335,6 +339,7 @@ export class TeamManager {
   }
 
   async status(): Promise<TeamStatus> {
+    if (!this.enabled) return { server: this.file.server || DEFAULT_TEAM_SERVER, disabled: true }
     await this.restoring
     // App checks (tools/app-e2e) run the UI without a team server: a signed-in user, offline.
     if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_TEAM_OFFLINE === '1' && !this.user) {
@@ -344,6 +349,7 @@ export class TeamManager {
   }
 
   private requireApi(): TeamApi {
+    if (!this.enabled) throw new Error('团队功能已停用')
     if (!this.api || !this.file.token) throw new Error('请先登录')
     return this.api
   }
@@ -357,18 +363,21 @@ export class TeamManager {
 
   /** Whether the server is reachable and already has an owner. */
   async probe(server: string): Promise<{ server: string; ready: boolean }> {
+    if (!this.enabled) throw new Error('团队功能已停用')
     const normalized = normalizeServer(server)
     const status = await new TeamApi(normalized, this.fetcher).status()
     return { server: normalized, ready: status.ready }
   }
 
   async setup(server: string, code: string, username: string, name: string, password: string): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
     const normalized = normalizeServer(server)
     await new TeamApi(normalized, this.fetcher).setup(code.trim(), username.trim(), name.trim(), password)
     return this.login(normalized, username, password)
   }
 
   async login(server: string, username: string, password: string): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
     const normalized = normalizeServer(server)
     if (this.file.server && normalized !== this.file.server && Object.keys(this.file.links).length) {
       throw new Error('这台电脑上还有其他团队服务器的窗口，请先在窗口管理里删除它们再换服务器')
@@ -392,6 +401,7 @@ export class TeamManager {
 
   /** Signs up with an invite code on the built-in server, then signs in. */
   async register(draft: TeamRegistration): Promise<TeamStatus> {
+    if (!this.enabled) throw new Error('团队功能已停用')
     const server = this.file.server || DEFAULT_TEAM_SERVER
     if (!draft.code.trim()) throw new Error('请填写邀请码')
     if (!/^[^\s@]{2,64}$/.test(draft.username.trim())) throw new Error('用户名 2 到 64 个字符，不能有空格和 @')
@@ -598,7 +608,7 @@ export class TeamManager {
 
   /** Runs sync() soon; several changes in a row make one pass. */
   scheduleSync(): void {
-    if (this.syncDelayMs < 0) return
+    if (!this.enabled || this.syncDelayMs < 0) return
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = setTimeout(() => {
       this.syncTimer = undefined
@@ -614,6 +624,7 @@ export class TeamManager {
    * go up. Windows deleted here stay in the cloud and are not pulled again.
    */
   async sync(): Promise<{ added: number; uploaded: number }> {
+    if (!this.enabled) return { added: 0, uploaded: 0 }
     if (this.syncing) {
       await this.syncing
       return this.sync()
@@ -717,7 +728,7 @@ export class TeamManager {
   /** A window changed here: send the new config to the cloud (the owner's, or a member's own). */
   async afterLocalEdit(id: string): Promise<void> {
     const link = this.file.links[id]
-    if (!link || !this.api || this.isReadOnly(link)) return
+    if (!this.enabled || !link || !this.api || this.isReadOnly(link)) return
     const profile = this.profiles.get(id)
     try {
       const record = await this.api.saveProfile(link.teamId, {
@@ -735,6 +746,8 @@ export class TeamManager {
 
   /** Windows assigned to a member are used as they are; changing or copying them out is the owner's call. */
   assertEditable(id: string): void {
+    // Team off: every window is this computer's own.
+    if (!this.enabled) return
     const link = this.file.links[id]
     if (link && this.isReadOnly(link)) throw new Error('这是分配给你的窗口，只有主账号可以修改或导出')
   }
@@ -743,6 +756,7 @@ export class TeamManager {
 
   /** Before a linked window starts: take the lock, then bring config and login state up to date. */
   async beforeLaunch(id: string): Promise<void> {
+    if (!this.enabled) return
     await this.verifySession()
     const link = this.file.links[id]
     if (!link) return
@@ -811,6 +825,7 @@ export class TeamManager {
 
   /** The launch failed after beforeLaunch: give the lock back without uploading. */
   async launchFailed(id: string): Promise<void> {
+    if (!this.enabled) return
     // A browser that started and died uploads through afterExit, which releases by itself.
     if (this.file.links[id] && !this.pushes.has(id)) await this.release(id)
   }
@@ -821,7 +836,7 @@ export class TeamManager {
    */
   async pushLoginState(id: string): Promise<void> {
     const link = this.file.links[id]
-    if (!link || !this.api) return
+    if (!this.enabled || !link || !this.api) return
     const pending = this.pushes.get(id)
     if (pending) await pending
     await this.api.lock(link.teamId, hostname())
@@ -836,6 +851,7 @@ export class TeamManager {
 
   /** After a linked window exits: upload its login state, then give the lock back. */
   afterExit(id: string): Promise<void> {
+    if (!this.enabled) return Promise.resolve()
     const link = this.file.links[id]
     // A window that was not in the cloud yet (opened before it went up) goes up now.
     if (!link) this.scheduleSync()

@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import type { ComponentType, ReactNode } from 'react'
 import { t } from '../../../shared/i18n'
+import { TEAM_FEATURE_ENABLED } from '../../../shared/team'
 import type { Workspace } from '../data/workspace'
 import { ExtensionsPage } from './extensions/ExtensionsPage'
 import { GroupsPage } from './groups/GroupsPage'
@@ -63,7 +64,7 @@ export const SECTIONS: Array<{ key: SectionKey; title: () => string }> = [
  * Every entry of the side menu. Adding a page = a folder under pages/ plus one line here;
  * the sidebar, top bar and navigation pick it up from this list.
  */
-export const PAGES: PageDefinition[] = [
+const ALL_PAGES: PageDefinition[] = [
   {
     key: 'windows',
     section: 'workspace',
@@ -127,6 +128,9 @@ export const PAGES: PageDefinition[] = [
   { key: 'settings', section: 'system', icon: <SettingOutlined />, label: () => t("设置"), page: SettingsPage }
 ]
 
+/** The team page is hidden while the team feature is off (TEAM_FEATURE_ENABLED). */
+export const PAGES: PageDefinition[] = ALL_PAGES.filter((page) => TEAM_FEATURE_ENABLED || page.key !== 'team')
+
 export function pageDefinition(key: PageKey): PageDefinition {
-  return PAGES.find((page) => page.key === key)!
+  return PAGES.find((page) => page.key === key) ?? PAGES[0]
 }
