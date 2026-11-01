@@ -51,9 +51,12 @@ try {
   const releases = await call('window.browserApi.engine.releases()', 60_000)
   report.kernelList = JSON.stringify(releases).match(/prism\d+|fonts-\d+/g)?.filter((v, i, a) => a.indexOf(v) === i)
   log('kernel list', JSON.stringify(report.kernelList))
-  log('installing 156 prism18 from GitHub ...')
+  // Same call as 内核管理 → 在线下载内核: the newest 156 build in the list, by its version.
+  const pick = releases.find((item) => /^156\./.test(item.chromium ?? item.version ?? '') && !item.history)
+  report.picked = pick && { version: pick.version, tag: pick.tag }
+  log('installing from GitHub', JSON.stringify(report.picked))
   const t0 = Date.now()
-  const installed = await call(`window.browserApi.engine.install('156.0.8078.47', 'prism18').then((r) => JSON.parse(JSON.stringify(r ?? null)))`, 900_000)
+  const installed = await call(`window.browserApi.engine.install(${JSON.stringify(pick?.version ?? '')}).then((r) => JSON.parse(JSON.stringify(r ?? null)))`, 900_000)
   report.install = { seconds: Math.round((Date.now() - t0) / 1000), result: JSON.stringify(installed).slice(0, 300) }
   log('installed', report.install.seconds, 's')
   const status = await call('window.browserApi.engine.status().then((s) => JSON.parse(JSON.stringify(s)))')
@@ -90,7 +93,7 @@ try {
   await quitApp(instance).catch(() => undefined)
   server.close()
 }
-report.pass = !report.error && !report.page?.error && /Chrome\/156/.test(report.page?.ua ?? '') && report.windowOffDisablesBinding === true
+report.pass = report.picked?.tag === 'prism18' && !report.error && !report.page?.error && /Chrome\/156/.test(report.page?.ua ?? '') && report.windowOffDisablesBinding === true
   && /设备绑定/.test(report.askRefused ?? '') && report.windowOnKeepsBinding === true && /不能再改/.test(report.lockedAfterOpen ?? '')
 console.log('REPORT ' + JSON.stringify(report))
 await delay(2000)
