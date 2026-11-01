@@ -15,7 +15,8 @@ import { TeamManager } from './team-manager'
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // A manager's background sync may still be writing team.json for a moment: retry instead of failing.
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })))
 })
 
 interface FakeRecord {
@@ -547,6 +548,7 @@ describe('TeamManager with a standby server', () => {
     const status = await restarted.status()
     expect(status.server).toBe(pair.A)
     expect(status.user?.username).toBe('boss')
+    await restarted.flush()
   })
 
   it('works in local mode while no server answers and sends the windows used there once one is back', async () => {
