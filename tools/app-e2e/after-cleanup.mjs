@@ -40,15 +40,28 @@ await rm(data, { recursive: true, force: true })
 await mkdir(vault, { recursive: true })
 await writeFile(join(vault, 'team.json'), JSON.stringify({ schemaVersion: 1, server: 'https://team.invalid', token: '', links: {}, localMode: true, userId: 'e2e', role: 'owner', userName: 'e2e' }))
 const instance = await launchApp({ app, packaged: true, headed: true }, data)
-const call = (expr, ms = 120_000) => Promise.race([evaluate(instance.client, expr), delay(ms).then(() => { throw new Error(`timeout: ${expr.slice(0, 80)}`) })])
+const call = (expr) => evaluate(instance.client, expr)
+// Each CDP call is capped at 30 s (run.mjs): a long operation starts in the page and is polled.
+let jobs = 0
+async function long(expr, ms) {
+  const key = `__job${++jobs}`
+  await call(`(window.${key} = { done: false }, Promise.resolve().then(() => ${expr}).then((v) => { window.${key} = { done: true, value: JSON.parse(JSON.stringify(v ?? null)) } }, (e) => { window.${key} = { done: true, error: String(e && e.message || e) } }), true)`)
+  const until = Date.now() + ms
+  for (;;) {
+    const state = await call(`window.${key}`)
+    if (state?.done) { if (state.error) throw new Error(state.error); return state.value }
+    if (Date.now() > until) throw new Error(`timeout: ${expr.slice(0, 80)}`)
+    await delay(3000)
+  }
+}
 try {
   const info = await call('window.browserApi.app.info()')
   report.app = info?.version ?? info
   log('app', JSON.stringify(report.app))
-  const update = await call('window.browserApi.app.checkUpdate()', 60_000).catch((e) => ({ error: String(e) }))
-  report.updateCheck = update
-  log('update check', JSON.stringify(update).slice(0, 300))
-  const releases = await call('window.browserApi.engine.releases()', 60_000)
+  const update = await long('window.browserApi.app.checkUpdate()', 60_000).catch((e) => ({ error: String(e) }))
+  report.updateCheck = update?.error ? update : { current: update?.current, latest: update?.latest, available: update?.available, size: update?.size }
+  log('update check', JSON.stringify(report.updateCheck))
+  const releases = await long('window.browserApi.engine.releases()', 90_000)
   report.kernelList = JSON.stringify(releases).match(/prism\d+|fonts-\d+/g)?.filter((v, i, a) => a.indexOf(v) === i)
   log('kernel list', JSON.stringify(report.kernelList))
   // Same call as 内核管理 → 在线下载内核: the newest 156 build in the list, by its version.
@@ -56,7 +69,7 @@ try {
   report.picked = pick && { version: pick.version, tag: pick.tag }
   log('installing from GitHub', JSON.stringify(report.picked))
   const t0 = Date.now()
-  const installed = await call(`window.browserApi.engine.install(${JSON.stringify(pick?.version ?? '')}).then((r) => JSON.parse(JSON.stringify(r ?? null)))`, 900_000)
+  const installed = await long(`window.browserApi.engine.install(${JSON.stringify(pick?.version ?? '')})`, 1_200_000)
   report.install = { seconds: Math.round((Date.now() - t0) / 1000), result: JSON.stringify(installed).slice(0, 300) }
   log('installed', report.install.seconds, 's')
   const status = await call('window.browserApi.engine.status().then((s) => JSON.parse(JSON.stringify(s)))')
@@ -66,7 +79,7 @@ try {
   // Window 1: an ordinary new window (device binding not set = off), opens the test page.
   const one = await call(`window.browserApi.profiles.create(${JSON.stringify(draft('after-cleanup-1', 515151, site))})`)
   const result = new Promise((done) => { deliver = done })
-  await call(`window.browserApi.profiles.launch(${JSON.stringify(one.id)}).then(() => true)`, 600_000)
+  await long(`window.browserApi.profiles.launch(${JSON.stringify(one.id)}).then(() => true)`, 900_000)
   report.page = await Promise.race([result, delay(90_000).then(() => ({ error: 'page timeout' }))])
   log('page', JSON.stringify(report.page))
   const line1 = browserLine(join(vault, 'profiles', one.id))
@@ -76,11 +89,11 @@ try {
 
   // Window 2: a new window that has not chosen yet ('ask', what the app's editor creates) is refused until it chooses.
   const two = await call(`window.browserApi.profiles.create(${JSON.stringify({ ...draft('after-cleanup-2', 525252, site), fingerprint: { ...draft('x', 525252, site).fingerprint, deviceBinding: 'ask' } })})`)
-  report.askRefused = await call(`window.browserApi.profiles.launch(${JSON.stringify(two.id)}).then(() => 'opened', (e) => String(e.message || e))`, 60_000)
+  report.askRefused = await long(`window.browserApi.profiles.launch(${JSON.stringify(two.id)}).then(() => 'opened', (e) => String(e.message || e))`, 60_000)
   log('ask window', report.askRefused)
   await call(`window.browserApi.profiles.setDeviceBinding(${JSON.stringify(two.id)}, 'on').then(() => true)`)
   const result2 = new Promise((done) => { deliver = done })
-  await call(`window.browserApi.profiles.launch(${JSON.stringify(two.id)}).then(() => true)`, 120_000)
+  await long(`window.browserApi.profiles.launch(${JSON.stringify(two.id)}).then(() => true)`, 300_000)
   report.page2 = await Promise.race([result2, delay(60_000).then(() => ({ error: 'page timeout' }))])
   const line2 = browserLine(join(vault, 'profiles', two.id))
   report.windowOnKeepsBinding = line2 !== '' && !/DeviceBoundSessions/.test(line2) && !/SoftwareKeysForManualTesting/.test(line2)
