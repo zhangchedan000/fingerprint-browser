@@ -135,7 +135,7 @@ function keepYesterday(r) {
 function removeOldCopies(r) {
   sh(r.env + "rclone delete " + r.target + "/db --include '2*.db.gz' || true; "
     + "for d in daily deleted assets; do rclone purge " + r.target + "/$d 2>/dev/null || true; done; "
-    + "rm -f " + DATA + "/backups/@auto_pb_backup_*.zip")
+    + "rm -f " + DATA + "/backups/@auto_pb_backup_*")
 }
 
 function fullPass(r, yesterday) {
