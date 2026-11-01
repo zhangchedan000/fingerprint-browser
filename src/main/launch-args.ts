@@ -29,6 +29,8 @@ export interface LaunchArgumentOptions {
   remoteDebuggingPort?: number
   extensionPaths?: string[]
   engineVersion?: string
+  /** The kernel binds sign-ins with software keys by itself (prism18+, kernel-features.ts); unknown: by its version name. */
+  softwareDeviceKeys?: boolean
   fingerprintKernel?: boolean
   /** The kernel uses its own Windows fonts (EngineStatus.builtInFonts, prism16+). */
   builtInFonts?: boolean
@@ -198,7 +200,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const disabledFeatures = deviceBinding
     ? ['CalculateNativeWinOcclusion']
     : ['CalculateNativeWinOcclusion', 'DeviceBoundSessions', 'EnableBoundSessionCredentials']
-  if (deviceBinding && (prismRevision(options.engineVersion) ?? 0) < SOFTWARE_DEVICE_KEYS_REVISION) {
+  const softwareKeys = options.softwareDeviceKeys ?? (prismRevision(options.engineVersion) ?? 0) >= SOFTWARE_DEVICE_KEYS_REVISION
+  if (deviceBinding && !softwareKeys) {
     args.push('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
   }
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.

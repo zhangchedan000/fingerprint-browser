@@ -30,7 +30,7 @@ import type { Readable, Writable } from 'node:stream'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
 import type { WriteStream } from 'node:fs'
-import { executableHidesConfig } from './kernel-features'
+import { executableHidesConfig, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
@@ -430,6 +430,7 @@ export class BrowserLauncher {
         proxyUrl: localProxyUrl,
         extensionPaths: this.extensions.paths(profile.extensionIds),
         engineVersion: engine.version,
+        softwareDeviceKeys: engine.fingerprintKernel && profile.fingerprint.deviceBinding === 'on' ? await executableUsesSoftwareDeviceKeys(engine.executable) : undefined,
         builtInFonts: engine.builtInFonts,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,

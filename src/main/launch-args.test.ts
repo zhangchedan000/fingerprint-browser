@@ -328,6 +328,10 @@ describe('launch arguments', () => {
     const prism18 = buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...prism17, engineVersion: '156.0.8078.47-prism18' })
     expect(prism18.some((arg) => arg.startsWith('--enable-features'))).toBe(false)
     expect(prism18.find((arg) => arg.startsWith('--disable-features'))).toBe('--disable-features=CalculateNativeWinOcclusion')
+    // A downloaded kernel's id has no prism number ("prism-156.0.8078.47"): its manifest says (softwareDeviceKeys).
+    const installed = { ...prism17, engineVersion: 'prism-156.0.8078.47' }
+    expect(buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...installed, softwareDeviceKeys: true }).some((arg) => arg.startsWith('--enable-features'))).toBe(false)
+    expect(buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...installed, softwareDeviceKeys: false })).toContain('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
   })
 
   it('keeps windows covered by other windows running', () => {

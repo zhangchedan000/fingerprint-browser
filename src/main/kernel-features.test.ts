@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelRelaysWebRtc, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelRelaysWebRtc, kernelUsesSoftwareDeviceKeys, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -69,4 +69,12 @@ it('knows the kernels with their own Windows fonts (prism16+) by release tag or 
   expect(kernelHasOwnFonts({ releaseTag: 'prism17' })).toBe(true)
   expect(kernelHasOwnFonts({ assetName: 'local-build-win32-x64', builtInFonts: true })).toBe(true)
   expect(kernelHasOwnFonts({})).toBe(false)
+})
+
+it('knows the kernels that bind sign-ins with software keys by themselves (prism18+) by release tag or manifest', () => {
+  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: '156.0.8078.47-prism18' })).toBe(true)
+  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: 'prism18', assetName: 'ungoogled-chromium_156.0.8078.47-prism18_windows_x64.zip' })).toBe(true)
+  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: '156.0.8078.47-prism17' })).toBe(false)
+  expect(kernelUsesSoftwareDeviceKeys({ softwareDeviceKeys: true })).toBe(true)
+  expect(kernelUsesSoftwareDeviceKeys({})).toBe(false)
 })

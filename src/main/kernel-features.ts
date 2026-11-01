@@ -36,7 +36,14 @@ const HIDDEN_CONFIG_SOURCE = { file: 'chrome/app/chrome_main.cc', marker: 'Prism
 
 export { prismRevision }
 
-type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; releaseTag?: string; assetName?: string }
+/**
+ * Device-bound sign-ins with software keys kept in the window's data, never this computer's TPM
+ * (patch 001, prism18): such kernels need no feature switch for it.
+ */
+const SOFTWARE_DEVICE_KEYS_REVISION = 18
+const SOFTWARE_DEVICE_KEYS_SOURCE = { file: 'components/unexportable_keys/unexportable_key_task_manager.cc', marker: 'Prism: software keys' }
+
+type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; softwareDeviceKeys?: boolean; releaseTag?: string; assetName?: string }
 
 const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
 
@@ -54,6 +61,16 @@ export function kernelHasOwnFonts(manifest: ManifestFeatures): boolean {
 
 export function kernelHidesConfig(manifest: ManifestFeatures): boolean {
   return manifest.hiddenConfig ?? revisionOf(manifest) >= HIDDEN_CONFIG_REVISION
+}
+
+export function kernelUsesSoftwareDeviceKeys(manifest: ManifestFeatures): boolean {
+  return manifest.softwareDeviceKeys ?? revisionOf(manifest) >= SOFTWARE_DEVICE_KEYS_REVISION
+}
+
+/** Whether this kernel (installed or a local build) binds sign-ins with software keys by itself (prism18+). */
+export async function executableUsesSoftwareDeviceKeys(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelUsesSoftwareDeviceKeys(manifest) : localBuildSourceHas(executable, SOFTWARE_DEVICE_KEYS_SOURCE.file, SOFTWARE_DEVICE_KEYS_SOURCE.marker)
 }
 
 /** Whether this kernel (installed or a local build) reads the encrypted --fingerprint-config file. */
