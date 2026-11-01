@@ -185,7 +185,11 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   // hidden (Windows occlusion tracking) and slows its timers and drawing, so pages behind other windows stall
   // (uploads, chats, keep-alive checks) while many windows are open.
   args.push('--disable-backgrounding-occluded-windows')
-  const disabledFeatures = ['CalculateNativeWinOcclusion']
+  // Sign-ins are not bound to this computer's security chip (Device Bound Session Credentials, on by
+  // default on Windows since Chrome 146: Google, YouTube): a bound sign-in dies on the team's other
+  // computers, whose chips do not hold the key. Without it a site gets ordinary cookies, as from a
+  // computer without a TPM.
+  const disabledFeatures = ['CalculateNativeWinOcclusion', 'DeviceBoundSessions', 'EnableBoundSessionCredentials']
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
   if (fp.portScanProtection === false) disabledFeatures.push('LocalNetworkAccessChecks')
   // One switch: Chrome only reads the last --disable-features.

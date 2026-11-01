@@ -310,10 +310,10 @@ describe('launch arguments', () => {
 
   it('turns Chrome\'s port scan protection off only when asked', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
-    expect(buildLaunchArgs(profile(), kernel).filter((arg) => arg.startsWith('--disable-features'))).toEqual(['--disable-features=CalculateNativeWinOcclusion'])
+    expect(buildLaunchArgs(profile(), kernel).filter((arg) => arg.startsWith('--disable-features'))).toEqual(['--disable-features=CalculateNativeWinOcclusion,DeviceBoundSessions,EnableBoundSessionCredentials'])
     // Chrome reads one --disable-features: both features in it.
     expect(buildLaunchArgs(profile({ portScanProtection: false }), kernel).filter((arg) => arg.startsWith('--disable-features')))
-      .toEqual(['--disable-features=CalculateNativeWinOcclusion,LocalNetworkAccessChecks'])
+      .toEqual(['--disable-features=CalculateNativeWinOcclusion,DeviceBoundSessions,EnableBoundSessionCredentials,LocalNetworkAccessChecks'])
   })
 
   it('keeps windows covered by other windows running', () => {
