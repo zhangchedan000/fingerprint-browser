@@ -54,7 +54,10 @@ export const LOGIN_STATE_PATHS = [
   'Default/Sync Extension Settings',
   'Default/Extension State',
   'Default/Extension Rules',
-  'Default/Extension Scripts'
+  'Default/Extension Scripts',
+  // Device-bound sign-ins with their keys (windows set to 绑定: software keys, so they work on the next computer).
+  'Default/Network/Device Bound Sessions',
+  'Default/Network/Device Bound Sessions-journal'
 ]
 
 const EXCLUDED_INSIDE = ['./Default/WebStorage/*/CacheStorage', './Default/Sessions/*.tmp']

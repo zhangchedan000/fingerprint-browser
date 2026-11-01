@@ -6,7 +6,7 @@ import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistenc
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
 import { launchedScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
-import { kernelVendor } from '../shared/kernel-id'
+import { kernelVendor, prismRevision } from '../shared/kernel-id'
 import { gpuAv1Support } from '../shared/gpu-catalog'
 import { keyboardLayoutFor, keyboardLayoutText } from '../shared/keyboard-layouts'
 
@@ -49,6 +49,9 @@ export interface LaunchArgumentOptions {
   /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
   webrtcRelayPort?: number
 }
+
+/** First prism kernel whose device-bound sign-in keys are software keys by default (no switch needed). */
+export const SOFTWARE_DEVICE_KEYS_REVISION = 18
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
   const name = profile.name
@@ -185,11 +188,19 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   // hidden (Windows occlusion tracking) and slows its timers and drawing, so pages behind other windows stall
   // (uploads, chats, keep-alive checks) while many windows are open.
   args.push('--disable-backgrounding-occluded-windows')
-  // Sign-ins are not bound to this computer's security chip (Device Bound Session Credentials, on by
-  // default on Windows since Chrome 146: Google, YouTube): a bound sign-in dies on the team's other
-  // computers, whose chips do not hold the key. Without it a site gets ordinary cookies, as from a
-  // computer without a TPM.
-  const disabledFeatures = ['CalculateNativeWinOcclusion', 'DeviceBoundSessions', 'EnableBoundSessionCredentials']
+  // Device-bound sign-ins (Device Bound Session Credentials, on by default on Windows since Chrome 146:
+  // Google, YouTube, Douyin…), per window (fp.deviceBinding):
+  // - 'on': bound like a real Chrome, but with a software key kept in the window's own data instead of
+  //   this computer's TPM, so the sign-in travels with the window to the team's other computers. prism18+
+  //   kernels use software keys by themselves; older ones are told so by a feature switch.
+  // - otherwise: not bound; sites give ordinary cookies, as to a computer without a TPM.
+  const deviceBinding = fp.deviceBinding === 'on'
+  const disabledFeatures = deviceBinding
+    ? ['CalculateNativeWinOcclusion']
+    : ['CalculateNativeWinOcclusion', 'DeviceBoundSessions', 'EnableBoundSessionCredentials']
+  if (deviceBinding && (prismRevision(options.engineVersion) ?? 0) < SOFTWARE_DEVICE_KEYS_REVISION) {
+    args.push('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
+  }
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
   if (fp.portScanProtection === false) disabledFeatures.push('LocalNetworkAccessChecks')
   // One switch: Chrome only reads the last --disable-features.

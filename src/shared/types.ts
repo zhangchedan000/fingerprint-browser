@@ -186,6 +186,13 @@ export interface FingerprintConfig {
   doNotTrack?: 'default' | 'on' | 'off'
   /** Chrome's Local Network Access checks (pages need permission to reach this computer and the LAN). Default: on. */
   portScanProtection?: boolean
+  /**
+   * Sign-ins bound to the device (Device Bound Session Credentials: Google, Douyin…). 'on': bound, with a
+   * key kept in the window's own data (not the computer's TPM), so it travels with the window; unset or
+   * 'off': not bound, sites give ordinary cookies; 'ask': a new window that was not opened yet asks first.
+   * Fixed once the window was opened.
+   */
+  deviceBinding?: 'ask' | 'on' | 'off'
   /** Windows voices of another locale (e.g. "zh-hk"). Unset = the window's language. */
   voicesLocale?: string
   /** "auto" (unset, from the seed), "real", or "microphones,speakers,cameras". */
@@ -829,6 +836,8 @@ export interface BrowserApi {
     exportCookies: (id: string) => Promise<CookieTransferResult | null>
     importCookies: (id: string) => Promise<CookieTransferResult | null>
     remove: (id: string) => Promise<void>
+    /** A new window's device-bound sign-in choice before its first opening; fixed afterwards. */
+    setDeviceBinding: (id: string, value: 'on' | 'off') => Promise<BrowserProfileView>
     launch: (id: string, options?: ProfileLaunchOptions) => Promise<BrowserProfileView>
     /** Opens a page in the window: a new tab when it runs, otherwise it starts with that page. */
     openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => Promise<BrowserProfileView>

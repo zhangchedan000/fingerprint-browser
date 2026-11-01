@@ -2646,5 +2646,18 @@
   "这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。": "Bu bilgisayarda Windows {0} var: Windows {1} pencereleri Windows {1}'in kendi yazı tiplerine (çekirdekle gelir) ihtiyaç duyar; pencere açılırken otomatik yüklenir.",
   "网页弹窗：{0}": "Sayfa iletişim kutusu: {0}",
   "检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整": "Sitenin kendi açılır penceresi, kontrol sırasında kapatıldı; genellikle sitenin bir hizmetine ulaşılamamıştır (Failed to fetch), bu yüzden sonuç eksik olabilir",
-  "这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑": "Bu dilin Windows yazı tiplerini çekirdek sağlar (gerektiğinde Microsoft'tan indirilir); bu bilgisayara bir şey yüklenmez"
+  "这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑": "Bu dilin Windows yazı tiplerini çekirdek sağlar (gerektiğinde Microsoft'tan indirilir); bu bilgisayara bir şey yüklenmez",
+  "#{0} {1}：设备绑定登录": "#{0} {1}: cihaza bağlı oturum açma",
+  "不绑定（推荐）": "Bağlama (önerilen)",
+  "：谷歌、抖音的登录换到别的电脑也能直接用。": ": Google ve Douyin oturumları başka bir bilgisayarda da çalışmaya devam eder.",
+  "绑定": "Bağla",
+  "：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。": ": oturumları normal bir Chrome gibi cihaza bağlar; bağlama verileri bu pencerede tutulur ve pencereyle birlikte eşitlenir.",
+  "选好后不能再改。": "Seçildikten sonra değiştirilemez.",
+  "{0}：没有打开（取消了确认）": "{0}: açılmadı (onay iptal edildi)",
+  "设备绑定登录": "Cihaza bağlı oturum açma",
+  "这个窗口已经打开过，不能再改": "Bu pencere daha önce açıldı, değiştirilemez",
+  "不绑定：谷歌、抖音的登录换到别的电脑也能直接用。绑定：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。第一次打开后不能再改。": "Bağlama: Google ve Douyin oturumları başka bilgisayarlarda da çalışır. Bağla: normal bir Chrome gibi cihaza bağlama; veriler bu pencerede tutulur ve pencereyle eşitlenir. İlk açılıştan sonra değiştirilemez.",
+  "请先选择这个窗口的「设备绑定登录」": "Önce bu pencere için cihaza bağlı oturum açma seçeneğini belirleyin",
+  "这个窗口已经打开过，设备绑定登录不能再改": "Bu pencere daha önce açıldı; cihaza bağlı oturum açma değiştirilemez",
+  "设备绑定登录设置无效": "Geçersiz cihaza bağlı oturum açma ayarı"
 }

@@ -26,6 +26,22 @@ function typedDraft<T extends { proxyId?: string }>(view: T): T {
 }
 
 describe('ProfileStore', () => {
+  it('asks a new window for its device-bound sign-in choice once, then keeps it', async () => {
+    const repository = await store()
+    const created = await repository.create(defaultProfileDraft(1))
+    expect(created.fingerprint.deviceBinding).toBe('ask')
+    expect((await repository.setDeviceBinding(created.id, 'on')).fingerprint.deviceBinding).toBe('on')
+    // Before the first opening it can still be changed.
+    expect((await repository.setDeviceBinding(created.id, 'off')).fingerprint.deviceBinding).toBeUndefined()
+    await repository.setDeviceBinding(created.id, 'on')
+    await repository.setRuntime(created.id, { status: 'closed', lastOpenedAt: new Date().toISOString() })
+    await expect(repository.setDeviceBinding(created.id, 'off')).rejects.toThrow('设备绑定登录不能再改')
+    // An edit of an opened window keeps it, whatever the form sends.
+    const draft = typedDraft(publicProfile(repository.get(created.id)))
+    const edited = await repository.update(created.id, { ...draft, fingerprint: { ...draft.fingerprint, deviceBinding: undefined } })
+    expect(edited.fingerprint.deviceBinding).toBe('on')
+  })
+
   it('keeps startup modes per profile across reload and duplicate', async () => {
     const repository = await store()
     const restored = await repository.create({ ...defaultProfileDraft(), startupMode: 'restore' })

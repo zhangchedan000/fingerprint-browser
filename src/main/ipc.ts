@@ -77,6 +77,13 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await team.afterLocalEdit(id)
     return profile
   })
+  // A new window's choice before its first opening (asked by the window list), then fixed.
+  ipcMain.handle('profiles:set-device-binding', async (_event, id: string, value: 'on' | 'off') => {
+    team.assertEditable(id)
+    const profile = publicProfile(await profiles.setDeviceBinding(id, value))
+    await team.afterLocalEdit(id)
+    return profile
+  })
   // An open window: only what does not need a restart (name, group, note, account, …).
   ipcMain.handle('profiles:update-details', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)

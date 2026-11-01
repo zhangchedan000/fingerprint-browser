@@ -80,6 +80,7 @@ export function defaultProfileDraft(index = 1): ProfileDraft & { account: Platfo
       password: ''
     },
     account: { platform: '', username: '', password: '' },
-    fingerprint: defaultFingerprint()
+    // A new window asks before its first opening whether sign-ins may be bound to the device.
+    fingerprint: { ...defaultFingerprint(), deviceBinding: 'ask' }
   }
 }

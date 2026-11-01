@@ -265,6 +265,8 @@ export class BrowserLauncher {
 
   async launch(id: string, options: ProfileLaunchOptions = {}): Promise<BrowserProfile> {
     if (this.closeAllOperation) throw new Error('正在关闭全部浏览器环境，请等待操作完成后再启动')
+    // A new window is opened only once its device-bound sign-in choice is made (the window list asks).
+    if (this.profiles.get(id).fingerprint.deviceBinding === 'ask') throw new Error('请先选择这个窗口的「设备绑定登录」')
     const existing = this.launchOperations.get(id)
     if (existing) return existing
     const operation = (async () => {

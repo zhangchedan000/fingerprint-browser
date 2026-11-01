@@ -316,6 +316,20 @@ describe('launch arguments', () => {
       .toEqual(['--disable-features=CalculateNativeWinOcclusion,DeviceBoundSessions,EnableBoundSessionCredentials,LocalNetworkAccessChecks'])
   })
 
+  it('binds sign-ins to the device only for windows set to 绑定, with software keys', () => {
+    const prism17 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47-prism17' }
+    const off = buildLaunchArgs(profile(), prism17)
+    expect(off.find((arg) => arg.startsWith('--disable-features'))).toContain('DeviceBoundSessions,EnableBoundSessionCredentials')
+    expect(off.some((arg) => arg.startsWith('--enable-features'))).toBe(false)
+    const on = buildLaunchArgs(profile({ deviceBinding: 'on' }), prism17)
+    expect(on.find((arg) => arg.startsWith('--disable-features'))).toBe('--disable-features=CalculateNativeWinOcclusion')
+    expect(on).toContain('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
+    // prism18+ uses software keys by itself: no switch on the command line.
+    const prism18 = buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...prism17, engineVersion: '156.0.8078.47-prism18' })
+    expect(prism18.some((arg) => arg.startsWith('--enable-features'))).toBe(false)
+    expect(prism18.find((arg) => arg.startsWith('--disable-features'))).toBe('--disable-features=CalculateNativeWinOcclusion')
+  })
+
   it('keeps windows covered by other windows running', () => {
     const args = buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' })
     expect(args).toContain('--disable-backgrounding-occluded-windows')

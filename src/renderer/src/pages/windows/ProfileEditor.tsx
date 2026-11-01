@@ -859,6 +859,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
   const running = runningNow ?? Boolean(profile && profile.status !== 'closed' && profile.status !== 'error')
 
+  // Device-bound sign-ins are chosen once: fixed after the window's first opening.
+  const deviceBindingFixed = Boolean(profile?.lastOpenedAt) && fp.deviceBinding !== 'ask'
+
   function patchFingerprint(patch: Partial<FingerprintConfig>): void {
     form.setFieldValue('fingerprint', { ...form.getFieldValue('fingerprint'), ...patch })
   }
@@ -1516,6 +1519,19 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         <div className="fb-fp-card-head">
           <h3 className="fb-fp-group">{t("登录状态与备注")}</h3>
         </div>
+      <Row
+        label={t("设备绑定登录")}
+        hint={deviceBindingFixed
+          ? t("这个窗口已经打开过，不能再改")
+          : t("不绑定：谷歌、抖音的登录换到别的电脑也能直接用。绑定：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。第一次打开后不能再改。")}
+      >
+        <Radio.Group
+          disabled={running || deviceBindingFixed}
+          value={fp.deviceBinding === 'on' ? 'on' : fp.deviceBinding === 'ask' ? undefined : 'off'}
+          onChange={(event) => patchFingerprint({ deviceBinding: event.target.value === 'on' ? 'on' : undefined })}
+          options={[{ value: 'off', label: t("不绑定（推荐）") }, { value: 'on', label: t("绑定") }]}
+        />
+      </Row>
       <Row
         label={t("Cookie")}
         hint={running

@@ -91,6 +91,7 @@ const api: BrowserApi = {
     exportCookies: (id: string) => ipcRenderer.invoke('profiles:export-cookies', id),
     importCookies: (id: string) => ipcRenderer.invoke('profiles:import-cookies', id),
     remove: (id: string) => ipcRenderer.invoke('profiles:remove', id),
+    setDeviceBinding: (id, value) => ipcRenderer.invoke('profiles:set-device-binding', id, value),
     launch: (id: string, options?: ProfileLaunchOptions) => ipcRenderer.invoke('profiles:launch', id, options),
     openUrl: (id: string, url: string, options?: ProfileLaunchOptions) => ipcRenderer.invoke('profiles:open-url', id, url, options),
     close: (id: string) => ipcRenderer.invoke('profiles:close', id),

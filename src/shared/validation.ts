@@ -138,6 +138,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
   const doNotTrack = rawFp.doNotTrack ?? 'default'
   if (!['default', 'on', 'off'].includes(doNotTrack)) throw new Error('Do Not Track 设置无效')
   if (rawFp.portScanProtection !== undefined && typeof rawFp.portScanProtection !== 'boolean') throw new Error('端口扫描保护设置无效')
+  if (rawFp.deviceBinding !== undefined && !['ask', 'on', 'off'].includes(rawFp.deviceBinding)) throw new Error('设备绑定登录设置无效')
   if (!['windows', 'macos'].includes(fp.platform) || !['Chrome', 'Edge'].includes(fp.brand)) {
     throw new Error('指纹平台或浏览器品牌无效')
   }
@@ -247,6 +248,7 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileDraft & { acco
       ...(geolocationPermission !== 'ask' ? { geolocationPermission } : {}),
       ...(doNotTrack !== 'default' ? { doNotTrack } : {}),
       ...(rawFp.portScanProtection === false ? { portScanProtection: false } : {}),
+      ...(rawFp.deviceBinding === 'on' || rawFp.deviceBinding === 'ask' ? { deviceBinding: rawFp.deviceBinding } : {}),
       ...(rawFp.voicesLocale ? { voicesLocale: rawFp.voicesLocale } : {}),
       ...(rawFp.mediaDevices && rawFp.mediaDevices !== 'auto' ? { mediaDevices: rawFp.mediaDevices } : {}),
       ...(rawFp.mediaLocale ? { mediaLocale: rawFp.mediaLocale } : {}),

@@ -1,4 +1,4 @@
-import { Modal } from 'antd'
+import { Button, Modal, Space } from 'antd'
 import { t, translateMessage as mt } from '../../../shared/i18n'
 import { geoConflictConfirmationMessage } from '../../../shared/network-identity'
 import type { BrowserProfileView } from '../../../shared/types'
@@ -27,6 +27,43 @@ function confirmGeoConflict(profile: BrowserProfileView, warning: string): Promi
   })
 }
 
+/**
+ * Asked before a new window's first opening: may its sign-ins be bound to the device? Closing the
+ * dialog (X) opens nothing; the window asks again next time. undefined = closed.
+ */
+function chooseDeviceBinding(profile: BrowserProfileView): Promise<'on' | 'off' | undefined> {
+  return new Promise((resolve) => {
+    let settled = false
+    const settle = (value: 'on' | 'off' | undefined): void => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const dialog = Modal.confirm({
+      title: t("#{0} {1}：设备绑定登录", profile.serialNumber, profile.name),
+      icon: null,
+      closable: true,
+      maskClosable: false,
+      keyboard: false,
+      content: (
+        <div className="fb-device-binding-choice">
+          <p><strong>{t("不绑定（推荐）")}</strong>{t("：谷歌、抖音的登录换到别的电脑也能直接用。")}</p>
+          <p><strong>{t("绑定")}</strong>{t("：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。")}</p>
+          <p className="fb-muted">{t("选好后不能再改。")}</p>
+        </div>
+      ),
+      footer: (
+        <Space style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <Button onClick={() => { settle('on'); dialog.destroy() }}>{t("绑定")}</Button>
+          <Button type="primary" onClick={() => { settle('off'); dialog.destroy() }}>{t("不绑定（推荐）")}</Button>
+        </Space>
+      ),
+      onCancel: () => settle(undefined),
+      afterClose: () => settle(undefined)
+    })
+  })
+}
+
 export interface OpenManyResult {
   total: number
   succeeded: number
@@ -37,8 +74,23 @@ export interface OpenManyResult {
 export function useWindowLauncher() {
   const ws = useWorkspace()
 
+  /**
+   * A new window asks its device-bound sign-in choice first (saved, then fixed). The profile to open, or
+   * undefined when the dialog was closed.
+   */
+  async function readyToOpen(profile: BrowserProfileView): Promise<BrowserProfileView | undefined> {
+    if (profile.fingerprint.deviceBinding !== 'ask') return profile
+    const choice = await chooseDeviceBinding(profile)
+    if (!choice) return undefined
+    const next = await window.browserApi.profiles.setDeviceBinding(profile.id, choice)
+    ws.upsertProfiles([next])
+    return next
+  }
+
   /** Opens one window; asks before going on when the proxy's GeoIP sources disagree. undefined = cancelled. */
-  async function launch(profile: BrowserProfileView): Promise<BrowserProfileView | undefined> {
+  async function launch(start: BrowserProfileView): Promise<BrowserProfileView | undefined> {
+    const profile = await readyToOpen(start)
+    if (!profile) return undefined
     try {
       return await window.browserApi.profiles.launch(profile.id)
     } catch (error) {
@@ -50,7 +102,9 @@ export function useWindowLauncher() {
   }
 
   /** Opens a page in the window: a new tab when it runs, otherwise it starts with the page. */
-  async function openUrl(profile: BrowserProfileView, url: string): Promise<BrowserProfileView | undefined> {
+  async function openUrl(start: BrowserProfileView, url: string): Promise<BrowserProfileView | undefined> {
+    const profile = await readyToOpen(start)
+    if (!profile) return undefined
     try {
       return await window.browserApi.profiles.openUrl(profile.id, url)
     } catch (error) {
@@ -73,7 +127,7 @@ export function useWindowLauncher() {
           ws.upsertProfiles([next])
           onEach?.(next)
         } else {
-          errors.push(t("{0}：用户取消了 GeoIP 冲突风险确认", profile.name))
+          errors.push(t("{0}：没有打开（取消了确认）", profile.name))
         }
       } catch (error) {
         errors.push(`${profile.name}：${humanError(error)}`)

@@ -895,10 +895,26 @@ export class ProfileStore {
       if (apiUrl) profile.apiProxy = current.apiProxy?.url === apiUrl ? current.apiProxy : { url: apiUrl }
       else delete profile.apiProxy
       if (apiUrl && current.apiProxy?.url !== apiUrl) delete profile.directCheck
+      // Device-bound sign-ins are fixed once the window was opened: an edit keeps what it had.
+      if (current.lastOpenedAt && current.fingerprint.deviceBinding !== 'ask') {
+        if (current.fingerprint.deviceBinding) profile.fingerprint.deviceBinding = current.fingerprint.deviceBinding
+        else delete profile.fingerprint.deviceBinding
+      }
       this.profiles.set(id, profile)
       await this.persist()
       return this.resolve(profile)
     })
+  }
+
+  /**
+   * The choice a new window asks for before its first opening: sign-ins bound to the device ('on', key
+   * kept in the window) or not ('off'). Fixed once the window was opened.
+   */
+  async setDeviceBinding(id: string, value: 'on' | 'off'): Promise<BrowserProfile> {
+    if (value !== 'on' && value !== 'off') throw new Error('设备绑定登录设置无效')
+    const current = this.stored(id)
+    if (current.lastOpenedAt && current.fingerprint.deviceBinding !== 'ask') throw new Error('这个窗口已经打开过，设备绑定登录不能再改')
+    return this.lockFingerprint(id, { deviceBinding: value === 'on' ? 'on' : undefined })
   }
 
   async duplicate(id: string): Promise<BrowserProfile> {

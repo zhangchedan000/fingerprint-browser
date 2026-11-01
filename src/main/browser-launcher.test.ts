@@ -4,7 +4,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { defaultProfileDraft } from '../shared/defaults'
+import { defaultProfileDraft as newWindowDraft } from '../shared/defaults'
+
+/** A window whose device-bound sign-in choice is made (new windows ask before their first opening). */
+function defaultProfileDraft(index?: number): ReturnType<typeof newWindowDraft> {
+  const draft = newWindowDraft(index)
+  return { ...draft, fingerprint: { ...draft.fingerprint, deviceBinding: undefined } }
+}
 import { BrowserLauncher } from './browser-launcher'
 import { ExtensionStore } from './extension-store'
 import type { ProcessInspector, SystemProcess } from './process-inspector'
@@ -160,6 +166,20 @@ describe('BrowserLauncher orphan recovery', () => {
     expect(inspector.terminated).toEqual([4242])
     expect(profiles.get(profile.id).status).toBe('closed')
     expect(launcher.isRunning(profile.id)).toBe(false)
+  })
+
+  it('does not open a new window before its device-bound sign-in choice is made', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    const profile = await profiles.create(newWindowDraft())
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]))
+    await launcher.initialize()
+    await expect(launcher.launch(profile.id)).rejects.toThrow('设备绑定登录')
+    expect(profiles.get(profile.id).status).toBe('closed')
   })
 
   it('stops close-all after bounded retries when an orphan cannot be terminated', async () => {
