@@ -10,6 +10,9 @@
 // or R2's) and the login states from R2, names itself active, and restarts (start.sh swaps them in).
 // Each server knows its own address from TEAM_PUBLIC_URL in .env.
 // Without R2, or before the first marker is written, a server is simply active (one server).
+// When R2 does not answer, the last marker stays (saved in pb_data/.control-last.json for restarts);
+// a server that took over meanwhile (allowed only when the active one does not answer either) keeps
+// pb_data/.control-override.json and writes the marker once R2 answers again; the others follow it.
 
 const KEY = { active: "control.active", servers: "control.servers", since: "control.since", handover: "control.handover" }
 const MARKER = "control/active.json"
@@ -29,11 +32,15 @@ function self() {
   return normalize($os.getenv("TEAM_PUBLIC_URL"))
 }
 
+/** The marker, {} when there is none yet, null without R2; throws when R2 does not answer (a
+ * bucket that cannot be read is not the same as one without a marker). */
 function readMarker() {
   const r2 = require(`${__hooks}/r2_utils.js`)
   const r = r2.remote()
   if (!r) return null
-  const text = r2.sh(r.env + "rclone cat " + r.target + "/" + MARKER + " 2>/dev/null || true")
+  // rclone's notices (stderr) stay out of the text; a failure still fails the line.
+  const text = r2.sh(r.env + "top=$(rclone lsf --max-depth 1 " + r.target + " 2>/dev/null) || exit 1; "
+    + "case \"$top\" in *control/*) rclone cat " + r.target + "/" + MARKER + " 2>/dev/null ;; esac")
   if (!text) return {}
   const marker = JSON.parse(text)
   return {
@@ -43,9 +50,68 @@ function readMarker() {
   }
 }
 
+function dataDir() {
+  return require(`${__hooks}/r2_utils.js`).DATA
+}
+
+/** A takeover made while R2 did not answer (control.pb.js): this server is active until R2 knows. */
+function readOverride() {
+  try { return JSON.parse(toString($os.readFile(dataDir() + "/.control-override.json"))) } catch (_) { return null }
+}
+
+function writeOverride(active, servers) {
+  const marker = { active: normalize(active), servers: servers, since: Date.now() }
+  $os.writeFile(dataDir() + "/.control-override.json", JSON.stringify(marker), 0o600)
+  setStore(marker)
+  return marker
+}
+
+function setStore(marker) {
+  const store = $app.store()
+  store.set(KEY.active, marker.active)
+  store.set(KEY.servers, JSON.stringify(marker.servers || []))
+  store.set(KEY.since, marker.since || 0)
+  // The last marker seen, for a restart while R2 does not answer.
+  try { $os.writeFile(dataDir() + "/.control-last.json", JSON.stringify(marker), 0o600) } catch (_) {}
+}
+
+/**
+ * R2 does not answer: keep the last marker (after a restart: the one saved on disk), but if one of
+ * the other servers says it is the active one now (it took over without R2), follow it.
+ */
+function fallback() {
+  const store = $app.store()
+  if (!store.get(KEY.active)) {
+    try { setStore(JSON.parse(toString($os.readFile(dataDir() + "/.control-last.json")))) } catch (_) {}
+  }
+  const me = self()
+  servers().filter((url) => url && url !== me && url !== active()).forEach((url) => {
+    try {
+      const reply = $http.send({ url: url + "/api/team/status", method: "GET", timeout: 10 })
+      const json = reply.json || {}
+      if (reply.statusCode === 200 && json.role === "active" && normalize(json.self) === url && normalize(json.active) === url) {
+        store.set(KEY.active, url)
+        store.remove(KEY.handover)
+      }
+    } catch (_) {}
+  })
+}
+
 /** Reads the marker into the store (every minute and at start). A failed read keeps the last one. */
 function refresh() {
   const store = $app.store()
+  const override = readOverride()
+  if (override) {
+    // Taken over while R2 did not answer: tell R2 as soon as it does.
+    setStore(override)
+    try {
+      writeMarker(override.active, override.servers || [])
+      $os.remove(dataDir() + "/.control-override.json")
+    } catch (err) {
+      console.log("control: R2 still not answering, marker not written yet: " + err)
+    }
+    return
+  }
   try {
     const marker = readMarker()
     if (!marker || !marker.active) {
@@ -53,13 +119,12 @@ function refresh() {
       store.set(KEY.servers, JSON.stringify(marker && marker.servers ? marker.servers : []))
       return
     }
-    store.set(KEY.active, marker.active)
-    store.set(KEY.servers, JSON.stringify(marker.servers))
-    store.set(KEY.since, marker.since)
+    setStore(marker)
     // The takeover happened elsewhere: the handover is done.
     if (marker.active !== self()) store.remove(KEY.handover)
   } catch (err) {
     console.log("control: marker not read: " + err)
+    fallback()
   }
 }
 
@@ -81,10 +146,7 @@ function writeMarker(active, servers) {
   const marker = { active: normalize(active), servers: list, since: Date.now() }
   const json = JSON.stringify(marker).replace(/'/g, "")
   r2.sh(r.env + "printf '%s' '" + json + "' | rclone rcat " + r.target + "/" + MARKER)
-  const store = $app.store()
-  store.set(KEY.active, marker.active)
-  store.set(KEY.servers, JSON.stringify(list))
-  store.set(KEY.since, marker.since)
+  setStore(marker)
   return marker
 }
 
@@ -129,7 +191,8 @@ function peerAt() {
 /** For /api/team/status: what launchers need to find the server in use (and how fresh a standby is). */
 function view() {
   const at = peerAt()
-  return Object.assign({ role: role(), self: self(), active: active(), servers: servers() }, at ? { peerCopyAt: at } : {})
+  const files = require(`${__hooks}/r2_utils.js`).mirrorAt()
+  return Object.assign({ role: role(), self: self(), active: active(), servers: servers() }, at ? { peerCopyAt: at } : {}, files ? { peerFilesAt: files } : {})
 }
 
 /** Checks the server's setup code (.env TEAM_SETUP_CODE); wrong tries are held off like invite codes. */
@@ -145,4 +208,4 @@ function requireSetupCode(e, code) {
   t.clearFailures(key)
 }
 
-module.exports = { requireSetupCode, peerAt, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }
+module.exports = { requireSetupCode, peerAt, writeOverride, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }

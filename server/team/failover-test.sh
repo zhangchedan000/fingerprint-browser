@@ -53,6 +53,7 @@ ok "$(curl -s -X POST $B/api/collections/users/auth-with-password -H 'content-ty
 say "waiting for A's first push to R2 (up to 70 s)"
 for i in $(seq 1 70); do [ -f "$W/bucket/db/current.db.gz" ] && ls "$W/bucket/storage" >/dev/null 2>&1 && break; sleep 1; done
 ok "$(ls $W/bucket/db | tr '\n' ' ')" "current.at current.db.gz " "R2 db: one current copy"
+for i in $(seq 1 70); do [ "$(ls $W/bucket | tr '\n' ' ')" = "control db storage " ] && break; sleep 1; done
 ok "$(ls $W/bucket | tr '\n' ' ')" "control db storage " "old copies, daily zips, deleted files, fonts gone"
 say "A pushes its database to B (up to 70 s)"
 for i in $(seq 1 70); do curl -s $B/api/team/status | j '"peerCopyAt" in d' | grep -q True && break; sleep 1; done
@@ -105,6 +106,42 @@ curl -s "$B/api/files/team_profiles/$PID/$FILE?token=$FT" -o "$W/got2.bin"
 ok "$(cmp -s $W/state.bin $W/got2.bin && echo same)" "same" "login state from R2 on B"
 for i in $(seq 1 70); do [ -f "$W/bucket/db/current.db.gz" ] && break; sleep 1; done
 ok "$([ -f $W/bucket/db/current.db.gz ] && echo yes)" "yes" "B writes R2's database again"
+
+say "B in use, A standby: A gets B's database and copies the login states from R2"
+for i in $(seq 1 70); do [ "$(role $A)" = "standby/True" ] && break; sleep 1; done
+curl -s -X PATCH $B/api/collections/team_profiles/records/$PID -H "Authorization: $OT" -H 'content-type: application/json' -d '{"name":"shop-on-b-last"}' >/dev/null
+for i in $(seq 1 150); do curl -s $A/api/team/status | j '"peerFilesAt" in d and "peerCopyAt" in d' | grep -q True && break; sleep 1; done
+ok "$(curl -s $A/api/team/status | j '"peerFilesAt" in d and "peerCopyAt" in d')" "True" "A holds B's database and login states"
+ok "$(find $W/a/pb_data/.peer/storage -type f | wc -l | tr -d ' ')" "$(find $W/bucket/storage -type f | wc -l | tr -d ' ')" "A's copy of the login states matches R2"
+
+say "R2 stops answering: no takeover while B still runs"
+# A link to nowhere where the bucket folder was: rclone can neither read nor write there.
+mv $W/bucket $W/bucket.off; ln -s $W/nowhere $W/bucket
+ok "$(curl -s -m 200 -X POST $A/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEA"}' | j 'd["message"][:6]')" "R2 连不上" "A refuses while B answers"
+ok "$(role $B)" "active/True" "B still active without R2"
+
+say "B dies too: A takes over from its own copies, without R2"
+touch $W/b/stop; pkill -f "127.0.0.1:8092" 2>/dev/null; sleep 2
+ok "$(curl -s -m 200 -X POST $A/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEA"}' | j 'str(d["restarting"]) + str(d["withoutR2"])')" "TrueTrue" "A activate without R2"
+sleep 4; up $A
+ok "$(role $A)" "active/True" "A active (R2 not told yet)"
+ok "$([ -f $W/a/pb_data/.control-override.json ] && echo yes)" "yes" "A remembers it took over"
+ok "$(curl -s $A/api/collections/team_profiles/records/$PID -H "Authorization: $OT" | j 'd["name"]')" "shop-on-b-last" "A has B's last change"
+FILE=$(curl -s $A/api/collections/team_profiles/records/$PID -H "Authorization: $OT" | j 'd["data"]')
+FT=$(curl -s -X POST $A/api/files/token -H "Authorization: $OT" | j 'd["token"]')
+curl -s "$A/api/files/team_profiles/$PID/$FILE?token=$FT" -o "$W/got3.bin"
+ok "$(cmp -s $W/state.bin $W/got3.bin && echo same)" "same" "login state from A's own copy"
+
+say "B comes back while R2 is still down: it follows A"
+rm -f $W/b/stop; serve b 8092 CODEB; up $B
+for i in $(seq 1 120); do [ "$(role $B)" = "standby/True" ] && break; sleep 1; done
+ok "$(role $B)" "standby/True" "B standby (asked A)"
+
+say "R2 answers again: A writes the marker"
+rm -f $W/bucket; mv $W/bucket.off $W/bucket
+for i in $(seq 1 120); do grep -q 8091 $W/bucket/control/active.json 2>/dev/null && [ ! -f $W/a/pb_data/.control-override.json ] && break; sleep 1; done
+ok "$(python3 -c "import json;print(json.load(open('$W/bucket/control/active.json'))['active'])")" "$A" "marker names A"
+ok "$([ -f $W/a/pb_data/.control-override.json ] && echo still || echo gone)" "gone" "override cleared"
 
 touch $W/a/stop $W/b/stop
 pkill -f "$W/" 2>/dev/null; pkill -f "127.0.0.1:809[12]" 2>/dev/null

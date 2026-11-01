@@ -6,6 +6,11 @@ cronAdd("r2_backup", "* * * * *", () => {
   require(`${__hooks}/r2_utils.js`).tick()
 })
 
+// A standby server copies the login states from R2 (after each new database, and hourly).
+cronAdd("peer_mirror", "* * * * *", () => {
+  require(`${__hooks}/r2_utils.js`).mirror()
+})
+
 // 03:30 Beijing time: yesterday's copy in R2, then a full pass.
 cronAdd("r2_daily", "30 19 * * *", () => {
   require(`${__hooks}/r2_utils.js`).daily(true)

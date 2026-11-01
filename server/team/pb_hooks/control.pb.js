@@ -149,11 +149,15 @@ routerAdd("POST", "/api/team/peer/db", (e) => {
     throw new BadRequestError("收到的数据库不完整：" + err.message)
   }
   $os.writeFile(dir + "/at", String(at), 0o600)
+  // The login states that came with this change: copied from R2 within a minute (r2_utils.js mirror).
+  r2.markMirror()
   return e.json(200, { ok: true, kept: at })
 })
 
 // A standby server takes over: the newest database (its own copy from the active server, or R2's,
-// whichever is newer), the login states from R2, named active, restart.
+// whichever is newer) and the login states (its own copy, brought up to date from R2), named active,
+// restart. When R2 does not answer it takes over only if the active server does not answer either
+// (so two servers never write at once), from its own copies, and tells R2 once it answers.
 routerAdd("POST", "/api/team/activate", (e) => {
   const r2 = require(`${__hooks}/r2_utils.js`)
   const c = require(`${__hooks}/control_utils.js`)
@@ -166,8 +170,29 @@ routerAdd("POST", "/api/team/activate", (e) => {
   if (c.active() === c.self() && c.role() === "active") return e.json(200, Object.assign({ ok: true, restarting: false }, c.view()))
   const dir = r2.DATA + "/.restore"
   const peerAt = c.peerAt()
+  // Taking over means writing the marker: R2 counts as answering only when a small file can be written.
+  let r2ok = true
+  try {
+    r2.sh(r.env + "printf ok | rclone rcat " + r.target + "/.prism-check && rclone deletefile " + r.target + "/.prism-check")
+  } catch (_) {
+    r2ok = false
+  }
+  if (!r2ok) {
+    const current = c.active()
+    if (current && current !== c.self()) {
+      let alive = false
+      try {
+        const reply = $http.send({ url: current + "/api/team/status", method: "GET", timeout: 10 })
+        alive = reply.statusCode === 200 && !!(reply.json && reply.json.self)
+      } catch (_) {}
+      if (alive) throw new BadRequestError("R2 连不上，而 " + current + " 还在运行：为了不让两台同时当班，现在不能接班。等 R2 恢复后再切换")
+    }
+    if (!peerAt) throw new BadRequestError("R2 连不上，这台服务器也没有当班服务器推来的数据库，不能接班")
+  }
   let r2At = 0
-  try { r2At = Number(r2.sh(r.env + "rclone cat " + r.target + "/db/current.at 2>/dev/null || true")) || 0 } catch (_) {}
+  if (r2ok) {
+    try { r2At = Number(r2.sh(r.env + "rclone cat " + r.target + "/db/current.at 2>/dev/null || true")) || 0 } catch (_) {}
+  }
   let from
   try {
     r2.sh("rm -rf " + dir + " && mkdir -p " + dir)
@@ -182,17 +207,28 @@ routerAdd("POST", "/api/team/activate", (e) => {
       from = "R2 " + (r2At ? new Date(r2At).toISOString() : "")
     }
     r2.sh("gunzip " + dir + "/data.db.gz")
-    r2.sh(r.env + "rclone copy " + r.target + "/storage " + dir + "/storage || [ -z \"$(rclone lsf " + r.target + "/storage 2>/dev/null)\" ]")
+    // Login states: this server's own copy first, then what changed in R2 since (when it answers).
+    r2.sh("[ -d " + r2.MIRROR + " ] && mv " + r2.MIRROR + " " + dir + "/storage || mkdir -p " + dir + "/storage")
+    if (r2ok) {
+      r2.sh(r.env + "top=$(rclone lsf --max-depth 1 " + r.target + ") || exit 1; "
+        + "case \"$top\" in *storage/*) rclone sync " + r.target + "/storage " + dir + "/storage ;; esac")
+    } else {
+      from += "（R2 连不上，登录态用这台自己存的 " + (r2.mirrorAt() ? new Date(r2.mirrorAt()).toISOString() : "—") + "）"
+    }
+    // Nothing at all: keep this server's own (empty) storage folder rather than an empty swap.
+    r2.sh("[ -n \"$(ls -A " + dir + "/storage)\" ] || rmdir " + dir + "/storage")
   } catch (err) {
     throw new BadRequestError("拉数据失败：" + err.message)
   }
   const old = c.servers()
-  c.writeMarker(c.self(), old.length ? old : [c.self()])
+  const list = old.length ? old : [c.self()]
+  if (r2ok) c.writeMarker(c.self(), list)
+  else c.writeOverride(c.self(), list)
   $os.writeFile(dir + "/ready", from, 0o600)
-  // The copy from the other server is used up; a new one comes when this server is standby again.
+  // The copies from the other server are used up; new ones come when this server is standby again.
   r2.sh("rm -rf " + r2.PEER_DIR)
   // After the reply: PocketBase stops, the container (or start.sh's loop) starts it again, and
   // start.sh swaps the pulled files in before it does.
   $os.cmd("sh", "-c", "sleep 2; kill -TERM $PPID").start()
-  return e.json(200, Object.assign({ ok: true, restarting: true, restoredFrom: from }, c.view()))
+  return e.json(200, Object.assign({ ok: true, restarting: true, restoredFrom: from, withoutR2: !r2ok }, c.view()))
 })

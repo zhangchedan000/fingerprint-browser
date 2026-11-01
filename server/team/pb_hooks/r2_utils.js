@@ -8,7 +8,9 @@
 //   Once a day (03:30 Beijing time) the current copy is copied to db/yesterday.db.gz and
 //   storage-yesterday/ first, over the day before, so a broken upload can be undone for a day.
 // - The standby server: the same database, pushed to it a minute after a change (it keeps it in
-//   pb_data/.peer, control.pb.js), so it can take over at once even when R2 has no good copy.
+//   pb_data/.peer, control.pb.js), and the login states, which it copies from R2 itself after each
+//   new database and every hour (pb_data/.peer/storage, mirror()). So it can take over at once,
+//   even when R2 has no good copy or does not answer.
 // Nothing else: caches never reach the server, the program is on GitHub, the private fonts
 // (pb_data/assets) are in the private repository, and there are no daily zips any more.
 // The owner sets the bucket and its key in the app (r2.pb.js); they are kept in pb_data/r2.env.
@@ -55,7 +57,9 @@ function rcloneEnv(config) {
   return "export RCLONE_CONFIG_R2_TYPE=${RCLONE_CONFIG_R2_TYPE:-s3} RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true"
     + " RCLONE_CONFIG_R2_ENDPOINT='" + config.R2_ENDPOINT + "'"
     + " RCLONE_CONFIG_R2_ACCESS_KEY_ID='" + config.R2_ACCESS_KEY_ID + "'"
-    + " RCLONE_CONFIG_R2_SECRET_ACCESS_KEY='" + config.R2_SECRET_ACCESS_KEY + "'; "
+    + " RCLONE_CONFIG_R2_SECRET_ACCESS_KEY='" + config.R2_SECRET_ACCESS_KEY + "'"
+    // An R2 that does not answer fails within about a minute instead of hanging the hooks.
+    + " RCLONE_CONTIMEOUT=15s RCLONE_TIMEOUT=60s RCLONE_RETRIES=2 RCLONE_LOW_LEVEL_RETRIES=3; "
 }
 
 /** { env, target } for the shell lines, or null when the backup is off. */
@@ -143,6 +147,41 @@ function fullPass(r, yesterday) {
   pushDb(r)
   pushStorage(r)
   removeOldCopies(r)
+}
+
+const MIRROR = PEER_DIR + "/storage"
+const MIRROR_EVERY_MS = 60 * 60 * 1000
+
+/** When the standby server last copied the login states from R2 (0: never). */
+function mirrorAt() {
+  try { return Number(toString($os.readFile(PEER_DIR + "/files-at")).trim()) || 0 } catch (_) { return 0 }
+}
+
+function markMirror() { $app.store().set("r2.mirrorDirty", true) }
+
+/**
+ * Every minute on a standby server: the login states from R2 into pb_data/.peer/storage (only what
+ * changed), after each new database copy from the active server and at least every hour. An R2
+ * without storage/ (or one that does not answer) never empties the copy here.
+ */
+function mirror() {
+  const r = remote()
+  if (!r) return
+  const control = require(`${__hooks}/control_utils.js`)
+  if (control.role() !== "standby" || !control.active() || control.active() === control.self() || !control.peerAt()) return
+  const store = $app.store()
+  if (!store.get("r2.mirrorDirty") && Date.now() - mirrorAt() < MIRROR_EVERY_MS) return
+  guarded(() => {
+    store.remove("r2.mirrorDirty")
+    try {
+      sh(r.env + "mkdir -p " + MIRROR + " && top=$(rclone lsf --max-depth 1 " + r.target + ") || exit 1; "
+        + "case \"$top\" in *storage/*) rclone sync " + r.target + "/storage " + MIRROR + " ;; esac")
+      $os.writeFile(PEER_DIR + "/files-at", String(Date.now()), 0o600)
+    } catch (err) {
+      store.set("r2.mirrorDirty", true)
+      console.log("mirror: login states not copied from R2: " + err)
+    }
+  })
 }
 
 /** The shared key of the two servers: both have the same R2 settings, nobody else does. */
@@ -312,4 +351,4 @@ function summary() {
   }, status())
 }
 
-module.exports = { DATA, PEER_DIR, markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, readConfig, check, saveConfig, removeConfig, remote, sh, stamp, dumpDb, pushDb, pushStorage, pushPeers, peerKey }
+module.exports = { DATA, PEER_DIR, MIRROR, mirror, mirrorAt, markMirror, markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, readConfig, check, saveConfig, removeConfig, remote, sh, stamp, dumpDb, pushDb, pushStorage, pushPeers, peerKey }
