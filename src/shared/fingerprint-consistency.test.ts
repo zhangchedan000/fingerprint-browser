@@ -30,6 +30,7 @@ describe('fingerprint and kernel consistency', () => {
     draft.fingerprint.brandVersion = '147'
     const profile = { ...draft, id: 'profile', createdAt: '', updatedAt: '', status: 'closed' } as BrowserProfile
     expect(() => assertFingerprintKernelCompatibility(profile, engine)).toThrow('148.0.7778.215')
+    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: 'prism-156.0.8078.47' })).toThrow('主版本不一致')
   })
 
   it('does not constrain compatibility-mode system browsers', () => {
@@ -37,19 +38,12 @@ describe('fingerprint and kernel consistency', () => {
     expect(fingerprintVersionWarning('120', systemEngine)).toBeUndefined()
   })
 
-  it('requires Chromium 144 for the disable-spoofing switch', () => {
-    const draft = defaultProfileDraft()
-    draft.fingerprint.disabledSpoofing = ['gpu']
-    const profile = { ...draft, id: 'profile', createdAt: '', updatedAt: '', status: 'closed' } as BrowserProfile
-    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: '142.0.7444.175' })).toThrow('144')
-    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: '144.0.7559.132' })).not.toThrow()
-  })
-
-  it('allows older kernels when no Chromium 144-only switch is requested', () => {
+  it('only launches fingerprint windows on our Prism kernels', () => {
     const draft = defaultProfileDraft()
     draft.fingerprint.hardwareProfileId = 'legacy-custom'
-    draft.fingerprint.disabledSpoofing = []
     const profile = { ...draft, id: 'profile', createdAt: '', updatedAt: '', status: 'closed' } as BrowserProfile
-    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: '142.0.7444.175' })).not.toThrow()
+    expect(() => assertFingerprintKernelCompatibility(profile, engine)).toThrow('Prism')
+    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: 'clearcote-150.0.7871.114' })).toThrow('Prism')
+    expect(() => assertFingerprintKernelCompatibility(profile, { ...engine, version: 'prism-156.0.8078.47' })).not.toThrow()
   })
 })

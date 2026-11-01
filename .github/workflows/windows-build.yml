@@ -1,0 +1,96 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main, refactor-core, desktop-updates]
+    # A version tag (v0.4.0) also publishes the release: the installer with latest.yml and its blockmap
+    # (what the app's auto update reads), notes from release-notes/<tag>.md, marked Latest so
+    # releases/latest always points at it, plus SHA256SUMS for the installer. Kernel zips
+    # are added afterwards only when the kernels changed; otherwise they stay on the earlier release.
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME but package.json says $version"; exit 1; }
+          [ -f "release-notes/$GITHUB_REF_NAME.md" ] || { echo "::error::release-notes/$GITHUB_REF_NAME.md is missing"; exit 1; }
+      - name: Tunnel core (mihomo, pinned and checksummed)
+        run: node tools/tunnel-core/fetch.mjs win32-x64
+      - name: Unit tests
+        env:
+          TUNNEL_CORE_BIN: build/tunnel-core/current/mihomo.exe
+        run: npx vitest run --fileParallelism=false --reporter=default --reporter=json --outputFile=vitest.json
+      - name: Report tunnel core tests
+        if: always()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            const rows = r.testResults.flatMap((f) => f.assertionResults).filter((a) => a.fullName.includes("tunnel core"))
+            console.log(`::notice title=Tunnel core tests::${rows.map((a) => a.status + " " + a.title).join(" | ") || "none ran"}`)'
+      - name: Report test failures
+        if: failure()
+        shell: bash
+        run: |
+          node -e '
+            const r = require("./vitest.json")
+            for (const f of r.testResults) {
+              const file = f.name.replace(process.cwd() + "\\", "").replace(/\\/g, "/")
+              if (f.status === "failed" && !f.assertionResults.some((a) => a.status === "failed")) console.log(`::error file=${file}::${(f.message || "suite failed").split("\n").slice(0, 6).join(" | ")}`)
+              for (const a of f.assertionResults) if (a.status === "failed") console.log(`::error file=${file}::${a.fullName} :: ${(a.failureMessages[0] || "").split("\n").slice(0, 4).join(" | ")}`)
+            }'
+      - name: Build installer (unsigned)
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run dist:win 2>&1 | tee build.log || { grep -v "duplicate dependency" build.log | tail -n 40 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("::error::"+s.replace(/%/g,"%25").replace(/\r?\n/g,"%0A")))'; exit 1; }
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # The fingerprint config key (src/main/encrypted-config.ts); it is not in the public source.
+          MAIN_VITE_PRISM_CONFIG_KEY: ${{ secrets.PRISM_CONFIG_KEY }}
+      - name: Check there is exactly one exe
+        shell: bash
+        run: |
+          ls -la release/*.exe
+          [ "$(ls release/*.exe | wc -l)" -eq 1 ] || { echo "::error::expected exactly one exe in release/"; exit 1; }
+          # Auto update finds the installer through latest.yml; its name must match the asset exactly.
+          exe="$(basename release/*.exe)"
+          grep -q "path: $exe" release/latest.yml || { echo "::error::latest.yml does not name $exe"; cat release/latest.yml; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          path: release/*.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release/*.exe release/latest.yml release/*.blockmap --clobber
+          else
+            gh release create "$tag" release/*.exe release/latest.yml release/*.blockmap --title "$tag" --notes-file "release-notes/$tag.md" --latest
+          fi
+          # SHA256SUMS lists the exe under its release asset name (GitHub turns spaces into dots).
+          # Kernels that did not change stay on the earlier release and are not uploaded again.
+          for f in release/*.exe; do echo "$(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f" | tr ' ' '.')"; done > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$tag" SHA256SUMS --clobber

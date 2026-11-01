@@ -1,0 +1,214 @@
+/**
+ * Deep check: public detection sites, which keep improving their own tests, judge the window. The
+ * temporary check browser opens each one and these parsers read the verdict from the page text
+ * (calibrated with tools/kernel-smoke BISECT=sites). When a site changes its page and nothing can
+ * be read, the result says so and the screenshot still shows the site's own answer.
+ */
+
+export type DeepSite = 'iphey' | 'browserscan' | 'pixelscan' | 'creepjs'
+
+export interface DeepSiteResult {
+  /** The DeepCheckSite id. */
+  site: string
+  name: string
+  url: string
+  status: 'ok' | 'warn' | 'bad' | 'unknown'
+  /** The site's own score, as it shows it ("100", "90%"…). */
+  score?: string
+  /** What the site flagged, in its own words (each one also has a Chinese key when known). */
+  findings: string[]
+  /** JPEG data URL of the page as the site left it. */
+  screenshot?: string
+  error?: string
+}
+
+/** The last deep check of a window, kept in its folder so it is there when the editor opens again. */
+export interface DeepCheckRecord {
+  checkedAt: string
+  /** The editor's settings key when it ran, to tell when the window has changed since. */
+  checkedSettings?: string
+  results: DeepSiteResult[]
+}
+
+/** A site in the user's deep check list (Settings); the four built-in ones are the default list. */
+export interface DeepCheckSite {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+}
+
+export interface DeepSiteSpec {
+  site: DeepSite
+  name: string
+  url: string
+  /** How long to wait for the verdict to appear. */
+  timeoutMs: number
+}
+
+/**
+ * After the verdict shows, how much longer the rest of the page may take to settle before the
+ * screenshot. Measured 2026-10-31 (direct, Win11): every site settled within 6 s of its verdict;
+ * through a proxy BrowserScan kept filling rows past 45 s.
+ */
+export const DEEP_SETTLE_AFTER_VERDICT_MS = 30_000
+
+/** The sites whose verdict the parsers below can read. */
+// Verdicts came after 2 s (CreepJS), 3 s (BrowserScan), 13 s (iphey) and 21 s (Pixelscan) on a direct
+// connection (2026-10-31); a slow proxy takes several times that, so each gets two minutes.
+export const DEEP_SITES: readonly DeepSiteSpec[] = [
+  { site: 'iphey', name: 'iphey', url: 'https://iphey.com/', timeoutMs: 120_000 },
+  { site: 'browserscan', name: 'BrowserScan', url: 'https://www.browserscan.net/', timeoutMs: 120_000 },
+  { site: 'pixelscan', name: 'Pixelscan', url: 'https://pixelscan.net/fingerprint-check', timeoutMs: 120_000 },
+  { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 120_000 }
+]
+type Parsed = Pick<DeepSiteResult, 'status' | 'score' | 'findings'>
+
+const lines = (text: string) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+
+/** iphey: "Your Digital Identity Looks Trustworthy", "100 MX SCORE", one line per card. */
+function iphey(text: string): Parsed | undefined {
+  if (/Temporary value/i.test(text)) return undefined
+  const score = text.match(/(\d{1,3})\s*MX SCORE/i)?.[1]
+  const verdict = text.match(/Identity Looks\s+([A-Za-z]+)/i)?.[1]
+  if (!score || !verdict) return undefined
+  const all = lines(text)
+  const findings: string[] = [`Looks ${verdict}`]
+  const trusted = /trustworthy/i.test(verdict)
+  for (const card of ['BROWSER', 'LOCATION', 'IP ADDRESS', 'HARDWARE', 'SOFTWARE']) {
+    const index = all.indexOf(card)
+    const value = index >= 0 ? all[index + 1] : undefined
+    if (!value) continue
+    // Hardware and software say what is wrong. Location and IP only name what iphey found; when it
+    // does not trust the window they are usually why (its GeoIP country against the time zone).
+    if ((card === 'HARDWARE' || card === 'SOFTWARE') && !/everything is fine/i.test(value)) findings.push(`${card}: ${value}`)
+    if (!trusted && (card === 'LOCATION' || card === 'IP ADDRESS')) findings.push(`${card}: ${value}`)
+  }
+  const value = Number(score)
+  return { status: trusted && value >= 90 ? 'ok' : value >= 60 ? 'warn' : 'bad', score, findings }
+}
+
+/** BrowserScan: "Browser fingerprint authenticity: 90%", then each deduction as a line and "-10%". */
+function browserscan(text: string): Parsed | undefined {
+  const score = text.match(/authenticity\s*:?\s*(\d{1,3})\s*%/i)?.[1] ?? text.match(/autenticidad[^\d]{0,40}(\d{1,3})\s*%/i)?.[1]
+  if (!score) return undefined
+  const all = lines(text)
+  const findings = all.flatMap((line, index) => /^-\d{1,3}%$/.test(line) && all[index - 1] ? [`${all[index - 1]} ${line}`] : [])
+  const value = Number(score)
+  return { status: value >= 95 ? 'ok' : value >= 75 ? 'warn' : 'bad', score: `${score}%`, findings }
+}
+
+/** Pixelscan: "Your Browser Fingerprint is inconsistent" and a status line above each check. */
+function pixelscan(text: string): Parsed | undefined {
+  // Its headline only: the FAQ below says "…your fingerprint is consistent" while the scan still runs.
+  const verdict = text.match(/^\s*Your Browser Fingerprint is (consistent|inconsistent)\s*$/im)?.[1]
+  if (!verdict) return undefined
+  const all = lines(text)
+  const findings: string[] = [`Fingerprint is ${verdict}`]
+  let flagged = false
+  for (const label of ['Location', 'Proxy', 'Fingerprint', 'Bot check']) {
+    const index = all.findIndex((line, i) => line === label && i > 0)
+    const status = index > 0 ? all[index - 1] : undefined
+    if (!status) continue
+    const bad = /detected|spoofed|mismatch/i.test(status) && !/^no /i.test(status)
+    if (bad) {
+      flagged = true
+      findings.push(`${label}: ${status}`)
+    }
+  }
+  return { status: /^inconsistent$/i.test(verdict) ? 'bad' : flagged ? 'warn' : 'ok', findings }
+}
+
+/** CreepJS: "0% headless", "25% like headless", "0% stealth". */
+function creepjs(text: string): Parsed | undefined {
+  const like = text.match(/(\d{1,3})% like headless/i)?.[1]
+  const headless = text.match(/(\d{1,3})% headless/i)?.[1]
+  const stealth = text.match(/(\d{1,3})% stealth/i)?.[1]
+  if (like === undefined || headless === undefined || stealth === undefined) return undefined
+  const findings = [`${headless}% headless`, `${like}% like headless`, `${stealth}% stealth`]
+  const status = Number(headless) > 0 || Number(stealth) > 0 ? 'bad' : Number(like) >= 50 ? 'warn' : 'ok'
+  return { status, score: `${like}% / ${headless}% / ${stealth}%`, findings }
+}
+
+const PARSERS: Record<DeepSite, (text: string) => Parsed | undefined> = { iphey, browserscan, pixelscan, creepjs }
+
+/** The list a new installation starts with, and "恢复默认" brings back. */
+export const DEFAULT_DEEP_CHECK_SITES: readonly DeepCheckSite[] = DEEP_SITES.map((spec) => ({
+  id: spec.site, name: spec.name, url: spec.url, enabled: true
+}))
+
+/** Sites added by the user get no score; this long is spent waiting for their page to settle. */
+const OTHER_SITE_TIMEOUT_MS = 30_000
+
+/** The built-in site this URL is on (its verdict can be read), by host and path. */
+export function knownDeepSite(url: string): DeepSiteSpec | undefined {
+  try {
+    const target = new URL(url)
+    const host = (address: URL) => address.hostname.replace(/^www\./, '')
+    // On shared hosts (CreepJS on github.io) the first path segment names the site.
+    const first = (address: URL) => address.pathname.split('/')[1] ?? ''
+    return DEEP_SITES.find((spec) => {
+      const known = new URL(spec.url)
+      return host(target) === host(known) && (!known.hostname.endsWith('github.io') || first(target) === first(known))
+    })
+  } catch {
+    return undefined
+  }
+}
+
+export function deepSiteTimeout(url: string): number {
+  return knownDeepSite(url)?.timeoutMs ?? OTHER_SITE_TIMEOUT_MS
+}
+
+/** The user's list, cleaned: http(s) URLs, a name, unique ids, at most 20. Undefined = the default list. */
+export function validDeepCheckSites(input: unknown): DeepCheckSite[] | undefined {
+  if (!Array.isArray(input)) return undefined
+  const seen = new Set<string>()
+  const sites: DeepCheckSite[] = []
+  for (const item of input.slice(0, 20)) {
+    if (!item || typeof item !== 'object') continue
+    const { id, name, url, enabled } = item as Partial<DeepCheckSite>
+    if (typeof id !== 'string' || !id || seen.has(id) || typeof name !== 'string' || !name.trim() || typeof url !== 'string') continue
+    try {
+      if (!/^https?:$/.test(new URL(url).protocol)) continue
+    } catch {
+      continue
+    }
+    seen.add(id)
+    sites.push({ id, name: name.trim().slice(0, 40), url: url.trim(), enabled: enabled !== false })
+  }
+  return sites
+}
+
+/**
+ * Placeholders the sites show while a value is still coming: BrowserScan's "---.---.---.---" IP
+ * and "--/--", iphey's "Temporary value", "Loading…" anywhere.
+ */
+export function pageStillLoading(text: string): boolean {
+  return /-{3}\.-{3}|(^|\s)--\/--(\s|$)|Temporary value|Loading\.\.\.|Loading…|scanning…|Collecting Data…|Computing\.\.\./i.test(text)
+}
+
+/**
+ * The site's verdict, or undefined while the page has not produced one yet. A site that is not
+ * one of the built-in ones has no verdict to read: it is "unknown" with only its page title.
+ */
+export function parseDeepSite(url: string, text: string): Parsed | undefined {
+  const known = knownDeepSite(url)
+  return known ? PARSERS[known.site](text) : undefined
+}
+
+/** Chinese explanations for findings the sites word the same way every time. */
+export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
+  [/Different time zones|Timezone spoofed/i, '时区与 IP 所在地不一致'],
+  [/Proxy detected/i, '被识别为代理 IP'],
+  [/Masking detected/i, '发现指纹伪装痕迹'],
+  [/automated behavior detected|Bot/i, '被识别为自动化浏览器'],
+  [/Different languages?/i, '语言与 IP 所在地不一致'],
+  [/WebRTC/i, 'WebRTC 相关'],
+  [/stealth/i, '发现隐身插件或伪装痕迹'],
+  [/headless/i, '像无头浏览器的特征'],
+  [/^LOCATION:/, 'iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因'],
+  [/^IP ADDRESS:/, 'iphey 看到的出口 IP'],
+  [/没有完全加载完/, '截图和结论可能不完整，可以打开原网页再看'],
+  [/^网页弹窗：/, '检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整']
+]

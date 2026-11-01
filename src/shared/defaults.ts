@@ -1,5 +1,6 @@
+import { deviceName, macAddress } from './device-identity'
 import { t } from './i18n'
-import type { BrowserPlatform, FingerprintConfig, ProfileDraft, ProfileWindowConfig } from './types'
+import type { BrowserPlatform, FingerprintConfig, PlatformAccount, ProfileDraft, ProfileWindowConfig } from './types'
 import { applyHardwareProfile, defaultHardwareProfileId } from './hardware-profiles'
 
 export const PROFILE_COLORS = ['#5965e8', '#1d9a6c', '#d97706', '#d9506b', '#7c4dce', '#0784a8']
@@ -30,36 +31,53 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     seed,
     hardwareProfileId: defaultHardwareProfileId(platform),
     platform,
-    platformVersion: platform === 'windows' ? '10.0.0' : '15.0.0',
+    platformVersion: platform === 'windows' ? '19.0.0' : '15.0.0',
     brand: 'Chrome',
     brandVersion: '',
     hardwareConcurrency: 8,
-    language: 'zh-CN',
-    acceptLanguages: 'zh-CN,zh,en-US,en',
-    timezone: 'Asia/Shanghai',
+    // A computer in the United States: Chrome's en-US interface and its Accept-Language
+    // (IDS_ACCEPT_LANGUAGES), and the Windows Eastern zone. "Based on IP" is one choice away.
+    language: 'en-US',
+    acceptLanguages: 'en-US,en',
+    timezone: 'America/New_York',
+    region: 'US',
     webrtcPolicy: 'proxy_only',
-    networkIdentityMode: 'proxy',
+    networkIdentityMode: 'manual',
     proxyExitPolicy: 'block',
     screenWidth: 1440,
     screenHeight: 900,
     disabledSpoofing: []
   }
-  return applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true })
+  return {
+    ...applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true }),
+    deviceName: deviceName(seed, platform),
+    macAddress: macAddress(seed, platform)
+  }
 }
 
 export function defaultProfileWindow(): ProfileWindowConfig {
   return { mode: 'auto', x: 0, y: 0, width: 1200, height: 800 }
 }
 
-export function defaultProfileDraft(index = 1): ProfileDraft {
+/**
+ * What a new window's 「设备绑定登录」 shows in the editor and recommends in the dialog before its first
+ * opening, until someone picks. 'off' (ordinary cookies, the common way) for now; 'on' once binding with
+ * software keys kept in the window (prism18+) has proven itself on real accounts.
+ */
+export const DEFAULT_DEVICE_BINDING: 'on' | 'off' = 'off'
+
+export function defaultProfileDraft(index = 1): ProfileDraft & { account: PlatformAccount } {
   return {
     name: t('环境 {0}', index),
     note: '',
     group: '',
     tags: [],
     extensionIds: [],
-    color: PROFILE_COLORS[(index - 1) % PROFILE_COLORS.length],
+    // Any index gives a colour (the proxy form's check draft passes 0).
+    color: PROFILE_COLORS[(((index - 1) % PROFILE_COLORS.length) + PROFILE_COLORS.length) % PROFILE_COLORS.length],
     startUrls: ['https://browserleaks.com/'],
+    // New windows reopen the tabs they were closed with; the start page is still kept for "urls".
+    startupMode: 'restore',
     kernelVersion: '',
     window: defaultProfileWindow(),
     proxy: {
@@ -68,6 +86,9 @@ export function defaultProfileDraft(index = 1): ProfileDraft {
       username: '',
       password: ''
     },
-    fingerprint: defaultFingerprint()
+    account: { platform: '', username: '', password: '' },
+    // A new window asks before its first opening whether sign-ins may be bound to the device
+    // (until then it shows DEFAULT_DEVICE_BINDING).
+    fingerprint: { ...defaultFingerprint(), deviceBinding: 'ask' }
   }
 }

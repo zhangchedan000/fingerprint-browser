@@ -17,7 +17,7 @@ npm run audit:fingerprint -- \
   --browser "/path/to/Chromium.app/Contents/MacOS/Chromium" \
   --platform macos \
   --platform-version 26.0.0 \
-  --version 144.0.7559.132 \
+  --version 156.0.8078.47 \
   --surface-mode native \
   --output artifacts/fingerprint-audit-mac.json
 ```
@@ -25,7 +25,7 @@ npm run audit:fingerprint -- \
 Windows 示例：
 
 ```powershell
-npm run audit:fingerprint -- --browser "D:\path\chrome.exe" --platform windows --platform-version 10.0.0 --version 144.0.7559.132 --surface-mode native --output artifacts\fingerprint-audit-win.json
+npm run audit:fingerprint -- --browser "D:\path\chrome.exe" --platform windows --platform-version 10.0.0 --version 156.0.8078.47 --surface-mode native --output artifacts\fingerprint-audit-win.json
 ```
 
 Windows 默认使用仅绑定 `127.0.0.1` 的随机 DevTools WebSocket 端口，避免 Node 子进程在 Windows 上继承
@@ -58,8 +58,7 @@ seed 保持稳定。宿主硬件模式继续保留原生 adapter、features 与 
 `--render-identity v1`、v2 和 v3 只用于旧报告兼容。新建环境和已存储的模拟硬件环境统一升级到 v4，
 产品矩阵中的 seeded 与 fixed-template 模板都以 v4 作为发布合同。
 
-CPU 核数、屏幕、语言、时区、位置、seed、禁用的注入表面与期望 GPU 均可通过命令行传入。产品模板的
-固定组合由 `tools/fingerprint-matrix/run.mjs` 统一管理，日常验收应优先运行矩阵命令。
+CPU 核数、屏幕、语言、时区、位置、seed、禁用的注入表面与期望 GPU 均可通过命令行传入。
 
 传入成对的 `--proxy-server` 与 `--expected-public-ip` 后，审计还会让三个独立浏览器数据目录通过代理
 访问公网 IP 服务，并要求每次看到的 IP 都等于启动前确认的代理出口。该能力由
@@ -68,8 +67,7 @@ CPU 核数、屏幕、语言、时区、位置、seed、禁用的注入表面与
 Worker 发起的请求在 Chromium 中通常不携带 `Sec-CH-UA*`。审计要求 `User-Agent` 与
 `Accept-Language` 始终一致；可选 Client Hints 一旦出现，值必须与 Window 请求完全一致。
 
-本地 macOS 构建应先用 `tools/macos-kernel/Sign-Local-Build.sh` 分层签名，使 Renderer/GPU Helper 带有正确的
-开发 entitlements。`--allow-no-sandbox` 只用于定位签名故障，不属于正常开发或发布参数。
+本地 macOS 内核要先分层签名，使 Renderer/GPU Helper 带有正确的开发 entitlements（内核编译和签名脚本在私有仓库 prism-kernel）。`--allow-no-sandbox` 只用于定位签名故障，不属于正常开发或发布参数。
 发布候选包必须使用 Developer ID 签名、公证并在不带此参数时通过启动和审计；JSON 报告中的
 `auditMode.sandboxDisabled` 必须为 `false`。
 

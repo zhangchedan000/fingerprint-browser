@@ -7,3 +7,6 @@ dist/
 vault/
 *.tsbuildinfo
 /private/
+/build/tunnel-core/
+ui-shots/
+/app-e2e-*.json

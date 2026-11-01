@@ -1,0 +1,247 @@
+{
+ "about": "Real WebGL UNMASKED_VENDOR/RENDERER strings observed on Windows Chrome (desktop GPUs in our range). Copied verbatim; nothing generated.",
+ "sources": [
+  "https://gist.github.com/dumbmoron/bfa33483d9ea1b1c5ac08b5a281af46e (frequency table, 2025-02)",
+  "samples/nvidia-rtx3080ti-i9-12900k-chrome155.json"
+ ],
+ "format_source": "ANGLE src/libANGLE/Context.cpp initRendererString + d3d11/Renderer11.cpp getRendererDescription/getVersionString (WebGL gets no driver version)",
+ "renderers": [
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002488) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 SUPER (0x00002783) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 SUPER (0x00001F06) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001F08) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 (0x00002204) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002216) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002487) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001E89) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 (0x00002704) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Ti (0x00002482) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002803) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 (0x00001E87) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Ti (0x00002208) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002584) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002507) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 SUPER (0x00001E81) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti (0x00002782) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti SUPER (0x00002705) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002206) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x0000220A) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 Ti (0x00002203) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 Ti (0x00001E07) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 (0x00001F02) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002709) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002503) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 OEM (0x00002508) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x000024C9) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002486) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002582) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002788) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 5700 XT (0x0000731F) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, Radeon RX 5500 XT (0x00007340) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6600 (0x000073FF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6600 XT (0x000073FF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6650 XT (0x000073EF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6700 XT (0x000073DF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6800 (0x000073BF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 6800 XT (0x000073BF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 7600 (0x00007480) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 7700 XT (0x0000747E) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 7800 XT (0x0000747E) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 7900 XT (0x0000744C) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (AMD)",
+   "renderer": "ANGLE (AMD, AMD Radeon RX 7900 XTX (0x0000744C) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics (0x000056A1) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 730 (0x00004692) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 730 (0x00004682) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 750 (0x00004C8A) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004680) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x0000A780) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (Intel)",
+   "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004690) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+   "vendor": "Google Inc. (NVIDIA)",
+   "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Ti (0x00002208) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+   "note": "user real sample, Chrome 155"
+  }
+ ]
+}

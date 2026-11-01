@@ -11,6 +11,8 @@ export interface SystemProcess {
 export interface ProcessInspector {
   list(): Promise<SystemProcess[]>
   terminate(pid: number, userDataPath: string): Promise<void>
+  /** Requests a normal window close so Chromium can flush its session files. */
+  requestClose?(pid: number): Promise<void>
 }
 
 export function parsePosixProcessList(output: string): SystemProcess[] {
@@ -70,6 +72,14 @@ async function waitForExit(pid: number, durationMs: number): Promise<boolean> {
 }
 
 export class SystemProcessInspector implements ProcessInspector {
+  async requestClose(pid: number): Promise<void> {
+    if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('进程 ID 无效')
+    if (process.platform === 'win32') {
+      // Without /F, taskkill requests WM_CLOSE instead of terminating Chromium abruptly.
+      await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T'], { windowsHide: true, timeout: 5000 })
+    } else process.kill(pid, 'SIGTERM')
+  }
+
   async list(): Promise<SystemProcess[]> {
     if (process.platform === 'win32') {
       const command = "$items = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--user-data-dir=*' } | Select-Object ProcessId,CommandLine; @($items) | ConvertTo-Json -Compress"

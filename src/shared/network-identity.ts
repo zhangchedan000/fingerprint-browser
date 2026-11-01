@@ -1,4 +1,9 @@
 import type { FingerprintConfig, ProxyTestResult } from './types'
+import { chromeLanguageProfile, chromeUiLocaleFor, countryLanguage } from './chrome-languages'
+import { windowsReportedZone } from './windows-time-zones'
+import { kernelVoiceLocaleFor, voiceLocaleForLanguage } from './windows-voices'
+import { keyboardLayoutFor } from './keyboard-layouts'
+import { autoMediaDevices, kernelMediaLocaleFor, legacyAutoMediaDevices, mediaLocaleFor } from './media-devices'
 
 export const GEOIP_CONFLICT_CONFIRMATION_PREFIX = '[PRISM_GEOIP_CONFLICT_CONFIRMATION_REQUIRED]'
 
@@ -9,6 +14,8 @@ export interface NetworkIdentityOptions {
 export interface NetworkIdentity {
   language: string
   acceptLanguages: string
+  /** Chrome's interface language (--lang): chosen in the window, otherwise the one for `language`. */
+  uiLocale: string
   timezone: string
   latitude?: number
   longitude?: number
@@ -16,35 +23,32 @@ export interface NetworkIdentity {
   source: 'manual' | 'proxy'
 }
 
-const COUNTRY_LOCALES: Record<string, { language: string; acceptLanguages: string }> = {
-  AU: { language: 'en-AU', acceptLanguages: 'en-AU,en' },
-  BR: { language: 'pt-BR', acceptLanguages: 'pt-BR,pt,en-US,en' },
-  CA: { language: 'en-CA', acceptLanguages: 'en-CA,en-US,en' },
-  CN: { language: 'zh-CN', acceptLanguages: 'zh-CN,zh,en-US,en' },
-  DE: { language: 'de-DE', acceptLanguages: 'de-DE,de,en-US,en' },
-  ES: { language: 'es-ES', acceptLanguages: 'es-ES,es,en-US,en' },
-  FR: { language: 'fr-FR', acceptLanguages: 'fr-FR,fr,en-US,en' },
-  GB: { language: 'en-GB', acceptLanguages: 'en-GB,en-US,en' },
-  HK: { language: 'zh-HK', acceptLanguages: 'zh-HK,zh-TW,zh,en-US,en' },
-  ID: { language: 'id-ID', acceptLanguages: 'id-ID,id,en-US,en' },
-  IN: { language: 'en-IN', acceptLanguages: 'en-IN,en' },
-  IT: { language: 'it-IT', acceptLanguages: 'it-IT,it,en-US,en' },
-  JP: { language: 'ja-JP', acceptLanguages: 'ja-JP,ja,en-US,en' },
-  KR: { language: 'ko-KR', acceptLanguages: 'ko-KR,ko,en-US,en' },
-  MX: { language: 'es-MX', acceptLanguages: 'es-MX,es,en-US,en' },
-  MY: { language: 'ms-MY', acceptLanguages: 'ms-MY,ms,en-US,en' },
-  NL: { language: 'nl-NL', acceptLanguages: 'nl-NL,nl,en-US,en' },
-  PH: { language: 'en-PH', acceptLanguages: 'en-PH,en-US,en' },
-  RU: { language: 'ru-RU', acceptLanguages: 'ru-RU,ru,en-US,en' },
-  SG: { language: 'en-SG', acceptLanguages: 'en-SG,en-US,en' },
-  TH: { language: 'th-TH', acceptLanguages: 'th-TH,th,en-US,en' },
-  TW: { language: 'zh-TW', acceptLanguages: 'zh-TW,zh,en-US,en' },
-  US: { language: 'en-US', acceptLanguages: 'en-US,en' },
-  VN: { language: 'vi-VN', acceptLanguages: 'vi-VN,vi,en-US,en' }
+/**
+ * navigator.languages lists the window's language first, then the rest of Accept-Language without
+ * repeats (Blink reports the accept list, and navigator.language is its first entry).
+ */
+export function chromeAcceptLanguages(language: string, acceptLanguages: string): string {
+  const ordered = [language, ...acceptLanguages.split(',').map((entry) => entry.trim()).filter(Boolean)]
+  return ordered.filter((entry, index) => ordered.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) === index).join(',')
 }
 
-export function localeForCountry(countryCode: string | undefined): { language: string; acceptLanguages: string } | undefined {
-  return countryCode ? COUNTRY_LOCALES[countryCode.toUpperCase()] : undefined
+/** The Accept-Language header Chrome sends for a list (net::HttpUtil::GenerateAcceptLanguageHeader). */
+export function acceptLanguageHeader(languages: string): string {
+  let q = 10
+  return languages.split(',').map((entry) => entry.trim()).filter(Boolean).map((language) => {
+    const item = q === 10 ? language : `${language};q=0.${q}`
+    if (q > 1) q -= 1
+    return item
+  }).join(',')
+}
+
+/**
+ * What a Chrome installed in this country shows: the country's language (CLDR), the interface
+ * language Chrome picks for it and that interface's default Accept-Language (chrome-languages.ts).
+ */
+export function localeForCountry(countryCode: string | undefined): { language: string; acceptLanguages: string; uiLocale: string } | undefined {
+  const language = countryCode ? countryLanguage(countryCode) : undefined
+  return language ? chromeLanguageProfile(language) : undefined
 }
 
 type CompleteProxyIdentity = ProxyTestResult & {
@@ -77,7 +81,13 @@ export function effectiveNetworkIdentity(
   const fallback: NetworkIdentity = {
     language: fingerprint.language,
     acceptLanguages: fingerprint.acceptLanguages,
+    uiLocale: fingerprint.uiLocale ?? chromeUiLocaleFor(fingerprint.language),
     timezone: fingerprint.timezone,
+    ...(fingerprint.location ? {
+      latitude: fingerprint.location.latitude,
+      longitude: fingerprint.location.longitude,
+      accuracyMeters: fingerprint.location.accuracyMeters
+    } : {}),
     source: 'manual'
   }
   if (fingerprint.networkIdentityMode !== 'proxy' || !hasCompleteProxyIdentity(check, options)) return fallback
@@ -85,12 +95,94 @@ export function effectiveNetworkIdentity(
   return {
     language: locale?.language ?? fallback.language,
     acceptLanguages: locale?.acceptLanguages ?? fallback.acceptLanguages,
-    timezone: check.timezone ?? fallback.timezone,
+    uiLocale: fingerprint.uiLocale ?? locale?.uiLocale ?? fallback.uiLocale,
+    // Windows only has its own zones; Chrome there reports the id CLDR gives that zone in the country.
+    timezone: (fingerprint.platform === 'windows' ? windowsReportedZone(check.timezone, check.countryCode) : undefined) ?? check.timezone,
     latitude: check.latitude,
     longitude: check.longitude,
     accuracyMeters: check.accuracyMeters,
     source: 'proxy'
   }
+}
+
+/**
+ * The values a window keeps for a checked IP: its country, the time zone and languages for it and
+ * its location. Once written into the window they stay; a later IP does not change them.
+ * Undefined when the check cannot say (failed, conflicting, or a country without a known language).
+ */
+export function fixedIdentityForCheck(
+  fingerprint: Pick<FingerprintConfig, 'platform' | 'uiLocale'>,
+  check: ProxyTestResult | undefined,
+  options: NetworkIdentityOptions & { followUiLocale?: boolean } = {}
+): Partial<FingerprintConfig> | undefined {
+  if (!check?.ok || !check.countryCode || !check.timezone || (check.geoConfidence === 'conflict' && !options.allowGeoConflict)) return undefined
+  const countryCode = check.countryCode.toUpperCase()
+  const locale = localeForCountry(countryCode)
+  if (!locale) return undefined
+  const timezone = (fingerprint.platform === 'windows' ? windowsReportedZone(check.timezone, countryCode) : undefined) ?? check.timezone
+  return {
+    networkIdentityMode: 'manual',
+    region: countryCode,
+    regionSource: 'ip',
+    language: locale.language,
+    acceptLanguages: locale.acceptLanguages,
+    // The system language follows the browser language unless the window chose its own.
+    uiLocale: options.followUiLocale ? undefined : fingerprint.uiLocale,
+    timezone,
+    location: check.latitude !== undefined && check.longitude !== undefined
+      ? { latitude: check.latitude, longitude: check.longitude, ...(check.accuracyMeters ? { accuracyMeters: check.accuracyMeters } : {}) }
+      : undefined
+  }
+}
+
+/**
+ * A saved window's fingerprint, with nothing left to work out at launch. A window that still
+ * followed its proxy's IP keeps the values of its last check (基于 IP 生成), or else the ones it
+ * had (手动选择); the system language, speech voices, device-name language and keyboard layout that followed the
+ * language are written in, so a later version of these tables cannot change a saved window.
+ */
+export function savedFingerprint(
+  fingerprint: FingerprintConfig,
+  check?: ProxyTestResult,
+  options: { gpuModel?: string; legacy?: boolean } = {}
+): FingerprintConfig {
+  const next: FingerprintConfig = { ...fingerprint }
+  if (next.networkIdentityMode === 'proxy') {
+    const fixed = fixedIdentityForCheck(next, check)
+    Object.assign(next, fixed ?? { networkIdentityMode: 'manual' })
+    if (!fixed) delete next.regionSource
+  }
+  for (const key of Object.keys(next) as Array<keyof FingerprintConfig>) {
+    if (next[key] === undefined) delete next[key]
+  }
+  const uiLocale = next.uiLocale ?? chromeUiLocaleFor(next.language)
+  const keyboardLayout = next.keyboardLayout ?? keyboardLayoutFor(next.language)
+  return {
+    ...next,
+    uiLocale,
+    // Windows saved before these were written keep what the kernel gave them; new ones get the country's own.
+    voicesLocale: next.voicesLocale ?? (options.legacy ? kernelVoiceLocaleFor : voiceLocaleForLanguage)(uiLocale),
+    mediaLocale: next.mediaLocale ?? (options.legacy ? kernelMediaLocaleFor : mediaLocaleFor)(uiLocale),
+    ...(keyboardLayout ? { keyboardLayout } : {}),
+    // The devices that went with its GPU (windows saved before this rule: the set they always had).
+    mediaDevices: next.mediaDevices ?? (options.legacy ? legacyAutoMediaDevices : autoMediaDevices)(next.seed >>> 0, options.gpuModel)
+  }
+}
+
+/**
+ * The editor's view of a saved fingerprint: values equal to what they would follow show as
+ * following (跟随… / 自动), so changing the language or GPU moves them along; written in again on save.
+ */
+export function followingLocales(fingerprint: FingerprintConfig, gpuModel?: string): FingerprintConfig {
+  const next: FingerprintConfig = { ...fingerprint }
+  if (next.mediaDevices === autoMediaDevices(next.seed >>> 0, gpuModel)) delete next.mediaDevices
+  const followedUi = chromeUiLocaleFor(next.language)
+  if (next.uiLocale === followedUi) delete next.uiLocale
+  const uiLocale = next.uiLocale ?? followedUi
+  if (next.voicesLocale === voiceLocaleForLanguage(uiLocale)) delete next.voicesLocale
+  if (next.mediaLocale === mediaLocaleFor(uiLocale)) delete next.mediaLocale
+  if (next.keyboardLayout === keyboardLayoutFor(next.language)) delete next.keyboardLayout
+  return next
 }
 
 export function geoConflictConfirmationMessage(errorText: string): string | undefined {

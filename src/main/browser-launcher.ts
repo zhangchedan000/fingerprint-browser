@@ -1,31 +1,52 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { access, mkdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserCrashRecord, BrowserProfile, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult } from '../shared/types'
+import type { BrowserCrashRecord, BrowserProfile, FingerprintConfig, LaunchDiagnosticCheck, LaunchDiagnosticReport, ProfileLaunchOptions, ProxyConfig, ProxyTestResult, TunnelRoute } from '../shared/types'
 import { locateBrowserForProfile } from './browser-locator'
-import { buildLaunchArgs } from './launch-args'
+import { buildLaunchArgs, type HostScreen } from './launch-args'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
+import { resolveApiProxy } from './api-proxy'
+import { apiProxyFor } from './api-window'
+import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { hardwareProfile, hardwareProfileSummary } from '../shared/hardware-profiles'
+import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWindows11PlatformVersion, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
+import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
-import { classifyProxyFailure, testProxy } from './proxy-tester'
-import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { kernelShipsSystemFonts, type PrismFontSet } from './other-windows-fonts'
+import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
+import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { ipZoneMismatch } from '../shared/quick-fix'
+import { windowsFontScript } from '../shared/windows-font-packs'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
 import type { Readable, Writable } from 'node:stream'
-import { kernelRequiresPro } from '../shared/kernel-policy'
+import { assertKernelCanOpenProfileData } from './profile-data-version'
+import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
+import type { WriteStream } from 'node:fs'
+import { executableHidesConfig } from './kernel-features'
+import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
+/** What a fixed window's clock and its IP in the same country disagree on, for the confirmation; none when they agree. */
+function zoneMismatchText(fp: FingerprintConfig, check: ProxyTestResult | undefined): string | undefined {
+  if (fp.networkIdentityMode === 'proxy') return undefined
+  const zone = ipZoneMismatch(fp.timezone, fp.region, check, fp.platform)
+  return zone ? `代理 IP（${check!.ip}）的时区是 ${zone}，窗口的时区是 ${fp.timezone}` : undefined
+}
+const ZONE_MISMATCH_ADVICE = '网站能看出浏览器的时间和 IP 所在地对不上。可以在编辑窗口的「时区」那行点「改成和 IP 一致」。是否仍要启动？'
+
 interface RunningBrowser {
   process: ChildProcess
+  /** The kernel it runs, to hand it more pages (openUrl). */
+  executable?: string
   automation?: BrowserControlSession
   proxyUrl?: string
   proxyIdentityIp?: string
@@ -67,7 +88,51 @@ function validCrashHistory(value: unknown): BrowserCrashRecord[] {
   )).slice(-MAX_PROFILE_CRASH_RECORDS)
 }
 
+/** Waits (briefly) until captured stderr is on disk. */
+function closeCapture(file: WriteStream | undefined): Promise<void> {
+  if (!file || file.closed) return Promise.resolve()
+  return new Promise((resolve) => {
+    // The child's stderr ends with the process and the pipe then closes the file; only end it
+    // ourselves when that does not happen in time.
+    const timer = setTimeout(() => { file.end(); resolve() }, 1000)
+    file.once('close', () => { clearTimeout(timer); resolve() })
+  })
+}
+
+/** Work around a window's run that lives outside the launcher (team windows: lock and sync). */
+/**
+ * What a window needs on this computer before it opens, fetched instead of failing: a window
+ * that came from another computer (or the cloud) may use a kernel, 网络加速 or a language font
+ * pack this one does not have yet.
+ */
+const WHITELIST_HINT = '。如果代理或 API 是按 IP 白名单授权的，换电脑后要把这台电脑的公网 IP 加进服务商白名单（开着网络加速时，是加速节点的 IP）'
+
+export interface LaunchPrerequisites {
+  /** Downloads and installs this kernel version. */
+  installKernel(version: string): Promise<void>
+  /** Starts 网络加速 when the window goes through it (and makes sure its node is there). */
+  ensureTunnel(route: TunnelRoute): Promise<void>
+  /** Installs the Windows language font pack the window's system language needs, when missing. */
+  ensureFonts(uiLocale: string): Promise<void>
+  /** Installs fonts the kernel package ships (Windows 10's on Windows 11 and back; Windows 10's extras). */
+  ensureOtherWindowsFonts?(set: PrismFontSet, kernelExecutable: string): Promise<void>
+  /** prism16+: puts the language font package into the kernel's own fonts for that Windows version. */
+  ensureKernelFonts?(script: string, kernelExecutable: string, windows: 'win10' | 'win11'): Promise<void>
+  /** prism16+: links the kernel to the shared Windows font package, downloading it once when needed. */
+  ensureKernelFontStore?(kernelExecutable: string): Promise<void>
+}
+
+export interface LaunchHooks {
+  /** Before the browser starts, while the window is still closed. Throwing cancels the launch. */
+  beforeLaunch(id: string): Promise<void>
+  /** The launch failed after beforeLaunch succeeded. */
+  launchFailed(id: string): Promise<void>
+  /** After the browser exited and the window is closed again. */
+  afterExit(id: string): Promise<void>
+}
+
 export class BrowserLauncher {
+  private hooks?: LaunchHooks
   private readonly processes = new Map<string, RunningBrowser>()
   private readonly orphanProcesses = new Map<string, number>()
   private readonly launchOperations = new Map<string, Promise<BrowserProfile>>()
@@ -75,7 +140,6 @@ export class BrowserLauncher {
   private activeLaunches = 0
   private readonly launchWaiters: Array<() => void> = []
   private closeAllOperation?: Promise<void>
-  private canUseProKernel: () => boolean = () => true
 
   constructor(
     private readonly profiles: ProfileStore,
@@ -97,8 +161,21 @@ export class BrowserLauncher {
     }
   }
 
-  setProKernelAccessCheck(check: () => boolean): void {
-    this.canUseProKernel = check
+  private hostScreen: () => HostScreen | undefined = () => undefined
+
+  setLaunchHooks(hooks: LaunchHooks): void {
+    this.hooks = hooks
+  }
+
+  private prerequisites?: LaunchPrerequisites
+
+  setPrerequisites(prerequisites: LaunchPrerequisites): void {
+    this.prerequisites = prerequisites
+  }
+
+  /** Provides the primary display size for windows whose resolution follows the computer. */
+  setHostScreenProvider(provider: () => HostScreen | undefined): void {
+    this.hostScreen = provider
   }
 
   async initialize(): Promise<void> {
@@ -144,8 +221,52 @@ export class BrowserLauncher {
     }
   }
 
+  /**
+   * The fonts a window gets before it opens: its system language's pack (prism7+) and, on the other
+   * Windows, that Windows' fonts from the kernel (other-windows-fonts.ts). Fingerprint and deep checks
+   * call it too, so they see what the window will. Never fails: the window then uses this computer's.
+   */
+  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean; builtInFonts?: boolean }, profileId?: string): Promise<void> {
+    if (!this.prerequisites || !engine.executable) return
+    // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's:
+    // the shared font package is linked into the kernel (downloaded once if no kernel brought it), and
+    // the package of the window's language is fetched into it when it lacks it.
+    if (engine.fingerprintKernel && engine.builtInFonts && this.prerequisites.ensureKernelFontStore) {
+      await this.prerequisites.ensureKernelFontStore(engine.executable).catch((error) => {
+        this.logger?.error('内核字体包没有准备好', { profileId, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+    if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) {
+      const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
+      if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
+        const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion, true)) ? 'win11' : 'win10'
+        await this.prerequisites.ensureKernelFonts(script, engine.executable, windows).catch((error) => {
+          this.logger?.error('语言字体包没有放进内核，窗口照常打开（没有这个语言的字体）', { profileId, script, error: error instanceof Error ? error.message : String(error) })
+        })
+      }
+      return
+    }
+    if (fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
+      // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
+      await this.prerequisites.ensureFonts(effectiveNetworkIdentity(fingerprint).uiLocale).catch((error) => {
+        this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+    const host = hostHardwareSnapshot()
+    const kernel = engine.fingerprintKernel === true
+    const otherFonts: PrismFontSet | undefined = otherWindowsFonts(fingerprint, host, kernel) ??
+      (windows10HostFonts(fingerprint, host, kernel) ? 'win10host' : undefined)
+    if (otherFonts && this.prerequisites.ensureOtherWindowsFonts) {
+      await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
+        this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
+      })
+    }
+  }
+
   async launch(id: string, options: ProfileLaunchOptions = {}): Promise<BrowserProfile> {
     if (this.closeAllOperation) throw new Error('正在关闭全部浏览器环境，请等待操作完成后再启动')
+    // A new window is opened only once its device-bound sign-in choice is made (the window list asks).
+    if (this.profiles.get(id).fingerprint.deviceBinding === 'ask') throw new Error('请先选择这个窗口的「设备绑定登录」')
     const existing = this.launchOperations.get(id)
     if (existing) return existing
     const operation = (async () => {
@@ -161,31 +282,106 @@ export class BrowserLauncher {
     }
   }
 
+  /** Settings → 下载位置 for this window (created if missing), or undefined for Chrome's own. */
+  private async downloadFolder(profile: BrowserProfile): Promise<string | undefined> {
+    const { downloadFolder, downloadPerWindow } = this.settings.get()
+    if (!downloadFolder) return undefined
+    // "18 环境 1": the serial keeps windows of the same name apart; no characters Windows refuses.
+    const name = `${profile.serialNumber} ${profile.name}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80)
+    const folder = downloadPerWindow ? join(downloadFolder, name) : downloadFolder
+    try {
+      await mkdir(folder, { recursive: true })
+      return folder
+    } catch (error) {
+      this.logger?.error('无法创建下载文件夹，窗口用 Chrome 默认下载位置', { profileId: profile.id, folder, error: error instanceof Error ? error.message : String(error) })
+      return undefined
+    }
+  }
+
+  /**
+   * Opens a page in the window: a new tab when it is running (Chrome hands a second start on the
+   * same user data folder to the running browser), otherwise the window starts as usual (its proxy
+   * and fingerprint) with the page as an extra tab.
+   */
+  async openUrl(id: string, url: string, options: ProfileLaunchOptions = {}): Promise<BrowserProfile> {
+    if (!/^https?:\/\//i.test(url)) throw new Error('只能打开 http 或 https 网址')
+    const running = this.processes.get(id)
+    if (!running) return this.launch(id, { ...options, openUrl: url })
+    if (!running.executable) throw new Error('这个窗口正在启动，请稍后再试')
+    const child = this.browserSpawner(running.executable, [`--user-data-dir=${this.profiles.profileDataPath(id)}`, url], {
+      stdio: 'ignore',
+      detached: true,
+      windowsHide: false
+    })
+    child.unref()
+    this.logger?.info('在窗口中打开网页', { profileId: id, url })
+    return this.profiles.get(id)
+  }
+
   private async launchProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
-    let profile = this.profiles.get(id)
     await this.guardProfileAvailable(id)
-    const engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    // Hooks may bring a newer config, so the window is read after them.
+    await this.hooks?.beforeLaunch(id)
+    try {
+      return await this.startProfile(id, options)
+    } catch (error) {
+      await this.hooks?.launchFailed(id).catch((hookError) => {
+        this.logger?.error('启动失败后的清理出错', { profileId: id, error: hookError instanceof Error ? hookError.message : String(hookError) })
+      })
+      throw error
+    }
+  }
+
+  private async startProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
+    let profile = this.profiles.get(id)
+    // Never fall back to the real network when the chosen proxy is gone.
+    if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
+    let engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    if (!engine.executable && profile.kernelVersion && this.prerequisites) {
+      // A window made on another computer keeps its kernel: fetched here instead of changed.
+      this.logger?.info('窗口的内核不在这台电脑上，自动下载', { profileId: id, kernel: profile.kernelVersion })
+      try {
+        await this.prerequisites.installKernel(profile.kernelVersion)
+      } catch (error) {
+        throw new Error(`环境绑定的内核 ${profile.kernelVersion} 不在这台电脑上，自动下载失败：${error instanceof Error ? error.message : String(error)}`)
+      }
+      engine = await locateBrowserForProfile(this.settings, this.profiles.vaultPath, profile.kernelVersion)
+    }
     if (!engine.executable) {
       throw new Error(profile.kernelVersion
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
-        : '没有找到浏览器内核，请先选择 Fingerprint Chromium 可执行文件')
+        : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
-    if (kernelRequiresPro(engine.version) && !this.canUseProKernel()) {
-      throw new Error(`Chromium ${engine.version} 是 Prism Pro 内核，请先激活 Pro 或将环境切换回 144 稳定内核`)
-    }
-    if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
+    if (profile.proxy.tunnel?.enabled && this.prerequisites) await this.prerequisites.ensureTunnel(profile.proxy.tunnel)
+    await this.prepareFonts(profile.fingerprint, engine, id)
     const hostHardware = hostHardwareSnapshot()
+    if (profile.apiProxy) {
+      // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
+      profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true)
+    } else {
+      if (profile.proxy.apiUrl) {
+        // A library proxy with an API link (from before they moved into the windows): a fresh proxy.
+        const endpoint = await resolveApiProxy(profile.proxy.apiUrl, profile.proxy.tunnel)
+        await this.profiles.setApiProxyEndpoint(profile.proxyId, endpoint)
+        profile = this.profiles.get(id)
+        this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
+      }
+      if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
+    }
+    profile = await this.lockOnLaunch(profile, options.allowGeoConflict === true)
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
     if (selectedHardware?.hostMatched && selectedHardware.platform !== hostHardware.platform) {
       throw new Error(`${selectedHardware.label} 只能在对应系统上使用；请改用本机模板或成套模拟模板`)
     }
     assertFingerprintKernelCompatibility(profile, engine)
+    await assertKernelCanOpenProfileData(this.profiles.profileDataPath(id), engine.version)
     this.logger?.info('准备启动浏览器环境', { profileId: id, engine: engine.label })
 
     this.onChanged(await this.profiles.setRuntime(id, { status: 'starting', lastError: undefined }))
     let localProxyUrl: string | undefined
+    let webrtcRelay: WebRtcRelay | undefined
     try {
       localProxyUrl = await openProxyBridge(profile.proxy, {
         onFailure: (error) => {
@@ -205,25 +401,71 @@ export class BrowserLauncher {
           })
         }
       })
+      // 替换 on prism7+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
+      // through the tunnel or a system proxy); otherwise the kernel only reports its address.
+      webrtcRelay = await windowWebRtcRelay(profile, engine)
+      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5') {
+        this.logger?.info(webrtcRelay ? 'WebRTC 经代理 UDP 转发' : 'WebRTC 替换为代理 IP（代理不转发 UDP）', { profileId: id })
+      }
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
+      try {
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile))
+      } catch (error) {
+        this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      try {
+        await answerBlankPasswordCheck(this.profiles.profileDataPath(id))
+      } catch (error) {
+        this.logger?.error('写入 Windows 空密码检查结果失败', {
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
       const args = buildLaunchArgs(profile, {
         userDataDir: this.profiles.profileDataPath(id),
         proxyUrl: localProxyUrl,
         extensionPaths: this.extensions.paths(profile.extensionIds),
         engineVersion: engine.version,
+        builtInFonts: engine.builtInFonts,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostPlatformVersion: hostHardware.platformVersion,
         proxyIdentity: profile.proxyCheck,
-        allowGeoConflict: options.allowGeoConflict === true
+        allowGeoConflict: options.allowGeoConflict === true,
+        hostScreen: this.hostScreen(),
+        windowScreen: engine.windowScreen,
+        webrtcRelaySupported: engine.webrtcRelay,
+        languageFonts: engine.webrtcRelay,
+        seededAudioRects: engine.webrtcRelay,
+        webrtcRelayPort: webrtcRelay?.port,
+        extraUrls: options.openUrl ? [options.openUrl] : undefined,
+        firstOpen: !await hasSavedSession(this.profiles.profileDataPath(id))
       })
       if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_BROWSER_HEADLESS === '1') {
         args.push('--headless=new')
         if (process.platform === 'darwin') args.push('--use-mock-keychain')
+        // Test containers run as root, where Chromium refuses its sandbox.
+        if (process.platform === 'linux' && process.getuid?.() === 0) args.push('--no-sandbox')
       }
       const pipeControlEnabled = process.platform !== 'win32'
       if (pipeControlEnabled) args.push('--remote-debugging-pipe')
+      // Every run writes a log so a crash can be explained in the window list.
+      const launchedAt = new Date()
+      const logFiles = launchLogFiles(runtimePath, launchedAt)
+      await mkdir(logFiles.folder, { recursive: true })
+      await pruneLaunchLogs(logFiles.folder, 9)
+      args.push(...launchLogArgs(logFiles))
+      // prism17+: the fingerprint switches go in an encrypted file, not on the command line (encrypted-config.ts).
+      let configFile: string | undefined
+      if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1' && await executableHidesConfig(engine.executable)) {
+        const hidden = await hideFingerprintArgs(args, join(runtimePath, 'config'))
+        args.splice(0, args.length, ...hidden.args)
+        configFile = hidden.file
+      }
       await writeFile(
         join(runtimePath, 'last-launch.json'),
         JSON.stringify({ executable: engine.executable, args, launchedAt: new Date().toISOString() }, null, 2),
@@ -231,10 +473,16 @@ export class BrowserLauncher {
       )
 
       const child = this.browserSpawner(engine.executable, args, {
-        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] : 'ignore',
+        stdio: pipeControlEnabled ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
         windowsHide: false,
         env: { ...process.env }
       })
+      if (configFile) {
+        // The kernel removes it once read; this is for a browser that never got that far.
+        child.once?.('exit', () => void removeConfigFile(configFile))
+        setTimeout(() => void removeConfigFile(configFile), 60_000).unref?.()
+      }
+      const stderrFile: WriteStream | undefined = captureStream(child.stderr, logFiles.stderrLog)
       let automation: BrowserControlSession | undefined
       if (pipeControlEnabled && Array.isArray(child.stdio)) {
         const writable = child.stdio[3] as Writable | null
@@ -270,6 +518,7 @@ export class BrowserLauncher {
         this.processes.delete(id)
         this.orphanProcesses.delete(id)
         try {
+          webrtcRelay?.close()
           const cleanup = await Promise.allSettled([
             closeProxyBridge(localProxyUrl),
             rm(join(runtimePath, 'process.json'), { force: true })
@@ -292,10 +541,15 @@ export class BrowserLauncher {
         } finally {
           resolveExited()
         }
+        // Not awaited: an upload can take minutes; the hook owner waits for it on quit.
+        void this.hooks?.afterExit(id).catch((error) => {
+          this.logger?.error('浏览器退出后的处理出错', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+        })
       }
       const running: RunningBrowser = {
         process: child,
         automation,
+        executable: engine.executable,
         proxyUrl: localProxyUrl,
         proxyIdentityIp: profile.proxyCheck?.ip,
         proxyMonitorRunning: false,
@@ -351,13 +605,21 @@ export class BrowserLauncher {
         }
         this.logger?.info('浏览器环境已退出', { profileId: id, code, signal, expected: !unexpected })
         void (async () => {
+          await closeCapture(stderrFile)
           if (unexpected) {
+            const analysis = await analyzeCrash(logFiles, this.profiles.profileDataPath(id), launchedAt)
+              .catch((): CrashAnalysis => ({ logTail: [], dumps: [] }))
+            this.logger?.error('浏览器异常退出', { profileId: id, code, signal, reason: analysis.reason, logFile: logFiles.chromeLog })
             await this.recordCrash(id, {
               occurredAt: new Date().toISOString(),
               pid: child.pid,
               code,
               signal,
-              phase
+              phase,
+              kernelVersion: engine.version,
+              logFile: logFiles.chromeLog,
+              ...analysis,
+              args
             }).catch((error) => {
               this.logger?.error('浏览器崩溃历史写入失败', {
                 profileId: id,
@@ -377,6 +639,7 @@ export class BrowserLauncher {
     } catch (error) {
       this.logger?.error('浏览器环境启动流程失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
       await closeProxyBridge(localProxyUrl)
+      webrtcRelay?.close()
       const safeError = safeErrorText(error)
       const next = await this.profiles.setRuntime(id, {
         status: 'error',
@@ -416,7 +679,16 @@ export class BrowserLauncher {
     running.expectedExit = true
     this.logger?.info('正在关闭浏览器环境', { profileId: id, pid: running.process.pid })
     this.onChanged(await this.profiles.setRuntime(id, { status: 'stopping', lastError: undefined }))
-    running.process.kill('SIGTERM')
+    if (this.profiles.get(id).startupMode === 'restore' && (running.automation || this.processInspector.requestClose)) {
+      try {
+        if (running.automation) {
+          await Promise.race([running.automation.requestClose(), new Promise((resolve) => setTimeout(resolve, 3000))])
+        } else if (running.process.pid) await this.processInspector.requestClose!(running.process.pid)
+      } catch {
+        // A close request can lose its reply as Chromium exits. Allow the normal shutdown
+        // to finish; the timeout below still terminates an unresponsive process.
+      }
+    } else running.process.kill('SIGTERM')
     const exited = await new Promise<boolean>((resolve) => {
       const forceTimer = setTimeout(() => {
         running.process.kill('SIGKILL')
@@ -573,6 +845,18 @@ export class BrowserLauncher {
     }
   }
 
+  /** Text of one of the window's launch logs. Only files in its own log folder are readable. */
+  async readLaunchLog(id: string, logFile: string): Promise<{ text: string; truncated: boolean; files: string[] }> {
+    const folder = this.launchLogFolder(id)
+    if (typeof logFile !== 'string' || !isLaunchLogOf(folder, logFile)) throw new Error('日志文件不属于这个环境')
+    return readLaunchLog(logFile)
+  }
+
+  launchLogFolder(id: string): string {
+    this.profiles.get(id)
+    return launchLogFiles(this.profiles.profileRuntimePath(id)).folder
+  }
+
   async crashHistorySnapshot(): Promise<Record<string, BrowserCrashRecord[]>> {
     return Object.fromEntries(await Promise.all(this.profiles.list().map(async (profile) => [
       profile.id,
@@ -680,10 +964,12 @@ export class BrowserLauncher {
           : profile.proxyCheck.geoConflict ?? '自动网络身份缺少国家、时区或坐标，请重新检测代理')
       }
     }
-    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy !== 'proxy_only') {
-      add('webrtc', 'WebRTC', 'warning', '当前兼容策略可能暴露代理之外的公网或本地地址')
+    if (profile.proxy.protocol !== 'direct' && profile.fingerprint.webrtcPolicy === 'default') {
+      add('webrtc', 'WebRTC', 'warning', 'WebRTC 为「允许」：不经过代理，会暴露本机公网地址')
     } else {
-      add('webrtc', 'WebRTC', 'pass', '已启用非代理 UDP 防泄漏策略')
+      add('webrtc', 'WebRTC', 'pass', profile.fingerprint.webrtcPolicy === 'proxy_only'
+        ? 'WebRTC 走代理或只报代理地址，不暴露本机地址'
+        : profile.fingerprint.webrtcPolicy === 'disabled' ? 'WebRTC 已关闭' : 'WebRTC 不提供任何地址')
     }
     if (profile.proxy.protocol !== 'direct') {
       add('dns', 'DNS 路由', 'pass', '域名解析、预取与 QUIC 均限制在代理路径，回环地址除外')
@@ -753,6 +1039,80 @@ export class BrowserLauncher {
     throw new Error('环境数据目录正被其他浏览器进程占用，请先结束遗留进程')
   }
 
+  /**
+   * The first launch keeps what it worked out: the country, time zone, languages and location of
+   * the IP (基于 IP 生成), and this computer's screen and core count (跟随本机). Later launches,
+   * on this computer or another, use the same values; a different IP is only pointed out.
+   */
+  private async lockOnLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+    const fp = profile.fingerprint
+    const patch: Partial<FingerprintConfig> = {}
+    if (fp.networkIdentityMode === 'proxy') Object.assign(patch, fixedIdentityForCheck(fp, profile.proxyCheck, { allowGeoConflict }) ?? {})
+    const screen = this.hostScreen()
+    if (fp.screenSource === 'host' && screen?.width && screen.height) {
+      Object.assign(patch, { screenSource: undefined, screenWidth: screen.width, screenHeight: screen.height })
+    }
+    if (fp.coresSource === 'host') {
+      Object.assign(patch, { coresSource: undefined, hardwareConcurrency: hostHardwareSnapshot().hardwareConcurrency })
+    }
+    if (!Object.keys(patch).length) return profile
+    const locked = await this.profiles.lockFingerprint(profile.id, patch)
+    this.onChanged(locked)
+    this.logger?.info('窗口第一次打开，指纹值已固定', { profileId: profile.id, region: patch.region, timezone: patch.timezone, screen: patch.screenWidth && `${patch.screenWidth}×${patch.screenHeight}`, cores: patch.hardwareConcurrency })
+    return locked
+  }
+
+  /**
+   * An API window's proxy for this launch: its current one while it works (勾选: the window opens on
+   * this IP; elsewhere or rotating, asked first); up to 3 new ones from the link when it stopped
+   * working (or there is none: 取消勾选 dropped it). A new one still elsewhere: asked first.
+   */
+  private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+    const region = profile.fingerprint.region?.toUpperCase()
+    const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, {
+      region: allowGeoConflict ? undefined : region,
+      keepWorking: true,
+      attempts: 3,
+      trigger: 'launch',
+      // Where the link's server is, for the check log (not in tests with their own tester).
+      locate: this.proxyTester === testProxy ? locateServer : undefined
+    })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(message.includes('白名单') ? message : `${message}${WHITELIST_HINT}`)
+      })
+    this.onChanged(outcome.profile)
+    const { check } = outcome
+    this.logger?.info('API 提取的代理', {
+      profileId: profile.id,
+      ip: check.ip,
+      country: check.countryCode,
+      newProxies: outcome.fetched,
+      // Why the window's own proxy was not used: it did not answer.
+      ...(outcome.replaced ? { replacedBecause: outcome.replaced.ok ? `出口 ${outcome.replaced.countryCode ?? '未知'}${outcome.replaced.rotating ? '，轮换' : ''}` : outcome.replaced.error ?? '连不上' } : {})
+    })
+    if (!check.ok) throw new Error(`${proxyLaunchError(check, 'warn') ?? '代理不可用'}${WHITELIST_HINT}`)
+    if (outcome.mismatch && check.rotating) {
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 链接给的代理在轮换出口 IP（${check.geoConflict ?? check.ip}），没有再从 API 提取（这个链接给的都是轮换的，再取只会用掉提取次数）；网站会看到 IP 在变，请在代理商后台改成固定会话（粘性 IP）。是否仍要启动？`)
+    }
+    if (outcome.mismatch && !outcome.fetched) {
+      const where = check.geoConfidence === 'conflict'
+        ? `两个 IP 数据库对代理的国家判断不一致（${check.geoConflict ?? check.ip}）`
+        : `这个窗口用的代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。不想用这个 IP：在编辑页取消勾选它或点「换一个 IP」。是否仍要启动？`)
+    }
+    if (outcome.mismatch) {
+      const where = check.geoConfidence === 'conflict'
+        ? `两个 IP 数据库对代理的国家判断不一致（${check.geoConflict ?? check.ip}）`
+        : `代理 IP 在 ${check.countryCode?.toUpperCase() ?? '未知国家'}（${check.ip}），窗口的国家是 ${region}`
+      throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 从 API 换了 ${outcome.fetched} 次 IP 还是不对：${where}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？`)
+    }
+    // The IP's country but another clock (a new IP elsewhere in the country): asked first, never followed.
+    const zone = allowGeoConflict ? undefined : zoneMismatchText(outcome.profile.fingerprint, check)
+    if (zone) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+    return outcome.profile
+  }
+
   private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
     const result = await this.proxyTester(profile.proxy)
     const current = this.profiles.get(profile.id)
@@ -762,7 +1122,8 @@ export class BrowserLauncher {
     const updated = await this.profiles.setProxyCheck(profile.id, { ...result, checkedAt: new Date().toISOString() })
     this.onChanged(updated)
     const error = proxyLaunchError(updated.proxyCheck!, updated.fingerprint.proxyExitPolicy)
-    if (error) throw new Error(error)
+    // A proxy authorised by IP refuses another computer until its IP is added (common after a cloud restore).
+    if (error) throw new Error(updated.proxyCheck?.ok ? error : `${error}${WHITELIST_HINT}`)
     if (updated.fingerprint.networkIdentityMode === 'proxy' && updated.proxyCheck?.geoConfidence === 'conflict' && !allowGeoConflict) {
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${updated.proxyCheck.geoConflict ?? 'GeoIP 数据源对代理地区判断不一致'}；继续使用可能导致 IP 地区与时区、语言或地理位置不一致，影响指纹效果。是否仍要启动？`)
     }
@@ -777,6 +1138,21 @@ export class BrowserLauncher {
     }
     if (updated.proxyCheck?.exitChanged) {
       this.logger?.error('代理出口 IP 已变化但策略允许继续', { profileId: profile.id })
+    }
+    // A window keeps its country; an IP somewhere else is pointed out (and, with 阻止启动, confirmed), never followed.
+    const fp = updated.fingerprint
+    const ipCountry = updated.proxyCheck?.ok ? updated.proxyCheck.countryCode?.toUpperCase() : undefined
+    if (fp.networkIdentityMode !== 'proxy' && fp.region && ipCountry && ipCountry !== fp.region.toUpperCase()) {
+      const where = `代理 IP 在 ${ipCountry}（${updated.proxyCheck!.ip}），窗口的国家是 ${fp.region.toUpperCase()}`
+      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) {
+        throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。可以在编辑窗口里点「改成和 IP 一致」，或换一个这个国家的代理。是否仍要启动？`)
+      }
+      this.logger?.error('代理 IP 的国家和窗口的国家不一致', { profileId: profile.id, ipCountry, region: fp.region })
+    }
+    const zone = zoneMismatchText(fp, updated.proxyCheck)
+    if (zone) {
+      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+      this.logger?.error('代理 IP 的时区和窗口的时区不一致', { profileId: profile.id, ipZone: updated.proxyCheck?.timezone, timezone: fp.timezone })
     }
     return updated
   }
@@ -912,4 +1288,13 @@ export class BrowserLauncher {
     }
   }
 
+}
+
+/** Chrome keeps the tabs to restore in Default/Sessions; a window never opened (or opened elsewhere and not brought here) has none. */
+async function hasSavedSession(userDataDir: string): Promise<boolean> {
+  try {
+    return (await readdir(join(userDataDir, 'Default', 'Sessions'))).length > 0
+  } catch {
+    return false
+  }
 }

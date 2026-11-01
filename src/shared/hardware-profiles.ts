@@ -1,44 +1,5 @@
 import type { BrowserPlatform, FingerprintConfig, HardwareProfileId } from './types'
-import windowsGpuCatalog from './windows-gpu-catalog.json'
-
-export interface GpuIdentity {
-  bucket: number
-  model: string
-  deviceId?: string
-  deviceClass: 'desktop' | 'integrated'
-}
-
-interface WindowsGpuCatalog {
-  schemaVersion: number
-  kernelCatalogSize: number
-  curatedDesktop: Array<Omit<GpuIdentity, 'deviceClass'>>
-}
-
-const WINDOWS_GPU_CATALOG = windowsGpuCatalog as WindowsGpuCatalog
-
-export const CURATED_WINDOWS_DESKTOP_GPUS: readonly GpuIdentity[] =
-  WINDOWS_GPU_CATALOG.curatedDesktop.map((identity) => ({
-    ...identity,
-    deviceClass: 'desktop' as const
-  }))
-
-export const CURATED_MACOS_GPUS: readonly GpuIdentity[] = [
-  'Apple M1',
-  'Apple M1 Pro',
-  'Apple M2',
-  'Apple M2 Max',
-  'Apple M2 Pro',
-  'Apple M3',
-  'Apple M3 Max',
-  'Apple M3 Pro',
-  'Apple M4',
-  'Apple M4 Max',
-  'Apple M4 Pro'
-].map((model, bucket) => ({
-  bucket,
-  model,
-  deviceClass: 'integrated' as const
-}))
+import { allKernelGpus, findKernelGpu, gpuForSeed, seedForGpu, type GpuChoice, type KernelGpu } from './gpu-catalog'
 
 export interface HardwareProfile {
   id: Exclude<HardwareProfileId, 'legacy-custom'>
@@ -52,16 +13,15 @@ export interface HardwareProfile {
   screenWidth: number
   screenHeight: number
   gpuModel: string
-  gpuBucket?: number
-  gpuBucketCount?: number
-  gpuPool?: readonly GpuIdentity[]
+  /** Fixed templates name their GPU (key from gpu-catalog); seeded ones let the kernel pick by seed. */
+  gpu?: string
   renderIdentityMode: 'host-native' | 'seeded-curated' | 'fixed-template'
   hostMatched: boolean
 }
 
 /**
- * These presets match the GPU ordering in fingerprint patch 011-gpu-info.
- * Keep the bucket values in sync when the kernel GPU catalogue changes.
+ * Hardware presets. GPUs are named by key (see gpu-catalog.ts), so a preset means the same card
+ * on every kernel version that has it.
  */
 export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   {
@@ -90,9 +50,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     browserDeviceMemoryGb: 8,
     screenWidth: 1440,
     screenHeight: 900,
-    gpuModel: '种子固定的 Apple GPU',
-    gpuBucketCount: 11,
-    gpuPool: CURATED_MACOS_GPUS,
+    gpuModel: '按种子从内核显卡清单中选择',
     renderIdentityMode: 'seeded-curated',
     hostMatched: false
   },
@@ -108,8 +66,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1440,
     screenHeight: 900,
     gpuModel: 'Apple M1',
-    gpuBucket: 0,
-    gpuBucketCount: 11,
+    gpu: 'Apple M1',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -125,8 +82,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1512,
     screenHeight: 982,
     gpuModel: 'Apple M3 Pro',
-    gpuBucket: 7,
-    gpuBucketCount: 11,
+    gpu: 'Apple M3 Pro',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -142,8 +98,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1512,
     screenHeight: 982,
     gpuModel: 'Apple M4 Pro',
-    gpuBucket: 10,
-    gpuBucketCount: 11,
+    gpu: 'Apple M4 Pro',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -152,7 +107,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     label: 'Windows · 本机硬件（推荐）',
     description: '保留本机 GPU、字体、Canvas 和 Audio，避免渲染信号互相矛盾。',
     platform: 'windows',
-    platformVersion: '10.0.0',
+    platformVersion: '19.0.0',
     hardwareConcurrency: 8,
     physicalMemoryGb: 16,
     browserDeviceMemoryGb: 8,
@@ -164,18 +119,16 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
   },
   {
     id: 'windows-seeded-nvidia',
-    label: 'Windows · 种子独立 NVIDIA GPU（推荐多环境）',
-    description: '8 核 CPU、16GB 内存、1920×1080；RTX 30/40 系列 GPU 由环境种子固定选择。',
+    label: 'Windows · 种子独立显卡（推荐多环境）',
+    description: '8 核 CPU、16GB 内存、1920×1080；显卡由环境种子从内核清单中选择，也可以手动指定。',
     platform: 'windows',
-    platformVersion: '10.0.0',
+    platformVersion: '19.0.0',
     hardwareConcurrency: 8,
     physicalMemoryGb: 16,
     browserDeviceMemoryGb: 8,
     screenWidth: 1920,
     screenHeight: 1080,
-    gpuModel: '种子固定的 NVIDIA RTX GPU',
-    gpuBucketCount: WINDOWS_GPU_CATALOG.kernelCatalogSize,
-    gpuPool: CURATED_WINDOWS_DESKTOP_GPUS,
+    gpuModel: '按种子从内核显卡清单中选择',
     renderIdentityMode: 'seeded-curated',
     hostMatched: false
   },
@@ -191,8 +144,7 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     screenWidth: 1920,
     screenHeight: 1080,
     gpuModel: 'NVIDIA GeForce RTX 3060',
-    gpuBucket: 5,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 3060|0x00002487',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -201,15 +153,14 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     label: 'Windows 11 · RTX 4060 · 16GB',
     description: '12 核 CPU、NVIDIA RTX 4060、1920×1080；Windows UA 仍使用 NT 10.0。',
     platform: 'windows',
-    platformVersion: '10.0.0',
+    platformVersion: '19.0.0',
     hardwareConcurrency: 12,
     physicalMemoryGb: 16,
     browserDeviceMemoryGb: 8,
     screenWidth: 1920,
     screenHeight: 1080,
     gpuModel: 'NVIDIA GeForce RTX 4060',
-    gpuBucket: 29,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 4060|0x00002882',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   },
@@ -218,15 +169,14 @@ export const HARDWARE_PROFILES: readonly HardwareProfile[] = [
     label: 'Windows 11 · RTX 4070 · 32GB',
     description: '16 核 CPU、NVIDIA RTX 4070、2560×1440；Windows UA 仍使用 NT 10.0。',
     platform: 'windows',
-    platformVersion: '10.0.0',
+    platformVersion: '19.0.0',
     hardwareConcurrency: 16,
     physicalMemoryGb: 32,
     browserDeviceMemoryGb: 8,
     screenWidth: 2560,
     screenHeight: 1440,
     gpuModel: 'NVIDIA GeForce RTX 4070',
-    gpuBucket: 34,
-    gpuBucketCount: 57,
+    gpu: 'NVIDIA GeForce RTX 4070|0x00002786',
     renderIdentityMode: 'fixed-template',
     hostMatched: false
   }
@@ -241,6 +191,7 @@ export function defaultHardwareProfileId(platform: BrowserPlatform): HardwarePro
 }
 
 export interface ApplyHardwareProfileOptions {
+  /** Forget a hand-picked GPU so the kernel picks one by seed again (used by "random fingerprint"). */
   refreshSeededGpu?: boolean
 }
 
@@ -249,33 +200,22 @@ export function applyHardwareProfile(
   id: HardwareProfileId,
   options: ApplyHardwareProfileOptions = {}
 ): FingerprintConfig {
+  const { gpuBucket: _legacyBucket, ...rest } = config
   const profile = hardwareProfile(id)
   if (!profile) {
-    return {
-      ...config,
-      hardwareProfileId: id,
-      gpuBucket: undefined,
-      renderIdentityVersion: undefined
-    }
+    return { ...rest, hardwareProfileId: id, gpu: undefined, renderIdentityVersion: undefined }
   }
-  const seededIdentity = profile.gpuPool?.length && options.refreshSeededGpu
-    ? profile.gpuPool[(config.seed >>> 0) % profile.gpuPool.length]
-    : undefined
-  const preservedSeededBucket = profile.renderIdentityMode === 'seeded-curated'
+  const keepPicked = profile.renderIdentityMode === 'seeded-curated'
     && config.hardwareProfileId === id
-    && Number.isInteger(config.gpuBucket)
-    ? config.gpuBucket
-    : undefined
-  const gpuBucket = seededIdentity?.bucket
-    ?? preservedSeededBucket
-    ?? (profile.renderIdentityMode === 'fixed-template' ? profile.gpuBucket : undefined)
+    && !options.refreshSeededGpu
+  const gpu = profile.renderIdentityMode === 'fixed-template'
+    ? profile.gpu
+    : keepPicked ? config.gpu : undefined
   return {
-    ...config,
+    ...rest,
     hardwareProfileId: profile.id,
-    gpuBucket,
-    renderIdentityVersion: gpuBucket === undefined
-      ? undefined
-      : 4,
+    gpu,
+    renderIdentityVersion: profile.renderIdentityMode === 'host-native' ? undefined : 4,
     platform: profile.platform,
     platformVersion: profile.platformVersion,
     hardwareConcurrency: profile.hardwareConcurrency,
@@ -284,35 +224,29 @@ export function applyHardwareProfile(
   }
 }
 
-export function effectiveFingerprintSeed(config: FingerprintConfig): number {
+/**
+ * The seed handed to the kernel. With a picked GPU it is shifted so `kernelVersion` reports that
+ * GPU; undefined means the kernel does not have it (launching would show a different card).
+ */
+export function effectiveFingerprintSeed(config: FingerprintConfig, kernelVersion?: string | null): number | undefined {
   const seed = config.seed >>> 0
-  const profile = hardwareProfile(config.hardwareProfileId)
-  if (!profile?.gpuBucketCount) return seed
-  const bucket = profile.renderIdentityMode === 'fixed-template'
-    ? profile.gpuBucket
-    : Number.isInteger(config.gpuBucket)
-      ? config.gpuBucket
-      : undefined
-  if (bucket === undefined) return seed
-  const remainder = seed % profile.gpuBucketCount
-  const candidate = seed - remainder + bucket
-  return candidate <= 0xffffffff ? candidate : candidate - profile.gpuBucketCount
+  if (!config.gpu || hardwareProfile(config.hardwareProfileId)?.hostMatched) return seed
+  return seedForGpu(seed, config.gpu, kernelVersion, config.platform)
 }
 
-export function effectiveGpuIdentity(
-  config: Pick<FingerprintConfig, 'seed' | 'hardwareProfileId' | 'gpuBucket'>
-): GpuIdentity | undefined {
-  const profile = hardwareProfile(config.hardwareProfileId)
-  if (!profile) return undefined
-  if (profile.gpuPool?.length && Number.isInteger(config.gpuBucket)) {
-    return profile.gpuPool.find((identity) => identity.bucket === config.gpuBucket)
-  }
-  if (profile.gpuBucket === undefined) return undefined
-  return {
-    bucket: profile.gpuBucket,
-    model: profile.gpuModel,
-    deviceClass: profile.platform === 'windows' ? 'desktop' : 'integrated'
-  }
+/** The GPU a window shows on `kernelVersion`; undefined for host hardware or an unmeasured kernel. */
+export function effectiveGpu(
+  config: Pick<FingerprintConfig, 'seed' | 'hardwareProfileId' | 'gpu' | 'platform'>,
+  kernelVersion?: string | null
+): KernelGpu | undefined {
+  if (hardwareProfile(config.hardwareProfileId)?.hostMatched) return undefined
+  if (config.gpu) return findKernelGpu(config.gpu, config.platform)
+  return gpuForSeed(config.seed, kernelVersion, config.platform)
+}
+
+/** GPUs a window on this platform can pick, each with the kernel versions that have it. */
+export function gpuChoices(platform: BrowserPlatform): GpuChoice[] {
+  return allKernelGpus(platform)
 }
 
 export function refreshSeededGpuIdentity(config: FingerprintConfig): FingerprintConfig {
@@ -335,4 +269,88 @@ export function hardwareProfileSummary(id: HardwareProfileId): string {
   if (!profile) return '未知硬件模板'
   if (profile.hostMatched) return `本机 CPU · 本机内存 · 本机 GPU · ${profile.screenWidth}×${profile.screenHeight}`
   return `${profile.hardwareConcurrency} 核 · ${profile.physicalMemoryGb}GB · ${profile.gpuModel} · ${profile.screenWidth}×${profile.screenHeight}`
+}
+
+/**
+ * The editor sets each value on its own, so a window that still follows an old fixed or host
+ * template is shown (and saved) as the seeded template with the same values:
+ * a fixed template keeps its GPU; a host template becomes "real" GPU, CPU and rendering surfaces.
+ */
+export function editableFingerprint(config: FingerprintConfig): FingerprintConfig {
+  const profile = hardwareProfile(config.hardwareProfileId)
+  if (profile?.renderIdentityMode === 'seeded-curated') return config
+  const seeded = defaultHardwareProfileId(config.platform)
+  const { gpuBucket: _legacy, overrides: _overrides, ...rest } = config
+  if (profile?.hostMatched) {
+    return {
+      ...rest,
+      hardwareProfileId: seeded,
+      gpu: undefined,
+      coresSource: 'host',
+      renderIdentityVersion: 4,
+      disabledSpoofing: [...new Set([...config.disabledSpoofing, 'font', 'audio', 'canvas', 'clientrects', 'gpu'] as const)]
+    }
+  }
+  return { ...rest, hardwareProfileId: seeded, gpu: profile?.gpu ?? config.gpu, renderIdentityVersion: 4 }
+}
+
+
+/** Windows platform versions 13 and up are Windows 11 (Chrome reads Windows.Foundation.UniversalApiContract). */
+export function isWindows11PlatformVersion(version: string | undefined): boolean {
+  return Number.parseInt(version ?? '', 10) >= 13
+}
+
+/**
+ * The platform version a window reports. Host hardware reports this computer's own. On a kernel with
+ * its own Windows fonts (prism16+, builtInFonts) a Windows window reports the version of those fonts,
+ * whatever this computer runs: 19.0.0 (Windows 11 24H2 / 25H2) or 10.0.0 (Windows 10 2004 and later).
+ * On older kernels, whose fonts, media formats and emoji are this computer's, a Windows window on a
+ * computer running the same Windows (10 or 11) reports this computer's own version; otherwise the
+ * window's own setting (a Windows 10 window on Windows 11: 10.0.0).
+ */
+export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId'>, hostPlatformVersion?: string, builtInFonts = false): string {
+  if (hostPlatformVersion && hardwareProfile(config.hardwareProfileId)?.hostMatched) return hostPlatformVersion
+  if (builtInFonts && config.platform === 'windows') return isWindows11PlatformVersion(config.platformVersion) ? '19.0.0' : '10.0.0'
+  if (!hostPlatformVersion) return config.platformVersion
+  if (config.platform !== 'windows' || !/^\d+\.\d+\.\d+$/.test(hostPlatformVersion)) return config.platformVersion
+  return isWindows11PlatformVersion(config.platformVersion) === isWindows11PlatformVersion(hostPlatformVersion)
+    ? hostPlatformVersion
+    : config.platformVersion
+}
+
+/** Fonts of the other Windows a window needs: Windows 10's on a Windows 11 computer or the other way round. */
+export type OtherWindows = 'win10' | 'win11'
+
+/**
+ * Which other Windows' fonts a Windows window needs on this computer (prism13: the kernel package
+ * ships them, the launcher installs them, patch 007 shows them): a Windows 10 window on Windows 11
+ * gets Windows 10's emoji, a Windows 11 window on Windows 10 gets Windows 11's own fonts. Undefined
+ * when the window claims this computer's Windows, uses this computer's real fonts, or not on Windows.
+ */
+export function otherWindowsFonts(
+  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
+  host: { platform: BrowserPlatform; platformVersion: string },
+  fingerprintKernel: boolean
+): OtherWindows | undefined {
+  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return undefined
+  const hostWindows11 = isWindows11PlatformVersion(host.platformVersion)
+  const windowWindows11 = isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
+  if (hostWindows11 === windowWindows11) return undefined
+  return windowWindows11 ? 'win11' : 'win10'
+}
+
+/**
+ * A Windows 10 window on a Windows 10 computer that lacks Sans Serif Collection (LTSC 21H2 does):
+ * iphey reports a window that claims Windows 10 without it as an inconsistent fingerprint
+ * ("butterfly", tested by changing only that name). It comes from the kernel's Windows 11 fonts and
+ * prism14+ shows it to Windows 10 windows. Same conditions as otherWindowsFonts otherwise.
+ */
+export function windows10HostFonts(
+  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
+  host: { platform: BrowserPlatform; platformVersion: string },
+  fingerprintKernel: boolean
+): boolean {
+  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return false
+  return !isWindows11PlatformVersion(host.platformVersion) &&
+    !isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
 }

@@ -20,7 +20,39 @@ async function store(): Promise<ProfileStore> {
   return result
 }
 
+/** What the window editor sends: the proxy typed in the form, without a library pick. */
+function typedDraft<T extends { proxyId?: string }>(view: T): T {
+  return { ...view, proxyId: undefined }
+}
+
 describe('ProfileStore', () => {
+  it('asks a new window for its device-bound sign-in choice once, then keeps it', async () => {
+    const repository = await store()
+    const created = await repository.create(defaultProfileDraft(1))
+    expect(created.fingerprint.deviceBinding).toBe('ask')
+    expect((await repository.setDeviceBinding(created.id, 'on')).fingerprint.deviceBinding).toBe('on')
+    // Before the first opening it can still be changed.
+    expect((await repository.setDeviceBinding(created.id, 'off')).fingerprint.deviceBinding).toBeUndefined()
+    await repository.setDeviceBinding(created.id, 'on')
+    await repository.setRuntime(created.id, { status: 'closed', lastOpenedAt: new Date().toISOString() })
+    await expect(repository.setDeviceBinding(created.id, 'off')).rejects.toThrow('设备绑定登录不能再改')
+    // An edit of an opened window keeps it, whatever the form sends.
+    const draft = typedDraft(publicProfile(repository.get(created.id)))
+    const edited = await repository.update(created.id, { ...draft, fingerprint: { ...draft.fingerprint, deviceBinding: undefined } })
+    expect(edited.fingerprint.deviceBinding).toBe('on')
+  })
+
+  it('keeps startup modes per profile across reload and duplicate', async () => {
+    const repository = await store()
+    const restored = await repository.create({ ...defaultProfileDraft(), startupMode: 'restore' })
+    const urls = await repository.create({ ...defaultProfileDraft(), startupMode: undefined })
+    const reloaded = new ProfileStore(repository.vaultPath)
+    await reloaded.initialize()
+    expect(reloaded.get(restored.id).startupMode).toBe('restore')
+    expect(reloaded.get(urls.id).startupMode).toBe('urls')
+    expect((await reloaded.duplicate(restored.id)).startupMode).toBe('restore')
+    await expect(reloaded.create({ ...defaultProfileDraft(), startupMode: 'bad' as 'urls' })).rejects.toThrow('启动页面模式无效')
+  })
   it('persists profiles and creates an independent data directory', async () => {
     const repository = await store()
     const profile = await repository.create(defaultProfileDraft())
@@ -57,7 +89,8 @@ describe('ProfileStore', () => {
     expect(copy.serialNumber).toBe(original.serialNumber + 1)
     expect(copy.fingerprint.seed).not.toBe(original.fingerprint.seed)
     expect(copy.fingerprint.renderIdentityVersion).toBe(4)
-    expect(copy.fingerprint.gpuBucket).toBeTypeOf('number')
+    // A copy gets a new seed, so the kernel picks its GPU afresh.
+    expect(copy.fingerprint.gpu).toBeUndefined()
     expect(repository.list()).toHaveLength(2)
   })
 
@@ -138,15 +171,15 @@ describe('ProfileStore', () => {
     draft.proxy = { protocol: 'http', host: 'proxy.example.com', port: 8080, username: 'user', password: 'secret' }
     const created = await repository.create(draft)
 
-    const unchanged = publicProfile(created)
+    const unchanged = typedDraft(publicProfile(created))
     await repository.update(created.id, unchanged)
     expect(repository.get(created.id).proxy.password).toBe('secret')
 
-    const replaced = publicProfile(repository.get(created.id))
+    const replaced = typedDraft(publicProfile(repository.get(created.id)))
     await repository.update(created.id, { ...replaced, proxy: { ...replaced.proxy, password: 'new-secret' } })
     expect(repository.get(created.id).proxy.password).toBe('new-secret')
 
-    const cleared = publicProfile(repository.get(created.id))
+    const cleared = typedDraft(publicProfile(repository.get(created.id)))
     cleared.proxy.passwordStored = false
     await repository.update(created.id, cleared)
     expect(repository.get(created.id).proxy.password).toBe('')
@@ -158,7 +191,7 @@ describe('ProfileStore', () => {
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: 'one.example.com', port: 8080, username: 'user', password: 'secret' }
     const created = await repository.create(draft)
-    const changed = publicProfile(created)
+    const changed = typedDraft(publicProfile(created))
     changed.proxy.host = 'two.example.com'
 
     await repository.update(created.id, changed)
@@ -258,7 +291,7 @@ describe('ProfileStore', () => {
       profileId: 'legacy-profile'
     })
     const migrated = JSON.parse(await readFile(repository.profilesPath, 'utf8'))
-    expect(migrated.schemaVersion).toBe(11)
+    expect(migrated.schemaVersion).toBe(12)
     expect(migrated.nextSerialNumber).toBe(2)
   })
 
@@ -315,7 +348,7 @@ describe('ProfileStore', () => {
     await recovered.initialize()
 
     expect(recovered.storageHealth().recoveryMessage).toContain('上一份备份')
-    expect(JSON.parse(await readFile(recovered.previousBackupPath, 'utf8')).schemaVersion).toBe(11)
+    expect(JSON.parse(await readFile(recovered.previousBackupPath, 'utf8')).schemaVersion).toBe(12)
   })
 
   it('refuses to replace data when the primary and both backups are invalid', async () => {
@@ -347,7 +380,7 @@ describe('ProfileStore', () => {
     await reopened.initialize()
     expect(reopened.get(profile.id).proxyCheck?.ip).toBe('203.0.113.8')
 
-    const changed = publicProfile(reopened.get(profile.id))
+    const changed = typedDraft(publicProfile(reopened.get(profile.id)))
     await reopened.update(profile.id, { ...changed, proxy: { ...changed.proxy, password: 'replacement' } })
     expect(reopened.get(profile.id).proxyCheck).toBeUndefined()
   })
@@ -364,4 +397,117 @@ describe('ProfileStore', () => {
     expect(confirmed.proxyCheck?.exitChanged).toBe(false)
     expect(confirmed.proxyCheck?.previousIp).toBeUndefined()
   })
+  it('pins and unpins kernels for many windows and clears hand-set brand versions', async () => {
+    const repository = await store()
+    const draft = defaultProfileDraft()
+    const [first, second] = await repository.createMany([
+      { ...draft, fingerprint: { ...draft.fingerprint, brandVersion: '143' } },
+      defaultProfileDraft()
+    ])
+
+    const pinned = await repository.setKernelMany([first.id, second.id, first.id], '144.0.7559.132')
+    expect(pinned).toHaveLength(2)
+    expect(repository.get(first.id).kernelVersion).toBe('144.0.7559.132')
+    expect(repository.get(first.id).fingerprint.brandVersion).toBe('')
+    expect(await repository.kernelUsers('144.0.7559.132')).toHaveLength(2)
+
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(second.id).kernelVersion).toBe('144.0.7559.132')
+
+    await repository.setKernelMany([second.id], '')
+    expect(repository.get(second.id).kernelVersion).toBe('')
+    expect(repository.get(first.id).kernelVersion).toBe('144.0.7559.132')
+  })
+
+  it('rejects invalid kernel batch requests without changing anything', async () => {
+    const repository = await store()
+    const profile = await repository.create(defaultProfileDraft())
+
+    await expect(repository.setKernelMany([profile.id], '144')).rejects.toThrow('版本号无效')
+    await expect(repository.setKernelMany([], '144.0.7559.132')).rejects.toThrow('没有选择')
+    await expect(repository.setKernelMany([profile.id, 'missing'], '144.0.7559.132')).rejects.toThrow('不存在')
+    expect(repository.get(profile.id).kernelVersion).toBe('')
+  })
+
+  it('pins a new window to the default kernel and pins existing followers once', async () => {
+    const repository = await store()
+    const follower = await repository.create(defaultProfileDraft())
+    expect(follower.kernelVersion).toBe('')
+
+    repository.setDefaultKernelResolver(async () => 'prism-156.0.8078.47')
+    const created = await repository.create(defaultProfileDraft())
+    expect(created.kernelVersion).toBe('prism-156.0.8078.47')
+    const chosen = await repository.create({ ...defaultProfileDraft(), kernelVersion: 'prism-156.0.8078.47-202610261501' })
+    expect(chosen.kernelVersion).toBe('prism-156.0.8078.47-202610261501')
+
+    const before = repository.get(follower.id).updatedAt
+    expect(await repository.pinUnboundKernels('prism-155.0.8059.84')).toBe(1)
+    expect(repository.get(follower.id).kernelVersion).toBe('prism-155.0.8059.84')
+    expect(repository.get(follower.id).updatedAt).toBe(before)
+    expect(repository.get(created.id).kernelVersion).toBe('prism-156.0.8078.47')
+    expect(await repository.pinUnboundKernels('prism-155.0.8059.84')).toBe(0)
+  })
+
+  it('keeps the platform account password across edits, restarts and the recycle bin', async () => {
+    const repository = await store()
+    const draft = defaultProfileDraft()
+    const created = await repository.create({ ...draft, account: { platform: 'TikTok Shop', username: 'shop@example.com', password: 'p@ss' } })
+    expect(repository.get(created.id).account.password).toBe('p@ss')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'TikTok Shop', username: 'shop@example.com', password: '', passwordStored: true } })
+    expect(repository.get(created.id).account.password).toBe('p@ss')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'TikTok Shop', username: 'other@example.com', password: '', passwordStored: true } })
+    expect(repository.get(created.id).account.password).toBe('')
+
+    await repository.update(created.id, { ...draft, account: { platform: 'Facebook', username: 'fb@example.com', password: 'new' } })
+    await repository.classifyMany([created.id], { group: 'Meta' })
+    await repository.setKernelMany([created.id], '144.0.7559.132')
+    expect(repository.get(created.id).account).toEqual({ platform: 'Facebook', username: 'fb@example.com', password: 'new' })
+
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(created.id).account.password).toBe('new')
+
+    await repository.remove(created.id)
+    const [trashed] = await repository.listTrash()
+    const restored = await repository.restore(trashed.trashId)
+    expect(restored.account).toEqual({ platform: 'Facebook', username: 'fb@example.com', password: 'new' })
+  })
+
+  it('loads older stores without an account as an empty account', async () => {
+    const repository = await store()
+    const profile = await repository.create(defaultProfileDraft())
+    const persisted = JSON.parse(await readFile(repository.profilesPath, 'utf8'))
+    delete persisted.profiles[0].account
+    await writeFile(repository.profilesPath, JSON.stringify(persisted))
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(profile.id).account).toEqual({ platform: '', username: '', password: '' })
+  })
 })
+
+describe('fingerprint seeds', () => {
+  it('gives a new window a seed no window here or in the team has; a window from the cloud keeps its own', async () => {
+    const repository = await store()
+    const first = await repository.create({ ...defaultProfileDraft(1), fingerprint: { ...defaultProfileDraft(1).fingerprint, seed: 1234 } })
+    expect(first.fingerprint.seed).toBe(1234)
+    // The same seed again (and one a teammate's cloud window uses): both replaced.
+    repository.setSeedsInUse(() => [5678])
+    const second = await repository.create({ ...defaultProfileDraft(2), fingerprint: { ...defaultProfileDraft(2).fingerprint, seed: 1234 } })
+    const third = await repository.create({ ...defaultProfileDraft(3), fingerprint: { ...defaultProfileDraft(3).fingerprint, seed: 5678 } })
+    expect(second.fingerprint.seed).not.toBe(1234)
+    expect(third.fingerprint.seed).not.toBe(5678)
+    // Several at once never share one either.
+    const many = await repository.createMany([1, 2, 3].map((index) => ({ ...defaultProfileDraft(10 + index), fingerprint: { ...defaultProfileDraft(1).fingerprint, seed: 42 } })))
+    expect(new Set(many.map((profile) => profile.fingerprint.seed)).size).toBe(3)
+    // Pulled from the cloud (it arrives with its origin): the same window, the same seed.
+    const pulled = await repository.createMany([{ ...defaultProfileDraft(20), fingerprint: { ...defaultProfileDraft(20).fingerprint, seed: 5678 } }], [{ serialNumber: 99, createdAt: new Date().toISOString() }])
+    expect(pulled[0].fingerprint.seed).toBe(5678)
+    // 换一换 to a seed another window has: replaced as well.
+    const changed = await repository.update(first.id, { ...defaultProfileDraft(1), fingerprint: { ...first.fingerprint, seed: second.fingerprint.seed } })
+    expect(changed.fingerprint.seed).not.toBe(second.fingerprint.seed)
+  })
+})
+

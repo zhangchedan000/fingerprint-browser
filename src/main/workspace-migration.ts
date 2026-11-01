@@ -11,6 +11,7 @@ import { validateProfileDraft } from '../shared/validation'
 import type { Logger } from './app-logger'
 import type { ExtensionStore } from './extension-store'
 import type { ProfileStore } from './profile-store'
+import { portableDraft } from './profile-portable'
 
 const MAGIC = Buffer.concat([Buffer.from('PRISM-MIGRATION'), Buffer.from([1])])
 const AUTH_TAG_BYTES = 16
@@ -81,12 +82,7 @@ function portableProfile(profile: BrowserProfile): MigrationProfile {
   return {
     sourceId: profile.id,
     favorite: profile.favorite,
-    profile: {
-      name: profile.name, note: profile.note, group: profile.group, tags: [...profile.tags],
-      extensionIds: [...profile.extensionIds], color: profile.color, startUrls: [...profile.startUrls],
-      kernelVersion: profile.kernelVersion, window: { ...profile.window }, proxy: { ...profile.proxy },
-      fingerprint: { ...profile.fingerprint, disabledSpoofing: [...profile.fingerprint.disabledSpoofing] }
-    }
+    profile: portableDraft(profile, { passwords: 'keep', extensions: true })
   }
 }
 
@@ -339,7 +335,7 @@ export class WorkspaceMigrationManager {
     try {
       const prefix = Buffer.alloc(MAGIC.length + 4)
       await readExactAt(handle, prefix, 0)
-      if (!prefix.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error('不是受支持的 Prism 全部环境迁移包')
+      if (!prefix.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error('不是受支持的指纹浏览器全部环境迁移包')
       const headerLength = prefix.readUInt32BE(MAGIC.length)
       if (headerLength <= 0 || headerLength > MAX_HEADER_BYTES) throw new Error('迁移包头长度无效')
       headerBytes = Buffer.alloc(headerLength)

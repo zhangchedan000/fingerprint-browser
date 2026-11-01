@@ -1,29 +1,66 @@
+import { isKernelId } from '../shared/kernel-id'
 import { suffixedProfileName } from '../shared/profile-name'
 import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { BrowserProfile, DeletedProfileSummary, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth, ProxyCheckSummary, WebRtcPolicy } from '../shared/types'
-import { defaultProfileWindow, seedFromId } from '../shared/defaults'
-import { refreshSeededGpuIdentity } from '../shared/hardware-profiles'
-import { validateProfileDraft } from '../shared/validation'
+import type {
+  ApiCheckRecord, ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
+  FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, ServerPlace, TunnelRoute, WebRtcPolicy, WindowApiProxy
+} from '../shared/types'
+import { defaultProfileWindow, randomSeed, seedFromId } from '../shared/defaults'
+import { nextGroupColor } from '../shared/group-colors'
+import { effectiveGpu, refreshSeededGpuIdentity } from '../shared/hardware-profiles'
+import { savedFingerprint } from '../shared/network-identity'
+import { EMPTY_ACCOUNT, validateGroupName, validatePlatformAccount, validateProfileDraft, validateProxyConfig, validateProxyDraft, validProxyApiUrl, validTunnelRoute } from '../shared/validation'
 import { identitySecretCodec, type SecretCodec } from './secret-codec'
-import { privateProxyConfig, sameProxyIdentity } from './profile-secrets'
+import { privateAccount, privateProxyConfig, sameAccountIdentity, sameProxyIdentity } from './profile-secrets'
 import { safePathSize } from './profile-data'
+import { portableDraft } from './profile-portable'
+import { newerCheck, nextProxyCheck, safeProxyCheck } from './proxy-check'
+import { safeIpSiteRecord, type IpSiteRecord } from '../shared/ip-sites'
+import { WorkspaceLibrary } from './workspace-library'
+
+/**
+ * What is written for a window. It holds references (proxyId, groupId), never the proxy or
+ * group itself; ProfileStore fills those in when a window is read (see resolve()).
+ */
+type StoredProfile = Omit<BrowserProfile, 'group' | 'proxy' | 'proxyCheck' | 'proxyMissing'> & {
+  /** Network check of a direct-connection window. Library proxies keep their own check. */
+  directCheck?: ProxyCheckSummary
+}
+
+const SCHEMA_VERSION = 12
+
+/** What assignMany can point windows at. '' = direct connection / ungrouped. */
+export interface AssignPatch {
+  proxyId?: string
+  groupId?: string
+  /** With a proxy: let time zone, language and location follow its exit IP. */
+  followProxyIdentity?: boolean
+  /** Add an extension to (or with removeExtension, take it off) the windows' extension list. */
+  extensionId?: string
+  removeExtension?: boolean
+}
 
 interface StoreFile {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
+  schemaVersion: number
   nextSerialNumber?: number
-  profiles: BrowserProfile[]
+  profiles: unknown[]
+  proxies?: unknown[]
+  groups?: unknown[]
 }
 
 interface LoadedStore {
-  profiles: BrowserProfile[]
+  profiles: StoredProfile[]
+  library: WorkspaceLibrary
   nextSerialNumber: number
+  schemaVersion: number
 }
 
 interface DeletedProfileRecord {
   schemaVersion: 1
   deletedAt: string
+  /** The window as it was (proxy and group by value, plus their ids), so it can be restored on its own. */
   profile: BrowserProfile
 }
 
@@ -34,56 +71,109 @@ interface ProfileOwnerMarker {
 
 const PROFILE_OWNER_FILE = 'profile-owner.json'
 const MAX_PROFILE_SERIAL = 999_999_999
+const DIRECT: ProxyConfig = { protocol: 'direct', host: '', username: '', password: '' }
+
+/** Where a window came from when it already existed elsewhere: its number and when it was made. */
+export interface WindowOrigin {
+  serialNumber?: number
+  createdAt?: string
+}
 
 function validProfileSerial(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= MAX_PROFILE_SERIAL
 }
 
 function safeWebRtcPolicy(value: unknown): WebRtcPolicy {
-  return value === 'proxy_only' || value === 'public_only' || value === 'default' ? value : 'proxy_only'
+  if (value === 'public_only') return 'default'
+  return value === 'proxy_only' || value === 'privacy' || value === 'default' || value === 'disabled' ? value : 'proxy_only'
 }
 
-function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const check = value as Partial<ProxyCheckSummary>
-  if (typeof check.ok !== 'boolean' || typeof check.latencyMs !== 'number' || typeof check.checkedAt !== 'string') return undefined
-  if (Number.isNaN(Date.parse(check.checkedAt))) return undefined
-  const risk = check.networkRisk === 'tor' || check.networkRisk === 'vpn' || check.networkRisk === 'proxy' || check.networkRisk === 'hosting'
-    ? check.networkRisk
-    : undefined
-  return {
-    ok: check.ok,
-    ip: typeof check.ip === 'string' ? check.ip : undefined,
-    latencyMs: Math.max(0, Math.round(check.latencyMs)),
-    error: typeof check.error === 'string' ? check.error.slice(0, 500) : undefined,
-    warning: typeof check.warning === 'string' ? check.warning.slice(0, 500) : undefined,
-    degraded: check.degraded === true,
-    country: typeof check.country === 'string' ? check.country : undefined,
-    countryCode: typeof check.countryCode === 'string' ? check.countryCode : undefined,
-    latitude: typeof check.latitude === 'number' && check.latitude >= -90 && check.latitude <= 90 ? check.latitude : undefined,
-    longitude: typeof check.longitude === 'number' && check.longitude >= -180 && check.longitude <= 180 ? check.longitude : undefined,
-    accuracyMeters: typeof check.accuracyMeters === 'number' && check.accuracyMeters > 0 ? check.accuracyMeters : undefined,
-    ipVersion: check.ipVersion === 4 || check.ipVersion === 6 ? check.ipVersion : undefined,
-    region: typeof check.region === 'string' ? check.region : undefined,
-    city: typeof check.city === 'string' ? check.city : undefined,
-    timezone: typeof check.timezone === 'string' ? check.timezone : undefined,
-    asn: typeof check.asn === 'number' ? check.asn : undefined,
-    organization: typeof check.organization === 'string' ? check.organization : undefined,
-    isp: typeof check.isp === 'string' ? check.isp : undefined,
-    networkRisk: risk,
-    geoConfidence: check.geoConfidence === 'consensus' || check.geoConfidence === 'single-source' || check.geoConfidence === 'conflict'
-      ? check.geoConfidence
-      : undefined,
-    geoSources: Array.isArray(check.geoSources)
-      ? check.geoSources.filter((source): source is string => typeof source === 'string').slice(0, 5)
-      : undefined,
-    geoConflict: typeof check.geoConflict === 'string' ? check.geoConflict.slice(0, 500) : undefined,
-    failureKind: ['authentication', 'timeout', 'connection', 'unknown'].includes(check.failureKind ?? '') ? check.failureKind : undefined,
-    retried: check.retried === true,
-    exitChanged: check.exitChanged === true,
-    previousIp: typeof check.previousIp === 'string' ? check.previousIp : undefined,
-    checkedAt: check.checkedAt
+/** A saved 网络加速 setting, or none when it is unreadable (the window then keeps the old rule). */
+function safeTunnelRoute(value: unknown): TunnelRoute | undefined {
+  if (value === undefined) return undefined
+  try {
+    return validTunnelRoute(value)
+  } catch {
+    return undefined
   }
+}
+
+/** 网络加速 of a window that was never given one. */
+const TUNNEL_OFF: TunnelRoute = { enabled: false, mode: 'auto' }
+const API_HISTORY_LIMIT = 50
+
+const text = (value: unknown, max = 200): string | undefined => typeof value === 'string' && value ? value.slice(0, max) : undefined
+
+/** Where a proxy server is, as saved; nothing when unreadable. */
+function safeServerPlace(value: unknown): ServerPlace | undefined {
+  const place = value as ServerPlace | undefined
+  if (!place || typeof place !== 'object') return undefined
+  const countryCode = text(place.countryCode, 2)
+  const city = text(place.city, 100)
+  return countryCode || city ? { ...(countryCode ? { countryCode } : {}), ...(city ? { city } : {}) } : undefined
+}
+
+/** One saved entry of an API window's check log; nothing when unreadable. */
+export function safeApiCheckRecord(value: unknown): ApiCheckRecord | undefined {
+  const entry = value as Partial<ApiCheckRecord> | undefined
+  if (!entry || typeof entry !== 'object' || typeof entry.at !== 'string' || typeof entry.ok !== 'boolean') return undefined
+  if (entry.trigger !== 'check' && entry.trigger !== 'refresh' && entry.trigger !== 'launch') return undefined
+  const addressPlace = safeServerPlace(entry.addressPlace)
+  const record: ApiCheckRecord = { at: entry.at, trigger: entry.trigger, ok: entry.ok }
+  if (text(entry.address)) record.address = text(entry.address)
+  if (addressPlace) record.addressPlace = addressPlace
+  if (entry.fetched === true) record.fetched = true
+  if (text(entry.ip, 64)) record.ip = text(entry.ip, 64)
+  if (text(entry.countryCode, 2)) record.countryCode = text(entry.countryCode, 2)
+  if (text(entry.city, 100)) record.city = text(entry.city, 100)
+  if (entry.rotating === true) record.rotating = true
+  if (text(entry.error, 500)) record.error = text(entry.error, 500)
+  return record
+}
+
+/** A saved API 提取 of a window, or none when it is unreadable. */
+function safeApiProxy(value: unknown): WindowApiProxy | undefined {
+  const api = value as Partial<WindowApiProxy> | undefined
+  if (!api || typeof api !== 'object' || typeof api.url !== 'string') return undefined
+  let url: string
+  try { url = validProxyApiUrl(api.url) } catch { return undefined }
+  const endpoint = api.endpoint && typeof api.endpoint === 'object'
+    && (api.endpoint.protocol === 'http' || api.endpoint.protocol === 'socks5')
+    && typeof api.endpoint.host === 'string' && Number.isInteger(api.endpoint.port)
+    ? {
+        protocol: api.endpoint.protocol,
+        host: api.endpoint.host,
+        port: api.endpoint.port,
+        username: typeof api.endpoint.username === 'string' ? api.endpoint.username : '',
+        ...(typeof api.endpoint.fetchedAt === 'string' ? { fetchedAt: api.endpoint.fetchedAt } : {}),
+        ...(safeServerPlace(api.endpoint.place) ? { place: safeServerPlace(api.endpoint.place) } : {})
+      }
+    : undefined
+  const history = Array.isArray(api.history)
+    ? api.history.filter((entry): entry is ApiIpRecord => Boolean(entry) && typeof entry.ip === 'string' && typeof entry.at === 'string').slice(0, API_HISTORY_LIMIT)
+    : []
+  const log = Array.isArray(api.log) ? api.log.map(safeApiCheckRecord).filter((entry): entry is ApiCheckRecord => Boolean(entry)).slice(0, API_HISTORY_LIMIT) : []
+  return { url, ...(endpoint ? { endpoint } : {}), ...(history.length ? { history } : {}), ...(log.length ? { log } : {}) }
+}
+
+/** The proxy as a window uses it: the window's own 网络加速, never the library proxy's default. */
+function withWindowRoute(config: ProxyConfig, tunnel: TunnelRoute | undefined): ProxyConfig {
+  const { tunnel: _default, ...rest } = config
+  return tunnel ? { ...rest, tunnel } : rest
+}
+
+function validRecordId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9-]{1,100}$/.test(value)
+}
+
+function isEditable(profile: Pick<BrowserProfile, 'status'>): boolean {
+  return profile.status === 'closed' || profile.status === 'error'
+}
+
+/** Drops the fields a window does not store and keeps the ones it does. */
+function storedFields(profile: BrowserProfile | StoredProfile): StoredProfile {
+  const { group: _group, proxy: _proxy, proxyCheck: _check, proxyMissing: _missing, ...stored } = profile as BrowserProfile
+  return stored as StoredProfile
 }
 
 export class ProfileStore {
@@ -91,11 +181,20 @@ export class ProfileStore {
   readonly profilesPath: string
   readonly backupPath: string
   readonly previousBackupPath: string
-  private profiles = new Map<string, BrowserProfile>()
+  private profiles = new Map<string, StoredProfile>()
+  /** Passwords of the proxies API links gave this session (not written to disk; the next launch fetches anew). */
+  private apiPasswords = new Map<string, string>()
+  private library = new WorkspaceLibrary()
   private nextSerialNumber = 1
   private writeQueue: Promise<void> = Promise.resolve()
   private health: ProfileStoreHealth = { recoveredFromBackup: false, backupHealthy: true }
   private preservePreviousBackupOnce = false
+  private changeListeners = new Set<(profiles: BrowserProfile[]) => void>()
+  private libraryListeners = new Set<() => void>()
+
+  /** The kernel a new window is pinned to when it names none (the default kernel at creation). */
+  private defaultKernel?: () => Promise<string | undefined>
+  private seedsElsewhere: () => Iterable<number> = () => []
 
   constructor(vaultPath: string, private readonly secrets: SecretCodec = identitySecretCodec) {
     this.vaultPath = vaultPath
@@ -148,17 +247,107 @@ export class ProfileStore {
       }
     }
 
+    // Keep an untouched copy of the file from before the proxy/group libraries existed.
+    if (loaded && loaded.schemaVersion < SCHEMA_VERSION && !primaryError) {
+      const copy = join(this.vaultPath, `profiles.v${loaded.schemaVersion}.before-upgrade.json`)
+      await copyFile(this.profilesPath, copy).catch(() => undefined)
+    }
+
     this.profiles.clear()
+    this.library = loaded?.library ?? new WorkspaceLibrary()
     this.nextSerialNumber = loaded?.nextSerialNumber ?? 1
     for (const profile of loaded?.profiles ?? []) {
       this.profiles.set(profile.id, profile)
       await this.ensureProfileDirectories(profile.id)
     }
+    this.moveApiProxiesIntoWindows()
+    this.adoptLibraryChecks()
+    this.fixSavedFingerprints()
     await this.persist()
+  }
+
+  /**
+   * Checks belong to the window since 0.5.20; before, a library proxy's last check showed in every
+   * window using it. A window that is the proxy's only user takes that check as its own once (it
+   * came from this window or the proxy page); a shared proxy's windows start unchecked.
+   */
+  private adoptLibraryChecks(): void {
+    const users = new Map<string, number>()
+    for (const stored of this.profiles.values()) if (stored.proxyId) users.set(stored.proxyId, (users.get(stored.proxyId) ?? 0) + 1)
+    for (const [id, stored] of this.profiles) {
+      if (!stored.proxyId || stored.directCheck || users.get(stored.proxyId) !== 1) continue
+      const check = this.library.proxies.get(stored.proxyId)?.check
+      if (check) this.profiles.set(id, { ...stored, directCheck: { ...check } })
+    }
+  }
+
+  /**
+   * Windows saved before every value was written in: one that still followed its IP keeps the values
+   * of its last check, and the languages that followed are written in (savedFingerprint).
+   */
+  private fixSavedFingerprints(): void {
+    this.rewrittenOnLoad.clear()
+    for (const [id, stored] of this.profiles) {
+      const fingerprint = savedFingerprint(stored.fingerprint, this.resolve(stored).proxyCheck, {
+        gpuModel: effectiveGpu(stored.fingerprint, stored.kernelVersion)?.model,
+        legacy: true
+      })
+      if (JSON.stringify(fingerprint) !== JSON.stringify(stored.fingerprint)) {
+        this.profiles.set(id, { ...stored, fingerprint })
+        this.rewrittenOnLoad.add(id)
+      }
+    }
+  }
+
+  private readonly rewrittenOnLoad = new Set<string>()
+
+  /** Windows whose values were written in when this version first opened them (their cloud copy is updated once). */
+  takeRewrittenOnLoad(): string[] {
+    const ids = [...this.rewrittenOnLoad]
+    this.rewrittenOnLoad.clear()
+    return ids
+  }
+
+  /**
+   * An API window's proxy as another computer left it (cloud): the same proxy and IP history, so
+   * it opens on the same IP. Only for the same link.
+   */
+  async restoreApiState(id: string, input: unknown): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const state = input as { url?: unknown; endpoint?: { password?: unknown }; history?: unknown; log?: unknown; check?: unknown } | undefined
+    const api = safeApiProxy({ url: current.apiProxy?.url, endpoint: state?.endpoint, history: state?.history, log: state?.log })
+    if (!current.apiProxy || !api) return this.resolve(current)
+    const check = safeProxyCheck(state?.check)
+    const password = typeof state?.endpoint?.password === 'string' ? state.endpoint.password : ''
+    if (api.endpoint && password) this.apiPasswords.set(id, password)
+    else if (api.endpoint) this.apiPasswords.delete(id)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, ...api } }
+    if (check) profile.directCheck = check
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
   }
 
   storageHealth(): ProfileStoreHealth {
     return { ...this.health }
+  }
+
+  /** Called when a library proxy's check or IP 评分 changed, wherever it was made. */
+  onLibraryChecksChanged(listener: () => void): () => void {
+    this.libraryListeners.add(listener)
+    return () => { this.libraryListeners.delete(listener) }
+  }
+
+  /** Called with the windows whose shown proxy or group changed because a library record changed. */
+  onProfilesChanged(listener: (profiles: BrowserProfile[]) => void): () => void {
+    this.changeListeners.add(listener)
+    return () => { this.changeListeners.delete(listener) }
+  }
+
+  private notify(profileIds: string[]): void {
+    if (!profileIds.length || !this.changeListeners.size) return
+    const changed = profileIds.filter((id) => this.profiles.has(id)).map((id) => this.get(id))
+    for (const listener of this.changeListeners) listener(changed)
   }
 
   private async readStore(path: string): Promise<LoadedStore> {
@@ -171,33 +360,49 @@ export class ProfileStore {
     }
     if (!value || typeof value !== 'object') throw new Error('环境元数据结构无效')
     const data = value as Partial<StoreFile>
-    if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(Number(data.schemaVersion)) || !Array.isArray(data.profiles)) {
+    const schemaVersion = Number(data.schemaVersion)
+    if (!Number.isInteger(schemaVersion) || schemaVersion < 1 || schemaVersion > SCHEMA_VERSION || !Array.isArray(data.profiles)) {
       throw new Error('环境元数据版本或列表结构无效')
     }
-    const result: BrowserProfile[] = []
+    const library = schemaVersion >= 12 ? this.readLibrary(data) : new WorkspaceLibrary()
+    const now = new Date().toISOString()
+    const result: StoredProfile[] = []
     const ids = new Set<string>()
     for (const value of data.profiles) {
-      const stored = value as Partial<BrowserProfile>
-      if (typeof stored.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(stored.id) || ids.has(stored.id)) {
+      const stored = value as Partial<BrowserProfile> & Partial<StoredProfile>
+      if (!validRecordId(stored.id) || ids.has(stored.id)) {
         throw new Error('环境元数据包含无效或重复 ID')
       }
-      if (!stored.proxy || !stored.fingerprint || !Array.isArray(stored.startUrls)) {
+      if (!stored.fingerprint || !Array.isArray(stored.startUrls)) {
         throw new Error(`环境 ${stored.id} 的配置不完整`)
       }
-      if (typeof stored.proxy.password !== 'string' || typeof stored.createdAt !== 'string' || typeof stored.updatedAt !== 'string') {
+      if (typeof stored.createdAt !== 'string' || typeof stored.updatedAt !== 'string') {
         throw new Error(`环境 ${stored.id} 的持久化字段无效`)
       }
+      // Up to version 11 the proxy and group were stored inside every window.
+      const legacy = schemaVersion < 12
+      if (legacy && (!stored.proxy || typeof stored.proxy.password !== 'string')) {
+        throw new Error(`环境 ${stored.id} 的持久化字段无效`)
+      }
+      const proxyId = legacy ? '' : typeof stored.proxyId === 'string' ? stored.proxyId : ''
+      const groupId = legacy ? '' : typeof stored.groupId === 'string' && library.groups.has(stored.groupId) ? stored.groupId : ''
       const draft = validateProfileDraft({
         name: stored.name as string,
         note: stored.note as string,
-        group: typeof stored.group === 'string' ? stored.group : '',
+        group: legacy ? (typeof stored.group === 'string' ? stored.group : '') : library.groupName(groupId),
         tags: Array.isArray(stored.tags) ? stored.tags.filter((tag) => typeof tag === 'string') : [],
         extensionIds: Array.isArray(stored.extensionIds) ? stored.extensionIds.filter((id) => typeof id === 'string') : [],
         color: stored.color as string,
         startUrls: stored.startUrls,
+        startupMode: stored.startupMode,
         kernelVersion: typeof stored.kernelVersion === 'string' ? stored.kernelVersion : '',
         window: stored.window ?? defaultProfileWindow(),
-        proxy: { ...stored.proxy, password: this.secrets.decode(stored.proxy.password) },
+        tunnel: proxyId || stored.apiProxy ? safeTunnelRoute(stored.tunnel) : undefined,
+        // A reference to a missing proxy is kept (and blocks launching); validate it as direct.
+        proxy: legacy ? { ...stored.proxy!, password: this.secrets.decode(stored.proxy!.password) } : library.proxyConfig(proxyId) ?? DIRECT,
+        account: stored.account && typeof stored.account === 'object'
+          ? { ...stored.account, password: this.secrets.decode(typeof stored.account.password === 'string' ? stored.account.password : '') }
+          : undefined,
         fingerprint: {
           ...stored.fingerprint,
           hardwareProfileId: stored.fingerprint.hardwareProfileId ?? 'legacy-custom',
@@ -208,16 +413,24 @@ export class ProfileStore {
         }
       })
       ids.add(stored.id)
+      const legacyCheck = legacy ? safeProxyCheck(stored.proxyCheck) : undefined
+      const resolvedProxyId = legacy ? library.ensureProxy(draft.proxy, now, legacyCheck) : proxyId
+      // Each window keeps its own last check, also when its proxy now comes from the library.
+      const directCheck = legacy ? legacyCheck : safeProxyCheck(stored.directCheck)
+      const { proxy: _proxy, group, ...fields } = draft
       result.push({
-        ...stored,
-        ...draft,
-        proxy: privateProxyConfig(draft.proxy),
+        ...fields,
+        account: privateAccount(draft.account),
+        proxyId: resolvedProxyId,
+        groupId: legacy ? library.ensureGroup(group, now) : groupId,
         id: stored.id,
         serialNumber: validProfileSerial(stored.serialNumber) ? stored.serialNumber : 0,
         createdAt: stored.createdAt,
         updatedAt: stored.updatedAt,
         lastOpenedAt: typeof stored.lastOpenedAt === 'string' ? stored.lastOpenedAt : undefined,
-        proxyCheck: safeProxyCheck(stored.proxyCheck),
+        ...(directCheck ? { directCheck } : {}),
+        ...(!resolvedProxyId && safeApiProxy(stored.apiProxy) ? { apiProxy: safeApiProxy(stored.apiProxy) } : {}),
+        ...this.loadApiPassword(stored),
         favorite: stored.favorite === true,
         status: 'closed',
         lastError: undefined
@@ -245,170 +458,740 @@ export class ProfileStore {
     const storedNext = validProfileSerial(data.nextSerialNumber) ? data.nextSerialNumber : 1
     const nextSerialNumber = Math.max(storedNext, highestSerial + 1)
     if (nextSerialNumber > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
-    return { profiles: result, nextSerialNumber }
+    return { profiles: result, library, nextSerialNumber, schemaVersion }
   }
 
-  list(): BrowserProfile[] {
-    return [...this.profiles.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  private readLibrary(data: Partial<StoreFile>): WorkspaceLibrary {
+    if (!Array.isArray(data.proxies) || !Array.isArray(data.groups)) throw new Error('代理库或分组库结构无效')
+    const proxies: ProxyRecord[] = []
+    const proxyIds = new Set<string>()
+    for (const value of data.proxies) {
+      const stored = value as Partial<ProxyRecord>
+      if (!validRecordId(stored.id) || proxyIds.has(stored.id) || typeof stored.password !== 'string'
+        || typeof stored.createdAt !== 'string' || typeof stored.updatedAt !== 'string') {
+        throw new Error('代理库包含无效记录')
+      }
+      const config = validateProxyConfig({
+        protocol: stored.protocol as ProxyConfig['protocol'],
+        host: stored.host as string,
+        port: stored.port,
+        username: stored.username as string,
+        password: this.secrets.decode(stored.password)
+      })
+      if (config.protocol === 'direct') throw new Error('代理库包含无效记录')
+      proxyIds.add(stored.id)
+      const check = safeProxyCheck(stored.check)
+      const ipSites = safeIpSiteRecord(stored.ipSites)
+      proxies.push({
+        id: stored.id,
+        protocol: config.protocol,
+        host: config.host,
+        port: config.port!,
+        username: config.username,
+        password: config.password,
+        note: typeof stored.note === 'string' ? stored.note.slice(0, 200) : '',
+        createdAt: stored.createdAt,
+        updatedAt: stored.updatedAt,
+        ...(check ? { check } : {}),
+        ...(ipSites ? { ipSites } : {}),
+        ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {}),
+        ...(safeTunnelRoute(stored.tunnel) ? { tunnel: safeTunnelRoute(stored.tunnel) } : {})
+      })
+    }
+    const groups: GroupRecord[] = []
+    const groupIds = new Set<string>()
+    for (const value of data.groups) {
+      const stored = value as Partial<GroupRecord>
+      if (!validRecordId(stored.id) || groupIds.has(stored.id) || typeof stored.createdAt !== 'string') {
+        throw new Error('分组库包含无效记录')
+      }
+      groupIds.add(stored.id)
+      groups.push({
+        id: stored.id,
+        name: validateGroupName(stored.name),
+        color: typeof stored.color === 'string' && /^#[\da-f]{6}$/i.test(stored.color) ? stored.color : nextGroupColor(groups.length),
+        note: typeof stored.note === 'string' ? stored.note.slice(0, 200) : '',
+        createdAt: stored.createdAt
+      })
+    }
+    return new WorkspaceLibrary(proxies, groups)
   }
 
-  get(id: string): BrowserProfile {
+  /** A window as everything else sees it: references filled in from the libraries. */
+  private resolve(stored: StoredProfile): BrowserProfile {
+    const { directCheck, ...fields } = stored
+    const record = stored.proxyId ? this.library.proxies.get(stored.proxyId) : undefined
+    const config = stored.proxyId ? this.library.proxyConfig(stored.proxyId) : stored.apiProxy ? this.apiProxyConfig(stored) : undefined
+    const profile: BrowserProfile = {
+      ...fields,
+      group: this.library.groupName(stored.groupId),
+      proxy: config ? withWindowRoute(config, stored.tunnel) : { ...DIRECT },
+      // A library proxy's latest check, wherever it ran (proxy page, any window using it); the
+      // window's own is kept too and counts when it is the newer one.
+      proxyCheck: newerCheck(record && !record.apiUrl ? record.check : undefined, directCheck)
+    }
+    if (stored.proxyId && !record) profile.proxyMissing = true
+    if (!profile.proxyCheck) delete profile.proxyCheck
+    return profile
+  }
+
+  /** A window's API 提取 as a proxy: the link, and the last proxy it gave (nothing yet: an empty host). */
+  private apiProxyConfig(stored: StoredProfile): ProxyConfig {
+    const { url, endpoint } = stored.apiProxy!
+    return {
+      protocol: endpoint?.protocol ?? 'http',
+      host: endpoint?.host ?? '',
+      ...(endpoint ? { port: endpoint.port } : {}),
+      username: endpoint?.username ?? '',
+      password: this.apiPasswords.get(stored.id) ?? '',
+      apiUrl: url
+    }
+  }
+
+  /** Gives windows an API link (API 提取) instead of their proxy; the same link keeps a window's history. */
+  async setApiUrlMany(idsInput: string[], urlInput: unknown): Promise<BrowserProfile[]> {
+    const url = validProxyApiUrl(typeof urlInput === 'string' ? urlInput : '')
+    const ids = this.selection(idsInput)
+    const running = ids.map((id) => this.stored(id)).find((profile) => !isEditable(profile))
+    if (running) throw new Error(`环境“${running.name}”正在运行，请先关闭再更换代理`)
+    const now = new Date().toISOString()
+    for (const id of ids) {
+      const current = this.stored(id)
+      const same = current.apiProxy?.url === url
+      const profile: StoredProfile = { ...current, proxyId: '', apiProxy: same ? current.apiProxy! : { url }, updatedAt: now }
+      if (!same) delete profile.directCheck
+      this.profiles.set(id, profile)
+    }
+    await this.persist()
+    return ids.map((id) => this.get(id))
+  }
+
+  /** The proxy password of an API window, read from the file into memory (it never reaches the window list). */
+  private loadApiPassword(stored: { id?: unknown; apiProxy?: unknown }): Record<string, never> {
+    const password = (stored.apiProxy as { endpoint?: { password?: unknown } } | undefined)?.endpoint?.password
+    if (typeof stored.id === 'string' && typeof password === 'string' && password) this.apiPasswords.set(stored.id, this.secrets.decode(password))
+    return {}
+  }
+
+  /** A new proxy from a window's API link: used from now on, while it works. */
+  async setWindowApiEndpoint(
+    id: string,
+    endpoint: { protocol: 'http' | 'socks5'; host: string; port: number; username: string; password: string },
+    place?: ServerPlace,
+    fetchedAt = new Date().toISOString()
+  ): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    if (!current.apiProxy) throw new Error('这个窗口没有使用 API 提取')
+    const { password, ...shown } = endpoint
+    if (password) this.apiPasswords.set(id, password)
+    else this.apiPasswords.delete(id)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, endpoint: { ...shown, fetchedAt, ...(place ? { place } : {}) } } }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /**
+   * An API window's exit IP left unticked: its proxy goes, with the check, the IP in its history and
+   * the log lines about that proxy; the next check or launch takes a new one from the link.
+   */
+  async discardApiEndpoint(id: string): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const endpoint = current.apiProxy?.endpoint
+    if (!current.apiProxy || !endpoint) return this.resolve(current)
+    const address = `${endpoint.host}:${endpoint.port}`
+    const ip = current.directCheck?.ip
+    const { endpoint: _gone, history, log, ...api } = current.apiProxy
+    const keptHistory = (history ?? []).filter((entry) => !ip || entry.ip !== ip)
+    const keptLog = (log ?? []).filter((entry) => entry.address !== address && (!ip || entry.ip !== ip))
+    const profile: StoredProfile = { ...current, apiProxy: { ...api, ...(keptHistory.length ? { history: keptHistory } : {}), ...(keptLog.length ? { log: keptLog } : {}) }, updatedAt: new Date().toISOString() }
+    delete profile.directCheck
+    this.apiPasswords.delete(id)
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /** Notes an extraction or check of an API window's proxy in its log (newest first, at most 50). */
+  async noteApiCheck(id: string, ...entries: ApiCheckRecord[]): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    if (!current.apiProxy || !entries.length) return this.resolve(current)
+    const log = [...[...entries].reverse(), ...(current.apiProxy.log ?? [])].slice(0, API_HISTORY_LIMIT)
+    const profile: StoredProfile = { ...current, apiProxy: { ...current.apiProxy, log } }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /**
+   * Windows that used an API proxy from the library (before 0.5.12) keep its link themselves; the
+   * library entry, which only ever showed the last short-lived IP, is then removed.
+   */
+  private moveApiProxiesIntoWindows(): boolean {
+    const apiRecords = this.library.listProxies().filter((record) => record.apiUrl)
+    if (!apiRecords.length) return false
+    for (const [id, stored] of this.profiles) {
+      const record = apiRecords.find((item) => item.id === stored.proxyId)
+      if (!record) continue
+      const endpoint = record.host && record.port && (record.protocol === 'http' || record.protocol === 'socks5')
+        ? { protocol: record.protocol, host: record.host, port: record.port, username: record.username }
+        : undefined
+      this.profiles.set(id, {
+        ...stored,
+        proxyId: '',
+        apiProxy: { url: record.apiUrl!, ...(endpoint ? { endpoint } : {}) },
+        ...(stored.tunnel || record.tunnel ? { tunnel: stored.tunnel ?? record.tunnel } : {}),
+        ...(record.check ? { directCheck: record.check } : {})
+      })
+    }
+    for (const record of apiRecords) this.library.deleteProxy(record.id)
+    return true
+  }
+
+  private stored(id: string): StoredProfile {
     const profile = this.profiles.get(id)
     if (!profile) throw new Error('浏览器环境不存在')
     return profile
   }
 
-  async create(input: ProfileDraft): Promise<BrowserProfile> {
-    return (await this.createMany([input]))[0]
+  list(): BrowserProfile[] {
+    return [...this.profiles.values()]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((profile) => this.resolve(profile))
   }
 
-  async createMany(inputs: ProfileDraft[]): Promise<BrowserProfile[]> {
-    if (!Array.isArray(inputs) || inputs.length === 0) throw new Error('没有可创建的浏览器环境')
-    if (inputs.length > 500) throw new Error('单次最多创建 500 个浏览器环境')
-    const drafts = inputs.map(validateProfileDraft)
-    if (this.nextSerialNumber + drafts.length - 1 > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
-    const firstSerialNumber = this.nextSerialNumber
-    this.nextSerialNumber += drafts.length
-    const now = new Date().toISOString()
-    const created = drafts.map((draft, index) => {
-      const id = randomUUID()
-      return {
-        ...draft,
-        id,
-        serialNumber: firstSerialNumber + index,
-        proxy: privateProxyConfig(draft.proxy),
-        fingerprint: {
-          ...draft.fingerprint,
-          seed: Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
-        },
-        createdAt: now,
-        updatedAt: now,
-        favorite: false,
-        status: 'closed' as const
-      }
-    })
+  get(id: string): BrowserProfile {
+    return this.resolve(this.stored(id))
+  }
 
+  /**
+   * Which library proxy a draft refers to. A proxy picked from the library is used as is;
+   * a typed proxy is looked up in the library and added when it is new. '' is direct.
+   */
+  private referenceProxy(input: ProfileDraft, proxy: ProxyConfig, now: string, currentProxyId = ''): string {
+    if (proxy.apiUrl && !input.proxyId) return ''
+    if (typeof input.proxyId === 'string' && input.proxyId) {
+      if (!this.library.proxies.has(input.proxyId)) throw new Error('所选代理已不在代理库中，请重新选择')
+      return input.proxyId
+    }
+    // An edit form that left a saved password empty still means the window's own proxy.
+    const current = currentProxyId ? this.library.proxyConfig(currentProxyId) : undefined
+    if (current && proxy.passwordStored && !proxy.password && sameProxyIdentity(proxy, current)) return currentProxyId
+    return this.library.ensureProxy(proxy, now)
+  }
+
+  /**
+   * A window's 网络加速: what it was given, else (same proxy as before) what it had, else the
+   * 网络加速 of the library proxy it now uses (off when that proxy has none). A direct window has none.
+   */
+  private windowTunnel(draft: { tunnel?: TunnelRoute }, proxyId: string, current?: StoredProfile, api = false): TunnelRoute | undefined {
+    if (!api && !proxyId) return undefined
+    if (draft.tunnel) return draft.tunnel
+    if (current && (api ? current.apiProxy : current.proxyId === proxyId)) return current.tunnel
+    if (api) return current?.tunnel ?? { ...TUNNEL_OFF }
+    const proxyRoute = this.library.proxies.get(proxyId)?.tunnel
+    return proxyRoute ? { ...proxyRoute } : { ...TUNNEL_OFF }
+  }
+
+  /** Runs a change that may add library records; on failure the libraries are put back. */
+  private async withLibraryRollback<T>(change: () => Promise<T>): Promise<T> {
+    const snapshot = this.library.clone()
     try {
-      await Promise.all(created.map((profile) => this.ensureProfileDirectories(profile.id)))
-      for (const profile of created) this.profiles.set(profile.id, profile)
-      await this.persist()
-      return created
+      return await change()
     } catch (error) {
-      for (const profile of created) this.profiles.delete(profile.id)
-      await Promise.allSettled(created.map((profile) => rm(join(this.vaultPath, 'profiles', profile.id), { recursive: true, force: true })))
+      this.library = snapshot
       throw error
     }
   }
 
+  /** Seeds windows elsewhere use (the team's cloud windows): a new window's seed is none of them. */
+  setSeedsInUse(provider: () => Iterable<number>): void {
+    this.seedsElsewhere = provider
+  }
+
+  /**
+   * The seed itself when no other window here or in the team has it, else a new random one: the
+   * seed decides the window's Canvas and AudioContext values, so two windows never share them.
+   */
+  private uniqueSeed(seed: number, except?: string, alsoTaken: ReadonlySet<number> = new Set()): number {
+    const taken = new Set<number>(alsoTaken)
+    for (const profile of this.profiles.values()) if (profile.id !== except) taken.add(profile.fingerprint.seed)
+    for (const value of this.seedsElsewhere()) taken.add(value)
+    let value = seed
+    while (taken.has(value)) value = randomSeed()
+    return value
+  }
+
+  setDefaultKernelResolver(resolver: () => Promise<string | undefined>): void {
+    this.defaultKernel = resolver
+  }
+
+  /**
+   * Pins every window that follows the default kernel to `kernelVersion` (the default now), so
+   * a later change of the default only affects windows created after it. Returns how many changed.
+   */
+  async pinUnboundKernels(kernelVersion: string): Promise<number> {
+    if (!isKernelId(kernelVersion)) throw new Error('内核版本号无效')
+    // updatedAt stays: the list is sorted by it and nothing the user did changed.
+    const next = [...this.profiles.values()]
+      .filter((profile) => !profile.kernelVersion)
+      .map((profile) => ({ ...profile, kernelVersion }))
+    if (!next.length) return 0
+    for (const profile of next) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return next.length
+  }
+
+  /**
+   * origin: a window that already existed elsewhere (from the cloud) keeps its number and creation
+   * time when no window here has that number; otherwise it takes the next number.
+   */
+  async create(input: ProfileDraft, origin?: WindowOrigin): Promise<BrowserProfile> {
+    return (await this.createMany([input], origin ? [origin] : undefined))[0]
+  }
+
+  async createMany(inputs: ProfileDraft[], origins?: Array<WindowOrigin | undefined>): Promise<BrowserProfile[]> {
+    if (!Array.isArray(inputs) || inputs.length === 0) throw new Error('没有可创建的浏览器环境')
+    if (inputs.length > 1000) throw new Error('单次最多创建 1000 个浏览器环境')
+    const drafts = inputs.map(validateProfileDraft)
+    if (this.nextSerialNumber + drafts.length - 1 > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
+    const defaultKernel = drafts.some((draft) => !draft.kernelVersion)
+      ? await this.defaultKernel?.().catch(() => undefined)
+      : undefined
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const taken = new Set([...this.profiles.values()].map((profile) => profile.serialNumber))
+      let next = this.nextSerialNumber
+      const numberFor = (origin: WindowOrigin | undefined): number => {
+        const wanted = origin?.serialNumber
+        if (validProfileSerial(wanted) && !taken.has(wanted)) {
+          taken.add(wanted)
+          return wanted
+        }
+        while (taken.has(next)) next += 1
+        taken.add(next)
+        return next++
+      }
+      const seedsNow = new Set<number>()
+      const created: StoredProfile[] = drafts.map((draft, index) => {
+        const id = randomUUID()
+        const origin = origins?.[index]
+        // A window brought from the cloud or a backup keeps its seed (it is the same window).
+        const wanted = Number.isInteger(draft.fingerprint.seed) ? draft.fingerprint.seed : seedFromId(id)
+        const seed = origin ? wanted : this.uniqueSeed(wanted, undefined, seedsNow)
+        seedsNow.add(seed)
+        const fingerprint = seed === wanted ? { ...draft.fingerprint, seed } : refreshSeededGpuIdentity({ ...draft.fingerprint, seed })
+        const createdAt = typeof origin?.createdAt === 'string' && !Number.isNaN(Date.parse(origin.createdAt)) ? origin.createdAt : now
+        const { proxy, group, tunnel, ...fields } = draft
+        const proxyId = this.referenceProxy(inputs[index], tunnel ? { ...proxy, tunnel } : proxy, now)
+        const api = !proxyId && proxy.apiUrl ? { url: proxy.apiUrl } : undefined
+        const route = this.windowTunnel(draft, proxyId, undefined, Boolean(api))
+        return {
+          ...fields,
+          ...(route ? { tunnel: route } : {}),
+          ...(api ? { apiProxy: api } : {}),
+          kernelVersion: fields.kernelVersion || defaultKernel || '',
+          id,
+          serialNumber: numberFor(origin),
+          proxyId,
+          groupId: this.library.ensureGroup(group, now),
+          account: privateAccount(draft.account),
+          // A saved window keeps its values: nothing follows an IP or a table from here on.
+          fingerprint: savedFingerprint(fingerprint, undefined, { gpuModel: effectiveGpu(fingerprint, fields.kernelVersion || defaultKernel)?.model }),
+          createdAt,
+          updatedAt: now,
+          favorite: false,
+          status: 'closed' as const
+        }
+      })
+      try {
+        await Promise.all(created.map((profile) => this.ensureProfileDirectories(profile.id)))
+        for (const profile of created) this.profiles.set(profile.id, profile)
+        this.nextSerialNumber = Math.max(next, ...created.map((profile) => profile.serialNumber + 1))
+        await this.persist()
+        return created.map((profile) => this.resolve(profile))
+      } catch (error) {
+        for (const profile of created) this.profiles.delete(profile.id)
+        await Promise.allSettled(created.map((profile) => rm(join(this.vaultPath, 'profiles', profile.id), { recursive: true, force: true })))
+        throw error
+      }
+    })
+  }
+
+  /**
+   * What can change while the window is open: its name, group, note, tags, colour, account, start
+   * pages, extensions and window size (used from its next launch). Proxy, kernel and fingerprint
+   * stay as the running browser was started with; changing them needs the window closed (update).
+   */
+  async updateDetails(id: string, input: ProfileDraft): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const draft = validateProfileDraft(input)
+    const keepAccountPassword = !draft.account.password
+      && draft.account.passwordStored === true
+      && sameAccountIdentity(draft.account, current.account)
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const { name, note, tags, color, startUrls, startupMode, extensionIds, window } = draft
+      const profile: StoredProfile = {
+        ...current,
+        name, note, tags, color, startUrls, startupMode, extensionIds, window,
+        groupId: this.library.ensureGroup(draft.group, now),
+        account: privateAccount({
+          ...draft.account,
+          password: keepAccountPassword ? current.account.password : draft.account.password
+        }),
+        updatedAt: now
+      }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
+    })
+  }
+
   async update(id: string, input: ProfileDraft): Promise<BrowserProfile> {
-    const current = this.get(id)
-    if (current.status !== 'closed' && current.status !== 'error') {
+    const current = this.stored(id)
+    if (!isEditable(current)) {
       throw new Error('请先关闭浏览器环境再修改配置')
     }
     const draft = validateProfileDraft(input)
-    const keepStoredPassword = draft.proxy.protocol !== 'direct'
-      && !draft.proxy.password
-      && draft.proxy.passwordStored
-      && sameProxyIdentity(draft.proxy, current.proxy)
-    const profile: BrowserProfile = {
-      ...current,
-      ...draft,
-      proxy: privateProxyConfig({
-        ...draft.proxy,
-        password: draft.proxy.protocol === 'direct' ? '' : keepStoredPassword ? current.proxy.password : draft.proxy.password
-      }),
-      id,
-      createdAt: current.createdAt,
-      updatedAt: new Date().toISOString(),
-      status: current.status
-    }
-    if (!sameProxyIdentity(profile.proxy, current.proxy) || profile.proxy.password !== current.proxy.password) {
-      delete profile.proxyCheck
-    }
-    this.profiles.set(id, profile)
-    await this.persist()
-    return profile
+    // The kernel a window following the default runs, for the GPU its 自动 media devices go with (as the editor shows).
+    const defaultKernel = draft.kernelVersion ? undefined : await this.defaultKernel?.().catch(() => undefined)
+    const keepAccountPassword = !draft.account.password
+      && draft.account.passwordStored === true
+      && sameAccountIdentity(draft.account, current.account)
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const { proxy, group, tunnel, ...fields } = draft
+      const proxyId = this.referenceProxy(input, tunnel ? { ...proxy, tunnel } : proxy, now, current.proxyId)
+      const apiUrl = !proxyId ? proxy.apiUrl : undefined
+      const route = this.windowTunnel(draft, proxyId, current, Boolean(apiUrl))
+      // A seed changed here (换一换) is one no other window has either.
+      if (fields.fingerprint.seed !== current.fingerprint.seed) {
+        const seed = this.uniqueSeed(fields.fingerprint.seed, id)
+        if (seed !== fields.fingerprint.seed) fields.fingerprint = refreshSeededGpuIdentity({ ...fields.fingerprint, seed })
+      }
+      const profile: StoredProfile = {
+        ...current,
+        ...fields,
+        fingerprint: savedFingerprint(fields.fingerprint, proxyId === current.proxyId ? this.resolve(current).proxyCheck : undefined, {
+          gpuModel: effectiveGpu(fields.fingerprint, fields.kernelVersion || defaultKernel)?.model
+        }),
+        proxyId,
+        groupId: this.library.ensureGroup(group, now),
+        account: privateAccount({
+          ...draft.account,
+          password: keepAccountPassword ? current.account.password : draft.account.password
+        }),
+        id,
+        createdAt: current.createdAt,
+        updatedAt: now,
+        status: current.status
+      }
+      // A check describes the proxy it ran on: another proxy starts unchecked.
+      if (proxyId !== current.proxyId) delete profile.directCheck
+      if (route) profile.tunnel = route
+      else delete profile.tunnel
+      // The same link keeps its last proxy and IP history; a new link starts afresh.
+      if (apiUrl) profile.apiProxy = current.apiProxy?.url === apiUrl ? current.apiProxy : { url: apiUrl }
+      else delete profile.apiProxy
+      if (apiUrl && current.apiProxy?.url !== apiUrl) delete profile.directCheck
+      // Device-bound sign-ins are fixed once the window was opened: an edit keeps what it had.
+      if (current.lastOpenedAt && current.fingerprint.deviceBinding !== 'ask') {
+        if (current.fingerprint.deviceBinding) profile.fingerprint.deviceBinding = current.fingerprint.deviceBinding
+        else delete profile.fingerprint.deviceBinding
+      }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
+    })
+  }
+
+  /**
+   * The choice a new window asks for before its first opening: sign-ins bound to the device ('on', key
+   * kept in the window) or not ('off'). Fixed once the window was opened.
+   */
+  async setDeviceBinding(id: string, value: 'on' | 'off'): Promise<BrowserProfile> {
+    if (value !== 'on' && value !== 'off') throw new Error('设备绑定登录设置无效')
+    const current = this.stored(id)
+    if (current.lastOpenedAt && current.fingerprint.deviceBinding !== 'ask') throw new Error('这个窗口已经打开过，设备绑定登录不能再改')
+    return this.lockFingerprint(id, { deviceBinding: value === 'on' ? 'on' : undefined })
   }
 
   async duplicate(id: string): Promise<BrowserProfile> {
     const source = this.get(id)
     const seed = seedFromId(randomUUID())
+    const draft = portableDraft(source, { passwords: 'keep', extensions: true })
     return this.create({
+      ...draft,
       name: suffixedProfileName('{0} 副本', source.name),
-      note: source.note,
-      group: source.group,
-      tags: [...source.tags],
-      extensionIds: [...source.extensionIds],
-      color: source.color,
-      startUrls: [...source.startUrls],
-      kernelVersion: source.kernelVersion,
-      window: { ...source.window },
-      proxy: { ...source.proxy },
-      fingerprint: refreshSeededGpuIdentity({ ...source.fingerprint, seed })
+      // Same library proxy, not a copy of it.
+      proxyId: source.proxyMissing ? undefined : source.proxyId,
+      fingerprint: refreshSeededGpuIdentity({ ...draft.fingerprint, seed })
     })
   }
 
   async classifyMany(idsInput: string[], patch: ProfileBatchClassification): Promise<BrowserProfile[]> {
     if (!Array.isArray(idsInput) || !patch || typeof patch !== 'object') throw new Error('批量修改参数无效')
-    const ids = [...new Set(idsInput)]
-    if (!ids.length) throw new Error('没有选择浏览器环境')
-    if (ids.length > 500) throw new Error('单次最多修改 500 个浏览器环境')
+    const ids = this.selection(idsInput)
     if (patch.group === undefined && !patch.addTags?.length) throw new Error('请填写分组或要追加的标签')
     if (patch.group !== undefined && typeof patch.group !== 'string') throw new Error('环境分组格式无效')
     if (patch.addTags !== undefined && (!Array.isArray(patch.addTags) || !patch.addTags.every((tag) => typeof tag === 'string'))) {
       throw new Error('环境标签格式无效')
     }
-    const now = new Date().toISOString()
-    const nextProfiles = ids.map((id) => {
-      const current = this.get(id)
-      const validated = validateProfileDraft({
-        name: current.name,
-        note: current.note,
-        group: patch.group === undefined ? current.group : patch.group,
-        tags: [...current.tags, ...(patch.addTags ?? [])],
-        extensionIds: current.extensionIds,
-        color: current.color,
-        startUrls: current.startUrls,
-        kernelVersion: current.kernelVersion,
-        window: current.window,
-        proxy: current.proxy,
-        fingerprint: current.fingerprint
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const groupId = patch.group === undefined
+        ? undefined
+        : this.library.ensureGroup(patch.group.trim() ? validateGroupName(patch.group) : '', now)
+      const next = ids.map((id) => {
+        const current = this.stored(id)
+        const { tags } = validateProfileDraft({
+          ...portableDraft(this.get(id), { passwords: 'keep', extensions: true }),
+          tags: [...current.tags, ...(patch.addTags ?? [])]
+        })
+        return { ...current, tags, groupId: groupId ?? current.groupId, updatedAt: now }
       })
-      return { ...current, ...validated, proxy: current.proxy, updatedAt: now }
+      for (const profile of next) this.profiles.set(profile.id, profile)
+      await this.persist()
+      return next.map((profile) => this.resolve(profile))
     })
-    for (const profile of nextProfiles) this.profiles.set(profile.id, profile)
-    await this.persist()
-    return nextProfiles
   }
+
+  private selection(idsInput: string[]): string[] {
+    if (!Array.isArray(idsInput)) throw new Error('批量修改参数无效')
+    const ids = [...new Set(idsInput)]
+    if (!ids.length) throw new Error('没有选择浏览器环境')
+    if (ids.length > 1000) throw new Error('单次最多修改 1000 个浏览器环境')
+    for (const id of ids) this.stored(id)
+    return ids
+  }
+
+  /**
+   * The one way windows are assigned to a library record: point proxyId / groupId at it.
+   * '' means direct connection / ungrouped. Proxies change only on closed windows.
+   */
+  async assignMany(idsInput: string[], patch: AssignPatch): Promise<BrowserProfile[]> {
+    if (!patch || typeof patch !== 'object') throw new Error('批量修改参数无效')
+    const ids = this.selection(idsInput)
+    const { proxyId, groupId, followProxyIdentity, extensionId, removeExtension } = patch
+    if (proxyId === undefined && groupId === undefined && extensionId === undefined) throw new Error('请选择要分配的代理或分组')
+    if (extensionId !== undefined && (typeof extensionId !== 'string' || !/^[a-f\d-]{36}$/i.test(extensionId))) throw new Error('环境扩展配置无效或超过 50 个')
+    if (proxyId !== undefined) {
+      if (typeof proxyId !== 'string' || (proxyId && !this.library.proxies.has(proxyId))) throw new Error('所选代理已不在代理库中，请重新选择')
+      const running = ids.map((id) => this.stored(id)).find((profile) => !isEditable(profile) && profile.proxyId !== proxyId)
+      if (running) throw new Error(`环境“${running.name}”正在运行，请先关闭再更换代理`)
+    }
+    if (groupId !== undefined && (typeof groupId !== 'string' || (groupId && !this.library.groups.has(groupId)))) {
+      throw new Error('所选分组已不存在，请重新选择')
+    }
+    const now = new Date().toISOString()
+    const next = ids.map((id) => {
+      const current = this.stored(id)
+      const profile: StoredProfile = { ...current, updatedAt: now }
+      if (groupId !== undefined) profile.groupId = groupId
+      if (proxyId !== undefined && (proxyId !== current.proxyId || current.apiProxy)) {
+        profile.proxyId = proxyId
+        delete profile.directCheck
+        delete profile.apiProxy
+        // A window given another proxy takes that proxy's 网络加速 (off when it has none).
+        const route = this.windowTunnel({}, proxyId, current.apiProxy ? undefined : current)
+        if (route) profile.tunnel = route
+        else delete profile.tunnel
+      }
+      if (extensionId !== undefined) {
+        const others = current.extensionIds.filter((id) => id !== extensionId)
+        profile.extensionIds = removeExtension === true ? others : [...others, extensionId]
+        if (profile.extensionIds.length > 50) throw new Error('环境扩展配置无效或超过 50 个')
+      }
+      // Time zone, language and location follow the new proxy's exit IP at launch.
+      if (proxyId && followProxyIdentity === true) profile.fingerprint = { ...profile.fingerprint, networkIdentityMode: 'proxy' }
+      return profile
+    })
+    for (const profile of next) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return next.map((profile) => this.resolve(profile))
+  }
+
+  /**
+   * Pin (or unpin with '') the kernel of several windows at once.
+   * Running windows keep their current process; the change applies on next launch.
+   * A hand-set brand version is cleared so it follows the new kernel automatically.
+   */
+  async setKernelMany(idsInput: string[], kernelVersionInput: string): Promise<BrowserProfile[]> {
+    if (!Array.isArray(idsInput) || typeof kernelVersionInput !== 'string') throw new Error('批量切换内核参数无效')
+    const ids = this.selection(idsInput)
+    const kernelVersion = kernelVersionInput.trim()
+    if (kernelVersion && !isKernelId(kernelVersion)) {
+      throw new Error('绑定的内核版本号无效')
+    }
+    const now = new Date().toISOString()
+    const next = ids.map((id) => {
+      const current = this.stored(id)
+      if (current.kernelVersion === kernelVersion) return current
+      return {
+        ...current,
+        kernelVersion,
+        fingerprint: { ...current.fingerprint, brandVersion: '' },
+        updatedAt: now
+      }
+    })
+    for (const profile of next) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return next.map((profile) => this.resolve(profile))
+  }
+
+  // ---- proxy library ---------------------------------------------------------------------
+
+  listProxies(): ProxyRecord[] {
+    return this.library.listProxies().map((proxy) => ({ ...proxy }))
+  }
+
+  getProxy(id: string): ProxyRecord {
+    return { ...this.library.getProxy(id) }
+  }
+
+  /** Windows that use a library proxy. Derived from the windows; never stored on the proxy. */
+  proxyUsers(proxyId: string): BrowserProfile[] {
+    return this.list().filter((profile) => profile.proxyId === proxyId)
+  }
+
+  /**
+   * Adds many proxies at once (pasted list or file). Proxies already in the library are
+   * counted, not added again; a bad entry is reported and the rest still go in.
+   */
+  async createProxies(inputs: ProxyDraft[]): Promise<{ created: ProxyRecord[]; duplicates: number; errors: Array<{ index: number; message: string }> }> {
+    if (!Array.isArray(inputs) || !inputs.length) throw new Error('没有可添加的代理')
+    if (inputs.length > 5000) throw new Error('单次最多添加 5000 个代理')
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const created: ProxyRecord[] = []
+      const errors: Array<{ index: number; message: string }> = []
+      let duplicates = 0
+      inputs.forEach((input, index) => {
+        try {
+          const draft = validateProxyDraft(input)
+          if (this.library.findProxy(draft)) {
+            duplicates += 1
+            return
+          }
+          created.push({ ...this.library.addProxy(draft, now) })
+        } catch (error) {
+          errors.push({ index, message: error instanceof Error ? error.message : String(error) })
+        }
+      })
+      if (created.length) await this.persist()
+      return { created, duplicates, errors }
+    })
+  }
+
+  async createProxy(input: ProxyDraft): Promise<ProxyRecord> {
+    return this.withLibraryRollback(async () => {
+      const record = this.library.addProxy(input, new Date().toISOString())
+      await this.persist()
+      return { ...record }
+    })
+  }
+
+  /** Records the proxy an API proxy's extraction just gave (windows already running keep theirs). */
+  async setApiProxyEndpoint(id: string, endpoint: Pick<ProxyRecord, 'protocol' | 'host' | 'port' | 'username' | 'password'>): Promise<ProxyRecord> {
+    const record = this.library.setApiEndpoint(id, endpoint, new Date().toISOString())
+    await this.persist()
+    this.notify(this.proxyUsers(id).map((profile) => profile.id))
+    return { ...record }
+  }
+
+  async updateProxy(id: string, input: ProxyDraft): Promise<ProxyRecord> {
+    const users = this.proxyUsers(id)
+    return this.withLibraryRollback(async () => {
+      const before = this.library.getProxy(id)
+      const record = this.library.updateProxy(id, input, new Date().toISOString())
+      const connectionChanged = !sameProxyIdentity(before, record) || before.password !== record.password
+      const running = users.find((profile) => !isEditable(profile))
+      if (connectionChanged && running) throw new Error(`环境“${running.name}”正在使用这个代理，请先关闭再修改`)
+      await this.persist()
+      this.notify(users.map((profile) => profile.id))
+      return { ...record }
+    })
+  }
+
+  /**
+   * Removes a library proxy. When windows use it, replaceWith must say what they use instead:
+   * another library proxy's id, or '' for direct connection.
+   */
+  async removeProxy(id: string, replaceWith?: string): Promise<void> {
+    this.library.getProxy(id)
+    const users = this.proxyUsers(id)
+    if (users.length) {
+      if (replaceWith === undefined) throw new Error(`有 ${users.length} 个窗口正在使用这个代理，请先选择替换的代理`)
+      if (replaceWith === id) throw new Error('不能用要删除的代理替换它自己')
+      await this.assignMany(users.map((profile) => profile.id), { proxyId: replaceWith })
+    }
+    this.library.deleteProxy(id)
+    await this.persist()
+    this.notify(users.map((profile) => profile.id))
+  }
+
+  // ---- group library ---------------------------------------------------------------------
+
+  listGroups(): GroupRecord[] {
+    return this.library.listGroups().map((group) => ({ ...group }))
+  }
+
+  async createGroup(draft: GroupDraft): Promise<GroupRecord> {
+    const record = this.library.addGroup(draft, new Date().toISOString())
+    await this.persist()
+    return { ...record }
+  }
+
+  async updateGroup(id: string, draft: GroupDraft): Promise<GroupRecord> {
+    const record = this.library.updateGroup(id, draft)
+    await this.persist()
+    this.notify(this.list().filter((profile) => profile.groupId === id).map((profile) => profile.id))
+    return { ...record }
+  }
+
+  /** Removes a group; its windows become ungrouped. */
+  async removeGroup(id: string): Promise<void> {
+    this.library.getGroup(id)
+    const members = [...this.profiles.values()].filter((profile) => profile.groupId === id)
+    for (const profile of members) this.profiles.set(profile.id, { ...profile, groupId: '' })
+    this.library.deleteGroup(id)
+    await this.persist()
+    this.notify(members.map((profile) => profile.id))
+  }
+
+  // ---- removal and recycle bin -----------------------------------------------------------
 
   async removeMany(idsInput: string[]): Promise<void> {
     if (!Array.isArray(idsInput)) throw new Error('批量删除参数无效')
     const ids = [...new Set(idsInput)]
     if (!ids.length) throw new Error('没有选择浏览器环境')
-    if (ids.length > 500) throw new Error('单次最多删除 500 个浏览器环境')
+    if (ids.length > 1000) throw new Error('单次最多删除 1000 个浏览器环境')
     for (const id of ids) {
-      const profile = this.get(id)
-      if (profile.status !== 'closed' && profile.status !== 'error') throw new Error(`环境“${profile.name}”正在运行，不能删除`)
+      const profile = this.stored(id)
+      if (!isEditable(profile)) throw new Error(`环境“${profile.name}”正在运行，不能删除`)
     }
     for (const id of ids) await this.remove(id)
   }
 
   async remove(id: string): Promise<void> {
     const profile = this.get(id)
-    if (profile.status !== 'closed' && profile.status !== 'error') throw new Error('运行中的环境不能删除')
+    if (!isEditable(profile)) throw new Error('运行中的环境不能删除')
     await this.assertProfileDataIdentity(id)
     const source = join(this.vaultPath, 'profiles', id)
     const recycle = join(this.vaultPath, 'recycle-bin', 'profiles')
     await mkdir(recycle, { recursive: true })
     const deletedAt = new Date().toISOString()
+    const { proxyMissing: _missing, ...snapshot } = profile
     const record: DeletedProfileRecord = {
       schemaVersion: 1,
       deletedAt,
       profile: {
-        ...profile,
+        ...snapshot,
         status: 'closed',
         lastError: undefined,
-        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) }
+        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) },
+        account: { ...profile.account, password: this.secrets.encode(profile.account.password) }
       }
     }
     const marker = join(source, 'deleted-profile.json')
@@ -438,6 +1221,7 @@ export class ProfileStore {
           profileId: record.profile.id,
           serialNumber: validProfileSerial(record.profile.serialNumber) ? record.profile.serialNumber : undefined,
           name: record.profile.name,
+          group: typeof record.profile.group === 'string' ? record.profile.group : '',
           deletedAt: record.deletedAt,
           sizeBytes: await safePathSize(join(root, entry.name))
         })
@@ -519,6 +1303,10 @@ export class ProfileStore {
     return expired.length
   }
 
+  /**
+   * Restores a window from the recycle bin. Its proxy is looked up again: the same library record
+   * when it still exists, otherwise the saved copy goes back into the library (never silently direct).
+   */
   async restore(trashId: string): Promise<BrowserProfile> {
     if (!/^[a-zA-Z0-9-]+$/.test(trashId)) throw new Error('回收站条目标识无效')
     const source = join(this.vaultPath, 'recycle-bin', 'profiles', trashId)
@@ -530,50 +1318,82 @@ export class ProfileStore {
     }
     if (record.schemaVersion !== 1 || !record.profile?.id) throw new Error('回收站中的环境元数据无效')
     if (this.profiles.has(record.profile.id)) throw new Error('相同 ID 的环境已经存在，无法恢复')
-    const profile: BrowserProfile = {
-      ...record.profile,
-      serialNumber: validProfileSerial(record.profile.serialNumber)
-        && !this.list().some((item) => item.serialNumber === record.profile.serialNumber)
-        ? record.profile.serialNumber
-        : this.nextSerialNumber++,
-      kernelVersion: typeof record.profile.kernelVersion === 'string' ? record.profile.kernelVersion : '',
-      group: typeof record.profile.group === 'string' ? record.profile.group : '',
-      tags: Array.isArray(record.profile.tags) ? record.profile.tags : [],
-      extensionIds: Array.isArray(record.profile.extensionIds) ? record.profile.extensionIds : [],
-      fingerprint: {
-        ...record.profile.fingerprint,
-        webrtcPolicy: safeWebRtcPolicy(record.profile.fingerprint?.webrtcPolicy)
-      },
-      window: record.profile.window ?? defaultProfileWindow(),
-      favorite: record.profile.favorite === true,
-      proxy: privateProxyConfig({ ...record.profile.proxy, password: this.secrets.decode(record.profile.proxy.password) }),
-      status: 'closed',
-      lastError: undefined,
-      updatedAt: new Date().toISOString()
-    }
-    if (profile.serialNumber >= this.nextSerialNumber) this.nextSerialNumber = profile.serialNumber + 1
-    if (this.nextSerialNumber > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
-    const target = join(this.vaultPath, 'profiles', profile.id)
-    await rename(source, target)
-    try {
-      await this.ensureProfileDirectories(profile.id)
-      await rm(join(target, 'deleted-profile.json'), { force: true })
-      this.profiles.set(profile.id, profile)
-      await this.persist()
-      return profile
-    } catch (error) {
-      this.profiles.delete(profile.id)
-      await rename(target, source).catch(() => undefined)
-      throw error
-    }
+    const saved = record.profile
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const savedProxy = saved.proxy && typeof saved.proxy === 'object'
+        ? privateProxyConfig({ ...saved.proxy, password: this.secrets.decode(typeof saved.proxy.password === 'string' ? saved.proxy.password : '') })
+        : DIRECT
+      // An API 提取 window keeps its link itself; it never goes into the library.
+      const proxyId = safeApiProxy(saved.apiProxy)
+        ? ''
+        : typeof saved.proxyId === 'string' && this.library.proxies.has(saved.proxyId)
+          ? saved.proxyId
+          : this.library.ensureProxy(savedProxy, now)
+      // Back into its group; a group deleted meanwhile is not brought back (the window goes to Ungrouped).
+      // Windows deleted before groups had ids find their group by name.
+      const groupId = typeof saved.groupId === 'string'
+        ? (this.library.groups.has(saved.groupId) ? saved.groupId : '')
+        : this.library.findGroup(typeof saved.group === 'string' ? saved.group : '')?.id ?? ''
+      const serialNumber = validProfileSerial(saved.serialNumber) && ![...this.profiles.values()].some((item) => item.serialNumber === saved.serialNumber)
+        ? saved.serialNumber
+        : this.nextSerialNumber++
+      const profile: StoredProfile = {
+        ...storedFields(saved),
+        serialNumber,
+        proxyId,
+        groupId,
+        kernelVersion: typeof saved.kernelVersion === 'string' ? saved.kernelVersion : '',
+        tags: Array.isArray(saved.tags) ? saved.tags : [],
+        extensionIds: Array.isArray(saved.extensionIds) ? saved.extensionIds : [],
+        fingerprint: {
+          ...saved.fingerprint,
+          webrtcPolicy: safeWebRtcPolicy(saved.fingerprint?.webrtcPolicy)
+        },
+        window: saved.window ?? defaultProfileWindow(),
+        tunnel: proxyId || safeApiProxy(saved.apiProxy) ? safeTunnelRoute(saved.tunnel) : undefined,
+        apiProxy: proxyId ? undefined : safeApiProxy(saved.apiProxy),
+        favorite: saved.favorite === true,
+        account: saved.account && typeof saved.account === 'object'
+          ? privateAccount(validatePlatformAccount({
+              ...saved.account,
+              password: this.secrets.decode(typeof saved.account.password === 'string' ? saved.account.password : '')
+            }))
+          : { ...EMPTY_ACCOUNT },
+        status: 'closed',
+        lastError: undefined,
+        updatedAt: now
+      }
+      if (!proxyId && saved.proxyCheck) {
+        const check = safeProxyCheck(saved.proxyCheck)
+        if (check) profile.directCheck = check
+      }
+      if (profile.serialNumber >= this.nextSerialNumber) this.nextSerialNumber = profile.serialNumber + 1
+      if (this.nextSerialNumber > MAX_PROFILE_SERIAL) throw new Error('环境编号空间已用尽')
+      const target = join(this.vaultPath, 'profiles', profile.id)
+      await rename(source, target)
+      try {
+        await this.ensureProfileDirectories(profile.id)
+        await rm(join(target, 'deleted-profile.json'), { force: true })
+        this.profiles.set(profile.id, profile)
+        await this.persist()
+        return this.resolve(profile)
+      } catch (error) {
+        this.profiles.delete(profile.id)
+        await rename(target, source).catch(() => undefined)
+        throw error
+      }
+    })
   }
+
+  // ---- runtime state ---------------------------------------------------------------------
 
   async setRuntime(
     id: string,
     patch: Pick<BrowserProfile, 'status'> & Partial<Pick<BrowserProfile, 'lastError' | 'lastOpenedAt'>>
   ): Promise<BrowserProfile> {
-    const current = this.get(id)
-    const profile = {
+    const current = this.stored(id)
+    const profile: StoredProfile = {
       ...current,
       ...patch,
       updatedAt: current.updatedAt
@@ -581,35 +1401,163 @@ export class ProfileStore {
     if (patch.lastError === undefined) delete profile.lastError
     this.profiles.set(id, profile)
     if (patch.lastOpenedAt || patch.status === 'closed' || patch.status === 'error') await this.persist()
-    return profile
+    return this.resolve(profile)
   }
 
+  /**
+   * Saves the result of testing a window's network. For a library proxy the result belongs
+   * to the proxy, so every window using it shows it.
+   */
   async setProxyCheck(id: string, check: ProxyCheckSummary, baselineIp?: string): Promise<BrowserProfile> {
-    const current = this.get(id)
-    const nextCheck = safeProxyCheck(check)
-    if (!nextCheck) throw new Error('代理检测结果无效')
-    const previousIp = baselineIp ?? (current.proxyCheck?.ok ? current.proxyCheck.ip : undefined)
-    if (previousIp && nextCheck.ok && nextCheck.ip && previousIp !== nextCheck.ip) {
-      nextCheck.exitChanged = true
-      nextCheck.previousIp = previousIp
-    } else {
-      nextCheck.exitChanged = false
-      nextCheck.previousIp = undefined
+    const current = this.stored(id)
+    if (current.proxyId) {
+      // The window's own result; the library proxy's status (proxy page) follows its latest check too.
+      await this.setLibraryProxyCheck(current.proxyId, check, baselineIp, id)
+      const profile: StoredProfile = { ...this.stored(id), directCheck: nextProxyCheck(check, current.directCheck, baselineIp) }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
     }
-    const profile: BrowserProfile = { ...current, proxyCheck: nextCheck }
+    if (current.apiProxy) {
+      // A new proxy from the link is expected: no "exit changed" against the last one; its IP goes into the history.
+      const entry: ApiIpRecord | undefined = check.ok && check.ip
+        ? { at: check.checkedAt, ip: check.ip, ...(current.apiProxy.endpoint ? { port: current.apiProxy.endpoint.port } : {}), ...(check.countryCode ? { countryCode: check.countryCode } : {}), ...(check.city ? { city: check.city } : {}) }
+        : undefined
+      // The same proxy checked again is not a new entry.
+      const latest = current.apiProxy.history?.[0]
+      const repeated = entry && latest && latest.ip === entry.ip && latest.port === entry.port
+      const history = entry && !repeated ? [entry, ...(current.apiProxy.history ?? [])].slice(0, API_HISTORY_LIMIT) : current.apiProxy.history
+      const profile: StoredProfile = {
+        ...current,
+        directCheck: nextProxyCheck(check, undefined),
+        apiProxy: { ...current.apiProxy, ...(history?.length ? { history } : {}) }
+      }
+      this.profiles.set(id, profile)
+      await this.persist()
+      return this.resolve(profile)
+    }
+    const profile: StoredProfile = { ...current, directCheck: nextProxyCheck(check, current.directCheck, baselineIp) }
     this.profiles.set(id, profile)
     await this.persist()
-    return profile
+    return this.resolve(profile)
+  }
+
+  /** Saves a test result for a library proxy (from the proxy library page or a window). */
+  /** A window's last proxy check as another computer left it (team sync): kept as it is, nothing else changes. */
+  async restoreProxyCheck(id: string, input: unknown): Promise<BrowserProfile> {
+    const check = safeProxyCheck(input)
+    const current = this.stored(id)
+    if (!check) return this.resolve(current)
+    const profile: StoredProfile = { ...current, directCheck: check }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /**
+   * A check the editor's tick was taken off: the window and its library proxy are put back as they
+   * were before it (null: no check at all). Not an edit of the window.
+   */
+  async forgetProxyCheck(target: { profileId?: string; windowCheck?: unknown; proxyId?: string; libraryCheck?: unknown; libraryIpSites?: unknown }): Promise<void> {
+    const libraryRecord = target.proxyId !== undefined && this.library.proxies.has(target.proxyId) ? { ...this.library.getProxy(target.proxyId) } : undefined
+    if (libraryRecord && (target.libraryCheck !== undefined || target.libraryIpSites !== undefined)) {
+      if (target.libraryCheck !== undefined) {
+        const check = safeProxyCheck(target.libraryCheck)
+        if (check) libraryRecord.check = check
+        else delete libraryRecord.check
+      }
+      if (target.libraryIpSites !== undefined) {
+        const ipSites = safeIpSiteRecord(target.libraryIpSites)
+        if (ipSites) libraryRecord.ipSites = ipSites
+        else delete libraryRecord.ipSites
+      }
+      this.library.proxies.set(libraryRecord.id, libraryRecord)
+    }
+    if (target.profileId !== undefined && target.windowCheck !== undefined && this.profiles.has(target.profileId)) {
+      const profile: StoredProfile = { ...this.stored(target.profileId) }
+      const check = safeProxyCheck(target.windowCheck)
+      if (check) profile.directCheck = check
+      else delete profile.directCheck
+      this.profiles.set(target.profileId, profile)
+    }
+    await this.persist()
+    // The window list shows the change, and so do the windows on that library proxy.
+    this.notify(this.list().filter((profile) => profile.id === target.profileId || (target.proxyId !== undefined && profile.proxyId === target.proxyId)).map((profile) => profile.id))
+    if (libraryRecord) this.libraryChecksChanged()
+  }
+
+  /** The IP 评分 of a library proxy's exit IP (null: none), shown wherever the proxy is. */
+  async setLibraryIpSites(proxyId: string, record: IpSiteRecord | null): Promise<void> {
+    const current = this.library.proxies.get(proxyId)
+    if (!current) return
+    const next = { ...current }
+    if (record) next.ipSites = record
+    else delete next.ipSites
+    this.library.proxies.set(proxyId, next)
+    await this.persist()
+    this.notify(this.list().filter((profile) => profile.proxyId === proxyId).map((profile) => profile.id))
+    this.libraryChecksChanged()
+  }
+
+  /** The library entry a typed proxy is (same address, account and password); API links are not. */
+  findLibraryProxy(config: ProxyConfig): ProxyRecord | undefined {
+    if (config.apiUrl || config.protocol === 'direct') return undefined
+    const found = this.library.findProxy(config)
+    return found && !found.apiUrl ? { ...found } : undefined
+  }
+
+  /** Tells the pages a library proxy's check or IP 评分 changed (or started or stopped being read). */
+  libraryChecksChanged(): void {
+    for (const listener of this.libraryListeners) listener()
+  }
+
+  async setLibraryProxyCheck(proxyId: string, check: ProxyCheckSummary, baselineIp?: string, sourceProfileId?: string): Promise<ProxyRecord> {
+    const record = this.library.getProxy(proxyId)
+    // An API proxy gives a new exit every time: no "exit changed" against the last one.
+    const next = { ...record, check: record.apiUrl ? nextProxyCheck(check, undefined) : nextProxyCheck(check, record.check, baselineIp) }
+    this.library.proxies.set(proxyId, next)
+    await this.persist()
+    this.notify(this.list().filter((profile) => profile.proxyId === proxyId && profile.id !== sourceProfileId).map((profile) => profile.id))
+    this.libraryChecksChanged()
+    return { ...next }
+  }
+
+  /**
+   * Writes values a window worked out at launch (from its IP, from this computer) into the window
+   * so later launches use the same ones. Not an edit: works while the window is starting.
+   * A key given as undefined is removed.
+   */
+  async lockFingerprint(id: string, patch: Partial<FingerprintConfig>): Promise<BrowserProfile> {
+    const current = this.stored(id)
+    const fingerprint = { ...current.fingerprint, ...patch } as FingerprintConfig
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete (fingerprint as unknown as Record<string, unknown>)[key]
+    }
+    const profile: StoredProfile = { ...current, fingerprint, updatedAt: new Date().toISOString() }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
   }
 
   async setFavorite(id: string, favorite: boolean): Promise<BrowserProfile> {
     if (typeof favorite !== 'boolean') throw new Error('收藏状态无效')
-    const current = this.get(id)
-    const profile: BrowserProfile = { ...current, favorite, updatedAt: new Date().toISOString() }
+    const current = this.stored(id)
+    const profile: StoredProfile = { ...current, favorite, updatedAt: new Date().toISOString() }
     this.profiles.set(id, profile)
     await this.persist()
-    return profile
+    return this.resolve(profile)
   }
+
+  /** The extensions a team window came with (team-extensions.ts); not an edit of the window. */
+  async setExtensionIds(id: string, extensionIds: string[]): Promise<BrowserProfile> {
+    if (!Array.isArray(extensionIds) || extensionIds.length > 50 || extensionIds.some((item) => typeof item !== 'string')) throw new Error('环境扩展配置无效或超过 50 个')
+    const profile: StoredProfile = { ...this.stored(id), extensionIds: [...extensionIds] }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  // ---- window data directories -----------------------------------------------------------
 
   profileDataPath(id: string): string {
     return join(this.vaultPath, 'profiles', id, 'user-data')
@@ -624,7 +1572,7 @@ export class ProfileStore {
   }
 
   async assertProfileDataIdentity(id: string): Promise<void> {
-    this.get(id)
+    this.stored(id)
     await this.verifyProfileDataIdentity(id)
   }
 
@@ -674,14 +1622,24 @@ export class ProfileStore {
     await this.verifyProfileDataIdentity(id)
   }
 
+  // ---- persistence -----------------------------------------------------------------------
+
+  /** Windows, proxies and groups are written together, so references always match what is saved. */
   private persist(): Promise<void> {
     const data: StoreFile = {
-      schemaVersion: 11,
+      schemaVersion: SCHEMA_VERSION,
       nextSerialNumber: this.nextSerialNumber,
-      profiles: this.list().map((profile) => ({
-        ...profile,
-        proxy: { ...profile.proxy, password: this.secrets.encode(profile.proxy.password) }
-      }))
+      profiles: [...this.profiles.values()]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map((profile) => ({
+          ...profile,
+          ...(profile.apiProxy?.endpoint && this.apiPasswords.get(profile.id)
+            ? { apiProxy: { ...profile.apiProxy, endpoint: { ...profile.apiProxy.endpoint, password: this.secrets.encode(this.apiPasswords.get(profile.id)!) } } }
+            : {}),
+          account: { ...profile.account, password: this.secrets.encode(profile.account.password) }
+        })),
+      proxies: this.library.listProxies().map((proxy) => ({ ...proxy, password: this.secrets.encode(proxy.password) })),
+      groups: this.library.listGroups()
     }
     const operation = this.writeQueue.catch(() => undefined).then(async () => {
       await mkdir(dirname(this.profilesPath), { recursive: true })

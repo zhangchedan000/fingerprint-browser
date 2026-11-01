@@ -4,7 +4,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { defaultProfileDraft } from '../shared/defaults'
+import { defaultProfileDraft as newWindowDraft } from '../shared/defaults'
+
+/** A window whose device-bound sign-in choice is made (new windows ask before their first opening). */
+function defaultProfileDraft(index?: number): ReturnType<typeof newWindowDraft> {
+  const draft = newWindowDraft(index)
+  return { ...draft, fingerprint: { ...draft.fingerprint, deviceBinding: undefined } }
+}
 import { BrowserLauncher } from './browser-launcher'
 import { ExtensionStore } from './extension-store'
 import type { ProcessInspector, SystemProcess } from './process-inspector'
@@ -14,7 +20,7 @@ import { SettingsStore } from './settings-store'
 const temporaryPaths: string[] = []
 
 afterEach(async () => {
-  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })))
 })
 
 class FakeProcessInspector implements ProcessInspector {
@@ -160,6 +166,20 @@ describe('BrowserLauncher orphan recovery', () => {
     expect(inspector.terminated).toEqual([4242])
     expect(profiles.get(profile.id).status).toBe('closed')
     expect(launcher.isRunning(profile.id)).toBe(false)
+  })
+
+  it('does not open a new window before its device-bound sign-in choice is made', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    const profile = await profiles.create(newWindowDraft())
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]))
+    await launcher.initialize()
+    await expect(launcher.launch(profile.id)).rejects.toThrow('设备绑定登录')
+    expect(profiles.get(profile.id).status).toBe('closed')
   })
 
   it('stops close-all after bounded retries when an orphan cannot be terminated', async () => {
@@ -388,6 +408,12 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await expect(launcher.crashHistory(ids[0])).resolves.toEqual([
       expect.objectContaining({ code: 23, phase: 'running', pid: controller.children[0].pid })
     ])
+    const [record] = await launcher.crashHistory(ids[0])
+    expect(record.logFile).toMatch(/browser-.+\.log$/)
+    expect(controller.arguments[0]).toContain(`--log-file=${record.logFile}`)
+    expect(record.args).toEqual(controller.arguments[0])
+    await expect(launcher.readLaunchLog(ids[0], record.logFile!)).resolves.toMatchObject({ text: '' })
+    await expect(launcher.readLaunchLog(ids[0], join(tmpdir(), 'browser-other.log'))).rejects.toThrow('日志文件不属于这个环境')
     expect(launcher.runtimeSnapshot().managedProcesses).toBe(0)
     expect(launcher.hasRunning()).toBe(false)
   })
@@ -436,9 +462,10 @@ describe('BrowserLauncher concurrent lifecycle', () => {
         latencyMs: 1,
         ip: checks++ === 0 ? '203.0.113.10' : '203.0.113.11',
         countryCode: 'US',
-        timezone: 'America/Los_Angeles',
-        latitude: 34.0522,
-        longitude: -118.2437
+        // The zone the window was saved with (New York): only the exit IP changes here.
+        timezone: 'America/New_York',
+        latitude: 40.7128,
+        longitude: -74.006
       }),
       3,
       controller.spawn,
@@ -464,7 +491,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     expect(profiles.get(profile.id).status).toBe('closed')
   })
 
-  it('requires confirmation for conflicting GeoIP data and launches after explicit approval', async () => {
+  it('asks before launching on an IP the databases disagree about, then keeps the window\'s own values', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
     temporaryPaths.push(vault)
     const profiles = new ProfileStore(vault)
@@ -508,9 +535,96 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     controller.startPending()
     await expect(approvedLaunch).resolves.toMatchObject({ status: 'running' })
     expect(controller.children).toHaveLength(1)
-    expect(controller.arguments[0]).toContain('--fingerprint-language=ja-JP')
-    expect(controller.arguments[0]).toContain('--timezone=Asia/Tokyo')
-    expect(controller.arguments[0]).toContain('--fingerprint-location=35.68,139.76,25000')
+    // Saved with the default United States values; an unclear IP changes nothing.
+    expect(controller.arguments[0]).toContain('--fingerprint-language=en-US')
+    expect(controller.arguments[0]).toContain('--timezone=America/New_York')
+    expect(controller.arguments[0].some((arg) => arg.startsWith('--fingerprint-location'))).toBe(false)
     await launcher.close(profile.id)
+  })
+
+  it('keeps the values a window was saved with, and only asks when its IP is elsewhere', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    const draft = defaultProfileDraft()
+    draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
+    // Filled in from a check of a Mexican IP before it was saved.
+    Object.assign(draft.fingerprint, {
+      networkIdentityMode: 'manual', region: 'MX', regionSource: 'ip', timezone: 'America/Mexico_City', language: 'es-419',
+      acceptLanguages: 'es-419,es', location: { latitude: 19.43, longitude: -99.13 }, proxyExitPolicy: 'block'
+    })
+    const profile = await profiles.create(draft)
+    const controller = new FakeSpawnController()
+    let exit = { ip: '187.190.19.106', countryCode: 'MX', timezone: 'America/Mexico_City', latitude: 19.43, longitude: -99.13 }
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]),
+      async () => ({ ok: true, latencyMs: 1, geoConfidence: 'consensus', ...exit }), 3, controller.spawn)
+
+    const first = launcher.launch(profile.id)
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await first
+    expect(controller.arguments[0]).toContain('--timezone=America/Mexico_City')
+    await launcher.close(profile.id)
+
+    // The next IP is in Spain: nothing changes; the launch asks first.
+    exit = { ip: '185.45.165.6', countryCode: 'ES', timezone: 'Europe/Madrid', latitude: 40.4, longitude: -3.7 }
+    // A fixed proxy's new IP is stopped by 出口变化 first; checked again, it becomes the known exit.
+    await expect(launcher.launch(profile.id)).rejects.toThrow('代理出口已从 187.190.19.106 变为 185.45.165.6')
+    await profiles.setProxyCheck(profile.id, { ok: true, latencyMs: 1, checkedAt: new Date().toISOString(), ...exit })
+    await expect(launcher.launch(profile.id)).rejects.toThrow('窗口的国家是 MX')
+    expect(profiles.get(profile.id).fingerprint).toMatchObject({ region: 'MX', timezone: 'America/Mexico_City' })
+    const approved = launcher.launch(profile.id, { allowGeoConflict: true })
+    await waitUntil(() => controller.children.length === 2)
+    controller.startPending()
+    await approved
+    expect(controller.arguments[1]).toContain('--timezone=America/Mexico_City')
+    expect(controller.arguments[1]).toContain('--fingerprint-location=19.43,-99.13,25000')
+    expect(profiles.get(profile.id).fingerprint.region).toBe('MX')
+    await launcher.close(profile.id)
+  })
+
+  it('asks when the IP is in the window country but another time zone, and launches anyway on 仅提醒', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    const draft = defaultProfileDraft()
+    draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
+    // Made with a Texas IP (a user's window); its new IP is in Kennewick, WA: still the US, Pacific time.
+    Object.assign(draft.fingerprint, {
+      networkIdentityMode: 'manual', region: 'US', regionSource: 'ip', timezone: 'America/Chicago', language: 'en-US',
+      acceptLanguages: 'en-US,en', location: { latitude: 32.73, longitude: -97.32 }, proxyExitPolicy: 'block'
+    })
+    const profile = await profiles.create(draft)
+    const exit = { ip: '47.6.202.29', countryCode: 'US', timezone: 'America/Los_Angeles', latitude: 46.21, longitude: -119.16 }
+    await profiles.setProxyCheck(profile.id, { ok: true, latencyMs: 1, checkedAt: new Date().toISOString(), ...exit })
+    const controller = new FakeSpawnController()
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]),
+      async () => ({ ok: true, latencyMs: 1, geoConfidence: 'consensus', ...exit }), 3, controller.spawn)
+
+    await expect(launcher.launch(profile.id)).rejects.toThrow('代理 IP（47.6.202.29）的时区是 America/Los_Angeles，窗口的时区是 America/Chicago')
+    expect(profiles.get(profile.id).fingerprint).toMatchObject({ timezone: 'America/Chicago', location: { latitude: 32.73, longitude: -97.32 } })
+    const approved = launcher.launch(profile.id, { allowGeoConflict: true })
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await approved
+    expect(controller.arguments[0]).toContain('--timezone=America/Chicago')
+    await launcher.close(profile.id)
+
+    // 仅提醒: noted in the log, not asked.
+    await profiles.update(profile.id, { ...draft, fingerprint: { ...profiles.get(profile.id).fingerprint, proxyExitPolicy: 'warn' } })
+    const warned = launcher.launch(profile.id)
+    await waitUntil(() => controller.children.length === 2)
+    controller.startPending()
+    await warned
+    await launcher.close(profile.id)
+
   })
 })

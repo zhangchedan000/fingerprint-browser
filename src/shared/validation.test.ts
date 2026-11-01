@@ -3,6 +3,14 @@ import { defaultProfileDraft } from './defaults'
 import { normalizeUrl, validateProfileDraft } from './validation'
 
 describe('profile validation', () => {
+  it('accepts the draft of any index, 0 included (the proxy form reads IP 评分 with one)', () => {
+    for (const index of [0, -3, 1, 2, 9, 100]) {
+      const draft = defaultProfileDraft(index)
+      expect(draft.color).toMatch(/^#[\da-f]{6}$/i)
+      expect(() => validateProfileDraft(draft)).not.toThrow()
+    }
+  })
+
   it('normalizes start pages to HTTPS URLs', () => {
     expect(normalizeUrl('example.com')).toBe('https://example.com/')
   })
@@ -67,7 +75,7 @@ describe('profile validation', () => {
     expect(result.fingerprint).toMatchObject({
       hardwareProfileId: 'windows-11-rtx4070',
       platform: 'windows',
-      platformVersion: '10.0.0',
+      platformVersion: '19.0.0',
       hardwareConcurrency: 16,
       screenWidth: 2560,
       screenHeight: 1440
@@ -121,5 +129,55 @@ describe('profile validation', () => {
     const result = validateProfileDraft(draft)
     expect(result.group).toBe('美国店铺')
     expect(result.tags).toEqual(['重点', '广告'])
+  })
+
+  it('keeps each value of a seeded window; old fixed templates still own theirs', () => {
+    const draft = defaultProfileDraft()
+    const seeded = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 } })
+    expect(seeded.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 })
+
+    const fixed = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, hardwareConcurrency: 12 }
+    })
+    expect(fixed.fingerprint).toMatchObject({ screenWidth: 2560, screenHeight: 1440, hardwareConcurrency: 16 })
+    const fixedHandSet = validateProfileDraft({
+      ...draft,
+      fingerprint: { ...draft.fingerprint, platform: 'windows', hardwareProfileId: 'windows-11-rtx4070', screenWidth: 1280, screenHeight: 720, overrides: ['screen', 'screen'] }
+    })
+    expect(fixedHandSet.fingerprint).toMatchObject({ screenWidth: 1280, screenHeight: 720, overrides: ['screen'] })
+  })
+
+  it('stores "real CPU cores" and leaves it out when not used', () => {
+    const draft = defaultProfileDraft()
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'host' } }).fingerprint.coresSource).toBe('host')
+    expect(validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, coresSource: 'profile' } }).fingerprint).not.toHaveProperty('coresSource')
+  })
+
+  it('validates the new site permission and screen options and omits defaults', () => {
+    const draft = defaultProfileDraft()
+    const chosen = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' } })
+    expect(chosen.fingerprint).toMatchObject({ geolocationPermission: 'block', doNotTrack: 'on', screenSource: 'host' })
+    const defaults = validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'ask', doNotTrack: 'default', screenSource: 'profile' } })
+    expect(defaults.fingerprint).not.toHaveProperty('geolocationPermission')
+    expect(defaults.fingerprint).not.toHaveProperty('doNotTrack')
+    expect(defaults.fingerprint).not.toHaveProperty('screenSource')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, geolocationPermission: 'maybe' as never } })).toThrow('地理位置')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, overrides: ['gpu' as never] } })).toThrow('自定义项')
+    expect(() => validateProfileDraft({ ...draft, fingerprint: { ...draft.fingerprint, screenWidth: 9000, overrides: ['screen'] } })).toThrow('7680')
+  })
+})
+
+describe('CPU model', () => {
+  it('keeps a known desktop CPU and makes the core count its thread count', async () => {
+    const { validateProfileDraft } = await import('./validation')
+    const { defaultProfileDraft } = await import('./defaults')
+    const draft = defaultProfileDraft()
+    draft.fingerprint = { ...draft.fingerprint, cpu: 'Intel Core i5-12400F', hardwareConcurrency: 8 }
+    const result = validateProfileDraft(draft)
+    expect(result.fingerprint.cpu).toBe('Intel Core i5-12400F')
+    expect(result.fingerprint.hardwareConcurrency).toBe(12)
+    draft.fingerprint = { ...draft.fingerprint, cpu: 'Intel Core i9-99999K' }
+    expect(() => validateProfileDraft(draft)).toThrow('CPU')
   })
 })

@@ -4,14 +4,19 @@ import { join } from 'node:path'
 import { getLocale, isUiLocale, resolveLocale, setLocale, t } from '../shared/i18n'
 
 function installMenu(): void {
+  // Windows and Linux get no menu bar; text fields keep their native copy/paste shortcuts.
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+    return
+  }
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ label: 'Prism Browser', submenu: [
-      { role: 'about' as const, label: t('关于 Prism Browser') }, { type: 'separator' as const },
-      { role: 'hide' as const, label: t('隐藏 Prism Browser') },
+    { label: '指纹浏览器', submenu: [
+      { role: 'about' as const, label: t('关于指纹浏览器') }, { type: 'separator' as const },
+      { role: 'hide' as const, label: t('隐藏指纹浏览器') },
       { role: 'hideOthers' as const, label: t('隐藏其他应用') },
       { role: 'unhide' as const, label: t('全部显示') }, { type: 'separator' as const },
-      { role: 'quit' as const, label: t('退出 Prism Browser') }
-    ] }] : []),
+      { role: 'quit' as const, label: t('退出指纹浏览器') }
+    ] },
     { label: t('编辑'), submenu: [
       { role: 'undo', label: t('撤销') }, { role: 'redo', label: t('重做') },
       { type: 'separator' }, { role: 'cut', label: t('剪切') },
@@ -26,7 +31,7 @@ function installMenu(): void {
       { role: 'minimize', label: t('最小化') }, { role: 'zoom', label: t('缩放') },
       { role: 'close', label: t('关闭窗口') }
     ] },
-    { label: t('帮助'), submenu: [{ label: t('官网'), click: () => { void shell.openExternal('https://prismbrowser.app/') } }] }
+    { label: t('帮助'), submenu: [{ label: t('官网'), click: () => { void shell.openExternal('https://github.com/zhangchedan000/fingerprint-browser') } }] }
   ]))
 }
 
