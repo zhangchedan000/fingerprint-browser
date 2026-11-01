@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultProfileDraft } from '../../shared/defaults'
 import type { TeamSyncEvent } from '../../shared/team'
 import type { PortableCookie } from '../cookie-file'
@@ -561,10 +561,11 @@ describe('TeamManager with a standby server', () => {
     // B takes over; "重试" finds it, leaves local mode and uploads the window used meanwhile.
     pair.state[pair.B] = 'active'
     const back = await offline.retry()
-    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(back.localMode).toBeFalsy()
     expect((await offline.status()).server).toBe(pair.B)
-    expect(pair.data.records.get(teamId)!.data_rev).toBe(2)
+    // The upload runs in the background (packing takes longer on Windows).
+    await vi.waitFor(() => expect(pair.data.records.get(teamId)!.data_rev).toBe(2), { timeout: 10_000, interval: 50 })
+    await offline.flush()
   })
 
   it('lets the owner name the standby and move the whole team to it', async () => {
