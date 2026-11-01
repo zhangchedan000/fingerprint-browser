@@ -910,7 +910,7 @@ function StandbyPanel() {
     try {
       setPair(await window.browserApi.team.setStandby(values.server, values.code))
       form.resetFields()
-      ws.notify.success('备用服务器已设置，所有成员的启动器会自动记住它')
+      ws.notify.success('服务器已添加，所有成员的启动器会自动记住它')
     } catch (error) {
       ws.fail(error)
     } finally {
@@ -924,6 +924,18 @@ function StandbyPanel() {
       await window.browserApi.team.switchServer(url)
       ws.notify.success(`已切换到 ${url}，成员的启动器会自动跟过去`)
       await reload()
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBusy(undefined)
+    }
+  }
+
+  async function remove(url: string): Promise<void> {
+    setBusy('remove:' + url)
+    try {
+      setPair(await window.browserApi.team.removeServer(url))
+      ws.notify.success(`已移除 ${url}`)
     } catch (error) {
       ws.fail(error)
     } finally {
@@ -949,19 +961,27 @@ function StandbyPanel() {
                 <Button size="small" type="primary" danger loading={busy === server.url} disabled={!server.codeSaved}>批量切换到这台</Button>
               </Popconfirm>
             )}
-            {server.url !== pair?.current && !server.codeSaved && <span className="fb-muted">这台电脑没记激活码：在左上角头像「连接其它服务器」里填激活码切换</span>}
+            {server.url !== pair?.current && (
+              <Popconfirm
+                title={`把 ${server.url} 从团队的服务器里移除？`}
+                description="移除后不再给它同步数据，也不能再切换到它；以后要用再添加回来。"
+                okText="移除" cancelText="取消" onConfirm={() => void remove(server.url)}>
+                <Button size="small" loading={busy === 'remove:' + server.url}>移除</Button>
+              </Popconfirm>
+            )}
+            {server.url !== pair?.current && !server.codeSaved && <span className="fb-muted">还没有它的激活码：在下面填它的地址和激活码，再点「添加服务器」</span>}
           </Space>
         )
       }))} />
-      {!others.length && <Alert type="info" showIcon title="还没有备用服务器。设置后，正在用的服务器挂了，可以一键把整个团队切过去。" />}
+      {!others.length && <Alert type="info" showIcon title="还没有备用服务器。添加后，正在用的服务器挂了，可以一键把整个团队切过去；可以添加多台。" />}
       <Form form={form} layout="inline" requiredMark={false} onFinish={(values) => void save(values)} className="fb-team-standby-form">
-        <Form.Item name="server" rules={[{ required: true, message: '请填写备用服务器地址' }]}>
-          <Input placeholder="备用服务器地址，例如 https://b.example.com" style={{ width: 320 }} />
+        <Form.Item name="server" rules={[{ required: true, message: '请填写服务器地址' }]}>
+          <Input placeholder="服务器地址，例如 https://c.example.com" style={{ width: 320 }} />
         </Form.Item>
         <Form.Item name="code" rules={[{ required: true, message: '请填写激活码' }]}>
-          <Input.Password placeholder="备用服务器的激活码" autoComplete="off" style={{ width: 200 }} />
+          <Input.Password placeholder="这台服务器的激活码" autoComplete="off" style={{ width: 200 }} />
         </Form.Item>
-        <Button htmlType="submit" loading={busy === 'standby'}>{others.length ? '更换备用服务器' : '设为备用服务器'}</Button>
+        <Button htmlType="submit" loading={busy === 'standby'}>添加服务器</Button>
       </Form>
     </div>
   )

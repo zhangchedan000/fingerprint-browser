@@ -125,7 +125,8 @@ routerAdd("GET", "/api/team/server", (e) => {
   t.requireOwner(e)
   const sizes = {}
   // storage/ and backups/ only exist once something was uploaded or backed up; du then fails on them.
-  const du = toString($os.cmd("sh", "-c", "du -sk /pb/pb_data /pb/pb_data/storage /pb/pb_data/backups 2>/dev/null; true").output())
+  // One du per folder: given all three at once, du counts storage/ and backups/ only under pb_data/.
+  const du = toString($os.cmd("sh", "-c", "for d in /pb/pb_data /pb/pb_data/storage /pb/pb_data/backups; do du -sk $d 2>/dev/null; done; true").output())
   du.split("\n").forEach((line) => {
     const parts = line.trim().split(/\s+/)
     if (parts.length === 2) sizes[parts[1].replace("/pb/pb_data", "").replace("/", "") || "all"] = Number(parts[0]) * 1024

@@ -52,6 +52,7 @@ ok "$(curl -s -X POST $B/api/collections/users/auth-with-password -H 'content-ty
 
 say "waiting for A's first push to R2 (up to 70 s)"
 for i in $(seq 1 70); do [ -f "$W/bucket/db/current.db.gz" ] && ls "$W/bucket/storage" >/dev/null 2>&1 && break; sleep 1; done
+for i in $(seq 1 70); do [ "$(ls $W/bucket/db | tr '\n' ' ')" = "current.at current.db.gz " ] && break; sleep 1; done
 ok "$(ls $W/bucket/db | tr '\n' ' ')" "current.at current.db.gz " "R2 db: one current copy"
 for i in $(seq 1 70); do [ "$(ls $W/bucket | tr '\n' ' ')" = "control db storage " ] && break; sleep 1; done
 ok "$(ls $W/bucket | tr '\n' ' ')" "control db storage " "old copies, daily zips, deleted files, fonts gone"
@@ -60,6 +61,18 @@ for i in $(seq 1 70); do curl -s $B/api/team/status | j '"peerCopyAt" in d' | gr
 ok "$(curl -s $B/api/team/status | j '"peerCopyAt" in d')" "True" "B holds A's database"
 ok "$(curl -s -X POST $B/api/team/peer/db -H 'X-Peer-Key: wrong' -H 'content-type: application/json' -d '{}' | j 'd["status"]')" "403" "B refuses a push without the key"
 
+say "activation codes kept for the owner"
+ok "$(curl -s $A/api/team/server-codes -H "Authorization: $OT" | j 'd["codes"]')" "{'$A': 'CODEA'}" "A gives its own code"
+ok "$(curl -s -X POST $A/api/team/server-codes -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"url\":\"$B\",\"code\":\"CODEB\"}" | j 'd["ok"]')" "True" "B's code kept on A"
+ok "$(curl -s -X POST $A/api/team/server-codes -H "Authorization: $OT" -H 'content-type: application/json' -d '{"url":"https://evil.example","code":"x"}' | j 'd["status"]')" "400" "a server outside the team is refused"
+ok "$(curl -s $A/api/team/server-codes | j 'd["status"]')" "401" "not signed in: no codes"
+say "the team's servers: remove one, add it back"
+ok "$(curl -s -X POST $A/api/team/servers -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"remove\":\"$B\"}" | j 'd["servers"]')" "['$A']" "B removed"
+ok "$(curl -s $A/api/team/server-codes -H "Authorization: $OT" | j 'sorted(d["codes"])')" "['$A']" "B's code removed with it"
+ok "$(curl -s -X POST $A/api/team/servers -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"remove\":\"$A\"}" | j 'd["status"]')" "400" "the active server cannot be removed"
+ok "$(curl -s -X POST $A/api/team/servers -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"add\":\"$B\"}" | j 'd["servers"]')" "['$A', '$B']" "B added back"
+ok "$(curl -s -X POST $A/api/team/servers -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"add\":\"http://127.0.0.1:8099\"}" | j 'd["status"]')" "400" "a server that does not answer is refused"
+curl -s -X POST $A/api/team/server-codes -H "Authorization: $OT" -H 'content-type: application/json' -d "{\"url\":\"$B\",\"code\":\"CODEB\"}" >/dev/null
 say "planned switch: A hands over, B takes over"
 ok "$(curl -s -X POST $A/api/team/handover -H "Authorization: $OT" | j 'd["ok"]')" "True" "A handover"
 ok "$(curl -s $A/api/collections/team_profiles/records -H "Authorization: $OT" | j 'd["status"]')" "409" "A refuses during handover"
@@ -73,6 +86,7 @@ FT=$(curl -s -X POST $B/api/files/token -H "Authorization: $OT" | j 'd["token"]'
 curl -s "$B/api/files/team_profiles/$PID/$FILE?token=$FT" -o "$W/got.bin"
 ok "$(cmp -s $W/state.bin $W/got.bin && echo same)" "same" "login state on B equals the uploaded one"
 ok "$(curl -s $B/api/collections/team_workspaces/records -H "Authorization: $OT" | j 'd["items"][0]["data"]["proxies"]')" "[1, 2, 3]" "workspace on B"
+ok "$(curl -s $B/api/team/server-codes -H "Authorization: $OT" | j 'sorted(d["codes"].items())')" "[('$A', 'CODEA'), ('$B', 'CODEB')]" "both codes on B after the switch"
 say "A learns it is standby (up to 70 s) and points to B"
 for i in $(seq 1 70); do [ "$(curl -s $A/api/collections/team_profiles/records -H "Authorization: $OT" | j 'd.get("movedTo","")')" = "$B" ] && break; sleep 1; done
 ok "$(role $A)" "standby/True" "A standby"

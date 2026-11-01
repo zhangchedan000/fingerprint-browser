@@ -9,6 +9,7 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:connect-server', (_event, server: string, code?: string) => team.connectServer(server, code))
   ipcMain.handle('team:server-pair', () => team.serverPair())
   ipcMain.handle('team:set-standby', (_event, server: string, code: string) => team.setStandby(server, code))
+  ipcMain.handle('team:remove-server', (_event, server: string) => team.removeServer(server))
   ipcMain.handle('team:switch-server', (_event, server: string, code?: string) => team.switchServer(server, code))
   ipcMain.handle('team:probe', (_event, server: string) => team.probe(server))
   ipcMain.handle('team:setup', (_event, server: string, code: string, username: string, name: string, password: string) =>

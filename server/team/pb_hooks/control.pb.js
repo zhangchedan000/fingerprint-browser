@@ -60,29 +60,75 @@ routerAdd("POST", "/api/team/standby/setup", (e) => {
   return e.json(200, c.view())
 })
 
-// The owner names a standby server (or none); every app learns it from /api/team/status.
+// The owner manages the team's servers; every app learns them from /api/team/status.
+// {add: url}: one more standby server (it must answer as a team server with that address);
+// {remove: url}: not one of the team's servers any more (never the active one);
+// {standby: url}: the older form, this server plus that one only (launchers before v0.5.52).
 routerAdd("POST", "/api/team/servers", (e) => {
   const t = require(`${__hooks}/team_utils.js`)
   const c = require(`${__hooks}/control_utils.js`)
   t.requireOwner(e)
   if (!c.self()) throw new BadRequestError("服务器没有设置自己的地址（.env 的 TEAM_PUBLIC_URL）")
   const body = e.requestInfo().body || {}
-  const standby = c.normalize(body.standby)
-  if (standby && (!c.validUrl(standby) || standby === c.self())) throw new BadRequestError("备用服务器地址不对")
-  if (standby) {
-    let reply
-    try {
-      reply = $http.send({ url: standby + "/api/team/status", method: "GET", timeout: 15 })
-    } catch (err) {
-      throw new BadRequestError("连不上备用服务器：" + err)
+  const current = c.servers().length ? c.servers() : [c.self()]
+  let list
+  if (body.remove !== undefined) {
+    const gone = c.normalize(body.remove)
+    if (gone === c.self()) throw new BadRequestError("正在用的这台不能移除")
+    list = current.filter((url) => url !== gone)
+    try { $app.delete($app.findFirstRecordByData("team_server_codes", "url", gone)) } catch (_) {}
+  } else {
+    const added = c.normalize(body.add !== undefined ? body.add : body.standby)
+    if (added && (!c.validUrl(added) || added === c.self())) throw new BadRequestError("服务器地址不对")
+    if (added) {
+      let reply
+      try {
+        reply = $http.send({ url: added + "/api/team/status", method: "GET", timeout: 15 })
+      } catch (err) {
+        throw new BadRequestError("连不上这台服务器：" + err)
+      }
+      const json = reply.json || {}
+      if (reply.statusCode !== 200 || !json.self) throw new BadRequestError("这台不是团队服务器，或者还没设置自己的地址")
+      if (c.normalize(json.self) !== added) throw new BadRequestError("这台服务器报的地址是 " + json.self + "，和填的不一样")
     }
-    const json = reply.json || {}
-    if (reply.statusCode !== 200 || !json.self) throw new BadRequestError("备用服务器不是团队服务器，或者还没设置自己的地址")
-    if (c.normalize(json.self) !== standby) throw new BadRequestError("备用服务器报的地址是 " + json.self + "，和填的不一样")
+    if (body.add !== undefined) list = current.indexOf(added) >= 0 ? current : current.concat([added])
+    else list = added ? [c.self(), added] : [c.self()]
   }
-  const marker = c.writeMarker(c.self(), standby ? [c.self(), standby] : [c.self()])
+  const marker = c.writeMarker(c.self(), list)
   t.log($app, e, "servers_set", null, { servers: marker.servers })
   return e.json(200, c.view())
+}, $apis.requireAuth("users"))
+
+// The owner's apps keep the team's activation codes here, so any of the owner's computers switches
+// between the servers with one click. GET: all of them (this server adds its own first); POST
+// {url, code}: the code of one of the team's servers (sent after it accepted it as standby).
+routerAdd("GET", "/api/team/server-codes", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  const c = require(`${__hooks}/control_utils.js`)
+  t.requireOwner(e)
+  const own = $os.getenv("TEAM_SETUP_CODE")
+  if (c.self() && own && own !== "change-me") c.saveCode(c.self(), own)
+  const team = c.servers()
+  const codes = {}
+  $app.findRecordsByFilter("team_server_codes", "", "", 0, 0).forEach((record) => {
+    const url = record.getString("url")
+    if (!team.length || team.indexOf(url) >= 0 || url === c.self()) codes[url] = record.getString("code")
+  })
+  return e.json(200, { codes })
+}, $apis.requireAuth("users"))
+
+routerAdd("POST", "/api/team/server-codes", (e) => {
+  const t = require(`${__hooks}/team_utils.js`)
+  const c = require(`${__hooks}/control_utils.js`)
+  t.requireOwner(e)
+  const body = e.requestInfo().body || {}
+  const url = c.normalize(body.url)
+  const code = String(body.code || "").trim()
+  if (!c.validUrl(url) || c.servers().indexOf(url) < 0) throw new BadRequestError("不是这个团队的服务器")
+  if (!code || code.length > 200) throw new BadRequestError("激活码不对")
+  c.saveCode(url, code)
+  t.log($app, e, "server_code_saved", null, { server: url })
+  return e.json(200, { ok: true })
 }, $apis.requireAuth("users"))
 
 // The owner's app copies the R2 bucket to a new standby server; only the owner sees the key.

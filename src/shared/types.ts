@@ -960,6 +960,8 @@ export interface BrowserApi {
     serverPair: () => Promise<import('./team').TeamServerPair>
     /** Owner: makes the server the standby of the one in use (with its activation code). */
     setStandby: (server: string, code: string) => Promise<import('./team').TeamServerPair>
+    /** Owner: takes a server off the team's list (not the one in use). */
+    removeServer: (server: string) => Promise<import('./team').TeamServerPair>
     /** Owner: the whole team moves to the server (批量切换). */
     switchServer: (server: string, code?: string) => Promise<import('./team').TeamStatus>
     /** Checks the address; ready = the server already has an owner account. */

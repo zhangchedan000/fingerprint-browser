@@ -188,6 +188,17 @@ function peerAt() {
   }
 }
 
+/** Keeps a server's activation code (team_server_codes); unchanged ones are not written again. */
+function saveCode(url, code) {
+  const collection = $app.findCollectionByNameOrId("team_server_codes")
+  let record
+  try { record = $app.findFirstRecordByData("team_server_codes", "url", url) } catch (_) { record = new Record(collection) }
+  if (record.getString("code") === code && record.getString("url") === url) return
+  record.set("url", url)
+  record.set("code", code)
+  $app.save(record)
+}
+
 /** For /api/team/status: what launchers need to find the server in use (and how fresh a standby is). */
 function view() {
   const at = peerAt()
@@ -208,4 +219,4 @@ function requireSetupCode(e, code) {
   t.clearFailures(key)
 }
 
-module.exports = { requireSetupCode, peerAt, writeOverride, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }
+module.exports = { requireSetupCode, peerAt, writeOverride, saveCode, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }

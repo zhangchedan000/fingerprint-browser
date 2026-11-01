@@ -407,6 +407,7 @@ export class TeamManager {
       const status = await this.requireApi().status()
       if (status.servers?.length) this.file.servers = status.servers
       await this.save()
+      await this.syncServerCodes()
       await this.flushLocalChanges()
       await this.pullWorkspace()
     } catch (error) {
@@ -500,11 +501,50 @@ export class TeamManager {
     throw new Error('备用服务器接班超时，请稍后重试')
   }
 
+  /**
+   * Owner: the activation codes of the team's servers, kept on the server too, so every computer of
+   * the owner switches between them with one click. Codes only this computer knows go up (an older
+   * version kept them here only); the server's go into this computer's encrypted file.
+   * A server without this (older program) is skipped.
+   */
+  private async syncServerCodes(): Promise<void> {
+    if (this.file.role !== 'owner' || !this.api || !this.online || !this.user || this.offline) return
+    const api = this.api
+    try {
+      const known = await api.serverCodes()
+      const team = this.file.servers ?? []
+      for (const url of team) {
+        const local = this.storedCode(url)
+        if (local && known[url] !== local) {
+          await api.saveServerCode(url, local)
+          known[url] = local
+        }
+      }
+      const codes = { ...(this.file.activationCodes ?? {}) }
+      let changed = false
+      for (const [url, code] of Object.entries(known)) {
+        if (code && this.storedCode(url) !== code) {
+          codes[url] = this.secrets.encode(code)
+          changed = true
+        }
+      }
+      if (changed) {
+        this.file.activationCodes = codes
+        await this.save()
+      }
+    } catch (error) {
+      if (!(error instanceof TeamApiError && error.status === 404)) {
+        this.logger?.error('同步服务器激活码没做完', { error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+  }
+
   /** Tests make the wait for a server's restart short. */
   takeoverPollMs = 3000
 
   /** The team's servers as the active one sees them, for the 服务器 page. */
   async serverPair(): Promise<TeamServerPair> {
+    await this.syncServerCodes()
     const current = this.file.server || DEFAULT_TEAM_SERVER
     const urls = [current, ...(this.file.servers ?? [])].filter((url, index, all) => url && all.indexOf(url) === index)
     const servers = await Promise.all(urls.map(async (url) => {
@@ -515,21 +555,40 @@ export class TeamManager {
   }
 
   /**
-   * Owner: makes `server` the standby of the active one. The active server names it (and checks it
-   * answers), then the standby gets the R2 bucket with its activation code, kept here for a switch.
+   * Owner: adds `server` to the team's servers as a standby (any number of them; adding one that is
+   * already there just checks and keeps its code). The active server names it (and checks it
+   * answers), then it gets the R2 bucket with its activation code, kept here and on the server.
    */
   async setStandby(server: string, code: string): Promise<TeamServerPair> {
     const api = await this.requireOwner()
     const url = normalizeServer(server)
-    if (url === api.server) throw new Error('备用服务器不能是正在用的这台')
-    if (!code.trim()) throw new Error('请填写备用服务器的激活码')
+    if (url === api.server) throw new Error('这是正在用的这台，不用添加')
+    if (!code.trim()) throw new Error('请填写这台服务器的激活码')
     const key = await api.offsiteKey()
-    const named = await api.setServers(url)
+    // Needs the server program with multi-server support (2026-11-01); both servers are updated first.
+    const named = await api.addServer(url)
     await new TeamApi(url, this.fetcher).standbySetup(code.trim(), key)
-    this.file.servers = named.servers?.length ? named.servers : [api.server, url]
+    this.file.servers = named.servers?.length ? named.servers : [...new Set([...(this.file.servers ?? [api.server]), url])]
     this.file.activationCodes = { ...(this.file.activationCodes ?? {}), [url]: this.secrets.encode(code.trim()) }
     await this.save()
+    // The server keeps it too, for the owner's other computers.
+    await api.saveServerCode(url, code.trim()).catch(() => undefined)
     this.logger?.info('备用服务器已设置', { standby: url })
+    return this.serverPair()
+  }
+
+  /** Owner: `server` is no longer one of the team's servers (not the one in use). */
+  async removeServer(server: string): Promise<TeamServerPair> {
+    const api = await this.requireOwner()
+    const url = normalizeServer(server)
+    if (url === api.server) throw new Error('正在用的这台不能移除')
+    const named = await api.removeServer(url)
+    this.file.servers = named.servers?.length ? named.servers : (this.file.servers ?? []).filter((item) => item !== url)
+    const codes = { ...(this.file.activationCodes ?? {}) }
+    delete codes[url]
+    this.file.activationCodes = codes
+    await this.save()
+    this.logger?.info('服务器已移除', { server: url })
     return this.serverPair()
   }
 
@@ -581,12 +640,19 @@ export class TeamManager {
     await this.pushWorkspace()
   }
 
-  private async save(): Promise<void> {
-    await mkdir(this.vaultPath, { recursive: true })
-    const temp = `${this.filePath}.tmp`
-    await writeFile(temp, JSON.stringify(this.file, null, 2), { encoding: 'utf8', mode: 0o600 })
-    await rename(temp, this.filePath)
+  /** Writes team.json; saves from background work and from the user's actions wait for each other. */
+  private save(): Promise<void> {
+    const next = this.saving.catch(() => undefined).then(async () => {
+      await mkdir(this.vaultPath, { recursive: true })
+      const temp = `${this.filePath}.tmp`
+      await writeFile(temp, JSON.stringify(this.file, null, 2), { encoding: 'utf8', mode: 0o600 })
+      await rename(temp, this.filePath)
+    })
+    this.saving = next
+    return next
   }
+
+  private saving: Promise<void> = Promise.resolve()
 
   async status(): Promise<TeamStatus> {
     if (!this.enabled) return { server: this.file.server || DEFAULT_TEAM_SERVER, disabled: true }

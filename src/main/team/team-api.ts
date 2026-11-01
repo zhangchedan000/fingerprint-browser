@@ -200,8 +200,29 @@ export class TeamApi {
     return this.request('POST', '/api/team/servers', { standby }, 30_000)
   }
 
+  /** Owner, on the active server: one more server for the team (it must answer as a team server). */
+  addServer(url: string): Promise<TeamServerStatus> {
+    return this.request('POST', '/api/team/servers', { add: url }, 30_000)
+  }
+
+  /** Owner, on the active server: no longer one of the team's servers. */
+  removeServer(url: string): Promise<TeamServerStatus> {
+    return this.request('POST', '/api/team/servers', { remove: url }, 30_000)
+  }
+
   offsiteKey(): Promise<TeamOffsiteKey> {
     return this.request('GET', '/api/team/offsite/key')
+  }
+
+  /** Owner: the activation codes of the team's servers the server keeps (the active one adds its own). */
+  async serverCodes(): Promise<Record<string, string>> {
+    const reply = await this.request<{ codes?: Record<string, string> }>('GET', '/api/team/server-codes')
+    return reply.codes ?? {}
+  }
+
+  /** Owner: keeps the activation code of one of the team's servers on the server. */
+  saveServerCode(url: string, code: string): Promise<{ ok: boolean }> {
+    return this.request('POST', '/api/team/server-codes', { url, code })
   }
 
   /** Owner, on the active server: stops writing and puts everything in R2 for the next one. */

@@ -199,6 +199,7 @@ const api: BrowserApi = {
     connectServer: (server, code) => ipcRenderer.invoke('team:connect-server', server, code),
     serverPair: () => ipcRenderer.invoke('team:server-pair'),
     setStandby: (server, code) => ipcRenderer.invoke('team:set-standby', server, code),
+    removeServer: (server) => ipcRenderer.invoke('team:remove-server', server),
     switchServer: (server, code) => ipcRenderer.invoke('team:switch-server', server, code),
     probe: (server) => ipcRenderer.invoke('team:probe', server),
     setup: (server, code, username, name, password) => ipcRenderer.invoke('team:setup', server, code, username, name, password),

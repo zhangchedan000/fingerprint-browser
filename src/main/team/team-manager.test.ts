@@ -458,6 +458,7 @@ function serverPair(data = fakeServer()) {
   const B = 'https://b.team.test'
   const state: Record<string, 'active' | 'standby' | 'down'> = { [A]: 'active', [B]: 'standby' }
   const calls: string[] = []
+  const codes: Record<string, string> = {}
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const activeOne = () => Object.keys(state).find((url) => state[url] === 'active') ?? ''
   const fetcher = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -467,7 +468,7 @@ function serverPair(data = fakeServer()) {
     calls.push(`${origin} ${request.method} ${url.pathname}`)
     if (state[origin] === 'down' || !(origin in state)) throw new TypeError('fetch failed')
     if (url.pathname === '/api/team/status') {
-      return json(200, { ready: true, lockMs: 90_000, role: state[origin], self: origin, active: activeOne(), servers: [A, B] })
+      return json(200, { ready: true, lockMs: 90_000, role: state[origin], self: origin, active: activeOne(), servers: Object.keys(state) })
     }
     if (url.pathname === '/api/team/activate') {
       const body = await request.json() as { code: string }
@@ -486,13 +487,25 @@ function serverPair(data = fakeServer()) {
       return json(200, { ok: true })
     }
     if (url.pathname === '/api/team/offsite/key') return json(200, { url: 'https://x.r2.cloudflarestorage.com/bucket', accessKeyId: 'AAAAAAAAAAAAAAAA', secretAccessKey: 'BBBBBBBBBBBBBBBB' })
-    if (url.pathname === '/api/team/servers') return json(200, { role: 'active', self: origin, active: origin, servers: [A, B] })
+    if (url.pathname === '/api/team/servers') {
+      const body = await request.json() as { add?: string; remove?: string }
+      if (body.remove) delete state[body.remove]
+      else if (body.add && !(body.add in state)) state[body.add] = 'standby'
+      return json(200, { role: 'active', self: origin, active: origin, servers: Object.keys(state) })
+    }
+    if (url.pathname === '/api/team/server-codes') {
+      // The active server adds its own code; the owner's apps add the others.
+      if (request.method === 'GET') return json(200, { codes: { ...codes, [origin]: 'CODE-' + origin } })
+      const body = await request.json() as { url: string; code: string }
+      codes[body.url] = body.code
+      return json(200, { ok: true })
+    }
     if (url.pathname.startsWith('/api/collections/team_workspaces/records')) {
       return request.method === 'GET' ? json(200, { items: [], page: 1, totalItems: 0 }) : json(200, { id: 'ws1' })
     }
     return data.fetcher(request)
   }
-  return { A, B, state, calls, data, fetcher: fetcher as typeof fetch }
+  return { A, B, state, calls, codes, data, fetcher: fetcher as typeof fetch }
 }
 
 describe('TeamManager with a standby server', () => {
@@ -572,7 +585,7 @@ describe('TeamManager with a standby server', () => {
     const pair = serverPair()
     const pc = await owned(pair)
     const view = await pc.team.setStandby(pair.B, 'CODE-' + pair.B)
-    expect(view.servers.map((server) => [server.url, server.role, server.codeSaved])).toEqual([[pair.A, 'active', false], [pair.B, 'standby', true]])
+    expect(view.servers.map((server) => [server.url, server.role, server.codeSaved])).toEqual([[pair.A, 'active', true], [pair.B, 'standby', true]])
     expect(pair.calls).toContain(`${pair.B} POST /api/team/standby/setup`)
 
     // 批量切换 with the kept code: A hands over, B takes over, this computer follows.
@@ -581,5 +594,37 @@ describe('TeamManager with a standby server', () => {
     expect(pair.calls).toContain(`${pair.A} POST /api/team/handover`)
     expect(pair.state).toEqual({ [pair.A]: 'standby', [pair.B]: 'active' })
     await expect(pc.team.connectServer(pair.A, 'wrong')).rejects.toThrow('激活码不对')
+  })
+
+  it('keeps both activation codes on the server, so any owner computer switches both ways with one click', async () => {
+    const pair = serverPair()
+    const pc = await owned(pair)
+    await pc.team.setStandby(pair.B, 'CODE-' + pair.B)
+    expect(pair.codes[pair.B]).toBe('CODE-' + pair.B)
+
+    // Another computer of the owner: nothing typed there, both codes come from the server.
+    const other = await owned(pair)
+    const view = await other.team.serverPair()
+    expect(view.servers.map((server) => [server.url, server.codeSaved])).toEqual([[pair.A, true], [pair.B, true]])
+    expect((await other.team.switchServer(pair.B)).server).toBe(pair.B)
+    expect((await other.team.switchServer(pair.A)).server).toBe(pair.A)
+    expect(pair.state).toEqual({ [pair.A]: 'active', [pair.B]: 'standby' })
+  })
+
+  it('keeps any number of servers: adds a third, switches to it, removes one', async () => {
+    const pair = serverPair()
+    const C = 'https://c.team.test'
+    const pc = await owned(pair)
+    await pc.team.setStandby(pair.B, 'CODE-' + pair.B)
+    await pc.team.setStandby(C, 'CODE-' + C)
+    let view = await pc.team.serverPair()
+    expect(view.servers.map((server) => [server.url, server.codeSaved])).toEqual([[pair.A, true], [pair.B, true], [C, true]])
+
+    expect((await pc.team.switchServer(C)).server).toBe(C)
+    expect(pair.state).toEqual({ [pair.A]: 'standby', [pair.B]: 'standby', [C]: 'active' })
+
+    view = await pc.team.removeServer(pair.B)
+    expect(view.servers.map((server) => server.url)).toEqual([C, pair.A])
+    await expect(pc.team.removeServer(C)).rejects.toThrow('正在用的这台不能移除')
   })
 })
