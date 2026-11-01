@@ -253,13 +253,6 @@ export class TeamApi {
     return reply.codes ?? {}
   }
 
-  /** Signed in: a short-lived download link for one of the team's private files (the kernel font package). */
-  async downloadLink(file: string): Promise<string> {
-    const reply = await this.request<{ url?: string }>('GET', `/api/team/downloads/${encodeURIComponent(file)}`, undefined, 30_000)
-    if (!reply.url) throw new TeamApiError('团队服务器没有给出下载地址', 0)
-    return reply.url
-  }
-
   /** Owner: keeps the activation code of one of the team's servers on the server. */
   saveServerCode(url: string, code: string): Promise<{ ok: boolean }> {
     return this.request('POST', '/api/team/server-codes', { url, code })

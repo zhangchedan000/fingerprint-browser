@@ -26,7 +26,7 @@ import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
 import { fontPackStatus, installFontPack, installKernelFontPack, registerLanguageFontsIpc } from './language-fonts'
 import { installOtherWindowsFonts } from './other-windows-fonts'
-import { ensureKernelFonts, KERNEL_FONT_PROGRESS, setKernelFontPackageSource } from './kernel-fonts'
+import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { TEAM_FEATURE_ENABLED } from '../shared/team'
@@ -286,8 +286,6 @@ app.whenReady().then(async () => {
   team = activeTeam
   // Team off (TEAM_FEATURE_ENABLED): no sign-in and no server, windows stay plain local windows.
   activeTeam.enabled = TEAM_FEATURE_ENABLED
-  // The kernel font package (Microsoft's fonts) is private: a short-lived link from the team server.
-  setKernelFontPackageSource((file) => activeTeam.downloadLink(file))
   // A window's 网络加速 nodes go to the cloud with it, and come along to other computers.
   activeTeam.tunnelSources = (route) => activeTunnel.sourcesFor(route)
   activeTeam.adoptTunnelSources = (sources) => activeTunnel.adoptSources(sources)

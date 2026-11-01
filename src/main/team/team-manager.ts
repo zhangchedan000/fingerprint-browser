@@ -602,15 +602,6 @@ export class TeamManager {
     return this.serverPair()
   }
 
-  /** A short-lived link to one of the team's private files (the kernel font package); any signed-in account. */
-  async downloadLink(file: string): Promise<string> {
-    if (!this.enabled) throw new Error('团队功能已停用，下载不了内核字体包')
-    await this.restoring
-    if (!this.api || !this.user) throw new Error('内核字体包要登录团队后才能下载')
-    if (this.file.localMode || this.offline) throw new Error('团队服务器连不上，暂时下载不了内核字体包')
-    return this.api.downloadLink(file)
-  }
-
   /** Owner: `server` is no longer one of the team's servers (not the one in use). */
   async removeServer(server: string): Promise<TeamServerPair> {
     const api = await this.requireOwner()

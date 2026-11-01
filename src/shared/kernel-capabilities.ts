@@ -29,17 +29,16 @@ export function kernelHasBuiltInFonts(version: string | null | undefined): boole
 
 /**
  * The Windows fonts of prism16+ kernels as a package of their own (`prism-system-fonts\win10`, `win11`:
- * base fonts, Simplified Chinese, Arabic, fallback.txt), kept in the data folder for every kernel
- * (main/kernel-fonts.ts). Microsoft's font files are never published: the package sits in the team's
- * private storage and the launcher downloads it through a short-lived link from the team server
- * (`/api/team/downloads/<file>`, signed-in accounts only). A kernel whose fonts change gets a new version.
+ * base fonts, Simplified Chinese, Arabic, fallback.txt), published once in prism-kernel-releases and
+ * kept in the data folder for every kernel (main/kernel-fonts.ts). A kernel whose fonts change gets a
+ * new package version here.
  */
-export interface KernelFontPackage { version: number; file: string; size: number; sha256: string }
+export interface KernelFontPackage { version: number; url: string; size: number; sha256: string }
 
 const KERNEL_FONT_PACKAGES: readonly KernelFontPackage[] = [
   {
     version: 1,
-    file: 'prism-system-fonts-1.zip',
+    url: 'https://github.com/zhangchedan000/prism-kernel-releases/releases/download/fonts-1/prism-system-fonts-1.zip',
     size: 537670469,
     sha256: 'de30a293b2de7788f4bcb6900c9058fe6106a0fe990454ba8642589d8fb96eb0'
   }

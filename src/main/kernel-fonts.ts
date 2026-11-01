@@ -100,13 +100,6 @@ export async function linkKernelFonts(browserFolder: string, store: string, logg
 
 export interface KernelFontDownloadProgress { receivedBytes: number; totalBytes: number; stage: 'downloading' | 'installing' }
 
-/** Where the font package comes from: a short-lived download link for its file (set by the app: the team server). */
-let packageLink: ((file: string) => Promise<string>) | undefined
-
-export function setKernelFontPackageSource(link: ((file: string) => Promise<string>) | undefined): void {
-  packageLink = link
-}
-
 /** Downloads a font package (SHA-256 checked) and unpacks it as the store; whole or not at all. */
 export async function installKernelFontStore(store: string, pkg: KernelFontPackage, fetchImpl: Fetch, onProgress: (progress: KernelFontDownloadProgress) => void, signal?: AbortSignal, logger?: Logger): Promise<void> {
   if (await kernelFontStoreReady(store)) return
@@ -117,10 +110,7 @@ export async function installKernelFontStore(store: string, pkg: KernelFontPacka
   if (have > pkg.size) { await rm(archive, { force: true }); have = 0 }
   if (have < pkg.size) {
     logger?.info('下载内核字体包', { version: pkg.version, bytes: pkg.size, resume: have })
-    if (!packageLink) throw new Error('内核字体包要登录团队后才能下载')
-    // A new link for every try (it expires after a few minutes); a download under way is not cut off.
-    const url = await packageLink(pkg.file)
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(pkg.url, {
       headers: { accept: 'application/octet-stream', 'user-agent': 'Fingerprint-Browser/0.1', ...(have ? { range: `bytes=${have}-` } : {}) },
       redirect: 'follow',
       signal: AbortSignal.any([AbortSignal.timeout(60 * 60_000), signal ?? new AbortController().signal])
