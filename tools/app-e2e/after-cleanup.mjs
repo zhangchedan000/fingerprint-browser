@@ -52,7 +52,7 @@ try {
   report.kernelList = JSON.stringify(releases).match(/prism\d+|fonts-\d+/g)?.filter((v, i, a) => a.indexOf(v) === i)
   log('kernel list', JSON.stringify(report.kernelList))
   // Same call as 内核管理 → 在线下载内核: the newest 156 build in the list, by its version.
-  const pick = releases.find((item) => /^156\./.test(item.chromium ?? item.version ?? '') && !item.history)
+  const pick = releases.find((item) => /(^|-)156\./.test(item.version ?? '') && !item.history)
   report.picked = pick && { version: pick.version, tag: pick.tag }
   log('installing from GitHub', JSON.stringify(report.picked))
   const t0 = Date.now()
