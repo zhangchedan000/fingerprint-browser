@@ -2659,5 +2659,7 @@
   "不绑定：谷歌、抖音的登录换到别的电脑也能直接用。绑定：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。第一次打开后不能再改。": "Bağlama: Google ve Douyin oturumları başka bilgisayarlarda da çalışır. Bağla: normal bir Chrome gibi cihaza bağlama; veriler bu pencerede tutulur ve pencereyle eşitlenir. İlk açılıştan sonra değiştirilemez.",
   "请先选择这个窗口的「设备绑定登录」": "Önce bu pencere için cihaza bağlı oturum açma seçeneğini belirleyin",
   "这个窗口已经打开过，设备绑定登录不能再改": "Bu pencere daha önce açıldı; cihaza bağlı oturum açma değiştirilemez",
-  "设备绑定登录设置无效": "Geçersiz cihaza bağlı oturum açma ayarı"
+  "设备绑定登录设置无效": "Geçersiz cihaza bağlı oturum açma ayarı",
+  "不绑定": "Bağlama",
+  "绑定（推荐）": "Bağla (önerilen)"
 }

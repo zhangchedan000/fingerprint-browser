@@ -1,4 +1,5 @@
 import { Button, Modal, Space } from 'antd'
+import { DEFAULT_DEVICE_BINDING } from '../../../shared/defaults'
 import { t, translateMessage as mt } from '../../../shared/i18n'
 import { geoConflictConfirmationMessage } from '../../../shared/network-identity'
 import type { BrowserProfileView } from '../../../shared/types'
@@ -27,6 +28,12 @@ function confirmGeoConflict(profile: BrowserProfileView, warning: string): Promi
   })
 }
 
+/** The label of a 「设备绑定登录」 choice; the default one (DEFAULT_DEVICE_BINDING) says it is recommended. */
+export function deviceBindingLabel(value: 'on' | 'off'): string {
+  if (value === 'on') return DEFAULT_DEVICE_BINDING === 'on' ? t("绑定（推荐）") : t("绑定")
+  return DEFAULT_DEVICE_BINDING === 'off' ? t("不绑定（推荐）") : t("不绑定")
+}
+
 /**
  * Asked before a new window's first opening: may its sign-ins be bound to the device? Closing the
  * dialog (X) opens nothing; the window asks again next time. undefined = closed.
@@ -47,15 +54,15 @@ function chooseDeviceBinding(profile: BrowserProfileView): Promise<'on' | 'off' 
       keyboard: false,
       content: (
         <div className="fb-device-binding-choice">
-          <p><strong>{t("不绑定（推荐）")}</strong>{t("：谷歌、抖音的登录换到别的电脑也能直接用。")}</p>
-          <p><strong>{t("绑定")}</strong>{t("：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。")}</p>
+          <p><strong>{deviceBindingLabel('off')}</strong>{t("：谷歌、抖音的登录换到别的电脑也能直接用。")}</p>
+          <p><strong>{deviceBindingLabel('on')}</strong>{t("：和正常 Chrome 一样做设备绑定，绑定数据存在这个窗口里，跟着窗口同步。")}</p>
           <p className="fb-muted">{t("选好后不能再改。")}</p>
         </div>
       ),
       footer: (
         <Space style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <Button onClick={() => { settle('on'); dialog.destroy() }}>{t("绑定")}</Button>
-          <Button type="primary" onClick={() => { settle('off'); dialog.destroy() }}>{t("不绑定（推荐）")}</Button>
+          <Button type={DEFAULT_DEVICE_BINDING === 'on' ? 'primary' : 'default'} onClick={() => { settle('on'); dialog.destroy() }}>{deviceBindingLabel('on')}</Button>
+          <Button type={DEFAULT_DEVICE_BINDING === 'off' ? 'primary' : 'default'} onClick={() => { settle('off'); dialog.destroy() }}>{deviceBindingLabel('off')}</Button>
         </Space>
       ),
       onCancel: () => settle(undefined),

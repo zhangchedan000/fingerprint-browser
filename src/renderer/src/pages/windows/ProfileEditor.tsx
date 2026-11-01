@@ -29,7 +29,7 @@ import {
 import { ThunderboltOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
+import { DEFAULT_DEVICE_BINDING, defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
 import { fingerprintVersionWarning } from '../../../../shared/fingerprint-consistency'
 import {
   applyHardwareProfile,
@@ -82,7 +82,7 @@ import { ExitIpCard } from '../../components/ExitIpCard'
 import { useIpScore } from '../../components/useIpScore'
 import { DeepCheck } from './DeepCheck'
 import { IpCheckSites } from './IpCheckSites'
-import { useWindowLauncher } from '../../data/window-actions'
+import { deviceBindingLabel, useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import type { IpSiteRecord } from '../../../../shared/ip-sites'
 import { kernelName } from '../../../../shared/kernel-id'
@@ -1527,9 +1527,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Radio.Group
           disabled={running || deviceBindingFixed}
-          value={fp.deviceBinding === 'on' ? 'on' : fp.deviceBinding === 'ask' ? undefined : 'off'}
+          // A new window not asked yet shows the default; picking here is the choice (no dialog then).
+          value={fp.deviceBinding === 'ask' ? DEFAULT_DEVICE_BINDING : fp.deviceBinding === 'on' ? 'on' : 'off'}
           onChange={(event) => patchFingerprint({ deviceBinding: event.target.value === 'on' ? 'on' : undefined })}
-          options={[{ value: 'off', label: t("不绑定（推荐）") }, { value: 'on', label: t("绑定") }]}
+          options={[{ value: 'off', label: deviceBindingLabel('off') }, { value: 'on', label: deviceBindingLabel('on') }]}
         />
       </Row>
       <Row

@@ -59,6 +59,13 @@ export function defaultProfileWindow(): ProfileWindowConfig {
   return { mode: 'auto', x: 0, y: 0, width: 1200, height: 800 }
 }
 
+/**
+ * What a new window's 「设备绑定登录」 shows in the editor and recommends in the dialog before its first
+ * opening, until someone picks. 'off' (ordinary cookies, the common way) for now; 'on' once binding with
+ * software keys kept in the window (prism18+) has proven itself on real accounts.
+ */
+export const DEFAULT_DEVICE_BINDING: 'on' | 'off' = 'off'
+
 export function defaultProfileDraft(index = 1): ProfileDraft & { account: PlatformAccount } {
   return {
     name: t('环境 {0}', index),
@@ -80,7 +87,8 @@ export function defaultProfileDraft(index = 1): ProfileDraft & { account: Platfo
       password: ''
     },
     account: { platform: '', username: '', password: '' },
-    // A new window asks before its first opening whether sign-ins may be bound to the device.
+    // A new window asks before its first opening whether sign-ins may be bound to the device
+    // (until then it shows DEFAULT_DEVICE_BINDING).
     fingerprint: { ...defaultFingerprint(), deviceBinding: 'ask' }
   }
 }
