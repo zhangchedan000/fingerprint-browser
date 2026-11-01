@@ -1,14 +1,14 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Off-server backup to Cloudflare R2: see r2_utils.js.
+// Off-server copies (Cloudflare R2 and the standby server): see r2_utils.js.
 
 cronAdd("r2_backup", "* * * * *", () => {
   require(`${__hooks}/r2_utils.js`).tick()
 })
 
-// 03:30 Beijing time, after PocketBase's own daily zip.
+// 03:30 Beijing time: yesterday's copy in R2, then a full pass.
 cronAdd("r2_daily", "30 19 * * *", () => {
-  require(`${__hooks}/r2_utils.js`).daily()
+  require(`${__hooks}/r2_utils.js`).daily(true)
 })
 
 // Locks change every 30 seconds while a window is open and are not worth keeping.

@@ -31,6 +31,9 @@ say "A: owner, member, R2, one shared window with a login state"
 curl -s -X POST $A/api/team/setup -H 'content-type: application/json' -d '{"code":"CODEA","username":"boss","name":"老板","password":"testpass123"}' >/dev/null
 OT=$(token $A boss testpass123)
 curl -s -X POST $A/api/collections/users/records -H "Authorization: $OT" -H 'content-type: application/json' -d '{"username":"alice","role":"member","password":"alicepass1","passwordConfirm":"alicepass1"}' >/dev/null
+# What older versions left in the bucket; the first full pass removes it.
+mkdir -p "$W/bucket/db" "$W/bucket/daily" "$W/bucket/deleted/20261030" "$W/bucket/assets"
+echo old > "$W/bucket/db/20261030T000000Z.db.gz"; echo old > "$W/bucket/daily/a.zip"; echo old > "$W/bucket/deleted/20261030/x"; echo old > "$W/bucket/assets/f.ttf"
 R2='{"url":"https://test.r2.cloudflarestorage.com/bucket","accessKeyId":"AAAAAAAAAAAAAAAA","secretAccessKey":"BBBBBBBBBBBBBBBB"}'
 ok "$(curl -s -X POST $A/api/team/offsite -H "Authorization: $OT" -H 'content-type: application/json' -d "$R2" | j 'd["configured"]')" "True" "A offsite on"
 head -c 200000 /dev/urandom > "$W/state.bin"
@@ -48,13 +51,18 @@ ok "$(curl -s -X POST $B/api/team/standby/setup -H 'content-type: application/js
 ok "$(curl -s -X POST $B/api/collections/users/auth-with-password -H 'content-type: application/json' -d '{"identity":"boss","password":"testpass123"}' | j 'd["status"]')" "409" "B refuses logins while standby"
 
 say "waiting for A's first push to R2 (up to 70 s)"
-for i in $(seq 1 70); do ls "$W/bucket/db/"*.db.gz >/dev/null 2>&1 && ls "$W/bucket/storage" >/dev/null 2>&1 && break; sleep 1; done
-ok "$(ls $W/bucket/db | wc -l | tr -d ' ')" "1" "one db copy in R2"
+for i in $(seq 1 70); do [ -f "$W/bucket/db/current.db.gz" ] && ls "$W/bucket/storage" >/dev/null 2>&1 && break; sleep 1; done
+ok "$(ls $W/bucket/db | tr '\n' ' ')" "current.at current.db.gz " "R2 db: one current copy"
+ok "$(ls $W/bucket | tr '\n' ' ')" "control db storage " "old copies, daily zips, deleted files, fonts gone"
+say "A pushes its database to B (up to 70 s)"
+for i in $(seq 1 70); do curl -s $B/api/team/status | j '"peerCopyAt" in d' | grep -q True && break; sleep 1; done
+ok "$(curl -s $B/api/team/status | j '"peerCopyAt" in d')" "True" "B holds A's database"
+ok "$(curl -s -X POST $B/api/team/peer/db -H 'X-Peer-Key: wrong' -H 'content-type: application/json' -d '{}' | j 'd["status"]')" "403" "B refuses a push without the key"
 
 say "planned switch: A hands over, B takes over"
 ok "$(curl -s -X POST $A/api/team/handover -H "Authorization: $OT" | j 'd["ok"]')" "True" "A handover"
 ok "$(curl -s $A/api/collections/team_profiles/records -H "Authorization: $OT" | j 'd["status"]')" "409" "A refuses during handover"
-ok "$(curl -s -X POST $B/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEB"}' | j 'd["restarting"]')" "True" "B activate"
+ok "$(curl -s -X POST $B/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEB"}' | j 'd["restarting"] and d["restoredFrom"][:6]')" "备用服务器自" "B activate from its own copy"
 sleep 4; up $B
 ok "$(role $B)" "active/True" "B active with the restored data"
 ok "$(curl -s -X POST $B/api/collections/users/auth-refresh -H "Authorization: $OT" | j 'd["record"]["username"]')" "boss" "A's sign-in still valid on B"
@@ -71,12 +79,32 @@ ok "$(curl -s $A/api/collections/team_profiles/records -H "Authorization: $OT" |
 
 say "B writes; then A dies-style takeover back to A (no handover)"
 curl -s -X PATCH $B/api/collections/team_profiles/records/$PID -H "Authorization: $OT" -H 'content-type: application/json' -d '{"name":"shop-on-b"}' >/dev/null
-for i in $(seq 1 70); do [ "$(ls $W/bucket/db | wc -l | tr -d ' ')" -ge 2 ] && break; sleep 1; done
+AT0=$(cat $W/bucket/db/current.at)
+for i in $(seq 1 90); do [ "$(cat $W/bucket/db/current.at)" != "$AT0" ] && [ "$(curl -s $A/api/team/status | j 'd.get("peerCopyAt",0)')" != "0" ] && break; sleep 1; done
+ok "$([ "$(cat $W/bucket/db/current.at)" != "$AT0" ] && echo moved)" "moved" "B's change in R2 (current written over)"
+ok "$(curl -s $A/api/team/status | j '"peerCopyAt" in d')" "True" "A (standby) holds B's database"
 ok "$(curl -s -X POST $A/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEA"}' | j 'd["restarting"]')" "True" "A activate"
 sleep 4; up $A
 ok "$(curl -s $A/api/collections/team_profiles/records/$PID -H "Authorization: $OT" | j 'd["name"]')" "shop-on-b" "A has B's change"
 for i in $(seq 1 70); do [ "$(role $B)" = "standby/True" ] && break; sleep 1; done
 ok "$(role $B)" "standby/True" "B back to standby"
+
+say "A in use; B gets A's changes; R2's database is lost; B takes over from its own copy"
+for i in $(seq 1 70); do [ "$(curl -s -o /dev/null -w '%{http_code}' $A/api/collections/team_profiles/records -H "Authorization: $OT")" = "200" ] && break; sleep 1; done
+curl -s -X PATCH $A/api/collections/team_profiles/records/$PID -H "Authorization: $OT" -H 'content-type: application/json' -d '{"name":"shop-on-a-again"}' >/dev/null
+BEFORE=$(curl -s $B/api/team/status | j 'd.get("peerCopyAt",0)')
+for i in $(seq 1 90); do [ "$(curl -s $B/api/team/status | j 'd.get("peerCopyAt",0)')" != "$BEFORE" ] && break; sleep 1; done
+ok "$([ "$(curl -s $B/api/team/status | j 'd.get("peerCopyAt",0)')" != "$BEFORE" ] && echo newer)" "newer" "B got A's change"
+rm -f $W/bucket/db/*
+ok "$(curl -s -X POST $B/api/team/activate -H 'content-type: application/json' -d '{"code":"CODEB"}' | j 'd["restarting"] and d["restoredFrom"][:6]')" "备用服务器自" "B activate without R2's database"
+sleep 4; up $B
+ok "$(curl -s $B/api/collections/team_profiles/records/$PID -H "Authorization: $OT" | j 'd["name"]')" "shop-on-a-again" "B has A's last change"
+FILE=$(curl -s $B/api/collections/team_profiles/records/$PID -H "Authorization: $OT" | j 'd["data"]')
+FT=$(curl -s -X POST $B/api/files/token -H "Authorization: $OT" | j 'd["token"]')
+curl -s "$B/api/files/team_profiles/$PID/$FILE?token=$FT" -o "$W/got2.bin"
+ok "$(cmp -s $W/state.bin $W/got2.bin && echo same)" "same" "login state from R2 on B"
+for i in $(seq 1 70); do [ -f "$W/bucket/db/current.db.gz" ] && break; sleep 1; done
+ok "$([ -f $W/bucket/db/current.db.gz ] && echo yes)" "yes" "B writes R2's database again"
 
 touch $W/a/stop $W/b/stop
 pkill -f "$W/" 2>/dev/null; pkill -f "127.0.0.1:809[12]" 2>/dev/null

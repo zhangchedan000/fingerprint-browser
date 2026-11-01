@@ -1,7 +1,7 @@
 #!/bin/sh
-# Starts PocketBase. After /api/team/activate (control.pb.js) pulled the newest data from R2 into
-# pb_data/.restore, the pulled database, login states and files are swapped in first; the old
-# ones are kept in pb_data/before-restore-<time>/.
+# Starts PocketBase. After /api/team/activate (control.pb.js) put the newest database and the
+# login states from R2 into pb_data/.restore, they are swapped in first; the old ones are kept in
+# pb_data/before-restore-<time>/.
 D=${TEAM_DATA_DIR:-/pb/pb_data}
 R=$D/.restore
 if [ -f "$R/ready" ] && [ -f "$R/data.db" ]; then
@@ -17,7 +17,7 @@ if [ -f "$R/ready" ] && [ -f "$R/data.db" ]; then
     fi
   done
   mv "$R/data.db" "$D/data.db"
-  echo "restored $(cat "$R/ready") ($K keeps the old files)"
+  echo "restored from $(cat "$R/ready") ($K keeps the old files)"
   rm -rf "$R"
 fi
 exec ${PB_BIN:-/pb/pocketbase} serve --http=${PB_HTTP:-0.0.0.0:8090} --dir="$D" --hooksDir=${PB_HOOKS:-/pb/pb_hooks} --migrationsDir=${PB_MIGRATIONS:-/pb/pb_migrations}

@@ -1,10 +1,16 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Off-server backup to Cloudflare R2 with rclone, only when something changed:
-// - the database (accounts, window configs, the log) a minute after a change, as db/<time>.db.gz;
-// - login states (storage/) a minute after a window uploads one.
-// Once a day (and once after the server starts) a full pass: a database copy, storage/ mirrored
-// with removed files moved to deleted/<date>/, and copies older than 7 days pruned.
+// Where the team's data is kept besides this server (only by the server in use, control_utils.js):
+// - Cloudflare R2, the windows: one current copy, only what changed is sent:
+//     db/current.db.gz (+ db/current.at)  the database (accounts, window configs, proxy libraries…)
+//                                          a minute after a change, written over;
+//     storage/                             login states, a minute after a window uploads one.
+//   Once a day (03:30 Beijing time) the current copy is copied to db/yesterday.db.gz and
+//   storage-yesterday/ first, over the day before, so a broken upload can be undone for a day.
+// - The standby server: the same database, pushed to it a minute after a change (it keeps it in
+//   pb_data/.peer, control.pb.js), so it can take over at once even when R2 has no good copy.
+// Nothing else: caches never reach the server, the program is on GitHub, the private fonts
+// (pb_data/assets) are in the private repository, and there are no daily zips any more.
 // The owner sets the bucket and its key in the app (r2.pb.js); they are kept in pb_data/r2.env.
 // Hook handlers run in their own VMs, so state lives in $app.store().
 
@@ -12,10 +18,9 @@
 const DATA = $os.getenv("TEAM_DATA_DIR") || "/pb/pb_data"
 const WORK = DATA + "/.r2"
 const CONFIG = DATA + "/r2.env"
-const KEEP_DAYS = 7
-// The daily zip of pb_data (PocketBase's own backup, 1761600003_backups.js) is also kept in R2, longer.
-const DAILY_KEEP_DAYS = 15
-const KEY = { db: "r2.dbDirty", files: "r2.filesDirty", status: "r2.status", running: "r2.running", started: "r2.started" }
+// The standby server's copy of the active server's database.
+const PEER_DIR = DATA + "/.peer"
+const KEY = { db: "r2.dbDirty", files: "r2.filesDirty", peer: "r2.peerDirty", status: "r2.status", running: "r2.running", started: "r2.started" }
 
 /** Only these shapes are accepted, so the values are safe inside the shell lines below. */
 function validConfig(config) {
@@ -67,7 +72,11 @@ function setStatus(patch) {
   $app.store().set(KEY.status, JSON.stringify(Object.assign(status(), patch)))
 }
 
-function markDb() { $app.store().set(KEY.db, true) }
+function markDb() {
+  const store = $app.store()
+  store.set(KEY.db, true)
+  store.set(KEY.peer, true)
+}
 function markFiles() { $app.store().set(KEY.files, true) }
 
 /** Runs a shell line; throws with its output when it fails. Arguments are ours, never a user's. */
@@ -85,36 +94,89 @@ function stamp() {
   return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")
 }
 
-function pushDb(r) {
+/** A consistent copy of the database while the server keeps writing: { file (gz), at }. */
+function dumpDb() {
   try { $os.mkdirAll(WORK, 0o700) } catch (_) {}
   const copy = WORK + "/data.db"
   sh("rm -f " + copy + " " + copy + ".gz")
-  // A consistent copy while the server keeps writing.
+  const at = Date.now()
   $app.db().newQuery("VACUUM INTO {:path}").bind({ path: copy }).execute()
-  sh(r.env + "gzip " + copy + " && rclone copyto " + copy + ".gz " + r.target + "/db/" + stamp() + ".db.gz && rm -f " + copy + ".gz")
+  sh("gzip " + copy)
+  return { file: copy + ".gz", at: at }
 }
 
+/** The database to R2, over the current copy. */
+function pushDb(r, dump) {
+  const d = dump || dumpDb()
+  sh(r.env + "rclone copyto " + d.file + " " + r.target + "/db/current.db.gz && printf '%s' '" + d.at + "' | rclone rcat " + r.target + "/db/current.at")
+  return d
+}
+
+/** Login states uploaded in the last two hours (new files only; the daily pass mirrors). */
 function pushFiles(r) {
   sh(r.env + "[ -d " + DATA + "/storage ] || exit 0; rclone copy --max-age 2h --no-traverse " + DATA + "/storage " + r.target + "/storage")
 }
 
+/** storage/ in R2 the same as here (only changes are sent). Skipped while there are no login states
+ * here at all, so a server that came up without them never wipes the bucket's. */
 function pushStorage(r) {
-  const day = stamp().slice(0, 8)
-  sh(r.env + "[ -d " + DATA + "/storage ] || exit 0; rclone sync " + DATA + "/storage " + r.target + "/storage --backup-dir " + r.target + "/deleted/" + day)
-  // Files the server hands out (assets.pb.js), so a standby server has them after a restore too.
-  sh(r.env + "[ -d " + DATA + "/assets ] || exit 0; rclone sync " + DATA + "/assets " + r.target + "/assets")
+  sh(r.env + "[ -d " + DATA + "/storage ] && [ -n \"$(ls -A " + DATA + "/storage)\" ] || exit 0; rclone sync " + DATA + "/storage " + r.target + "/storage")
 }
 
-function fullPass(r) {
+/** Yesterday's copy: the current one, over the day before (copied inside R2, only what changed). */
+function keepYesterday(r) {
+  sh(r.env + "if rclone lsf " + r.target + "/db/current.db.gz | grep -q .; then"
+    + " rclone copyto " + r.target + "/db/current.db.gz " + r.target + "/db/yesterday.db.gz"
+    + " && (rclone copyto " + r.target + "/db/current.at " + r.target + "/db/yesterday.at || true)"
+    + " && rclone sync " + r.target + "/storage " + r.target + "/storage-yesterday; fi")
+}
+
+/** What earlier versions kept: a copy per change, deleted files, daily zips, the private fonts. */
+function removeOldCopies(r) {
+  sh(r.env + "rclone delete " + r.target + "/db --include '2*.db.gz' || true; "
+    + "for d in daily deleted assets; do rclone purge " + r.target + "/$d 2>/dev/null || true; done; "
+    + "rm -f " + DATA + "/backups/@auto_pb_backup_*.zip")
+}
+
+function fullPass(r, yesterday) {
+  if (yesterday) keepYesterday(r)
   pushDb(r)
   pushStorage(r)
-  sh(r.env + "rclone delete --min-age " + KEEP_DAYS + "d " + r.target + "/deleted; rclone delete --min-age " + KEEP_DAYS + "d " + r.target + "/db")
+  removeOldCopies(r)
 }
 
-/** The newest daily zip of pb_data goes to daily/ too; zips older than DAILY_KEEP_DAYS are removed there. */
-function pushDailyZip(r) {
-  sh(r.env + "[ -d " + DATA + "/backups ] || exit 0; latest=$(ls -1t " + DATA + "/backups/*.zip 2>/dev/null | head -1); [ -n \"$latest\" ] || exit 0; "
-    + "rclone copy \"$latest\" " + r.target + "/daily && rclone delete --min-age " + DAILY_KEEP_DAYS + "d " + r.target + "/daily")
+/** The shared key of the two servers: both have the same R2 settings, nobody else does. */
+function peerKey() {
+  const config = readConfig()
+  return config ? $security.sha256("prism-peer-1|" + config.R2_ACCESS_KEY_ID + "|" + config.R2_SECRET_ACCESS_KEY) : ""
+}
+
+/** The database to the other servers of the team (the standby ones); throws with the reasons. */
+function pushPeers(dump) {
+  const control = require(`${__hooks}/control_utils.js`)
+  const self = control.self()
+  const peers = control.servers().filter((url) => url && url !== self)
+  if (!peers.length) return []
+  const key = peerKey()
+  if (!key) return []
+  const d = dump || dumpDb()
+  const body = JSON.stringify({
+    from: self,
+    at: d.at,
+    sha256: sh("sha256sum " + d.file + " | cut -d' ' -f1"),
+    db: sh("base64 " + d.file + " | tr -d '\\n'")
+  })
+  const failed = []
+  peers.forEach((url) => {
+    try {
+      const reply = $http.send({ url: url + "/api/team/peer/db", method: "POST", body: body, headers: { "content-type": "application/json", "X-Peer-Key": key }, timeout: 60 })
+      if (reply.statusCode !== 200) failed.push(url + "：" + ((reply.json && reply.json.message) || ("HTTP " + reply.statusCode)))
+    } catch (err) {
+      failed.push(url + "：" + err)
+    }
+  })
+  if (failed.length) throw new Error(failed.join("；"))
+  return peers
 }
 
 /** Writes and removes a small file, so a wrong address or key shows before it is saved. */
@@ -163,10 +225,15 @@ function standby() {
 /** Every minute: whatever changed since the last run. */
 function tick() {
   const target = remote()
-  if (!target || standby()) return
+  if (!target) return
   const store = $app.store()
+  const work = store.get(KEY.files) || store.get(KEY.db) || store.get(KEY.peer) || !store.get(KEY.started)
+  if (!work) return
+  // Copies are written over now: be sure this server is still the one in use before writing.
+  require(`${__hooks}/control_utils.js`).refreshSoon()
+  if (standby()) return
   if (!store.get(KEY.started)) {
-    daily()
+    daily(false)
     return
   }
   guarded(() => {
@@ -180,20 +247,36 @@ function tick() {
         setStatus({ lastError: "登录态备份失败：" + err.message, lastErrorAt: Date.now() })
       }
     }
+    let dump = null
     if (store.get(KEY.db)) {
       store.remove(KEY.db)
       try {
-        pushDb(target)
+        dump = pushDb(target)
         setStatus({ lastDb: Date.now() })
       } catch (err) {
-        markDb()
+        store.set(KEY.db, true)
         setStatus({ lastError: "数据库备份失败：" + err.message, lastErrorAt: Date.now() })
       }
     }
+    if (store.get(KEY.peer)) syncPeers(dump)
   })
 }
 
-function daily() {
+function syncPeers(dump) {
+  const store = $app.store()
+  store.remove(KEY.peer)
+  try {
+    const peers = pushPeers(dump)
+    if (peers.length) setStatus({ lastPeer: Date.now(), peers: peers, peerError: "", peerErrorAt: 0 })
+  } catch (err) {
+    // Tried again next minute (a standby server that is down gets it when it is back).
+    store.set(KEY.peer, true)
+    setStatus({ peerError: "同步到备用服务器失败：" + err.message, peerErrorAt: Date.now() })
+  }
+}
+
+/** The full pass: at start (yesterday false) and every day at 03:30 Beijing time (yesterday true). */
+function daily(yesterday) {
   const target = remote()
   if (!target || standby()) return
   guarded(() => {
@@ -202,16 +285,16 @@ function daily() {
     store.remove(KEY.db)
     store.remove(KEY.files)
     try {
-      fullPass(target)
-      try { pushDailyZip(target) } catch (err) { setStatus({ lastError: "每日整包备份失败：" + err.message, lastErrorAt: Date.now() }) }
+      fullPass(target, yesterday !== false)
       const now = Date.now()
       store.set(KEY.started, true)
-      setStatus({ lastDb: now, lastFiles: now, lastFull: now })
+      setStatus(Object.assign({ lastDb: now, lastFiles: now, lastFull: now }, yesterday !== false ? { lastYesterday: now } : {}))
     } catch (err) {
       markDb()
       markFiles()
       setStatus({ lastError: "完整备份失败：" + err.message, lastErrorAt: Date.now() })
     }
+    syncPeers(null)
   })
 }
 
@@ -229,4 +312,4 @@ function summary() {
   }, status())
 }
 
-module.exports = { DATA, markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, readConfig, check, saveConfig, removeConfig, remote, sh, stamp, pushDb, pushStorage, KEEP_DAYS, DAILY_KEEP_DAYS }
+module.exports = { DATA, PEER_DIR, markDb, markFiles, tick, daily, summary, parseS3Url, validConfig, readConfig, check, saveConfig, removeConfig, remote, sh, stamp, dumpDb, pushDb, pushStorage, pushPeers, peerKey }

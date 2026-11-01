@@ -1,10 +1,10 @@
 #!/bin/bash
-# Restores the team server from its R2 backup: the newest database copy (or the one named) and
-# the login states. The current pb_data is kept as pb_data.before-restore-<time>. Run it on the
-# server in the deploy folder (sudo).
-#   ./r2-restore.sh              shows what it would restore
-#   ./r2-restore.sh --yes        restores the newest copy
-#   ./r2-restore.sh --yes 20261027T120000Z.db.gz
+# Restores the team server from its R2 backup: the current database and login states, or
+# yesterday's. The current pb_data is kept as pb_data.before-restore-<time>. Run it on the server
+# in the deploy folder (sudo). Switching to the standby server needs none of this (the app does it).
+#   ./r2-restore.sh                  shows what it would restore
+#   ./r2-restore.sh --yes            restores the current copy
+#   ./r2-restore.sh --yes yesterday  restores yesterday's copy
 set -euo pipefail
 cd "$(dirname "$0")"
 CONFIG=pb_data/r2.env
@@ -19,10 +19,11 @@ rc() { docker compose run --rm --no-deps -T --entrypoint rclone $(env | grep -o 
 
 YES=""
 [ "${1:-}" = "--yes" ] && { YES=1; shift; }
-NAME=${1:-$(rc lsf "$R/db" | grep '\.db\.gz$' | sort | tail -1)}
-[ -n "$NAME" ] || { echo "R2 上没有数据库备份"; exit 1; }
+if [ "${1:-}" = "yesterday" ]; then NAME=yesterday.db.gz; FILES=storage-yesterday
+else NAME=current.db.gz; FILES=storage; fi
+rc lsf "$R/db/$NAME" | grep -q . || { echo "R2 上没有 db/$NAME"; exit 1; }
 echo "数据库：$R/db/$NAME"
-echo "登录态：$R/storage（$(rc size "$R/storage" 2>/dev/null | tr '\n' ' ')）"
+echo "登录态：$R/$FILES（$(rc size "$R/$FILES" 2>/dev/null | tr '\n' ' ')）"
 [ -n "$YES" ] || { echo "确认无误后加 --yes 再运行"; exit 0; }
 
 STAMP=$(date -u +%Y%m%d%H%M%S)
@@ -33,6 +34,6 @@ mkdir pb_data
 cp -p "pb_data.before-restore-$STAMP/r2.env" pb_data/
 rc copyto "$R/db/$NAME" /pb/pb_data/data.db.gz
 gunzip pb_data/data.db.gz
-rc copy "$R/storage" /pb/pb_data/storage
+rc copy "$R/$FILES" /pb/pb_data/storage
 docker compose start prism-team
 echo "已恢复。原来的数据在 pb_data.before-restore-$STAMP"

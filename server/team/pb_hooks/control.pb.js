@@ -16,6 +16,7 @@ routerUse((e) => {
   const path = e.request.url.path
   const open = !path.startsWith("/api/") || path === "/api/health"
     || path === "/api/team/status" || path === "/api/team/activate" || path === "/api/team/standby/setup"
+    || path === "/api/team/peer/db"
   if (open) return e.next()
   const c = require(`${__hooks}/control_utils.js`)
   if (c.role() === "standby") {
@@ -104,17 +105,55 @@ routerAdd("POST", "/api/team/handover", (e) => {
   if (!r) throw new BadRequestError("还没开启异地备份（R2）")
   t.log($app, e, "handover", null, {})
   c.startHandover()
+  let dump
   try {
-    r2.pushDb(r)
+    dump = r2.pushDb(r)
     r2.pushStorage(r)
   } catch (err) {
     c.endHandover()
     throw new BadRequestError("最后一次同步到 R2 失败，没有切换：" + err.message)
   }
+  // The standby server gets the last database straight too (R2 has it anyway).
+  try { r2.pushPeers(dump) } catch (_) {}
   return e.json(200, { ok: true })
 })
 
-// A standby server takes over: newest data from R2, named active, restart.
+// The active server's database, pushed after every change (r2_utils.js pushPeers): kept in
+// pb_data/.peer, unused, until this server takes over. Only a standby server takes it.
+routerAdd("POST", "/api/team/peer/db", (e) => {
+  const r2 = require(`${__hooks}/r2_utils.js`)
+  const c = require(`${__hooks}/control_utils.js`)
+  const key = r2.peerKey()
+  const given = String(e.request.header.get("X-Peer-Key") || "")
+  if (!key || !given || !$security.equal(given, key)) throw new ForbiddenError("这台服务器还没设置 R2，或者 R2 设置和当班服务器的不一样")
+  c.refreshSoon()
+  if (c.role() !== "standby" || c.active() === c.self()) {
+    return e.json(409, { status: 409, message: "这台服务器正在当班，不收别的服务器的数据库", data: {} })
+  }
+  const body = e.requestInfo().body || {}
+  const at = Number(body.at) || 0
+  const sha = String(body.sha256 || "")
+  const db = String(body.db || "")
+  if (!at || !/^[0-9a-f]{64}$/.test(sha) || !db || !/^[A-Za-z0-9+/=]+$/.test(db)) throw new BadRequestError("数据不完整")
+  const dir = r2.PEER_DIR
+  $os.mkdirAll(dir, 0o700)
+  let have = 0
+  try { have = Number(toString($os.readFile(dir + "/at")).trim()) || 0 } catch (_) {}
+  if (at <= have) return e.json(200, { ok: true, kept: have })
+  $os.writeFile(dir + "/incoming.b64", db, 0o600)
+  try {
+    r2.sh("cd " + dir + " && base64 -d incoming.b64 > incoming.db.gz && echo '" + sha + "  incoming.db.gz' | sha256sum -c - >/dev/null"
+      + " && gzip -t incoming.db.gz && mv incoming.db.gz data.db.gz && rm -f incoming.b64")
+  } catch (err) {
+    r2.sh("rm -f " + dir + "/incoming.b64 " + dir + "/incoming.db.gz")
+    throw new BadRequestError("收到的数据库不完整：" + err.message)
+  }
+  $os.writeFile(dir + "/at", String(at), 0o600)
+  return e.json(200, { ok: true, kept: at })
+})
+
+// A standby server takes over: the newest database (its own copy from the active server, or R2's,
+// whichever is newer), the login states from R2, named active, restart.
 routerAdd("POST", "/api/team/activate", (e) => {
   const r2 = require(`${__hooks}/r2_utils.js`)
   const c = require(`${__hooks}/control_utils.js`)
@@ -126,18 +165,32 @@ routerAdd("POST", "/api/team/activate", (e) => {
   c.refresh()
   if (c.active() === c.self() && c.role() === "active") return e.json(200, Object.assign({ ok: true, restarting: false }, c.view()))
   const dir = r2.DATA + "/.restore"
+  const peerAt = c.peerAt()
+  let r2At = 0
+  try { r2At = Number(r2.sh(r.env + "rclone cat " + r.target + "/db/current.at 2>/dev/null || true")) || 0 } catch (_) {}
+  let from
   try {
-    r2.sh(r.env + "rm -rf " + dir + " && mkdir -p " + dir + " && latest=$(rclone lsf " + r.target + "/db | grep '\\.db\\.gz$' | sort | tail -1)"
-      + " && [ -n \"$latest\" ] && rclone copyto " + r.target + "/db/$latest " + dir + "/data.db.gz && gunzip " + dir + "/data.db.gz"
-      + " && (rclone copy " + r.target + "/storage " + dir + "/storage || [ -z \"$(rclone lsf " + r.target + "/storage 2>/dev/null)\" ])"
-      + " && (rclone copy " + r.target + "/assets " + dir + "/assets || true)"
-      + " && echo \"$latest\" > " + dir + "/ready")
+    r2.sh("rm -rf " + dir + " && mkdir -p " + dir)
+    if (peerAt && peerAt >= r2At) {
+      r2.sh("cp " + r2.PEER_DIR + "/data.db.gz " + dir + "/data.db.gz")
+      from = "备用服务器自己的副本 " + new Date(peerAt).toISOString()
+    } else {
+      // Older servers wrote a copy per change (db/<time>.db.gz): the newest one, if there is no current.
+      r2.sh(r.env + "cd " + dir + " && if rclone lsf " + r.target + "/db/current.db.gz | grep -q .; then"
+        + " rclone copyto " + r.target + "/db/current.db.gz data.db.gz;"
+        + " else latest=$(rclone lsf " + r.target + "/db | grep '^2.*\\.db\\.gz$' | sort | tail -1) && [ -n \"$latest\" ] && rclone copyto " + r.target + "/db/$latest data.db.gz; fi")
+      from = "R2 " + (r2At ? new Date(r2At).toISOString() : "")
+    }
+    r2.sh("gunzip " + dir + "/data.db.gz")
+    r2.sh(r.env + "rclone copy " + r.target + "/storage " + dir + "/storage || [ -z \"$(rclone lsf " + r.target + "/storage 2>/dev/null)\" ]")
   } catch (err) {
-    throw new BadRequestError("从 R2 拉数据失败：" + err.message)
+    throw new BadRequestError("拉数据失败：" + err.message)
   }
   const old = c.servers()
   c.writeMarker(c.self(), old.length ? old : [c.self()])
-  const from = toString($os.readFile(dir + "/ready")).trim()
+  $os.writeFile(dir + "/ready", from, 0o600)
+  // The copy from the other server is used up; a new one comes when this server is standby again.
+  r2.sh("rm -rf " + r2.PEER_DIR)
   // After the reply: PocketBase stops, the container (or start.sh's loop) starts it again, and
   // start.sh swaps the pulled files in before it does.
   $os.cmd("sh", "-c", "sleep 2; kill -TERM $PPID").start()

@@ -5,8 +5,9 @@
 // The server named there is "active"; any other server that shares the bucket is "standby": it
 // answers only /api/team/status and the standby routes (control.pb.js), so nothing is written
 // on two servers at once, and it never pushes its own (old) data to R2.
-// A standby server takes over with /api/team/activate: it pulls the newest database, login
-// states and files from R2, names itself active, and restarts (start.sh swaps the files in).
+// The active server pushes its database to the standby one after every change (r2_utils.js).
+// A standby server takes over with /api/team/activate: it takes the newest database (its own copy
+// or R2's) and the login states from R2, names itself active, and restarts (start.sh swaps them in).
 // Each server knows its own address from TEAM_PUBLIC_URL in .env.
 // Without R2, or before the first marker is written, a server is simply active (one server).
 
@@ -114,9 +115,21 @@ function endHandover() {
   $app.store().remove(KEY.handover)
 }
 
-/** For /api/team/status: what launchers need to find the server in use. */
+/** When the database copy this server got from the active one was made (0: none). */
+function peerAt() {
+  const dir = require(`${__hooks}/r2_utils.js`).PEER_DIR
+  try {
+    $os.stat(dir + "/data.db.gz")
+    return Number(toString($os.readFile(dir + "/at")).trim()) || 0
+  } catch (_) {
+    return 0
+  }
+}
+
+/** For /api/team/status: what launchers need to find the server in use (and how fresh a standby is). */
 function view() {
-  return { role: role(), self: self(), active: active(), servers: servers() }
+  const at = peerAt()
+  return Object.assign({ role: role(), self: self(), active: active(), servers: servers() }, at ? { peerCopyAt: at } : {})
 }
 
 /** Checks the server's setup code (.env TEAM_SETUP_CODE); wrong tries are held off like invite codes. */
@@ -132,4 +145,4 @@ function requireSetupCode(e, code) {
   t.clearFailures(key)
 }
 
-module.exports = { requireSetupCode, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }
+module.exports = { requireSetupCode, peerAt, normalize, validUrl, self, refresh, refreshSoon, readMarker, writeMarker, active, servers, role, startHandover, endHandover, view, MARKER, HANDOVER_MS }
