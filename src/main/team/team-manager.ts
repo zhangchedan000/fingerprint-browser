@@ -261,7 +261,7 @@ export class TeamManager {
     await rm(this.workPath, { recursive: true, force: true })
     if (!this.enabled) return
     if (this.file.server && this.file.token) {
-      const api = new TeamApi(this.file.server, this.fetcher)
+      const api = this.followTeam(new TeamApi(this.file.server, this.fetcher))
       try {
         api.token = this.secrets.decode(this.file.token)
         this.api = api
@@ -299,7 +299,7 @@ export class TeamManager {
       await this.save()
       this.scheduleSync()
       void this.pushRewritten()
-      void this.afterOnline()
+      this.settling = this.afterOnline()
     } catch (error) {
       // The server moved, or is gone: the team's other server may be the one in use now.
       if (failover && (error instanceof TeamMovedError || (error instanceof TeamApiError && error.status === 0))) {
@@ -379,12 +379,31 @@ export class TeamManager {
 
   /** Works through `server` from now on, with the sign-in this computer has. */
   private useServer(server: string, token: string): TeamApi {
-    const api = new TeamApi(server, this.fetcher)
+    const api = this.followTeam(new TeamApi(server, this.fetcher))
     api.token = token
     this.api = api
     this.file.server = server
     return api
   }
+
+  /**
+   * The app's connection follows the team: a request answered with "moved to X" goes to X (and
+   * this computer remembers X), one answered with "switching" waits for the switch (TeamApi).
+   */
+  private followTeam(api: TeamApi): TeamApi {
+    api.switchPollMs = this.switchPollMs
+    api.onMoved = (server) => {
+      if (this.api !== api) return
+      this.file.server = server
+      if (!(this.file.servers ?? []).includes(server)) this.file.servers = [...(this.file.servers ?? []), server]
+      void this.save().catch(() => undefined)
+      this.logger?.info('团队服务器换了，改连另一台', { to: server })
+    }
+    return api
+  }
+
+  /** Tests make the wait while servers switch short. */
+  switchPollMs = 5_000
 
   /** The server of the team that is in use (active and set up), other than `current`. */
   private async findActiveServer(current: string, hint: string): Promise<string | undefined> {
@@ -472,7 +491,13 @@ export class TeamManager {
       if (!activation) throw new Error('这台服务器还没接班，需要主账号填它的激活码切换过去')
       status = await this.takeOver(url, activation)
     }
-    if (!this.file.token) throw new Error('请先登录')
+    if (!this.file.token) {
+      // Not signed in here yet (a new computer while the default server is down): sign in there next.
+      this.file.server = url
+      if (!(this.file.servers ?? []).includes(url)) this.file.servers = [...(this.file.servers ?? []), url]
+      await this.save()
+      return this.status()
+    }
     const api = this.useServer(url, this.secrets.decode(this.file.token))
     if (!(this.file.servers ?? []).includes(url)) this.file.servers = [...(this.file.servers ?? []), url]
     await this.save()
@@ -695,7 +720,18 @@ export class TeamManager {
   async probe(server: string): Promise<{ server: string; ready: boolean }> {
     if (!this.enabled) throw new Error('团队功能已停用')
     const normalized = normalizeServer(server)
-    const status = await new TeamApi(normalized, this.fetcher).status()
+    const status = await new TeamApi(normalized, this.fetcher).status().catch(async (error: unknown) => {
+      // Down: answer for the team's server in use, if another one is.
+      const next = await this.findActiveServer(normalized, '')
+      if (!next) throw error
+      return { ...(await new TeamApi(next, this.fetcher).status()), active: next, role: 'standby' as const }
+    })
+    // A server waiting as standby: what matters is the one in use (it may have no owner of its own yet).
+    if (status.role === 'standby' && status.active && normalizeServer(status.active) !== normalized) {
+      const active = normalizeServer(status.active)
+      const current = await new TeamApi(active, this.fetcher).status().catch(() => undefined)
+      if (current) return { server: active, ready: current.ready }
+    }
     return { server: normalized, ready: status.ready }
   }
 
@@ -722,14 +758,16 @@ export class TeamManager {
         user = await api.login(username.trim(), password)
         break
       } catch (error) {
-        if (!(error instanceof TeamMovedError) || !error.movedTo || hop >= 2) throw error
-        normalized = normalizeServer(error.movedTo)
+        // Down: the team's other server may be the one in use now.
+        const next = error instanceof TeamApiError && error.status === 0 && hop < 2 ? await this.findActiveServer(normalized, '') : undefined
+        if (!next && (!(error instanceof TeamMovedError) || !error.movedTo || hop >= 2)) throw error
+        normalized = next ?? normalizeServer((error as TeamMovedError).movedTo)
         api = new TeamApi(normalized, this.fetcher)
         if (!(this.file.servers ?? []).includes(normalized)) this.file.servers = [...new Set([...(this.file.servers ?? []), asked, normalized])]
       }
     }
     if (this.user && this.user.id !== user.id && this.locked.size) throw new Error('还有团队窗口在运行，请先关闭再切换账号')
-    this.api = api
+    this.api = this.followTeam(api)
     this.user = user
     this.offline = undefined
     this.verifiedAt = Date.now()
@@ -740,7 +778,7 @@ export class TeamManager {
     this.rememberUser(user)
     await this.save()
     this.scheduleSync()
-    void this.afterOnline()
+    this.settling = this.afterOnline()
     this.logger?.info('团队已登录', { server: normalized, user: user.username, role: user.role })
     return this.status()
   }
@@ -752,8 +790,13 @@ export class TeamManager {
     if (!draft.code.trim()) throw new Error('请填写邀请码')
     if (!/^[^\s@]{2,64}$/.test(draft.username.trim())) throw new Error('用户名 2 到 64 个字符，不能有空格和 @')
     if (draft.password.length < 8) throw new Error('密码至少 8 位')
-    await new TeamApi(server, this.fetcher).register({ ...draft, username: draft.username.trim(), name: draft.name.trim() })
-    return this.login(server, draft.username, draft.password)
+    // Registers where the team is now, if it moved (批量切换).
+    let target = server
+    const api = new TeamApi(server, this.fetcher)
+    api.switchPollMs = this.switchPollMs
+    api.onMoved = (url) => { target = url }
+    await api.register({ ...draft, username: draft.username.trim(), name: draft.name.trim() })
+    return this.login(target, draft.username, draft.password)
   }
 
   /** The server signs out everywhere on a new password; this computer signs in again with it. */
@@ -1277,10 +1320,13 @@ export class TeamManager {
     this.heartbeats.delete(id)
   }
 
-  /** Waits for uploads still running (app quit). */
+  /** Waits for uploads and the sync after signing in still running (app quit). */
   async flush(): Promise<void> {
-    await Promise.allSettled(this.pushes.values())
+    await Promise.allSettled([...this.pushes.values(), this.settling])
   }
+
+  /** The sync after signing in or reconnecting (afterOnline), for flush(). */
+  private settling: Promise<void> = Promise.resolve()
 
   /** A window was deleted here: the cloud keeps it, this computer does not pull it again. */
   async forget(id: string): Promise<void> {

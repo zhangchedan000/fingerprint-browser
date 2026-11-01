@@ -280,7 +280,11 @@ describe('TeamManager', () => {
     // Next start: the saved sign-in cannot be checked, so the app stays on the sign-in page.
     let tries = 0
     const restarted = new TeamManager(owner.vault, owner.profiles, {} as CookieManager, identitySecretCodec, () => undefined, undefined,
-      (async () => { tries += 1; throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND team.test'), { code: 'ENOTFOUND' }) }) }) as unknown as typeof fetch)
+      (async (input: string | URL | Request) => {
+        // The team's built-in servers are asked too when it is down (none of them answer here).
+        if (String(input instanceof Request ? input.url : input).startsWith('http://team.test')) tries += 1
+        throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo ENOTFOUND team.test'), { code: 'ENOTFOUND' }) })
+      }) as unknown as typeof fetch)
     restarted.syncDelayMs = -1
     restarted.restoreRetryMs = [0, 0, 0]
     await restarted.initialize()
@@ -514,7 +518,7 @@ describe('TeamManager with a standby server', () => {
     pc.team.takeoverPollMs = 1
     await pc.team.login(pair.A, 'boss', 'ownerpass')
     // login learns the pair in the background (afterOnline)
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await pc.team.flush()
     return pc
   }
 
@@ -611,6 +615,23 @@ describe('TeamManager with a standby server', () => {
     expect(pair.state).toEqual({ [pair.A]: 'active', [pair.B]: 'standby' })
   })
 
+  it('follows the team in every request, also while a switch is under way', async () => {
+    const pair = serverPair()
+    const pc = await owned(pair)
+    ;(pc.team as unknown as { api: { switchPollMs: number } }).api.switchPollMs = 10
+    await pc.team.listProfiles()
+
+    // A hands over (no new server yet): requests wait instead of failing...
+    pair.state[pair.A] = 'standby'
+    const listing = pc.team.listProfiles()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    // ...and go to B once it took over; this computer keeps working with B.
+    pair.state[pair.B] = 'active'
+    await expect(listing).resolves.toBeDefined()
+    expect((await pc.team.status()).server).toBe(pair.B)
+    expect(pair.calls.filter((call) => call.startsWith(pair.B)).length).toBeGreaterThan(0)
+  })
+
   it('signs in where the team is now when the server asked says it moved', async () => {
     const pair = serverPair()
     pair.state[pair.A] = 'standby'
@@ -620,7 +641,19 @@ describe('TeamManager with a standby server', () => {
     expect(status.server).toBe(pair.B)
     expect(status.user?.username).toBe('boss')
     // login learns the pair in the background (afterOnline)
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await pc.team.flush()
+  })
+
+  it('lets a computer that never signed in pick the team\'s other server while the default one is down', async () => {
+    const pair = serverPair()
+    pair.state[pair.A] = 'down'
+    pair.state[pair.B] = 'active'
+    const pc = await computer({ fetcher: pair.fetcher } as ReturnType<typeof fakeServer>)
+    await expect(pc.team.login(pair.A, 'boss', 'ownerpass')).rejects.toThrow('连不上')
+    expect((await pc.team.connectServer(pair.B)).server).toBe(pair.B)
+    const status = await pc.team.login(pair.B, 'boss', 'ownerpass')
+    expect(status.user?.username).toBe('boss')
+    await pc.team.flush()
   })
 
   it('keeps any number of servers: adds a third, switches to it, removes one', async () => {

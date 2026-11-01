@@ -154,13 +154,46 @@ export function toTeamUser(user: RemoteUser): TeamUser {
   }
 }
 
+/** How long a request waits while the team's servers switch (the old one says so, no new one yet). */
+export const SWITCH_WAIT_MS = 2 * 60_000
+
 /** PocketBase REST calls of the team server. Holds the auth token, nothing else. */
 export class TeamApi {
   token = ''
 
-  constructor(readonly server: string, private readonly fetcher: Fetch = fetch) {}
+  /**
+   * Set by the app for its signed-in connection: every request follows the team when the server
+   * says it moved (批量切换, failover), and waits while a switch is under way, so nothing anywhere
+   * fails because the team changed servers. Called with the new address each time it moves.
+   */
+  onMoved?: (server: string) => void
+
+  /** Tests make the wait between tries during a switch short. */
+  switchPollMs = 5_000
+
+  constructor(public server: string, private readonly fetcher: Fetch = fetch) {}
 
   private async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30_000): Promise<T> {
+    if (!this.onMoved) return this.send<T>(method, path, body, timeoutMs)
+    const deadline = Date.now() + SWITCH_WAIT_MS
+    for (let hops = 0; ; ) {
+      try {
+        return await this.send<T>(method, path, body, timeoutMs)
+      } catch (error) {
+        if (!(error instanceof TeamMovedError)) throw error
+        if (error.movedTo && normalizeServer(error.movedTo) !== this.server && hops < 3) {
+          hops += 1
+          this.server = normalizeServer(error.movedTo)
+          this.onMoved(this.server)
+          continue
+        }
+        if (Date.now() + this.switchPollMs > deadline) throw error
+        await new Promise((resolve) => setTimeout(resolve, this.switchPollMs))
+      }
+    }
+  }
+
+  private async send<T>(method: string, path: string, body?: unknown, timeoutMs = 30_000): Promise<T> {
     const headers: Record<string, string> = {}
     if (this.token) headers.Authorization = this.token
     let payload: BodyInit | undefined

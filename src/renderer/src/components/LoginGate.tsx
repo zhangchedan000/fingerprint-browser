@@ -93,8 +93,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
             action={<Button size="small" loading={busy} onClick={() => void retry()}>{t("重试")}</Button>}
           />
         )}
-        {status.offline && (
-          // The server is down: work without it (an account that signed in here before), or go to the team's other server.
+        {(status.offline || (error && ready === undefined)) && (
+          // The server is down: work without it (an account that signed in here before), or go to the team's other server
+          // (also on a computer that never signed in: it then signs in there).
           <div className="fb-login-fallback">
             {status.canLocal && (
               <Button type="primary" block loading={busy} onClick={() => void (async () => {
@@ -103,7 +104,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
               })()}>进入本地模式</Button>
             )}
             <Button block onClick={() => setConnectOpen(true)}>连接其它服务器</Button>
-            <ConnectServerModal open={connectOpen} servers={status.servers} onClose={() => setConnectOpen(false)} onDone={setStatus} />
+            <ConnectServerModal open={connectOpen} servers={status.servers} onClose={() => setConnectOpen(false)} onDone={(next) => {
+              setStatus(next)
+              if (!next.user && !next.disabled) void probe(next.server)
+            }} />
           </div>
         )}
         {error && (
