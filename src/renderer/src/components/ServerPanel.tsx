@@ -70,15 +70,18 @@ export function ServerAvatar({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState<string>()
   const [connectOpen, setConnectOpen] = useState(false)
   const last = useRef<Connection | undefined>(undefined)
+  // The last account seen (none while the server is out of reach): only the owner gets server notices.
+  const owner = useRef(false)
 
   async function load(): Promise<void> {
     try {
       const next = await window.browserApi.team.status()
       setStatus(next)
       const state = connection(next)
-      // Lost while working: say so once, not on every look.
-      if (state === 'offline' && last.current === 'online') ws.notify.warning('团队服务器连不上了：点左上角头像，可以重试、进入本地模式或连接备用服务器')
-      if (state === 'online' && (last.current === 'offline' || last.current === 'local')) ws.notify.success('团队服务器连上了')
+      if (next.user) owner.current = next.user.role === 'owner'
+      // Lost while working: the owner hears it once (members' apps follow the team by themselves).
+      if (owner.current && state === 'offline' && last.current === 'online') ws.notify.warning('团队服务器连不上了：点左上角头像，可以重试、进入本地模式或连接备用服务器')
+      if (owner.current && state === 'online' && (last.current === 'offline' || last.current === 'local')) ws.notify.success('团队服务器连上了')
       last.current = state
     } catch {
       // The panel shows the last state.

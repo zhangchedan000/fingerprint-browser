@@ -708,12 +708,26 @@ export class TeamManager {
 
   async login(server: string, username: string, password: string): Promise<TeamStatus> {
     if (!this.enabled) throw new Error('团队功能已停用')
-    const normalized = normalizeServer(server)
-    if (this.file.server && normalized !== this.file.server && Object.keys(this.file.links).length) {
+    const asked = normalizeServer(server)
+    const sameTeam = (url: string) => url === this.file.server || (this.file.servers ?? []).includes(url)
+    if (this.file.server && !sameTeam(asked) && Object.keys(this.file.links).length) {
       throw new Error('这台电脑上还有其他团队服务器的窗口，请先在窗口管理里删除它们再换服务器')
     }
-    const api = new TeamApi(normalized, this.fetcher)
-    const user = await api.login(username.trim(), password)
+    // The team may have moved to another of its servers (批量切换): sign in where it is now.
+    let normalized = asked
+    let api = new TeamApi(normalized, this.fetcher)
+    let user: TeamUser
+    for (let hop = 0; ; hop++) {
+      try {
+        user = await api.login(username.trim(), password)
+        break
+      } catch (error) {
+        if (!(error instanceof TeamMovedError) || !error.movedTo || hop >= 2) throw error
+        normalized = normalizeServer(error.movedTo)
+        api = new TeamApi(normalized, this.fetcher)
+        if (!(this.file.servers ?? []).includes(normalized)) this.file.servers = [...new Set([...(this.file.servers ?? []), asked, normalized])]
+      }
+    }
     if (this.user && this.user.id !== user.id && this.locked.size) throw new Error('还有团队窗口在运行，请先关闭再切换账号')
     this.api = api
     this.user = user

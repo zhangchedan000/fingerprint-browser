@@ -611,6 +611,18 @@ describe('TeamManager with a standby server', () => {
     expect(pair.state).toEqual({ [pair.A]: 'active', [pair.B]: 'standby' })
   })
 
+  it('signs in where the team is now when the server asked says it moved', async () => {
+    const pair = serverPair()
+    pair.state[pair.A] = 'standby'
+    pair.state[pair.B] = 'active'
+    const pc = await computer({ fetcher: pair.fetcher } as ReturnType<typeof fakeServer>)
+    const status = await pc.team.login(pair.A, 'boss', 'ownerpass')
+    expect(status.server).toBe(pair.B)
+    expect(status.user?.username).toBe('boss')
+    // login learns the pair in the background (afterOnline)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  })
+
   it('keeps any number of servers: adds a third, switches to it, removes one', async () => {
     const pair = serverPair()
     const C = 'https://c.team.test'
