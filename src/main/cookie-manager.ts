@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PortableCookie } from './cookie-file'
@@ -9,7 +9,17 @@ import type { SettingsStore } from './settings-store'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { answerBlankPasswordCheck } from './chrome-preferences'
-import { kernelSpawnOptions } from './browser-spawn'
+
+/** How long the cookie browser may take to shut down (and write its cookies) before it is ended. */
+export const COOKIE_SHUTDOWN_MS = 30_000
+
+async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  await Promise.race([
+    new Promise<void>((resolve) => child.once('exit', () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+  ])
+}
 
 export class CookieManager {
   private readonly busyProfiles = new Set<string>()
@@ -80,7 +90,7 @@ export class CookieManager {
         '--no-first-run',
         '--no-default-browser-check',
         'about:blank'
-      ], { stdio: 'ignore', windowsHide: true, env: { ...process.env }, ...kernelSpawnOptions() })
+      ], { stdio: 'ignore', windowsHide: true, env: { ...process.env } })
       let client: CdpClient | undefined
       try {
         const { websocket } = await waitForPage(userDataPath)
@@ -95,6 +105,10 @@ export class CookieManager {
           ])
           client.close()
         }
+        // Chrome writes cookies set through CDP to disk on a 30 s timer or when it shuts down. Ended
+        // before that (it used to be after 1 s), a slow computer kept none of the cookies just
+        // imported: a team window opened there signed out, every cookie gone. Let it finish.
+        await waitForExit(child, COOKIE_SHUTDOWN_MS)
         await stopChild(child)
         await rm(activePort, { force: true })
       }

@@ -28,7 +28,6 @@ import { answerBlankPasswordCheck } from './chrome-preferences'
 import { buildLaunchArgs } from './launch-args'
 import { closeProxyBridge, openProxyBridge } from './proxy-bridge'
 import { windowWebRtcRelay, type WebRtcRelay } from './webrtc-relay'
-import { kernelSpawnOptions } from './browser-spawn'
 
 /** Runs inside the checked page and reports what a website would see. */
 const PROBE = String.raw`(async () => {
@@ -419,7 +418,7 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       const hidden = await hideFingerprintArgs(args, userDataDir)
       args.splice(0, args.length, ...hidden.args)
     }
-    child = spawn(engine.executable, args, { stdio: 'ignore', windowsHide: true, env: { ...process.env }, ...kernelSpawnOptions() })
+    child = spawn(engine.executable, args, { stdio: 'ignore', windowsHide: true, env: { ...process.env } })
     // A cold first start (antivirus scanning a fresh kernel) can take well over ten seconds.
     const { websocket } = await waitForPage(userDataDir, 30_000)
     client = await CdpClient.connect(websocket)

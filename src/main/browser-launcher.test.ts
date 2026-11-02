@@ -377,6 +377,38 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     expect(launcher.hasRunning()).toBe(false)
   })
 
+  it('closes every window the way Chrome shuts down, so it writes its last cookies', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    // A window that opens its own pages (not 恢复上次): it used to be ended at once.
+    const [profile] = await profiles.createMany([{ ...defaultProfileDraft(1), startupMode: 'urls' }])
+    const controller = new FakeSpawnController()
+    const closeRequests: number[] = []
+    const inspector: ProcessInspector = {
+      list: async () => [],
+      terminate: async () => undefined,
+      requestClose: async (pid) => {
+        closeRequests.push(pid)
+        controller.children.find((child) => child.pid === pid)?.crash(0)
+      }
+    }
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, inspector,
+      async () => ({ ok: true, latencyMs: 1, checkedAt: new Date().toISOString() }), 3, controller.spawn)
+    const launch = launcher.launch(profile.id)
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await launch
+    await launcher.close(profile.id)
+    expect(closeRequests).toEqual([controller.children[0].pid])
+    expect(controller.children[0].signals).toEqual([])
+    expect(profiles.get(profile.id).status).toBe('closed')
+  })
+
   it('blocks new launches while close-all drains a profile that is still starting', async () => {
     const { profiles, launcher, controller, ids } = await launchFixture(2)
     const launch = launcher.launch(ids[0])

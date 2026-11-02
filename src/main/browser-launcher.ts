@@ -32,7 +32,6 @@ import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFil
 import type { WriteStream } from 'node:fs'
 import { executableHidesConfig, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
-import { kernelSpawnOptions } from './browser-spawn'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -477,8 +476,7 @@ export class BrowserLauncher {
       const child = this.browserSpawner(engine.executable, args, {
         stdio: pipeControlEnabled ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
         windowsHide: false,
-        env: { ...process.env },
-        ...kernelSpawnOptions()
+        env: { ...process.env }
       })
       if (configFile) {
         // The kernel removes it once read; this is for a browser that never got that far.
@@ -682,7 +680,10 @@ export class BrowserLauncher {
     running.expectedExit = true
     this.logger?.info('正在关闭浏览器环境', { profileId: id, pid: running.process.pid })
     this.onChanged(await this.profiles.setRuntime(id, { status: 'stopping', lastError: undefined }))
-    if (this.profiles.get(id).startupMode === 'restore' && (running.automation || this.processInspector.requestClose)) {
+    // Every window shuts down the way Chrome does (it writes cookies changed in the last 30 s, such as
+    // sign-ins a site just renewed); ending it at once lost them, and the next computer got a stale
+    // sign-in. The timers below still end a window that does not exit.
+    if (running.automation || this.processInspector.requestClose) {
       try {
         if (running.automation) {
           await Promise.race([running.automation.requestClose(), new Promise((resolve) => setTimeout(resolve, 3000))])
