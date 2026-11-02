@@ -32,6 +32,8 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:unshare', (_event, id: string) => team.unshare(id))
   ipcMain.handle('team:force-unlock', (_event, id: string) => team.forceUnlock(id))
   ipcMain.handle('team:add-to-computer', (_event, id: string) => team.restoreToComputer(id))
+  ipcMain.handle('team:device-states', (_event, profileId: string) => team.deviceStates(profileId))
+  ipcMain.handle('team:restore-device-state', (_event, profileId: string, stateId: string) => team.restoreDeviceState(profileId, stateId))
   ipcMain.handle('team:sync', () => team.sync())
   ipcMain.handle('team:logs', (_event, query: TeamLogQuery) => team.logs(query))
   ipcMain.handle('team:server-info', () => team.serverInfo())

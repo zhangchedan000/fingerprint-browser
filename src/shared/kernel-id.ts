@@ -85,3 +85,12 @@ export function prismRevision(name: string | undefined): number | undefined {
   const match = name?.match(/(?:^|-)prism(\d+)(?:_|$)/)
   return match ? Number(match[1]) : undefined
 }
+
+/**
+ * Two kernel ids name the same kernel build family and Chromium version, differing at most in the
+ * import-time suffix ("prism-155.0.8059.84" and "prism-155.0.8059.84-202610261927"). A window
+ * pinned to one opens with the other when only that one is on this computer.
+ */
+export function sameChromiumKernel(first: string, second: string): boolean {
+  return first.replace(BUILD_SUFFIX, '') === second.replace(BUILD_SUFFIX, '')
+}

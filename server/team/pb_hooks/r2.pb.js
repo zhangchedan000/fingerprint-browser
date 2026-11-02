@@ -21,20 +21,20 @@ onModelAfterCreateSuccess((e) => {
   e.next()
   const r2 = require(`${__hooks}/r2_utils.js`)
   r2.markDb()
-  if (e.model.tableName() === "team_profiles") r2.markFiles()
-}, "users", "team_profiles", "team_logs", "team_workspaces", "team_server_codes")
+  if (e.model.tableName() === "team_profiles" || e.model.tableName() === "team_device_states") r2.markFiles()
+}, "users", "team_profiles", "team_logs", "team_workspaces", "team_server_codes", "team_device_states")
 
 onModelAfterUpdateSuccess((e) => {
   e.next()
   const r2 = require(`${__hooks}/r2_utils.js`)
   r2.markDb()
-  if (e.model.tableName() === "team_profiles") r2.markFiles()
-}, "users", "team_profiles", "team_workspaces", "team_server_codes")
+  if (e.model.tableName() === "team_profiles" || e.model.tableName() === "team_device_states") r2.markFiles()
+}, "users", "team_profiles", "team_workspaces", "team_server_codes", "team_device_states")
 
 onModelAfterDeleteSuccess((e) => {
   e.next()
   require(`${__hooks}/r2_utils.js`).markDb()
-}, "users", "team_profiles", "team_logs")
+}, "users", "team_profiles", "team_logs", "team_device_states")
 
 // The owner sets the bucket in the app: the S3 API address R2 shows for it and the token's keys.
 routerAdd("POST", "/api/team/offsite", (e) => {

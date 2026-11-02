@@ -30,9 +30,33 @@ export interface RemoteProfile {
   data_rev: number
   data_by: string
   data_size?: number
+  /** The computer that uploaded the latest login state (servers and apps before per-computer copies: none). */
+  data_device?: string
+  data_device_name?: string
   created?: string
   updated: string
   expand?: { data_by?: RemoteUser }
+}
+
+/** One computer's own copy of a window's login state (team_device_states). */
+export interface RemoteDeviceState {
+  id: string
+  profile: string
+  user: string
+  device: string
+  device_name: string
+  data: string
+  data_rev: number
+  data_sha256?: string
+  data_size?: number
+  updated: string
+  expand?: { user?: RemoteUser }
+}
+
+/** Where a login state is uploaded from: this computer's fixed id and its name. */
+export interface UploadDevice {
+  id: string
+  name: string
 }
 
 interface RemoteUser {
@@ -377,7 +401,7 @@ export class TeamApi {
   async saveProfile(
     id: string | undefined,
     fields: { name?: string; note?: string; source_id?: string; owner?: string; config?: unknown; assignees?: string[] },
-    data?: { file: string; rev: number; size: number; sha256: string }
+    data?: { file: string; rev: number; size: number; sha256: string; device?: UploadDevice }
   ): Promise<RemoteProfile> {
     const form = new FormData()
     for (const [key, value] of Object.entries(fields)) {
@@ -393,6 +417,10 @@ export class TeamApi {
       form.append('data_rev', String(data.rev))
       form.append('data_size', String(data.size))
       form.append('data_sha256', data.sha256)
+      if (data.device) {
+        form.append('data_device', data.device.id)
+        form.append('data_device_name', data.device.name)
+      }
       form.append('data', await openAsBlob(data.file), 'profile.tgz')
     }
     // Large login states take a while over a slow line.
@@ -423,9 +451,47 @@ export class TeamApi {
   }
 
   /** Saves the window's login state archive to `target`. */
-  async downloadData(profile: RemoteProfile, target: string): Promise<void> {
+  /**
+   * A window's per-computer copies this account may see (its own; the owner: everyone's), newest
+   * first. undefined when the server has no per-computer copies yet (updated later than this app).
+   */
+  async listDeviceStates(profileId: string): Promise<RemoteDeviceState[] | undefined> {
+    const filter = encodeURIComponent(`profile = "${profileId.replace(/[^a-zA-Z0-9]/g, '')}"`)
+    try {
+      const result = await this.request<ListResult<RemoteDeviceState>>('GET', `/api/collections/team_device_states/records?perPage=200&sort=-updated&filter=${filter}&expand=user`)
+      return result.items
+    } catch (error) {
+      if (error instanceof TeamApiError && (error.status === 404 || error.status === 400)) return undefined
+      throw error
+    }
+  }
+
+  /** Uploads this computer's own copy (needs the window's lock); `id` updates the existing one. */
+  async saveDeviceState(
+    id: string | undefined,
+    key: { profile: string; user: string; device: UploadDevice },
+    data: { file: string; size: number; sha256: string }
+  ): Promise<RemoteDeviceState> {
+    const form = new FormData()
+    if (!id) {
+      form.append('profile', key.profile)
+      form.append('user', key.user)
+      form.append('device', key.device.id)
+    }
+    form.append('device_name', key.device.name)
+    form.append('data_size', String(data.size))
+    form.append('data_sha256', data.sha256)
+    form.append('data', await openAsBlob(data.file), 'profile.tgz')
+    const timeout = Math.max(120_000, data.size / 50)
+    return id
+      ? this.request('PATCH', `/api/collections/team_device_states/records/${encodeURIComponent(id)}`, form, timeout)
+      : this.request('POST', '/api/collections/team_device_states/records', form, timeout)
+  }
+
+  async downloadData(profile: RemoteProfile | RemoteDeviceState, target: string): Promise<void> {
     const { token } = await this.request<{ token: string }>('POST', '/api/files/token')
-    const url = `${this.server}/api/files/team_profiles/${encodeURIComponent(profile.id)}/${encodeURIComponent(profile.data)}?token=${encodeURIComponent(token)}`
+    const collection = 'device' in profile ? 'team_device_states' : 'team_profiles'
+    const url = `${this.server}/api/files/${collection}/${encodeURIComponent(profile.id)}/${encodeURIComponent(profile.data)}?token=${encodeURIComponent(token)}`
     let response: Response
     try {
       response = await this.fetcher(url, { signal: AbortSignal.timeout(30 * 60_000) })

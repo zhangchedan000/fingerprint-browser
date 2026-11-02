@@ -3,6 +3,7 @@ import type { MessageInstance } from 'antd/es/message/interface'
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getLocale, subscribeLocale } from '../../../shared/i18n'
+import { sameChromiumKernel } from '../../../shared/kernel-id'
 import { applyThemePreference } from '../theme'
 import type {
   AppPreferences,
@@ -175,7 +176,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const canLaunch = useCallback((profile: BrowserProfileView) => {
     if (profile.proxyMissing) return false
     if (!profile.kernelVersion) return Boolean(engine?.executable)
-    return kernels.some((kernel) => kernel.version === profile.kernelVersion && kernel.executable)
+    // Same build family and Chromium version under another id also opens it (see locateBrowserForProfile).
+    return kernels.some((kernel) => Boolean(kernel.executable) && (kernel.version === profile.kernelVersion
+      || sameChromiumKernel(kernel.version, profile.kernelVersion!)))
   }, [engine, kernels])
 
   const setPreferences = useCallback(async (patch: Partial<AppPreferences>) => {

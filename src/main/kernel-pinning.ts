@@ -1,7 +1,7 @@
 import { access, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { isKernelId } from '../shared/kernel-id'
-import { locateBrowser, locateBrowserForProfile } from './browser-locator'
+import { locateBrowser, locateExactBrowserForProfile } from './browser-locator'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 
@@ -12,7 +12,7 @@ import type { SettingsStore } from './settings-store'
 export async function defaultKernelId(settings: SettingsStore, vaultPath: string): Promise<string | undefined> {
   const engine = await locateBrowser(settings)
   if (!engine.fingerprintKernel || !engine.executable || !engine.version || !isKernelId(engine.version)) return undefined
-  const pinned = await locateBrowserForProfile(settings, vaultPath, engine.version).catch(() => undefined)
+  const pinned = await locateExactBrowserForProfile(settings, vaultPath, engine.version).catch(() => undefined)
   if (!pinned?.executable || resolve(pinned.executable) !== resolve(engine.executable)) return undefined
   return engine.version
 }

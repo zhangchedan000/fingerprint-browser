@@ -33,6 +33,21 @@ interface FakeRecord {
   data_by: string
   data_sha256: string
   data_size: number
+  data_device?: string
+  data_device_name?: string
+  updated: string
+}
+
+interface FakeDeviceState {
+  id: string
+  profile: string
+  user: string
+  device: string
+  device_name: string
+  data: string
+  data_rev: number
+  data_sha256: string
+  data_size: number
   updated: string
 }
 
@@ -48,6 +63,7 @@ function fakeServer() {
   const records = new Map<string, FakeRecord>()
   const files = new Map<string, Buffer>()
   const locks = new Map<string, { holder: string; expires: number; device: string }>()
+  const deviceStates = new Map<string, FakeDeviceState>()
   let sequence = 0
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const userOf = (request: Request) => users.find((user) => request.headers.get('authorization') === `token-${user.id}`)
@@ -65,7 +81,7 @@ function fakeServer() {
       return found ? json(200, { token: `token-${found.id}`, record: publicUser(found) }) : json(400, { message: 'Failed to authenticate.' })
     }
     if (path === '/api/collections/users/auth-refresh') return user ? json(200, { token: `token-${user.id}`, record: publicUser(user) }) : json(401, {})
-    if (path.startsWith('/api/files/team_profiles/')) {
+    if (path.startsWith('/api/files/team_profiles/') || path.startsWith('/api/files/team_device_states/')) {
       const [, , , , id, name] = path.split('/')
       if (url.searchParams.get('token') !== 'file-token') return json(404, {})
       const file = files.get(`${id}/${name}`)
@@ -91,6 +107,38 @@ function fakeServer() {
       if (mode === 'heartbeat' && !lock) return json(409, { message: '占用已失效.' })
       locks.set(id, { holder: user.id, expires: Date.now() + 90_000, device: 'test' })
       return json(200, { expires: Date.now() + 90_000, lockMs: 90_000 })
+    }
+    // Per-computer copies (1761600008_device_states.js): own ones (the owner: all), writes need the lock.
+    const stateMatch = /^\/api\/collections\/team_device_states\/records(?:\/(\w+))?$/.exec(path)
+    if (stateMatch) {
+      const id = stateMatch[1]
+      if (request.method === 'GET') {
+        const profile = /profile = "(\w+)"/.exec(url.searchParams.get('filter') ?? '')?.[1]
+        const items = [...deviceStates.values()]
+          .filter((state) => state.profile === profile && (user.role === 'owner' || state.user === user.id))
+          .map((state) => ({ ...state, expand: { user: publicUser(users.find((item) => item.id === state.user)!) } }))
+        return json(200, { items, page: 1, totalItems: items.length })
+      }
+      const form = await request.formData()
+      const existing = id ? deviceStates.get(id) : undefined
+      if (id && (!existing || existing.user !== user.id)) return json(404, {})
+      const profile = existing?.profile ?? String(form.get('profile'))
+      const lock = locks.get(profile)
+      if (!lock || lock.holder !== user.id) return json(409, { message: '没有占用这个窗口，不能上传登录态.' })
+      if (!existing && String(form.get('user')) !== user.id) return json(400, {})
+      const state: FakeDeviceState = existing ?? {
+        id: `dev${++sequence}`, profile, user: user.id, device: String(form.get('device')), device_name: '',
+        data: '', data_rev: 0, data_sha256: '', data_size: 0, updated: ''
+      }
+      state.device_name = String(form.get('device_name') ?? '')
+      state.data_rev += 1
+      state.data = `device_${state.data_rev}.tgz`
+      state.data_sha256 = String(form.get('data_sha256') ?? '')
+      state.data_size = Number(form.get('data_size') ?? 0)
+      state.updated = new Date().toISOString()
+      files.set(`${state.id}/${state.data}`, Buffer.from(await (form.get('data') as Blob).arrayBuffer()))
+      deviceStates.set(state.id, state)
+      return json(200, state)
     }
     const recordMatch = /^\/api\/collections\/team_profiles\/records(?:\/(\w+))?$/.exec(path)
     if (recordMatch) {
@@ -130,13 +178,15 @@ function fakeServer() {
         record.data_by = user.id
         record.data_sha256 = field('data_sha256') ?? ''
         record.data_size = Number(field('data_size') ?? 0)
+        record.data_device = field('data_device') ?? ''
+        record.data_device_name = field('data_device_name') ?? ''
       }
       records.set(record.id, record)
       return json(200, record)
     }
     return json(404, { message: `fake server: ${request.method} ${path}` })
   }
-  return { fetcher: fetcher as typeof fetch, records, locks }
+  return { fetcher: fetcher as typeof fetch, records, locks, deviceStates }
 }
 
 /** One computer: its vault, windows, and the cookie jar of each window's browser. */
@@ -222,6 +272,86 @@ describe('TeamManager', () => {
     expect(owner.jars.get(local.id)).toEqual([cookie('member-session')])
     await owner.team.afterExit(local.id)
     expect(server.records.get(shared.id)?.data_rev).toBe(3)
+  })
+
+  it('keeps one login state per computer for the same account, the latest for others, none uploaded in 测试模式', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    const member = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    await member.team.login('http://team.test', 'alice', 'alicepass')
+    const local = await a.profiles.create({ ...defaultProfileDraft(), name: '店铺' })
+    a.jars.set(local.id, [cookie('a-1')])
+    await a.team.sync()
+    const teamId = a.team.links()[0].teamId
+    await b.team.sync()
+    const onB = b.team.links()[0].profileId
+
+    // A uses it: the latest and A's own copy.
+    await a.team.beforeLaunch(local.id)
+    a.jars.set(local.id, [cookie('a-2')])
+    await a.team.afterExit(local.id)
+    expect(server.records.get(teamId)?.data_rev).toBe(2)
+    expect([...server.deviceStates.values()].map((state) => state.data_rev)).toEqual([1])
+
+    // B has no copy of its own yet: the first open brings the latest.
+    await b.team.beforeLaunch(onB)
+    expect(b.jars.get(onB)).toEqual([cookie('a-2')])
+    b.jars.set(onB, [cookie('b-1')])
+    await b.team.afterExit(onB)
+    expect(server.records.get(teamId)?.data_rev).toBe(3)
+    expect(server.deviceStates.size).toBe(2)
+
+    // Back on A: the latest came from this account on B, so A keeps its own sign-ins.
+    a.jars.set(local.id, [])
+    await a.team.beforeLaunch(local.id)
+    expect(a.jars.get(local.id)).toEqual([])
+    await a.team.launchFailed(local.id)
+    // Lost here (a reinstall, say): A's own copy comes back, not B's.
+    const link = (a.team as unknown as { file: { links: Record<string, { deviceRev?: number }> } }).file.links[local.id]
+    link.deviceRev = undefined
+    await a.team.beforeLaunch(local.id)
+    expect(a.jars.get(local.id)).toEqual([cookie('a-2')])
+    await a.team.launchFailed(local.id)
+
+    // Another member takes the latest, whoever's it is.
+    await a.team.share([teamId], ['member1'])
+    await member.team.sync()
+    const onMember = member.team.links()[0].profileId
+    await member.team.beforeLaunch(onMember)
+    expect(member.jars.get(onMember)).toEqual([cookie('b-1')])
+    await member.team.launchFailed(onMember)
+
+    // A picks B's copy by hand; the next open keeps it.
+    const states = await a.team.deviceStates(local.id)
+    expect(states.map((state) => state.thisComputer).sort()).toEqual([false, true])
+    await a.team.restoreDeviceState(local.id, states.find((state) => !state.thisComputer)!.id)
+    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
+    await a.team.beforeLaunch(local.id)
+    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
+    await a.team.launchFailed(local.id)
+    expect(server.locks.has(teamId)).toBe(false)
+
+    // 测试模式 on B: closing uploads nothing and the next open keeps what is here.
+    await b.team.setTestMode(onB, true)
+    await b.team.beforeLaunch(onB)
+    b.jars.set(onB, [cookie('b-test')])
+    await b.team.afterExit(onB)
+    expect(server.records.get(teamId)?.data_rev).toBe(3)
+    expect(server.locks.has(teamId)).toBe(false)
+    await b.team.beforeLaunch(onB)
+    expect(b.jars.get(onB)).toEqual([cookie('b-test')])
+    await b.team.launchFailed(onB)
+    // Cookies edited in 测试模式 stay here too.
+    await b.team.pushLoginState(onB)
+    expect(server.records.get(teamId)?.data_rev).toBe(3)
+    // Turning it off backs up first: the latest and B's own copy.
+    expect((await b.team.setTestMode(onB, false)).testMode).toBeUndefined()
+    expect(server.records.get(teamId)).toMatchObject({ data_rev: 4 })
+    const bCopy = [...server.deviceStates.values()].find((state) => state.device_name && state.data_rev === 2)
+    expect(bCopy).toBeDefined()
   })
 
   it('applies the owner’s config changes on the member’s next open', async () => {

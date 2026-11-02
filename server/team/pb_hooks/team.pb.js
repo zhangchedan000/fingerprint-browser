@@ -72,9 +72,14 @@ onRecordUpdateRequest((e) => {
     }
     e.record.set("data_rev", expected)
     e.record.set("data_by", e.auth.id)
+    // Which computer it came from (apps before per-computer copies send none).
+    e.record.set("data_device", String(body.data_device || "").slice(0, 100))
+    e.record.set("data_device_name", String(body.data_device_name || "").slice(0, 200))
   } else {
     e.record.set("data_rev", original.getInt("data_rev"))
     e.record.set("data_by", original.getString("data_by"))
+    e.record.set("data_device", original.getString("data_device"))
+    e.record.set("data_device_name", original.getString("data_device_name"))
   }
   e.record.set("config_rev", original.getInt("config_rev") + (body.config !== undefined ? 1 : 0))
   const changed = ["name", "note", "config", "assignees"].filter((key) => body[key] !== undefined)
@@ -86,6 +91,15 @@ onRecordUpdateRequest((e) => {
     t.log($app, e, "update", e.record, detail)
   }
 }, "team_profiles")
+
+// A computer's own copy of a window's login state (see 1761600008_device_states.js).
+onRecordCreateRequest((e) => {
+  require(`${__hooks}/team_utils.js`).deviceStateWrite(e, true)
+}, "team_device_states")
+
+onRecordUpdateRequest((e) => {
+  require(`${__hooks}/team_utils.js`).deviceStateWrite(e, false)
+}, "team_device_states")
 
 onRecordDeleteRequest((e) => {
   const t = require(`${__hooks}/team_utils.js`)

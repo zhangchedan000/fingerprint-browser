@@ -1,4 +1,5 @@
 import { t } from '../shared/i18n'
+import { windowNameKey } from '../shared/defaults'
 import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -53,6 +54,7 @@ interface IpcDependencies {
 
 export function registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team }: IpcDependencies): void {
   ipcMain.handle('profiles:list', () => profiles.list().map(publicProfile))
+  ipcMain.handle('profiles:next-serial', () => profiles.peekNextSerial())
   // Only for the editor's eye button: lists and views never carry passwords.
   ipcMain.handle('profiles:passwords', (_event, id: string) => {
     const profile = profiles.get(id)
@@ -61,7 +63,24 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('proxy:password', (_event, id: string) => profiles.getProxy(id).password ?? '')
   ipcMain.handle('profiles:storage-health', () => profiles.storageHealth())
   // Every window is a cloud window: new ones here go up shortly after (team.sync).
+  /**
+   * Window names must not repeat (here or among the team's cloud windows): two windows of the same
+   * name are easily mixed up. Only checked when a name is given or changed; older duplicates stay.
+   */
+  const assertUniqueWindowName = async (name: unknown, id?: string): Promise<void> => {
+    if (typeof name !== 'string' || !name.trim()) return
+    if (id && profiles.get(id).name.trim() === name.trim()) return
+    const taken = [
+      ...profiles.list().filter((profile) => profile.id !== id).map((profile) => profile.name),
+      ...await team.cloudWindowNames(id)
+    ]
+    const key = windowNameKey(name)
+    if (taken.some((other) => windowNameKey(other) === key)) {
+      throw new Error(`已经有名为「${name.trim()}」的窗口，请换一个名字`)
+    }
+  }
   ipcMain.handle('profiles:create', async (_event, draft: ProfileDraft) => {
+    await assertUniqueWindowName(draft?.name)
     const profile = publicProfile(await adoptDraftApiProxy((await profiles.create(draft)).id, draft.draftSession))
     if (draft.draftSession) sessionWindows.set(draft.draftSession, profile.id)
     // Checks started before the first save belong to this window now.
@@ -72,6 +91,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   })
   ipcMain.handle('profiles:update', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
+    await assertUniqueWindowName(draft?.name, id)
     await profiles.update(id, draft)
     const profile = publicProfile(await adoptDraftApiProxy(id, draft.draftSession))
     await team.afterLocalEdit(id)
@@ -87,6 +107,7 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   // An open window: only what does not need a restart (name, group, note, account, …).
   ipcMain.handle('profiles:update-details', async (_event, id: string, draft: ProfileDraft) => {
     team.assertEditable(id)
+    await assertUniqueWindowName(draft?.name, id)
     const profile = publicProfile(await profiles.updateDetails(id, draft))
     await team.afterLocalEdit(id)
     return profile
@@ -743,6 +764,8 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     if (error) throw new Error(`无法打开日志目录：${error}`)
   })
   ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => publicProfile(await profiles.setFavorite(id, favorite)))
+  // 测试模式: turning it off first uploads this computer's login state (team-manager setTestMode).
+  ipcMain.handle('profiles:set-test-mode', async (_event, id: string, on: boolean) => publicProfile(await team.setTestMode(id, on === true)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
     return (await profiles.classifyMany(ids, patch)).map(publicProfile)
   })

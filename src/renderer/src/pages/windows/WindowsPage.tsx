@@ -1,6 +1,7 @@
 import {
   ApiOutlined,
   CaretRightOutlined,
+  CloudDownloadOutlined,
   CopyOutlined,
   DatabaseOutlined,
   DeleteOutlined,
@@ -21,7 +22,7 @@ import {
   UploadOutlined,
   WarningFilled
 } from '@ant-design/icons'
-import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tag, Tooltip, type MenuProps, type TableColumnsType } from 'antd'
+import { Alert, Button, Dropdown, Input, Modal, Select, Space, Switch, Tag, Tooltip, type MenuProps, type TableColumnsType } from 'antd'
 import { useMemo, useState } from 'react'
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, ProfileDraft, StorageOverview } from '../../../../shared/types'
@@ -37,6 +38,7 @@ import { kernelUsers } from '../../data/kernels'
 import { BatchImportModal } from './BatchImportModal'
 import { BatchResultModal, type BatchOperationResult } from './BatchResultModal'
 import { CrashHistoryModal } from './CrashHistoryModal'
+import { DeviceStatesModal } from './DeviceStatesModal'
 import { KernelSwitchModal } from './KernelSwitchModal'
 import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
@@ -68,6 +70,9 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [importing, setImporting] = useState(false)
   const [editing, setEditing] = useState<BrowserProfileView | undefined>()
   const [editorOpen, setEditorOpen] = useState(false)
+  const [nextSerial, setNextSerial] = useState(1)
+  const [deviceStatesOf, setDeviceStatesOf] = useState<BrowserProfileView>()
+  const [testModeBusy, setTestModeBusy] = useState('')
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState<'group' | 'proxy' | null>(null)
   const [batchTags, setBatchTags] = useState('')
@@ -186,7 +191,9 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     }
   }
 
-  function openEditor(profile?: BrowserProfileView): void {
+  async function openEditor(profile?: BrowserProfileView): Promise<void> {
+    // A new window is named 环境 + the 序号 it will get, so name and number agree.
+    if (!profile) setNextSerial(await window.browserApi.profiles.nextSerial().catch(() => profiles.length + 1))
     setEditing(profile)
     setEditorOpen(true)
   }
@@ -419,6 +426,35 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     }
   }
 
+  /**
+   * 测试模式: on right away. Off uploads this computer's login state first (as the latest and as this
+   * computer's copy), so it asks before.
+   */
+  function toggleTestMode(profile: BrowserProfileView, on: boolean): void {
+    const apply = async () => {
+      setTestModeBusy(profile.id)
+      try {
+        upsert(await window.browserApi.profiles.setTestMode(profile.id, on))
+        if (!on) notify.success(t("已上传本机备份，“{0}”回到正常模式", profile.name))
+      } catch (error) {
+        ws.fail(error)
+      } finally {
+        setTestModeBusy('')
+      }
+    }
+    if (on) {
+      void apply()
+      return
+    }
+    Modal.confirm({
+      title: t("关闭“{0}”的测试模式？", profile.name),
+      content: t("关闭前会先备份同步：把本机这个窗口现在的登录状态上传，作为本机的备份和云端最新的一份。之后关闭窗口都会照常上传。"),
+      okText: t("备份同步并关闭测试"),
+      cancelText: t("取消"),
+      onOk: apply
+    })
+  }
+
   function profileMenu(profile: BrowserProfileView): MenuProps {
     const editable = isEditable(profile)
     return {
@@ -429,16 +465,18 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         { key: 'crashes', icon: <WarningFilled />, label: t("异常与恢复") },
         { key: 'proxy-check', icon: <ApiOutlined />, label: t("检测代理") },
         { key: 'duplicate', icon: <CopyOutlined />, label: t("复制环境") },
+        { key: 'device-states', icon: <CloudDownloadOutlined />, label: t("恢复其他电脑的备份"), disabled: !editable },
         { key: 'export', icon: <DownloadOutlined />, label: t("导出配置"), disabled: !editable },
         { type: 'divider' },
         { key: 'delete', icon: <DeleteOutlined />, label: t("删除"), danger: true, disabled: !editable }
       ],
       onClick: ({ key }) => {
-        if (key === 'edit') openEditor(profile)
+        if (key === 'edit') void openEditor(profile)
         if (key === 'data') setDataProfile(profile)
         if (key === 'diagnose') void runDiagnostics(profile)
         if (key === 'crashes') void openCrashHistory(profile)
         if (key === 'proxy-check') void runProxyChecks([profile.id])
+        if (key === 'device-states') setDeviceStatesOf(profile)
         if (key === 'duplicate') {
           void withBusy(profile.id, async () => {
             upsert(await window.browserApi.profiles.duplicate(profile.id))
@@ -470,6 +508,24 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   }
 
   const columns: TableColumnsType<BrowserProfileView> = [
+    {
+      title: (
+        <Tooltip title={t("测试模式：打开时照常拉取本机的云端备份，关闭时只保存在本机、不上传。关闭测试模式时会先备份同步。")}>
+          {t("测试")}
+        </Tooltip>
+      ),
+      key: 'testMode',
+      width: 64,
+      render: (_value, profile) => (
+        <Switch
+          size="small"
+          checked={profile.testMode === true}
+          loading={testModeBusy === profile.id}
+          disabled={!isEditable(profile) || Boolean(testModeBusy)}
+          onChange={(on) => toggleTestMode(profile, on)}
+        />
+      )
+    },
     {
       title: t("序号"),
       dataIndex: 'serialNumber',
@@ -582,7 +638,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
               {profile.status === 'orphaned' ? t("结束遗留") : running ? t("关闭") : t("打开")}
             </Button>
             <Tooltip title={editable ? undefined : t("窗口运行中：名称、分组、备注等可以改，代理和指纹要关闭后才能改")}>
-              <Button size="small" type="link" autoInsertSpace={false} onClick={() => openEditor(profile)}>{t("编辑")}</Button>
+              <Button size="small" type="link" autoInsertSpace={false} onClick={() => void openEditor(profile)}>{t("编辑")}</Button>
             </Tooltip>
             <Dropdown menu={profileMenu(profile)} trigger={['click']}>
               <Button size="small" type="text" icon={<MoreOutlined />} aria-label={t("更多操作")} />
@@ -629,7 +685,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       <ListPage<BrowserProfileView>
         toolbar={(
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建窗口")}</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => void openEditor()}>{t("新建窗口")}</Button>
             <Dropdown
               trigger={['click']}
               menu={{
@@ -708,13 +764,13 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         loading={ws.loading}
         scrollX="content"
         emptyText={profiles.length ? t("没有符合条件的窗口") : t("还没有浏览器窗口")}
-        emptyAction={!profiles.length && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>{t("新建第一个窗口")}</Button>}
+        emptyAction={!profiles.length && <Button type="primary" icon={<PlusOutlined />} onClick={() => void openEditor()}>{t("新建第一个窗口")}</Button>}
       />
 
       <ProfileEditor
         open={editorOpen}
         profile={editing}
-        suggestedIndex={profiles.length + 1}
+        suggestedIndex={nextSerial}
         saving={saving}
         extensions={extensions}
         engine={engine}
@@ -724,6 +780,14 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         onCancel={() => { setEditorOpen(false); setEditing(undefined) }}
         onSave={saveProfile}
         running={editing ? !isEditable(profiles.find((profile) => profile.id === editing.id) ?? editing) : false}
+      />
+      <DeviceStatesModal
+        profile={deviceStatesOf}
+        onClose={() => setDeviceStatesOf(undefined)}
+        onRestored={() => {
+          notify.success(t("已恢复到本机，下次打开就是这份登录状态"))
+          setDeviceStatesOf(undefined)
+        }}
       />
       <AssignModal
         open={assigning === 'group'}

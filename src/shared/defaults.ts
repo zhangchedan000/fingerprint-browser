@@ -92,3 +92,8 @@ export function defaultProfileDraft(index = 1): ProfileDraft & { account: Platfo
     fingerprint: { ...defaultFingerprint(), deviceBinding: 'ask' }
   }
 }
+
+/** What two window names are compared by: trimmed, case and width folded ("环境 1" = "环境１"). */
+export function windowNameKey(name: string): string {
+  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
+}

@@ -294,6 +294,11 @@ export interface BrowserProfile {
   kernelVersion: string
   window: ProfileWindowConfig
   favorite: boolean
+  /**
+   * 测试模式 (team windows): opening still brings this computer's login state from the cloud, but
+   * closing keeps it on this computer only. Local to this computer; never goes to the cloud.
+   */
+  testMode?: boolean
   /** Reference into the proxy library; '' means direct connection. */
   proxyId: string
   /** The referenced proxy, filled in when the window is read; never stored on the window. */
@@ -785,6 +790,8 @@ export interface BrowserApi {
     /** An open window: name, group, note, account and the like; proxy and fingerprint stay as launched. */
     updateDetails: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
     duplicate: (id: string) => Promise<BrowserProfileView>
+    /** The 序号 the next new window gets here (its default name is 环境 + that number). */
+    nextSerial: () => Promise<number>
     exportConfig: (id: string) => Promise<string | null>
     importConfig: () => Promise<BrowserProfileView | null>
     /** Reads a spreadsheet (picked in a dialog when no path is given) and checks each row. */
@@ -858,6 +865,8 @@ export interface BrowserApi {
     /** Shows the window's launch log folder (or one file in it) in the file manager. */
     openLaunchLogFolder: (id: string, logFile?: string) => Promise<void>
     setFavorite: (id: string, favorite: boolean) => Promise<BrowserProfileView>
+    /** 测试模式 on or off; off uploads this computer's login state first. */
+    setTestMode: (id: string, on: boolean) => Promise<BrowserProfileView>
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => Promise<BrowserProfileView[]>
     /** Point windows at a library proxy or group ('' = direct / ungrouped). The one way to assign. */
     assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean; extensionId?: string; removeExtension?: boolean }) => Promise<BrowserProfileView[]>
@@ -1000,6 +1009,10 @@ export interface BrowserApi {
     forceUnlock: (id: string) => Promise<void>
     /** Puts a cloud window on this computer (also one deleted here before); returns its local id. */
     addToComputer: (id: string) => Promise<string>
+    /** A local window's cloud copies per computer (this account's; the owner: everyone's), newest first. */
+    deviceStates: (profileId: string) => Promise<import('./team').TeamDeviceStateView[]>
+    /** Puts one computer's copy into this window here (closed). */
+    restoreDeviceState: (profileId: string, stateId: string) => Promise<void>
     /** Pulls cloud windows missing here and puts this computer's new windows into the cloud. */
     sync: () => Promise<{ added: number; uploaded: number }>
     logs: (query: import('./team').TeamLogQuery) => Promise<import('./team').TeamLogPage>

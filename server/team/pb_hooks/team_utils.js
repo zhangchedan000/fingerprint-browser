@@ -156,4 +156,18 @@ function lockRoute(e, mode) {
   return e.json(200, result)
 }
 
-module.exports = { LOCK_MS, INVITE_MS, checkHold, addFailure, clearFailures, isOwner, requireOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }
+/**
+ * A computer's own copy of a window's login state: written only by the account holding the
+ * window's lock (as for team_profiles.data), only as itself, its revision counted here.
+ */
+function deviceStateWrite(e, creating) {
+  const lock = findOrNull($app, "team_locks", "profile = {:p}", { p: e.record.getString("profile") })
+  if (!lock || lock.getString("holder") !== e.auth.id || lock.getInt("expires") <= Date.now()) {
+    throw new ApiError(409, "没有占用这个窗口，不能上传登录态", {})
+  }
+  if (creating) e.record.set("user", e.auth.id)
+  e.record.set("data_rev", (creating ? 0 : e.record.original().getInt("data_rev")) + 1)
+  e.next()
+}
+
+module.exports = { deviceStateWrite, LOCK_MS, INVITE_MS, checkHold, addFailure, clearFailures, isOwner, requireOwner, displayName, canSee, findOrNull, log, userNames, lockRoute }

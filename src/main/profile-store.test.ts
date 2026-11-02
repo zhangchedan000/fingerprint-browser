@@ -80,6 +80,20 @@ describe('ProfileStore', () => {
     expect(repository.list()).toHaveLength(2)
   })
 
+  it('gives copies names no other window has and tells the next 序号', async () => {
+    const repository = await store()
+    expect(repository.peekNextSerial()).toBe(1)
+    const original = await repository.create({ ...defaultProfileDraft(), name: 'Shop' })
+    const first = await repository.duplicate(original.id)
+    const second = await repository.duplicate(original.id)
+    expect(first.name).not.toBe(second.name)
+    expect(new Set(repository.list().map((profile) => profile.name)).size).toBe(3)
+    expect(repository.peekNextSerial()).toBe(4)
+    await repository.remove(second.id)
+    // A deleted window's number is not handed out again.
+    expect(repository.peekNextSerial()).toBe(4)
+  })
+
   it('duplicates metadata with a new id and fingerprint seed', async () => {
     const repository = await store()
     const original = await repository.create(defaultProfileDraft())

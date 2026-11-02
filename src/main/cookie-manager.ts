@@ -9,6 +9,7 @@ import type { SettingsStore } from './settings-store'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { answerBlankPasswordCheck } from './chrome-preferences'
+import { kernelSpawnOptions } from './browser-spawn'
 
 export class CookieManager {
   private readonly busyProfiles = new Set<string>()
@@ -79,7 +80,7 @@ export class CookieManager {
         '--no-first-run',
         '--no-default-browser-check',
         'about:blank'
-      ], { stdio: 'ignore', windowsHide: true, env: { ...process.env } })
+      ], { stdio: 'ignore', windowsHide: true, env: { ...process.env }, ...kernelSpawnOptions() })
       let client: CdpClient | undefined
       try {
         const { websocket } = await waitForPage(userDataPath)

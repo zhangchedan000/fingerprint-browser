@@ -1,5 +1,5 @@
 import { isKernelId } from '../shared/kernel-id'
-import { suffixedProfileName } from '../shared/profile-name'
+import { PROFILE_NAME_MAX_LENGTH, suffixedProfileName } from '../shared/profile-name'
 import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -7,7 +7,7 @@ import type {
   ApiCheckRecord, ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
   FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, ServerPlace, TunnelRoute, WebRtcPolicy, WindowApiProxy
 } from '../shared/types'
-import { defaultProfileWindow, randomSeed, seedFromId } from '../shared/defaults'
+import { defaultProfileWindow, randomSeed, seedFromId, windowNameKey } from '../shared/defaults'
 import { nextGroupColor } from '../shared/group-colors'
 import { effectiveGpu, refreshSeededGpuIdentity } from '../shared/hardware-profiles'
 import { savedFingerprint } from '../shared/network-identity'
@@ -432,6 +432,7 @@ export class ProfileStore {
         ...(!resolvedProxyId && safeApiProxy(stored.apiProxy) ? { apiProxy: safeApiProxy(stored.apiProxy) } : {}),
         ...this.loadApiPassword(stored),
         favorite: stored.favorite === true,
+        ...(stored.testMode === true ? { testMode: true } : {}),
         status: 'closed',
         lastError: undefined
       })
@@ -750,6 +751,14 @@ export class ProfileStore {
     return (await this.createMany([input], origin ? [origin] : undefined))[0]
   }
 
+  /** The 序号 a window created now without an origin would get (createMany's numbering). */
+  peekNextSerial(): number {
+    const taken = new Set([...this.profiles.values()].map((profile) => profile.serialNumber))
+    let next = this.nextSerialNumber
+    while (taken.has(next)) next += 1
+    return next
+  }
+
   async createMany(inputs: ProfileDraft[], origins?: Array<WindowOrigin | undefined>): Promise<BrowserProfile[]> {
     if (!Array.isArray(inputs) || inputs.length === 0) throw new Error('没有可创建的浏览器环境')
     if (inputs.length > 1000) throw new Error('单次最多创建 1000 个浏览器环境')
@@ -917,13 +926,24 @@ export class ProfileStore {
     return this.lockFingerprint(id, { deviceBinding: value === 'on' ? 'on' : undefined })
   }
 
+  /** `name`, or with " 2", " 3"… when a window here already has it (window names do not repeat). */
+  private unusedName(name: string): string {
+    const taken = new Set([...this.profiles.values()].map((profile) => windowNameKey(profile.name)))
+    if (!taken.has(windowNameKey(name))) return name
+    for (let number = 2; ; number += 1) {
+      const suffix = ` ${number}`
+      const candidate = `${name.slice(0, PROFILE_NAME_MAX_LENGTH - suffix.length)}${suffix}`
+      if (!taken.has(windowNameKey(candidate))) return candidate
+    }
+  }
+
   async duplicate(id: string): Promise<BrowserProfile> {
     const source = this.get(id)
     const seed = seedFromId(randomUUID())
     const draft = portableDraft(source, { passwords: 'keep', extensions: true })
     return this.create({
       ...draft,
-      name: suffixedProfileName('{0} 副本', source.name),
+      name: this.unusedName(suffixedProfileName('{0} 副本', source.name)),
       // Same library proxy, not a copy of it.
       proxyId: source.proxyMissing ? undefined : source.proxyId,
       fingerprint: refreshSeededGpuIdentity({ ...draft.fingerprint, seed })
@@ -1534,6 +1554,16 @@ export class ProfileStore {
       if (value === undefined) delete (fingerprint as unknown as Record<string, unknown>)[key]
     }
     const profile: StoredProfile = { ...current, fingerprint, updatedAt: new Date().toISOString() }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /** 测试模式 on or off (see BrowserProfile.testMode); not an edit of the window. */
+  async setTestMode(id: string, on: boolean): Promise<BrowserProfile> {
+    if (typeof on !== 'boolean') throw new Error('测试模式设置无效')
+    const { testMode: _old, ...current } = this.stored(id)
+    const profile: StoredProfile = on ? { ...current, testMode: true } : current
     this.profiles.set(id, profile)
     await this.persist()
     return this.resolve(profile)

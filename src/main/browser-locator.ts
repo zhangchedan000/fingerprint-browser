@@ -1,4 +1,4 @@
-import { isKernelId } from '../shared/kernel-id'
+import { isKernelId, sameChromiumKernel } from '../shared/kernel-id'
 import { app } from 'electron'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -72,8 +72,46 @@ function validKernelVersion(version: string): boolean {
   return isKernelId(version)
 }
 
-/** Resolve a profile-pinned managed kernel without ever falling back to another browser. */
+/**
+ * Resolve the kernel a window is pinned to. When this computer has no kernel by that exact id, a
+ * kernel of the same build family and Chromium version installed here is used instead: the same
+ * kernel imported on two computers gets different ids ("prism-155.0.8059.84" on one,
+ * "prism-155.0.8059.84-202610261927" on the other), and a window synced from one must still open
+ * on the other. Never falls back to another Chromium version or another browser.
+ */
 export async function locateBrowserForProfile(
+  settingsStore: SettingsStore,
+  vaultPath: string,
+  kernelVersion: string,
+  runtime: ProfileBrowserRuntime = {}
+): Promise<EngineStatus> {
+  const exact = await locateExactBrowserForProfile(settingsStore, vaultPath, kernelVersion, runtime)
+  if (exact.executable || !kernelVersion.trim()) return exact
+  for (const sibling of await sameChromiumKernelIds(vaultPath, kernelVersion.trim())) {
+    const engine = await locateExactBrowserForProfile(settingsStore, vaultPath, sibling, runtime).catch(() => undefined)
+    if (engine?.executable) return engine
+  }
+  return exact
+}
+
+/** Installed kernel ids other than `id` with the same build family and Chromium version, newest import first. */
+export async function sameChromiumKernelIds(vaultPath: string, id: string): Promise<string[]> {
+  if (!validKernelVersion(id)) return []
+  let names: string[] = []
+  try {
+    names = (await readdir(resolve(vaultPath, 'kernels'), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
+  return names
+    .filter((name) => name !== id && validKernelVersion(name) && sameChromiumKernel(name, id))
+    .sort((first, second) => second.localeCompare(first, undefined, { numeric: true }))
+}
+
+/** Resolve a profile-pinned managed kernel by its exact id, without falling back to another kernel. */
+export async function locateExactBrowserForProfile(
   settingsStore: SettingsStore,
   vaultPath: string,
   kernelVersion: string,

@@ -85,7 +85,7 @@ import { IpCheckSites } from './IpCheckSites'
 import { deviceBindingLabel, useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import type { IpSiteRecord } from '../../../../shared/ip-sites'
-import { kernelName } from '../../../../shared/kernel-id'
+import { kernelName, sameChromiumKernel } from '../../../../shared/kernel-id'
 
 type SpoofSurface = FingerprintConfig['disabledSpoofing'][number]
 type EditorTab = 'basic' | 'proxy' | 'fingerprint'
@@ -661,6 +661,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }, [form, open, profile, suggestedIndex])
 
   const pinnedKernel = kernels.find((kernel) => kernel.version === kernelVersion)
+    ?? kernels.find((kernel) => Boolean(kernel.executable) && Boolean(kernelVersion) && sameChromiumKernel(kernel.version, kernelVersion))
   const selectedEngine: EngineStatus | null = kernelVersion
     ? {
         executable: pinnedKernel?.executable ?? null,

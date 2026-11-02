@@ -32,6 +32,7 @@ import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFil
 import type { WriteStream } from 'node:fs'
 import { executableHidesConfig, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
+import { kernelSpawnOptions } from './browser-spawn'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -476,7 +477,8 @@ export class BrowserLauncher {
       const child = this.browserSpawner(engine.executable, args, {
         stdio: pipeControlEnabled ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'],
         windowsHide: false,
-        env: { ...process.env }
+        env: { ...process.env },
+        ...kernelSpawnOptions()
       })
       if (configFile) {
         // The kernel removes it once read; this is for a browser that never got that far.
