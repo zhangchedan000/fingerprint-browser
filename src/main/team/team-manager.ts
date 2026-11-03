@@ -1238,7 +1238,21 @@ export class TeamManager {
     if (!link) throw new Error('这个窗口还没有存到云端')
     const states = await this.requireApi().listDeviceStates(link.teamId)
     if (!states) throw new Error('团队服务器还没有更新，暂时不能按电脑恢复备份')
-    return states.map((state) => ({
+    return states.map((state) => this.deviceStateView(state))
+  }
+
+  /**
+   * The copies per computer of a cloud window that is not on this computer, before adding it here:
+   * when this computer has its own copy (it had the window before), the user picks which one goes in.
+   * An older server without copies per computer: none.
+   */
+  async cloudDeviceStates(teamId: string): Promise<TeamDeviceStateView[]> {
+    const states = await this.requireApi().listDeviceStates(teamId)
+    return (states ?? []).map((state) => this.deviceStateView(state))
+  }
+
+  private deviceStateView(state: RemoteDeviceState): TeamDeviceStateView {
+    return {
       id: state.id,
       deviceName: state.device_name || state.device.slice(0, 8),
       userName: state.expand?.user?.name || state.expand?.user?.username || '',
@@ -1246,7 +1260,7 @@ export class TeamManager {
       updated: state.updated,
       size: Number(state.data_size ?? 0),
       rev: state.data_rev
-    }))
+    }
   }
 
   /**

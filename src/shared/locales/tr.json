@@ -2671,6 +2671,8 @@
   "电脑": "Bilgisayar",
   "最后备份": "Son yedek",
   "恢复其他电脑的备份": "Başka bir bilgisayarın yedeğini geri yükle",
+  "用哪台电脑的登录状态{0}": "Hangi bilgisayarın oturum durumu kullanılsın{0}",
+  "这台电脑以前用过这个窗口，云端存着它的备份。选一份放进本机这个窗口，之后打开就用它；别的电脑那份不受影响。": "Bu bilgisayar bu pencereyi daha önce kullandı ve bulutta yedeği var. Buradaki pencereye koymak için bir kopya seçin; bundan sonra o kopyayla açılır. Diğer bilgisayarların kopyaları etkilenmez.",
   "已上传本机备份，“{0}”回到正常模式": "Bu bilgisayarın yedeği yüklendi; “{0}” normal moda döndü",
   "关闭“{0}”的测试模式？": "“{0}” için test modu kapatılsın mı?",
   "关闭前会先备份同步：把本机这个窗口现在的登录状态上传，作为本机的备份和云端最新的一份。之后关闭窗口都会照常上传。": "Kapatmadan önce yedek eşitlemesi yapılır: bu pencerenin bu bilgisayardaki mevcut oturum durumu, bu bilgisayarın yedeği ve buluttaki en son kopya olarak yüklenir. Bundan sonra pencereyi kapatmak her zamanki gibi yükler.",

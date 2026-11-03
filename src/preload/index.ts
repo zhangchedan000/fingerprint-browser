@@ -225,6 +225,7 @@ const api: BrowserApi = {
     forceUnlock: (id) => ipcRenderer.invoke('team:force-unlock', id),
     addToComputer: (id) => ipcRenderer.invoke('team:add-to-computer', id),
     deviceStates: (profileId) => ipcRenderer.invoke('team:device-states', profileId),
+    cloudDeviceStates: (teamId) => ipcRenderer.invoke('team:cloud-device-states', teamId),
     restoreDeviceState: (profileId, stateId) => ipcRenderer.invoke('team:restore-device-state', profileId, stateId),
     sync: () => ipcRenderer.invoke('team:sync'),
     logs: (query) => ipcRenderer.invoke('team:logs', query),

@@ -327,6 +327,8 @@ describe('TeamManager', () => {
     // A picks B's copy by hand; the next open keeps it.
     const states = await a.team.deviceStates(local.id)
     expect(states.map((state) => state.thisComputer).sort()).toEqual([false, true])
+    // The same list by cloud id, for adding the window here again (TeamPage asks which copy goes in).
+    expect(await a.team.cloudDeviceStates(teamId)).toEqual(states)
     await a.team.restoreDeviceState(local.id, states.find((state) => !state.thisComputer)!.id)
     expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
     await a.team.beforeLaunch(local.id)

@@ -2671,6 +2671,8 @@
   "电脑": "Ordinateur",
   "最后备份": "Dernière sauvegarde",
   "恢复其他电脑的备份": "Restaurer la sauvegarde d’un autre ordinateur",
+  "用哪台电脑的登录状态{0}": "Quel état de connexion utiliser{0}",
+  "这台电脑以前用过这个窗口，云端存着它的备份。选一份放进本机这个窗口，之后打开就用它；别的电脑那份不受影响。": "Cet ordinateur a déjà utilisé cette fenêtre et le cloud garde sa sauvegarde. Choisissez une copie à mettre dans cette fenêtre ici ; elle s’ouvrira ensuite avec cette copie. Les copies des autres ordinateurs ne changent pas.",
   "已上传本机备份，“{0}”回到正常模式": "Sauvegarde de cet ordinateur envoyée ; « {0} » repasse en mode normal",
   "关闭“{0}”的测试模式？": "Désactiver le mode test de « {0} » ?",
   "关闭前会先备份同步：把本机这个窗口现在的登录状态上传，作为本机的备份和云端最新的一份。之后关闭窗口都会照常上传。": "Avant la désactivation, une sauvegarde est synchronisée : l’état de connexion actuel de cette fenêtre sur cet ordinateur est envoyé comme sauvegarde de cet ordinateur et comme dernière copie du cloud. Ensuite, fermer la fenêtre envoie l’état comme d’habitude.",
