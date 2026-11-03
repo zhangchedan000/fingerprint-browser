@@ -61,8 +61,13 @@ try {
   await click('团队')
   await delay(3000)
   await click('添加到本机', '.ant-table', name)
-  await delay(4000)
-  const modal = await evaluate(`(() => { const m = [...document.querySelectorAll('.ant-modal')].find((x) => x.offsetParent && x.textContent.includes('登录状态')); return m ? m.innerText.replace(/\\s+/g, ' ').slice(0, 600) : null })()`)
+  // The picker (asks the server for the copies first) or, with no copy of this computer, the window added.
+  let modal = null
+  for (let i = 0; i < 60 && !modal; i++) {
+    modal = await evaluate(`(() => { const m = [...document.querySelectorAll('.ant-modal')].find((x) => x.offsetParent && x.textContent.includes('登录状态')); return m ? m.innerText.replace(/\\s+/g, ' ').slice(0, 600) : null })()`)
+    if (!modal && await evaluate('window.browserApi.profiles.list().then((l) => l.length > 0)')) break
+    await delay(500)
+  }
   log('picker', modal ?? 'none')
   await shot(newComputer ? 'new-computer.png' : 'picker.png')
   if (modal) {
