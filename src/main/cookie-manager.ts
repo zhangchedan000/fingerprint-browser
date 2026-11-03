@@ -8,7 +8,7 @@ import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
-import { answerBlankPasswordCheck } from './chrome-preferences'
+import { answerBlankPasswordCheck, restoreWindowState, snapshotWindowState } from './chrome-preferences'
 
 /** How long the cookie browser may take to shut down (and write its cookies) before it is ended. */
 export const COOKIE_SHUTDOWN_MS = 30_000
@@ -81,6 +81,8 @@ export class CookieManager {
       await rm(activePort, { force: true })
       // Cookies can come before the window's first start: answer Chrome's blank-password logon here too.
       await answerBlankPasswordCheck(userDataPath)
+      // The headless run only handles cookies: the window keeps its own size and last session.
+      const windowState = await snapshotWindowState(userDataPath)
       const child = spawn(engine.executable, [
         `--user-data-dir=${userDataPath}`,
         '--headless=new',
@@ -111,6 +113,9 @@ export class CookieManager {
         await waitForExit(child, COOKIE_SHUTDOWN_MS)
         await stopChild(child)
         await rm(activePort, { force: true })
+        await restoreWindowState(userDataPath, windowState).catch((error) => {
+          this.logger?.error('窗口大小和上次页面没能恢复', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+        })
       }
     } finally {
       this.busyProfiles.delete(id)

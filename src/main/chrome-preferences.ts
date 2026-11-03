@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserProfile, FingerprintConfig } from '../shared/types'
 import { osPasswordCheck, type OsPasswordCheck } from './os-password'
@@ -130,4 +130,83 @@ export async function answerBlankPasswordCheck(userDataDir: string, check: Pick<
   await writeFile(temporary, JSON.stringify(next), { encoding: 'utf8', mode: 0o600 })
   await rename(temporary, path)
   return true
+}
+
+/** What a headless run of Chrome on a window's folder must not change: its saved window size and last session. */
+export interface WindowStateSnapshot {
+  /** Default/Preferences browser.window_placement; undefined: none (or not readable). */
+  placement?: unknown
+  /** False: Preferences could not be read, so it is left as it is afterwards. */
+  preferencesRead: boolean
+  /** Default/Sessions files (open tabs to restore), null when there was no such folder. */
+  sessions: Map<string, Buffer> | null
+}
+
+/**
+ * Chrome's headless window size is 800×600. A headless run that shut down properly wrote it as the
+ * window's size (v0.5.55), and Chrome then kept it, a little moved and shrunk (780×580 seen). A
+ * saved size this small is that, not the user's: dropped, so the window opens at Chrome's default
+ * size as a freshly installed Chrome does, and remembers the size the user then gives it.
+ */
+function isHeadlessPlacement(value: unknown): boolean {
+  const p = value as { left?: number; top?: number; right?: number; bottom?: number; maximized?: unknown } | undefined
+  if (!p || typeof p !== 'object' || p.maximized) return false
+  const width = Number(p.right) - Number(p.left)
+  const height = Number(p.bottom) - Number(p.top)
+  return Number.isFinite(width) && Number.isFinite(height) && width <= 800 && height <= 600
+}
+
+/**
+ * Before Chrome runs headless on a window's folder (Cookie import / export): its saved window size
+ * and last session. A headless Chrome that shuts down properly writes its own 800×600 size and an
+ * about:blank session there, so the window would next open small and blank.
+ */
+export async function snapshotWindowState(userDataDir: string): Promise<WindowStateSnapshot> {
+  let placement: unknown
+  let preferencesRead = false
+  try {
+    const parsed = JSON.parse(await readFile(join(userDataDir, 'Default', 'Preferences'), 'utf8')) as Json
+    placement = (parsed.browser as Json | undefined)?.window_placement
+    if (isHeadlessPlacement(placement)) placement = undefined
+    preferencesRead = true
+  } catch (error) {
+    preferencesRead = (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+  let sessions: Map<string, Buffer> | null = null
+  const folder = join(userDataDir, 'Default', 'Sessions')
+  try {
+    sessions = new Map()
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      if (entry.isFile()) sessions.set(entry.name, await readFile(join(folder, entry.name)))
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    sessions = null
+  }
+  return { placement, preferencesRead, sessions }
+}
+
+/** After the headless run: the window size and last session exactly as they were before it. */
+export async function restoreWindowState(userDataDir: string, snapshot: WindowStateSnapshot): Promise<void> {
+  const path = join(userDataDir, 'Default', 'Preferences')
+  if (snapshot.preferencesRead) {
+    try {
+      const current = JSON.parse(await readFile(path, 'utf8')) as Json
+      const browser = { ...((current.browser as Json | undefined) ?? {}) }
+      if (snapshot.placement === undefined) delete browser.window_placement
+      else browser.window_placement = snapshot.placement
+      const next = { ...current, browser }
+      const temporary = `${path}.fb-tmp`
+      await writeFile(temporary, JSON.stringify(next), { encoding: 'utf8', mode: 0o600 })
+      await rename(temporary, path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  const folder = join(userDataDir, 'Default', 'Sessions')
+  await rm(folder, { recursive: true, force: true })
+  if (snapshot.sessions) {
+    await mkdir(folder, { recursive: true })
+    for (const [name, data] of snapshot.sessions) await writeFile(join(folder, name), data)
+  }
 }
