@@ -60,6 +60,7 @@ try {
   await delay(3000)
   await click('团队')
   await delay(3000)
+  log('row', await evaluate(`(() => { const tr = [...document.querySelectorAll('.ant-table tr')].find((x) => x.textContent.includes(${JSON.stringify(name)})); return tr ? [...tr.querySelectorAll('button')].map((b) => b.textContent.trim() + (b.disabled ? '(disabled)' : '')).join(' / ') + ' || ' + tr.innerText.replace(/\\s+/g, ' ') : 'no row' })()`))
   await click('添加到本机', '.ant-table', name)
   // The picker (asks the server for the copies first) or, with no copy of this computer, the window added.
   let modal = null
@@ -68,6 +69,7 @@ try {
     if (!modal && await evaluate('window.browserApi.profiles.list().then((l) => l.length > 0)')) break
     await delay(500)
   }
+  log('messages', await evaluate(`[...document.querySelectorAll('.ant-notification-notice, .ant-message-notice')].map((x) => x.innerText.replace(/\\s+/g, ' ')).join(' | ') || 'none'`))
   log('picker', modal ?? 'none')
   await shot(newComputer ? 'new-computer.png' : 'picker.png')
   if (modal) {
