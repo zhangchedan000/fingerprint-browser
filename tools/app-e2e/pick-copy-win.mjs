@@ -48,7 +48,7 @@ const shot = async (file) => { const r = await send('Page.captureScreenshot', { 
 // Clicks the first element whose own text is exactly `text` (inside `scope`, a CSS selector), retrying.
 const click = async (text, scope = 'body', within = '') => {
   for (let i = 0; i < 40; i++) {
-    const done = await evaluate(`(() => { const root = [...document.querySelectorAll(${JSON.stringify(scope)})].pop(); if (!root) return false; const host = ${JSON.stringify(within)} ? [...root.querySelectorAll('tr')].find((tr) => tr.textContent.includes(${JSON.stringify(within)})) : root; if (!host) return false; const el = [...host.querySelectorAll('button, a, span, div, li, td')].find((x) => x.textContent.trim() === ${JSON.stringify(text)} && x.offsetParent); if (!el) return false; (el.closest('button') || el).click(); return true })()`)
+    const done = await evaluate(`(() => { const root = [...document.querySelectorAll(${JSON.stringify(scope)})].pop(); if (!root) return false; const host = ${JSON.stringify(within)} ? [...root.querySelectorAll('tr')].find((tr) => tr.textContent.includes(${JSON.stringify(within)})) : root; if (!host) return false; const pick = (sel) => [...host.querySelectorAll(sel)].find((x) => x.textContent.trim() === ${JSON.stringify(text)} && x.offsetParent); const el = pick('button') || pick('tr') || pick('a, span, div, li, td'); if (!el) return false; el.click(); return true })()`)
     if (done) return true
     await delay(500)
   }
