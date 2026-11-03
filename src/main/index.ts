@@ -1,5 +1,6 @@
 import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
+import { t } from '../shared/i18n'
 import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
@@ -14,7 +15,7 @@ import { SettingsStore } from './settings-store'
 import { KernelManager } from './kernel-manager'
 import { AppLogger } from './app-logger'
 import { ExtensionStore } from './extension-store'
-import { CookieManager } from './cookie-manager'
+import { CookieManager, type StuckPrompt } from './cookie-manager'
 import { publicProfile } from './profile-secrets'
 import { ProfileBackupManager } from './profile-backup'
 import { AppSessionTracker } from './app-session'
@@ -278,6 +279,29 @@ app.whenReady().then(async () => {
     logger.error('固定窗口内核失败', error)
   }
   const cookies = new CookieManager(profiles, settings, logger)
+  // A browser still running long after it was asked to close, with nothing written for a while:
+  // the user decides whether to keep waiting (safer) or end it.
+  const stuckPrompt: StuckPrompt = async (name, seconds, doing) => {
+    logger?.error('[登录态] 浏览器好像卡住了，问用户', { name, seconds, doing })
+    const options = {
+      type: 'warning' as const,
+      buttons: [t("继续等"), t("强制结束")],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      title: t("浏览器好像卡住了"),
+      message: doing === 'close'
+        ? t("窗口「{0}」关闭了 {1} 秒还没退出", name, seconds)
+        : t("窗口「{0}」写入登录状态 {1} 秒还没完成", name, seconds),
+      detail: t("最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。")
+    }
+    const { response } = mainWindow ? await dialog.showMessageBox(mainWindow, options) : await dialog.showMessageBox(options)
+    const choice = response === 1 ? 'force' : 'wait'
+    logger?.info('[登录态] 用户选择', { name, choice: choice === 'force' ? '强制结束' : '继续等' })
+    return choice
+  }
+  cookies.setStuckPrompt(stuckPrompt)
+  launcher.setStuckPrompt(stuckPrompt)
   const backups = new ProfileBackupManager(profiles, app.getVersion(), logger)
   const workspaceMigration = new WorkspaceMigrationManager(profiles, extensions, app.getVersion(), logger)
   const activeTeam = new TeamManager(vaultPath, profiles, cookies, new ElectronSecretCodec(), (event) => {

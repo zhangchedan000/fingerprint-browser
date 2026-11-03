@@ -2700,5 +2700,11 @@
   "默认：云端最新": "Par défaut : la plus récente du cloud",
   "默认：本机那份": "Par défaut : celle de cet ordinateur",
   "（最新）": "(la plus récente)",
-  "（本机）": "(cet ordinateur)"
+  "（本机）": "(cet ordinateur)",
+  "继续等": "Continuer d’attendre",
+  "强制结束": "Forcer la fermeture",
+  "浏览器好像卡住了": "Le navigateur semble bloqué",
+  "窗口「{0}」关闭了 {1} 秒还没退出": "La fenêtre « {0} » n’est toujours pas fermée {1} s après la demande",
+  "窗口「{0}」写入登录状态 {1} 秒还没完成": "La fenêtre « {0} » n’a pas fini d’écrire son état de connexion après {1} s",
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Rien n’a été écrit dans les données de la fenêtre depuis 10 secondes : elle est peut-être bloquée. Attendre est le plus sûr ; forcer la fermeture peut perdre les dernières secondes de changements (comme une connexion tout juste renouvelée)."
 }

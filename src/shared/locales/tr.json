@@ -2700,5 +2700,11 @@
   "默认：云端最新": "Varsayılan: buluttaki en yeni",
   "默认：本机那份": "Varsayılan: bu bilgisayarınki",
   "（最新）": "(en yeni)",
-  "（本机）": "(bu bilgisayar)"
+  "（本机）": "(bu bilgisayar)",
+  "继续等": "Beklemeye devam et",
+  "强制结束": "Zorla kapat",
+  "浏览器好像卡住了": "Tarayıcı takılmış görünüyor",
+  "窗口「{0}」关闭了 {1} 秒还没退出": "“{0}” penceresi kapatıldıktan {1} sn sonra hâlâ çıkmadı",
+  "窗口「{0}」写入登录状态 {1} 秒还没完成": "“{0}” penceresi oturum durumunu {1} sn’de yazmayı bitirmedi",
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Pencerenin verilerine 10 saniyedir hiçbir şey yazılmadı; takılmış olabilir. Beklemek en güvenlisi; zorla kapatmak son birkaç saniyenin değişikliklerini (ör. yeni yenilenen oturum) kaybettirebilir."
 }

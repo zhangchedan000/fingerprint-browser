@@ -130,24 +130,6 @@ export interface TeamSyncEvent {
   message?: string
 }
 
-/** One computer's cloud copy of a window's login state (each computer an account opens it on keeps one). */
-export interface TeamDeviceStateView {
-  id: string
-  /** The computer's name when it last uploaded. */
-  deviceName: string
-  /** The first characters of the computer's fixed id (tells apart two computers with one name). */
-  deviceShort: string
-  /** The computer's system when it last uploaded (copies from older apps: none). */
-  os?: string
-  /** The account it belongs to. */
-  userName: string
-  /** This computer's own copy (this account, this computer). */
-  thisComputer: boolean
-  updated: string
-  size: number
-  rev: number
-}
-
 /** What the local window list needs to know about linked windows. */
 export interface TeamLinkView {
   profileId: string

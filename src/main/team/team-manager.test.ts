@@ -283,7 +283,7 @@ describe('TeamManager', () => {
     expect(server.records.get(shared.id)?.data_rev).toBe(3)
   })
 
-  it('keeps one login state per computer for the same account, the latest for others, none uploaded in 测试模式', async () => {
+  it('opens the latest login state on every computer, whoever closed it last; none uploaded in 测试模式', async () => {
     const server = fakeServer()
     const a = await computer(server)
     const b = await computer(server)
@@ -298,53 +298,47 @@ describe('TeamManager', () => {
     await b.team.sync()
     const onB = b.team.links()[0].profileId
 
-    // A uses it: the latest and A's own copy.
+    // A uses it and closes: one login state in the cloud, nothing per computer.
     await a.team.beforeLaunch(local.id)
     a.jars.set(local.id, [cookie('a-2')])
     await a.team.afterExit(local.id)
     expect(server.records.get(teamId)?.data_rev).toBe(2)
-    expect([...server.deviceStates.values()].map((state) => state.data_rev)).toEqual([1])
+    expect(server.deviceStates.size).toBe(0)
 
-    // B has no copy of its own yet: the first open brings the latest.
+    // B (the same account on another computer) opens A's latest, and its close goes over it.
     await b.team.beforeLaunch(onB)
     expect(b.jars.get(onB)).toEqual([cookie('a-2')])
     b.jars.set(onB, [cookie('b-1')])
     await b.team.afterExit(onB)
     expect(server.records.get(teamId)?.data_rev).toBe(3)
-    expect(server.deviceStates.size).toBe(2)
 
-    // Back on A: the latest came from this account on B, so A keeps its own sign-ins.
-    a.jars.set(local.id, [])
+    // Back on A: B's latest.
     await a.team.beforeLaunch(local.id)
-    expect(a.jars.get(local.id)).toEqual([])
-    await a.team.launchFailed(local.id)
-    // Lost here (a reinstall, say): A's own copy comes back, not B's.
-    const link = (a.team as unknown as { file: { links: Record<string, { deviceRev?: number }> } }).file.links[local.id]
-    link.deviceRev = undefined
-    await a.team.beforeLaunch(local.id)
-    expect(a.jars.get(local.id)).toEqual([cookie('a-2')])
+    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
     await a.team.launchFailed(local.id)
 
-    // Another member takes the latest, whoever's it is.
+    // A window 0.5.55–0.5.57 left on this computer's own older copy (deviceRev set, the latest from the
+    // other computer at the same revision): the next open brings the latest once.
+    const links = (a.team as unknown as { file: { links: Record<string, { deviceRev?: number; dataRev: number }> } }).file.links
+    a.jars.set(local.id, [cookie('a-own-old')])
+    links[local.id].deviceRev = 1
+    await a.team.beforeLaunch(local.id)
+    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
+    expect(links[local.id].deviceRev).toBeUndefined()
+    await a.team.launchFailed(local.id)
+    // Already the latest: nothing comes down again.
+    a.jars.set(local.id, [cookie('kept-here')])
+    await a.team.beforeLaunch(local.id)
+    expect(a.jars.get(local.id)).toEqual([cookie('kept-here')])
+    await a.team.launchFailed(local.id)
+
+    // Another member takes the latest too.
     await a.team.share([teamId], ['member1'])
     await member.team.sync()
     const onMember = member.team.links()[0].profileId
     await member.team.beforeLaunch(onMember)
     expect(member.jars.get(onMember)).toEqual([cookie('b-1')])
     await member.team.launchFailed(onMember)
-
-    // A picks B's copy by hand; the next open keeps it.
-    const states = await a.team.deviceStates(local.id)
-    expect(states.map((state) => state.thisComputer).sort()).toEqual([false, true])
-    // The same list by cloud id, for adding the window here again (TeamPage asks which copy goes in).
-    expect(await a.team.cloudDeviceStates(teamId)).toEqual(states)
-    // Each copy says its computer's system and the start of its computer id.
-    expect(states.every((state) => state.os && state.deviceShort.length === 6)).toBe(true)
-    await a.team.restoreDeviceState(local.id, states.find((state) => !state.thisComputer)!.id)
-    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
-    await a.team.beforeLaunch(local.id)
-    expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
-    await a.team.launchFailed(local.id)
     expect(server.locks.has(teamId)).toBe(false)
 
     // 测试模式 on B: closing uploads nothing and the next open keeps what is here.
@@ -360,18 +354,10 @@ describe('TeamManager', () => {
     // Cookies edited in 测试模式 stay here too.
     await b.team.pushLoginState(onB)
     expect(server.records.get(teamId)?.data_rev).toBe(3)
-    // Turning it off backs up first: the latest and B's own copy.
+    // Turning it off backs up first, over the cloud one.
     expect((await b.team.setTestMode(onB, false)).testMode).toBeUndefined()
     expect(server.records.get(teamId)).toMatchObject({ data_rev: 4 })
-    const bCopy = [...server.deviceStates.values()].find((state) => state.device_name && state.data_rev === 2)
-    expect(bCopy).toBeDefined()
-
-    // A copy can be deleted; the window and the other copies stay.
-    const before = await a.team.deviceStates(local.id)
-    await a.team.removeDeviceState(before.find((state) => !state.thisComputer)!.id)
-    const after = await a.team.deviceStates(local.id)
-    expect(after.map((state) => state.id)).toEqual(before.filter((state) => state.thisComputer).map((state) => state.id))
-    expect(server.records.get(teamId)).toBeDefined()
+    expect(server.deviceStates.size).toBe(0)
   })
 
   it('applies the owner’s config changes on the member’s next open', async () => {

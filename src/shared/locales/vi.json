@@ -2700,5 +2700,11 @@
   "默认：云端最新": "Mặc định: bản mới nhất trên đám mây",
   "默认：本机那份": "Mặc định: bản của máy này",
   "（最新）": "(mới nhất)",
-  "（本机）": "(máy này)"
+  "（本机）": "(máy này)",
+  "继续等": "Tiếp tục chờ",
+  "强制结束": "Buộc đóng",
+  "浏览器好像卡住了": "Trình duyệt có vẻ bị treo",
+  "窗口「{0}」关闭了 {1} 秒还没退出": "Cửa sổ “{0}” đóng {1} giây vẫn chưa thoát",
+  "窗口「{0}」写入登录状态 {1} 秒还没完成": "Cửa sổ “{0}” ghi trạng thái đăng nhập {1} giây vẫn chưa xong",
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "10 giây qua dữ liệu cửa sổ không được ghi gì, có thể đã bị treo. Chờ là an toàn nhất; buộc đóng có thể mất thay đổi của vài giây cuối (như đăng nhập vừa được gia hạn)."
 }

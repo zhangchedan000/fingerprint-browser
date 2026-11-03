@@ -1,3 +1,5 @@
+import { waitForBrowserExit } from './browser-exit'
+import type { StuckPrompt } from './cookie-manager'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, readFile, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -162,6 +164,12 @@ export class BrowserLauncher {
   }
 
   private hostScreen: () => HostScreen | undefined = () => undefined
+  /** No UI (tests): a browser that looks stuck is ended, as before. */
+  private stuckPrompt: StuckPrompt = async () => 'force'
+
+  setStuckPrompt(prompt: StuckPrompt): void {
+    this.stuckPrompt = prompt
+  }
 
   setLaunchHooks(hooks: LaunchHooks): void {
     this.hooks = hooks
@@ -678,7 +686,7 @@ export class BrowserLauncher {
     }
 
     running.expectedExit = true
-    this.logger?.info('正在关闭浏览器环境', { profileId: id, pid: running.process.pid })
+    this.logger?.info('[登录态] 关闭窗口：请浏览器正常退出', { profileId: id, pid: running.process.pid })
     this.onChanged(await this.profiles.setRuntime(id, { status: 'stopping', lastError: undefined }))
     // Every window shuts down the way Chrome does (it writes cookies changed in the last 30 s, such as
     // sign-ins a site just renewed); ending it at once lost them, and the next computer got a stale
@@ -693,20 +701,18 @@ export class BrowserLauncher {
         // to finish; the timeout below still terminates an unresponsive process.
       }
     } else running.process.kill('SIGTERM')
-    const exited = await new Promise<boolean>((resolve) => {
-      const forceTimer = setTimeout(() => {
-        running.process.kill('SIGKILL')
-      }, 5000)
-      const giveUpTimer = setTimeout(() => {
-        clearTimeout(forceTimer)
-        resolve(false)
-      }, 8000)
-      void running.exited.then(() => {
-        clearTimeout(forceTimer)
-        clearTimeout(giveUpTimer)
-        resolve(true)
-      })
+    // Waited for until it exits by itself (it has written everything then); one that looks stuck is
+    // ended only when the user says so (browser-exit.ts).
+    const profileName = this.profiles.get(id).name
+    let finished = false
+    void running.exited.then(() => { finished = true }, () => { finished = true })
+    const wait = await waitForBrowserExit(running.exited, this.profiles.profileDataPath(id), {
+      onStuck: (seconds) => this.stuckPrompt(profileName, seconds, 'close'),
+      kill: () => { running.process.kill('SIGKILL') }
     })
+    if (wait.forced) this.logger?.error('[登录态] 关闭窗口：浏览器卡住，按用户选择强制结束（可能少了最后几秒的改动）', { profileId: id, seconds: wait.seconds, stuckPrompts: wait.stuckPrompts })
+    else this.logger?.info('[登录态] 关闭窗口：浏览器已正常退出（写完了）', { profileId: id, seconds: wait.seconds, stuckPrompts: wait.stuckPrompts })
+    const exited = finished
     if (!exited && this.processes.get(id) === running) {
       let managedProcess
       try {

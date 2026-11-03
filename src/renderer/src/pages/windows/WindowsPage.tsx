@@ -1,7 +1,6 @@
 import {
   ApiOutlined,
   CaretRightOutlined,
-  CloudDownloadOutlined,
   CopyOutlined,
   DatabaseOutlined,
   DeleteOutlined,
@@ -38,7 +37,6 @@ import { kernelUsers } from '../../data/kernels'
 import { BatchImportModal } from './BatchImportModal'
 import { BatchResultModal, type BatchOperationResult } from './BatchResultModal'
 import { CrashHistoryModal } from './CrashHistoryModal'
-import { DeviceStatesModal } from './DeviceStatesModal'
 import { KernelSwitchModal } from './KernelSwitchModal'
 import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
@@ -71,7 +69,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [editing, setEditing] = useState<BrowserProfileView | undefined>()
   const [editorOpen, setEditorOpen] = useState(false)
   const [nextSerial, setNextSerial] = useState(1)
-  const [deviceStatesOf, setDeviceStatesOf] = useState<BrowserProfileView>()
   const [testModeBusy, setTestModeBusy] = useState('')
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState<'group' | 'proxy' | null>(null)
@@ -465,7 +462,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         { key: 'crashes', icon: <WarningFilled />, label: t("异常与恢复") },
         { key: 'proxy-check', icon: <ApiOutlined />, label: t("检测代理") },
         { key: 'duplicate', icon: <CopyOutlined />, label: t("复制环境") },
-        { key: 'device-states', icon: <CloudDownloadOutlined />, label: t("恢复其他电脑的备份"), disabled: !editable },
         { key: 'export', icon: <DownloadOutlined />, label: t("导出配置"), disabled: !editable },
         { type: 'divider' },
         { key: 'delete', icon: <DeleteOutlined />, label: t("删除"), danger: true, disabled: !editable }
@@ -476,7 +472,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         if (key === 'diagnose') void runDiagnostics(profile)
         if (key === 'crashes') void openCrashHistory(profile)
         if (key === 'proxy-check') void runProxyChecks([profile.id])
-        if (key === 'device-states') setDeviceStatesOf(profile)
         if (key === 'duplicate') {
           void withBusy(profile.id, async () => {
             upsert(await window.browserApi.profiles.duplicate(profile.id))
@@ -780,14 +775,6 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         onCancel={() => { setEditorOpen(false); setEditing(undefined) }}
         onSave={saveProfile}
         running={editing ? !isEditable(profiles.find((profile) => profile.id === editing.id) ?? editing) : false}
-      />
-      <DeviceStatesModal
-        profile={deviceStatesOf}
-        onClose={() => setDeviceStatesOf(undefined)}
-        onRestored={() => {
-          notify.success(t("已恢复到本机，下次打开就是这份登录状态"))
-          setDeviceStatesOf(undefined)
-        }}
       />
       <AssignModal
         open={assigning === 'group'}

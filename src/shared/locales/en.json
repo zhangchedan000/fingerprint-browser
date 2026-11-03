@@ -2700,5 +2700,11 @@
   "默认：云端最新": "Default: latest in the cloud",
   "默认：本机那份": "Default: this computer’s",
   "（最新）": "(latest)",
-  "（本机）": "(this computer)"
+  "（本机）": "(this computer)",
+  "继续等": "Keep waiting",
+  "强制结束": "Force close",
+  "浏览器好像卡住了": "The browser seems stuck",
+  "窗口「{0}」关闭了 {1} 秒还没退出": "Window “{0}” has not exited {1} s after closing",
+  "窗口「{0}」写入登录状态 {1} 秒还没完成": "Window “{0}” has not finished writing its sign-in state after {1} s",
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Nothing in the window’s data has been written for 10 seconds, so it may be stuck. Waiting is safest; forcing it closed may lose the last few seconds of changes (such as a sign-in just renewed)."
 }

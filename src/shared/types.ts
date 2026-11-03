@@ -1010,12 +1010,8 @@ export interface BrowserApi {
     /** Puts a cloud window on this computer (also one deleted here before); returns its local id. */
     addToComputer: (id: string) => Promise<string>
     /** A local window's cloud copies per computer (this account's; the owner: everyone's), newest first. */
-    deviceStates: (profileId: string) => Promise<import('./team').TeamDeviceStateView[]>
     /** The same for a cloud window not on this computer yet (by its cloud id); empty on an older server. */
-    cloudDeviceStates: (teamId: string) => Promise<import('./team').TeamDeviceStateView[]>
     /** Puts one computer's copy into this window here (closed). */
-    removeDeviceState: (stateId: string) => Promise<void>
-    restoreDeviceState: (profileId: string, stateId: string) => Promise<void>
     /** Pulls cloud windows missing here and puts this computer's new windows into the cloud. */
     sync: () => Promise<{ added: number; uploaded: number }>
     logs: (query: import('./team').TeamLogQuery) => Promise<import('./team').TeamLogPage>

@@ -6,23 +6,28 @@ import type { Logger } from './app-logger'
 import { locateBrowserForProfile } from './browser-locator'
 import type { ProfileStore } from './profile-store'
 import type { SettingsStore } from './settings-store'
+import { waitForBrowserExit, type StuckChoice } from './browser-exit'
 import { CdpClient, stopChild, waitForPage } from './devtools-session'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { answerBlankPasswordCheck, restoreWindowState, snapshotWindowState } from './chrome-preferences'
 
-/** How long the cookie browser may take to shut down (and write its cookies) before it is ended. */
-export const COOKIE_SHUTDOWN_MS = 30_000
-
-async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  await Promise.race([
-    new Promise<void>((resolve) => child.once('exit', () => resolve())),
-    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
-  ])
+/** Settles when the process has exited. */
+function exitOf(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  return new Promise<void>((resolve) => child.once('exit', () => resolve()))
 }
+
+/** Asked when a browser looks stuck (window name, seconds so far, what it was doing). */
+export type StuckPrompt = (name: string, seconds: number, doing: 'cookies' | 'close') => Promise<StuckChoice>
 
 export class CookieManager {
   private readonly busyProfiles = new Set<string>()
+  /** No UI (tests): a browser that looks stuck is ended, as before. */
+  private stuckPrompt: StuckPrompt = async () => 'force'
+
+  setStuckPrompt(prompt: StuckPrompt): void {
+    this.stuckPrompt = prompt
+  }
 
   constructor(
     private readonly profiles: ProfileStore,
@@ -40,7 +45,7 @@ export class CookieManager {
       const result = await client.send<{ cookies: PortableCookie[] }>('Network.getAllCookies')
       return result.cookies
     })
-    this.logger?.info('环境 Cookie 已导出', { profileId: id, count: cookies.length })
+    this.logger?.info('[登录态] 已从窗口读出 Cookie', { profileId: id, count: cookies.length })
     return cookies
   }
 
@@ -53,7 +58,7 @@ export class CookieManager {
       if (options.replace) await client.send('Network.clearBrowserCookies')
       if (persistentCookies.length) await client.send('Network.setCookies', { cookies: persistentCookies })
     })
-    this.logger?.info('环境 Cookie 已导入', { profileId: id, count: cookies.length })
+    this.logger?.info('[登录态] 已把 Cookie 写进窗口', { profileId: id, count: cookies.length, replace: options.replace === true })
     return cookies.length
   }
 
@@ -109,8 +114,14 @@ export class CookieManager {
         }
         // Chrome writes cookies set through CDP to disk on a 30 s timer or when it shuts down. Ended
         // before that (it used to be after 1 s), a slow computer kept none of the cookies just
-        // imported: a team window opened there signed out, every cookie gone. Let it finish.
-        await waitForExit(child, COOKIE_SHUTDOWN_MS)
+        // imported: a team window opened there signed out, every cookie gone. It is waited for until
+        // it exits by itself; only one that looks stuck is ended, when the user says so.
+        const wait = await waitForBrowserExit(exitOf(child), userDataPath, {
+          onStuck: (seconds) => this.stuckPrompt(profile.name, seconds, 'cookies'),
+          kill: () => { child.kill() }
+        })
+        if (wait.forced) this.logger?.error('[登录态] 后台浏览器卡住，按用户选择强制结束（可能少了最后几秒写入的 Cookie）', { profileId: id, seconds: wait.seconds })
+        else this.logger?.info('[登录态] 后台浏览器已正常退出（写完了）', { profileId: id, seconds: wait.seconds, stuckPrompts: wait.stuckPrompts })
         await stopChild(child)
         await rm(activePort, { force: true })
         await restoreWindowState(userDataPath, windowState).catch((error) => {

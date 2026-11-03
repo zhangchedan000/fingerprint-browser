@@ -4,7 +4,6 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   TeamBackup,
-  TeamDeviceStateView,
   TeamInvite,
   TeamLinkView,
   TeamLogPage,
@@ -30,14 +29,13 @@ import type { CookieManager } from '../cookie-manager'
 import type { ProfileStore } from '../profile-store'
 import { portableDraft } from '../profile-portable'
 import type { SecretCodec } from '../secret-codec'
-import { normalizeServer, TeamApi, TeamApiError, TeamMovedError, type Fetch, type RemoteDeviceState, type RemoteProfile, type TeamServerStatus, type UploadDevice } from './team-api'
+import { normalizeServer, TeamApi, TeamApiError, TeamMovedError, type Fetch, type RemoteProfile, type TeamServerStatus, type UploadDevice } from './team-api'
 import { packProfileState, sha256File, unpackProfileState, type PasswordTransfer } from './team-archive'
 import { applyCheckRecords, collectCheckRecords } from './team-records'
 import { adoptWindowExtensions, windowExtensions } from './team-extensions'
 import type { ExtensionStore } from '../extension-store'
 import { fingerprintCheckStore } from '../fingerprint-check'
 import { windowsKeyProtector, type KeyProtector } from './saved-passwords'
-import { hostSystemName } from '../host-hardware'
 
 interface TeamLink {
   teamId: string
@@ -50,8 +48,8 @@ interface TeamLink {
   /** Who created the cloud window; members may change their own ones. */
   ownerId?: string
   /**
-   * Revision of this computer's own cloud copy (team_device_states) that the login state here
-   * is: set when this computer uploads or restores it, cleared when another login state comes down.
+   * Set by 0.5.55–0.5.57 (a copy per computer): the login state here may be this computer's own older
+   * copy rather than the latest. The next open brings the latest and clears it.
    */
   deviceRev?: number
 }
@@ -1207,98 +1205,24 @@ export class TeamManager {
         await this.applyCloudExtras(id, record.config)
         link.configRev = record.config_rev
       }
-      // The same account on two computers keeps one login state per computer: when the latest one
-      // came from this account on another computer, this computer opens its own copy instead. The
-      // latest from someone else (another member), or a first open here, brings the latest.
-      const own = await this.ownDeviceState(api, link.teamId)
-      if (own && record.data_by === this.user?.id && record.data_device && record.data_device !== this.device.id) {
-        if (link.deviceRev !== own.data_rev && own.data) {
-          await this.pullState(id, own)
-          link.deviceRev = own.data_rev
-          this.logger?.info('同一账号在另一台电脑用过这个窗口，打开本机自己的云端备份', { profileId: id, rev: own.data_rev, latestFrom: record.data_device_name })
-        }
-        // The latest is known here (a close uploads over it); this computer just keeps its own.
-        link.dataRev = Math.max(link.dataRev, record.data_rev)
-      } else if (record.data_rev > link.dataRev && record.data) {
+      // Every computer opens the latest login state (whoever closed the window last). 0.5.55–0.5.57 kept
+      // a copy per computer and could open this computer's own older copy (deviceRev set): then the
+      // latest from another computer is brought once even at the same revision.
+      const ownCopyHere = link.deviceRev !== undefined && Boolean(record.data_device) && record.data_device !== this.device.id
+      if ((record.data_rev > link.dataRev || ownCopyHere) && record.data) {
+        this.logger?.info('[登录态] 打开窗口：拉云端最新的登录状态', { profileId: id, rev: record.data_rev, localRev: link.dataRev, from: record.data_device_name || undefined, uploadedAt: record.updated })
         await this.pullState(id, record)
         link.dataRev = record.data_rev
-        link.deviceRev = undefined
+      } else {
+        this.logger?.info('[登录态] 打开窗口：本机已是云端最新，不用下载', { profileId: id, rev: record.data_rev })
       }
+      link.deviceRev = undefined
       await this.save()
       this.startHeartbeat(id, link.teamId)
     } catch (error) {
       this.onSync({ profileId: id, phase: 'error', message: error instanceof Error ? error.message : String(error) })
       await this.release(id)
       throw error
-    }
-  }
-
-  /** The cloud copies of a window's login state per computer (this account's; the owner: everyone's). */
-  async deviceStates(id: string): Promise<TeamDeviceStateView[]> {
-    const link = this.file.links[id]
-    if (!link) throw new Error('这个窗口还没有存到云端')
-    const states = await this.requireApi().listDeviceStates(link.teamId)
-    if (!states) throw new Error('团队服务器还没有更新，暂时不能按电脑恢复备份')
-    return states.map((state) => this.deviceStateView(state))
-  }
-
-  /**
-   * The copies per computer of a cloud window that is not on this computer, before adding it here:
-   * when this computer has its own copy (it had the window before), the user picks which one goes in.
-   * An older server without copies per computer: none.
-   */
-  async cloudDeviceStates(teamId: string): Promise<TeamDeviceStateView[]> {
-    const states = await this.requireApi().listDeviceStates(teamId)
-    return (states ?? []).map((state) => this.deviceStateView(state))
-  }
-
-  private deviceStateView(state: RemoteDeviceState): TeamDeviceStateView {
-    return {
-      id: state.id,
-      deviceName: state.device_name || state.device.slice(0, 8),
-      deviceShort: state.device.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6),
-      os: state.device_os || undefined,
-      userName: state.expand?.user?.name || state.expand?.user?.username || '',
-      thisComputer: state.user === this.user?.id && state.device === this.device.id,
-      updated: state.updated,
-      size: Number(state.data_size ?? 0),
-      rev: state.data_rev
-    }
-  }
-
-  /** Deletes one computer's cloud copy of a cloud window (the window and the other copies stay). */
-  async removeDeviceState(stateId: string): Promise<void> {
-    await this.requireApi().removeDeviceState(stateId)
-    this.logger?.info('已删除一台电脑的云端备份', { stateId })
-  }
-
-  /**
-   * Puts a computer's cloud copy into this window here (the window closed). It stays this
-   * computer's login state: the next open keeps it, and the next normal close uploads it.
-   */
-  async restoreDeviceState(id: string, stateId: string): Promise<void> {
-    const link = this.file.links[id]
-    if (!link) throw new Error('这个窗口还没有存到云端')
-    if (!this.isClosed(id)) throw new Error('请先关闭这个窗口')
-    const pending = this.pushes.get(id)
-    if (pending) await pending
-    const api = this.requireApi()
-    await api.lock(link.teamId, hostname())
-    this.locked.add(id)
-    try {
-      const states = await api.listDeviceStates(link.teamId)
-      const state = states?.find((item) => item.id === stateId)
-      if (!state?.data) throw new Error('这个备份已经不在了')
-      await this.pullState(id, state)
-      const record = await api.getProfile(link.teamId)
-      // Neither the latest nor this computer's copy replaces it on the next open.
-      link.dataRev = Math.max(link.dataRev, record.data_rev)
-      link.deviceRev = states?.find((item) => item.user === this.user?.id && item.device === this.device.id)?.data_rev
-      link.pendingUpload = false
-      await this.save()
-      this.logger?.info('已恢复另一台电脑的云端备份', { profileId: id, from: state.device_name, rev: state.data_rev })
-    } finally {
-      await this.release(id)
     }
   }
 
@@ -1315,7 +1239,7 @@ export class TeamManager {
   }
 
   /** Downloads a login state (the window's latest, or a computer's copy) into this window. */
-  private async pullState(id: string, source: RemoteProfile | RemoteDeviceState): Promise<void> {
+  private async pullState(id: string, source: RemoteProfile): Promise<void> {
     const api = this.requireApi()
     this.onSync({ profileId: id, phase: 'pulling' })
     await mkdir(this.workPath, { recursive: true })
@@ -1335,7 +1259,7 @@ export class TeamManager {
         const extensionIds = await adoptWindowExtensions(this.extensions, extensionsFolder, extensions, userData)
         await this.profiles.setExtensionIds(id, extensionIds)
       }
-      this.logger?.info('团队窗口登录态已拉取', { profileId: id, rev: source.data_rev, device: 'device' in source ? source.device_name : undefined, cookies: cookies.length, extensions: extensions?.length ?? 0 })
+      this.logger?.info('[登录态] 已拉取并放进窗口', { profileId: id, rev: source.data_rev, cookies: cookies.length, extensions: extensions?.length ?? 0 })
     } finally {
       await rm(archive, { force: true })
       await rm(extensionsFolder, { recursive: true, force: true })
@@ -1346,31 +1270,7 @@ export class TeamManager {
   /** This computer: its fixed id (made on first use) and its name. */
   private get device(): UploadDevice {
     if (!this.file.deviceId) this.file.deviceId = randomUUID()
-    return { id: this.file.deviceId, name: hostname(), os: hostSystemName() }
-  }
-
-  /** This account's copy from this computer, if the server keeps per-computer copies and has one. */
-  private async ownDeviceState(api: TeamApi, teamId: string): Promise<RemoteDeviceState | undefined> {
-    try {
-      return (await api.listDeviceStates(teamId))?.find((state) => state.user === this.user?.id && state.device === this.device.id)
-    } catch (error) {
-      this.logger?.error('读取本机云端备份失败', { teamId, error: error instanceof Error ? error.message : String(error) })
-      return undefined
-    }
-  }
-
-  /** The login state just packed, as this computer's own copy too (servers without copies: skipped). */
-  private async uploadOwnCopy(id: string, link: TeamLink, packed: { file: string; size: number; sha256: string }): Promise<void> {
-    const api = this.requireApi()
-    try {
-      const states = await api.listDeviceStates(link.teamId)
-      if (!states || !this.user) return
-      const mine = states.find((state) => state.user === this.user!.id && state.device === this.device.id)
-      const saved = await api.saveDeviceState(mine?.id, { profile: link.teamId, user: this.user.id, device: this.device }, packed)
-      link.deviceRev = saved.data_rev
-    } catch (error) {
-      this.logger?.error('本机云端备份上传失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
-    }
+    return { id: this.file.deviceId, name: hostname() }
   }
 
   /** The launch failed after beforeLaunch: give the lock back without uploading. */
@@ -1415,7 +1315,7 @@ export class TeamManager {
     const push = (async () => {
       if (testMode) {
         // 测试模式: closing keeps the login state on this computer only.
-        this.logger?.info('测试模式：登录态只留在本机，没有上传', { profileId: id })
+        this.logger?.info('[登录态] 关闭窗口：测试模式，只留在本机，没有上传', { profileId: id })
         await this.release(id)
         return
       }
@@ -1426,7 +1326,7 @@ export class TeamManager {
         link.pendingUpload = true
         await this.save().catch(() => undefined)
         const message = error instanceof Error ? error.message : String(error)
-        this.logger?.error('团队窗口登录态上传失败', { profileId: id, error: message })
+        this.logger?.error('[登录态] 关闭窗口：上传失败，下次打开时重试', { profileId: id, error: message })
         this.onSync({ profileId: id, phase: 'error', message: `登录态上传失败，下次打开时重试：${message}` })
       } finally {
         await this.release(id)
@@ -1449,9 +1349,8 @@ export class TeamManager {
       link.dataRev = record.data_rev
       if (config) link.configRev = record.config_rev
       link.pendingUpload = false
-      await this.uploadOwnCopy(id, link, packed)
       await this.save()
-      this.logger?.info('团队窗口登录态已上传', { profileId: id, rev: record.data_rev, bytes: packed.size })
+      this.logger?.info('[登录态] 关闭窗口：已上传，覆盖云端那一份', { profileId: id, rev: record.data_rev, bytes: packed.size })
     } finally {
       await rm(packed.file, { force: true })
     }
