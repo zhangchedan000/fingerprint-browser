@@ -60,6 +60,7 @@ try {
   await delay(3000)
   await click('团队')
   await delay(3000)
+  log('api', await evaluate(`(async () => { const list = await window.browserApi.team.profiles(); const p = list.find((x) => x.name === ${JSON.stringify(name)}); if (!p) return 'no cloud window'; const t0 = Date.now(); const states = await Promise.race([window.browserApi.team.cloudDeviceStates(p.id), new Promise((r) => setTimeout(() => r('timeout'), 20000))]); return JSON.stringify({ localId: p.localId ?? null, removedHere: p.removedHere, ms: Date.now() - t0, states: states === 'timeout' ? states : states.map((x) => x.deviceName + (x.thisComputer ? '(this)' : '')) }) })()`).catch((e) => 'failed ' + e.message))
   log('row', await evaluate(`(() => { const tr = [...document.querySelectorAll('.ant-table tr')].find((x) => x.textContent.includes(${JSON.stringify(name)})); return tr ? [...tr.querySelectorAll('button')].map((b) => b.textContent.trim() + (b.disabled ? '(disabled)' : '')).join(' / ') + ' || ' + tr.innerText.replace(/\\s+/g, ' ') : 'no row' })()`))
   await click('添加到本机', '.ant-table', name)
   // The picker (asks the server for the copies first) or, with no copy of this computer, the window added.
