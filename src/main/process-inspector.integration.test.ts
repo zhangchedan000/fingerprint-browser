@@ -42,7 +42,8 @@ describe('SystemProcessInspector real process integration', () => {
       child.once('error', reject)
     })
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
-    const inspector = new SystemProcessInspector()
+    // A windowless process never answers a normal close: it is ended after the (here short) wait.
+    const inspector = new SystemProcessInspector(2_000)
 
     const matched = await waitUntil(async () => findManagedProcess(await inspector.list(), userDataPath))
     expect(matched.pid).toBe(child.pid)

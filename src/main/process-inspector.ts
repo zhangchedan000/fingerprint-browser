@@ -72,6 +72,9 @@ async function waitForExit(pid: number, durationMs: number): Promise<boolean> {
 }
 
 export class SystemProcessInspector implements ProcessInspector {
+  /** How long a leftover browser gets to close normally before it is ended (tests: shorter). */
+  constructor(private readonly gracefulCloseMs = 30_000) {}
+
   async requestClose(pid: number): Promise<void> {
     if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('进程 ID 无效')
     if (process.platform === 'win32') {
@@ -103,14 +106,14 @@ export class SystemProcessInspector implements ProcessInspector {
     if (process.platform === 'win32') {
       // A normal close first (no /T, see requestClose); ended only if it is still running after 30 s.
       await execFileAsync('taskkill.exe', ['/PID', String(pid)]).catch(() => undefined)
-      if (!await waitForExit(pid, 30_000)) {
+      if (!await waitForExit(pid, this.gracefulCloseMs)) {
         if (!processMatchesUserData(await this.list(), pid, userDataPath)) return
         await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T', '/F'])
       }
       return
     }
     process.kill(pid, 'SIGTERM')
-    if (!await waitForExit(pid, 5000)) {
+    if (!await waitForExit(pid, Math.min(5000, this.gracefulCloseMs))) {
       if (!processMatchesUserData(await this.list(), pid, userDataPath)) return
       process.kill(pid, 'SIGKILL')
     }
