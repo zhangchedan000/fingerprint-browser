@@ -18,6 +18,8 @@ import { join } from 'node:path'
 
 const [app, localState, vault, folder, sourceName, ...flags] = process.argv.slice(2)
 const oldApp = flags.includes('--old') ? flags[flags.indexOf('--old') + 1] : ''
+// A throwaway window an earlier run left in the cloud (its exact name), deleted first.
+const leftover = flags.includes('--delete-name') ? flags[flags.indexOf('--delete-name') + 1] : ''
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => appendFileSync(join(folder, 'latest-only.log'), `${new Date().toISOString().slice(11, 19)} ${a.join(' ')}\n`)
 
@@ -82,12 +84,17 @@ async function openClose(ev, id, label, userData) {
 }
 
 let teamId = ''
-let cleanupEv
+let running
 try {
   // 1. Launcher A, this computer.
   const aData = prepare('a', false)
   const a = await start(app, aData)
-  cleanupEv = a
+  running = a
+  if (leftover) {
+    const ids = await a.evaluate(`window.browserApi.team.profiles().then((l) => l.filter((p) => p.name === ${J(leftover)}).map((p) => p.id))`)
+    for (const id of ids) await a.evaluate(`window.browserApi.team.unshare(${J(id)}).then(() => true)`)
+    log('leftover throwaway windows deleted', leftover, ids.length)
+  }
   const source = await a.evaluate(`window.browserApi.team.profiles().then((l) => l.find((p) => p.name === ${J(sourceName)})?.id)`)
   const sourceLocal = await a.evaluate(`window.browserApi.team.addToComputer(${J(source)})`)
   const copy = await a.evaluate(`window.browserApi.profiles.duplicate(${J(sourceLocal)}).then((p) => p.id)`)
@@ -105,27 +112,33 @@ try {
   await delay(3000)
   log('A: 测试模式 off', '\n  ' + stateLines(aData, offFrom).join('\n  '), '\n  cloud rev now', await rev(a.evaluate, teamId))
   await a.stop()
+  running = undefined
 
   // 2. Launcher B, a computer that never had it.
   const bData = prepare('b', true)
   const b = await start(app, bData)
+  running = b
   const onB = await b.evaluate(`window.browserApi.team.addToComputer(${J(teamId)})`)
   await openClose(b.evaluate, onB, 'B (other computer) open + close:', bData)
   log('B: cloud rev now', await rev(b.evaluate, teamId))
   await b.stop()
+  running = undefined
 
   // 3. The older app against the updated server.
   if (oldApp) {
     const cData = prepare('c', true)
     const c = await start(oldApp, cData)
+    running = c
     log('old app version', await c.evaluate('window.browserApi.app.version ? window.browserApi.app.version() : "?"').catch(() => '?'))
     const onC = await c.evaluate(`window.browserApi.team.addToComputer(${J(teamId)})`)
     await openClose(c.evaluate, onC, 'old app open + close:', cData)
     log('old app: cloud rev now', await rev(c.evaluate, teamId))
     await c.stop()
+    running = undefined
   }
 } catch (error) {
   log('error', String(error?.message ?? error).slice(0, 400))
+  await running?.stop()
 }
 // 4. The throwaway cloud window goes (from a fresh launcher A run).
 if (teamId) {
