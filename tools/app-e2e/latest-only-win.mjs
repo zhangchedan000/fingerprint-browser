@@ -75,6 +75,8 @@ const rev = (ev, teamId) => ev(`window.browserApi.team.profiles().then((l) => l.
 const localOf = (ev, teamId) => ev(`window.browserApi.team.links().then((l) => l.find((x) => x.teamId === ${J(teamId)})?.profileId ?? null)`)
 async function openClose(ev, id, label, userData) {
   const from = new Date().toISOString()
+  // A window never opened asks for its 设备绑定登录 choice first (the window list asks the user).
+  await ev(`window.browserApi.profiles.list().then((l) => l.find((p) => p.id === ${J(id)})?.fingerprint.deviceBinding === 'ask' ? window.browserApi.profiles.setDeviceBinding(${J(id)}, 'off') : null).then(() => true)`)
   await ev(`window.browserApi.profiles.launch(${J(id)}).then(() => true)`)
   await delay(8000)
   await ev(`window.browserApi.profiles.close(${J(id)}).then(() => true)`)
