@@ -22,6 +22,10 @@ rmSync(userData, { recursive: true, force: true })
 mkdirSync(join(userData, 'vault'), { recursive: true })
 copyFileSync(localState, join(userData, 'Local State'))
 for (const file of ['settings.json']) copyFileSync(join(vault, file), join(userData, 'vault', file))
+// The kernels and their fonts (a copy of a computer's login state is written through a kernel).
+for (const dir of ['kernels', 'kernel-fonts']) {
+  try { execFileSync('robocopy', [join(vault, dir), join(userData, 'vault', dir), '/E', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { stdio: 'ignore' }) } catch (e) { if (e.status >= 8) throw e }
+}
 const team = JSON.parse(readFileSync(join(vault, 'team.json'), 'utf8'))
 // The real computer's windows count as deleted here, so the start-up sync does not add them by itself
 // (as after 「从本机删除」); 「添加到本机」 is then the way back.
