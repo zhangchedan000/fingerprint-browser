@@ -1,7 +1,7 @@
 import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
-import { executableHidesConfig, executableUsesSoftwareDeviceKeys } from './kernel-features'
+import { executableHidesConfig, executableIsOfficialBase, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs } from './encrypted-config'
 import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
@@ -385,11 +385,13 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     // headless": 31% instead of the 25% every desktop Chrome gets, measured 2026-10-31).
     const size = expectedIdentity(profile, options).screen
     const softwareDeviceKeys = engine.fingerprintKernel && profile.fingerprint.deviceBinding === 'on' ? await executableUsesSoftwareDeviceKeys(engine.executable) : undefined
+    const officialBase = engine.fingerprintKernel ? await executableIsOfficialBase(engine.executable) : false
     const checkArgs = (height: number) => buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height } }, {
       userDataDir,
       proxyUrl,
       engineVersion: engine.version,
       softwareDeviceKeys,
+      officialBase,
       builtInFonts: engine.builtInFonts,
       fingerprintKernel: engine.fingerprintKernel,
       hostHardwareConcurrency: options.hostHardwareConcurrency,

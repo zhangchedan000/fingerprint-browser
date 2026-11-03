@@ -62,6 +62,25 @@ describe('chrome preferences', () => {
     expect(patchChromePreferences(noSearch, {})).toEqual(ALWAYS)
   })
 
+  it('leaves Chrome its own defaults on a prism21+ kernel and undoes the old workarounds once', () => {
+    // A window an earlier launcher opened on an ungoogled-chromium kernel.
+    const old = { other: true, ...ALWAYS }
+    const official = patchChromePreferences(old, {}, undefined, undefined, true)!
+    expect(official).toEqual({ other: true, prism_launcher: { official_base: 1 } })
+    expect(patchChromePreferences(official, {}, undefined, undefined, true)).toBeUndefined()
+    // The user turns secure connections on in the window afterwards: kept.
+    const own = { ...official, https_only_mode_enabled: true }
+    expect(patchChromePreferences(own, {}, undefined, undefined, true)).toBeUndefined()
+    // A new window: nothing but the marker.
+    expect(patchChromePreferences({}, {}, undefined, undefined, true)).toEqual({ prism_launcher: { official_base: 1 } })
+    // An engine the user picked (also Chrome's own Google) stays.
+    const picked = { prism_launcher: { official_base: 1 }, default_search_provider_data: { template_url_data: { short_name: 'Google', url: '{google:baseURL}search?q={searchTerms}', prepopulate_id: 1 } } }
+    expect(patchChromePreferences(picked, {}, undefined, undefined, true)).toBeUndefined()
+    // Only the launcher's Google entry goes, keeping anything else Chrome stored next to it.
+    const mixed = { prism_launcher: { official_base: 1 }, default_search_provider_data: { template_url_data: GOOGLE_SEARCH, mirrored: 1 } }
+    expect(patchChromePreferences(mixed, {}, undefined, undefined, true)).toEqual({ prism_launcher: { official_base: 1 }, default_search_provider_data: { mirrored: 1 } })
+  })
+
   it('points downloads at the folder Settings names, and leaves them alone otherwise', () => {
     const next = patchChromePreferences({}, {}, undefined, 'D:\\下载\\18 环境 1')!
     expect((next.download as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')

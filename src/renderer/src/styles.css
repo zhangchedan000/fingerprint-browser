@@ -582,7 +582,9 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-ip-card-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); border: 1.5px solid var(--fb-accent); border-radius: 10px; background: var(--fb-accent-soft); overflow: hidden; }
 .fb-ip-card-row > .fb-ip-card { border: 0; border-radius: 0; background: transparent; align-content: start; }
 .fb-ip-card-row.is-off { border-style: dashed; border-color: var(--fb-line); background: transparent; }
-.fb-ip-card-row.is-stale { opacity: .6; border-style: dashed; }
+.fb-ip-card-row.is-stale { opacity: .6; border-style: dashed; filter: grayscale(1); }
+/* Stale as one block: the card inside is not greyed a second time, IP 评分 beside it the same. */
+.fb-ip-card-row > .fb-ip-card.is-stale { opacity: 1; }
 .fb-ip-card-aside { padding: 12px 14px; border-left: 1px solid var(--fb-accent-soft-border); background: var(--fb-surface); }
 /* Too narrow for two columns (the 代理 IP form): IP 评分 goes below the IP instead of squeezing it. */
 .fb-ip-card-wrap { container-type: inline-size; }

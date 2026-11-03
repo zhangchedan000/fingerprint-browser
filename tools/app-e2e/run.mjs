@@ -186,6 +186,8 @@ async function waitForExit(child, milliseconds) {
 async function launchApp(options, userDataPath) {
   const port = await reservePort()
   const args = [`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=${port}`]
+  // Electron refuses to start as root (Linux containers) unless its sandbox is off.
+  if (process.getuid?.() === 0) args.push('--no-sandbox')
   if (!options.packaged) args.push(resolve('.'))
   const child = spawn(options.app, args, {
     stdio: ['ignore', 'ignore', 'pipe'],

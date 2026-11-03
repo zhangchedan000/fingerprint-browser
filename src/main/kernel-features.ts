@@ -1,5 +1,5 @@
 import { prismRevision } from '../shared/kernel-id'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /**
@@ -43,7 +43,16 @@ export { prismRevision }
 const SOFTWARE_DEVICE_KEYS_REVISION = 18
 const SOFTWARE_DEVICE_KEYS_SOURCE = { file: 'components/unexportable_keys/unexportable_key_task_manager.cc', marker: 'Prism: software keys' }
 
-type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; softwareDeviceKeys?: boolean; releaseTag?: string; assetName?: string }
+/**
+ * Google's own Chromium source instead of ungoogled-chromium's defaults (prism21, private repo
+ * official-base/): Chrome's search engines, HTTPS upgrades and <a ping> are as in Chrome, so the
+ * launcher's workarounds for ungoogled-chromium (https-only mode, its own Google engine, --no-pings)
+ * are left out. A local build of it was prepared in stages (build\prism-stages next to src).
+ */
+const OFFICIAL_BASE_REVISION = 21
+const OFFICIAL_BASE_STAGES = 'prism-stages'
+
+type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; softwareDeviceKeys?: boolean; officialBase?: boolean; releaseTag?: string; assetName?: string }
 
 const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
 
@@ -65,6 +74,16 @@ export function kernelHidesConfig(manifest: ManifestFeatures): boolean {
 
 export function kernelUsesSoftwareDeviceKeys(manifest: ManifestFeatures): boolean {
   return manifest.softwareDeviceKeys ?? revisionOf(manifest) >= SOFTWARE_DEVICE_KEYS_REVISION
+}
+
+export function kernelIsOfficialBase(manifest: ManifestFeatures): boolean {
+  return manifest.officialBase ?? revisionOf(manifest) >= OFFICIAL_BASE_REVISION
+}
+
+/** Whether this kernel (installed or a local build) is built from Google's Chromium source (prism21+). */
+export async function executableIsOfficialBase(executable: string): Promise<boolean> {
+  const manifest = await installedManifestOf(executable)
+  return manifest ? kernelIsOfficialBase(manifest) : localBuildHasFolder(executable, OFFICIAL_BASE_STAGES)
 }
 
 /** Whether this kernel (installed or a local build) binds sign-ins with software keys by itself (prism18+). */
@@ -136,6 +155,20 @@ async function localBuildSourceHas(executable: string, file: string, marker: str
     try {
       return (await readFile(join(folder, ...file.split('/')), 'utf8')).includes(marker)
     } catch { /* not the source root */ }
+    const parent = dirname(folder)
+    if (parent === folder) break
+    folder = parent
+  }
+  return false
+}
+
+/** A folder of this name sits next to a local build's source tree (src\out\Default\chrome.exe → build). */
+async function localBuildHasFolder(executable: string, name: string): Promise<boolean> {
+  let folder = dirname(executable)
+  for (let level = 0; level < 5; level++) {
+    try {
+      if ((await stat(join(folder, name))).isDirectory()) return true
+    } catch { /* not here */ }
     const parent = dirname(folder)
     if (parent === folder) break
     folder = parent

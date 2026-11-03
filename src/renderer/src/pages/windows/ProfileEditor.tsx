@@ -470,6 +470,18 @@ const LANGUAGES = CHROME_UI_LOCALES.map((uiLocale) => {
   return item === (same.find((other) => samePrimary(other.uiLocale, other.language)) ?? same[0])
 })
 
+/**
+ * The settings a check of the exit IP depends on: 代理方式, the proxy itself and 网络加速, from the
+ * form's values (as they are now, or as watched for the render).
+ */
+function proxyKeyOf(mode: ProxyMode, proxy: Partial<ProxyConfig> | undefined, proxyId: unknown, tunnel: unknown): string {
+  const route = tunnel ?? null
+  if (mode === 'library') return JSON.stringify(['library', String(proxyId ?? ''), route])
+  if (mode === 'api') return JSON.stringify(['api', String(proxy?.apiUrl ?? '').trim(), route])
+  if (mode === 'direct') return JSON.stringify(['direct'])
+  return JSON.stringify([mode, String(proxy?.host ?? '').trim(), Number(proxy?.port) || null, String(proxy?.username ?? ''), String(proxy?.password ?? ''), proxy?.passwordStored === true, route])
+}
+
 export function ProfileEditor({ open, profile, suggestedIndex, saving, extensions, engine, kernels, groups, proxies, onCancel, onSave, running: runningNow }: ProfileEditorProps) {
   const [form] = Form.useForm<EditorValues>()
   const [tab, setTab] = useState<EditorTab>('basic')
@@ -488,7 +500,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // What the IP check sites said about the exit IP (IP 评分), read after each check that worked.
   const ipScore = useIpScore({ draft: () => currentDraft(), profileId: profile?.id, onOpen: profile ? (url) => void openInWindow(url) : undefined })
   const [proxyCheckedAt, setProxyCheckedAt] = useState<string>()
-  const [proxyEdited, setProxyEdited] = useState(false)
+  // The proxy settings the shown result was checked with (proxyKey): it is marked as older only
+  // while the settings differ, so going back to them (another 代理方式 and back) shows it as before.
+  const [checkedKey, setCheckedKey] = useState<string>()
+  const checkStartKey = useRef<string | undefined>(undefined)
   const [showApiLog, setShowApiLog] = useState(false)
   // An API window as its last check left it (its current proxy and IP history).
   const [apiView, setApiView] = useState<BrowserProfileView | undefined>()
@@ -558,6 +573,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const proxyPassword = Form.useWatch(['proxy', 'password'], { form, preserve: true }) ?? ''
   const apiUrlTyped = String(Form.useWatch(['proxy', 'apiUrl'], { form, preserve: true }) ?? '').trim()
   const proxyPasswordStored = Form.useWatch(['proxy', 'passwordStored'], { form, preserve: true }) === true
+  const proxyKey = proxyKeyOf(proxyMode, { host: typedHost, port: typedPort, username: typedUsername, password: proxyPassword, passwordStored: proxyPasswordStored, apiUrl: apiUrlTyped }, proxyId, watchedRoute)
+  const proxyEdited = checkedKey !== undefined && checkedKey !== proxyKey
+  /** The result shown belongs to the settings in the form now (read from the form: watched values come a render later). */
+  const markChecked = (mode: ProxyMode = proxyMode) => setCheckedKey(proxyKeyOf(mode, form.getFieldValue('proxy') as Partial<ProxyConfig> | undefined, form.getFieldValue('proxyId'), form.getFieldValue('tunnel')))
   const accountPassword = Form.useWatch(['account', 'password'], { form, preserve: true }) ?? ''
   const accountPasswordStored = Form.useWatch(['account', 'passwordStored'], { form, preserve: true }) === true
   const cookieText = Form.useWatch('cookieText', { form, preserve: true }) ?? ''
@@ -588,7 +607,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setTestingProxy(false)
     setProxyResult(profile?.proxyCheck ?? null)
     setProxyCheckedAt(profile?.proxyCheck?.checkedAt)
-    setProxyEdited(false)
     setShowApiLog(false)
     setApiView(profile)
     setUseApiIp(true)
@@ -621,7 +639,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     setPasteText('')
     setPasted(null)
     setPasteError('')
-    setProxyMode(profile?.apiProxy ? 'api' : profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct')
+    const openedMode: ProxyMode = profile?.apiProxy ? 'api' : profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct'
+    setProxyMode(openedMode)
+    markChecked(openedMode)
     const initial = values.fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !isChoice(initial.screenWidth, initial.screenHeight)))
@@ -780,7 +800,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         proxyCheckRun.current += 1
         setProxyResult(found.check)
         setProxyCheckedAt(found.check.checkedAt)
-        setProxyEdited(false)
+        markChecked()
         setResultShared(true)
         setKeepCheck(true)
         void ipScore.follow({ proxyId: id }, found.check.ip, { readIfMissing: found.check.ok })
@@ -1117,7 +1137,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         password: parsed.password,
         passwordStored: false
       })
-      setProxyEdited(true)
       setPasteError('')
     } catch (error) {
       setPasteError(mt(error instanceof Error ? error.message : String(error)))
@@ -1126,7 +1145,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function chooseProxyMode(mode: ProxyMode): void {
     setProxyMode(mode)
-    setProxyEdited(true)
     if (mode !== 'library' && mode !== 'api') form.setFieldValue(['proxy', 'protocol'], mode)
   }
 
@@ -1154,12 +1172,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       // 网络加速 follows the picked proxy; back on its saved proxy the window has its own again.
       form.setFieldValue('tunnel', profile?.tunnel && changed.proxyId === profile.proxyId ? { ...profile.tunnel } : undefined)
       setProxyCheckedAt(shown?.checkedAt)
-      setProxyEdited(false)
+      markChecked()
       // A new window takes the country the picked proxy was last checked in, unless one was picked by hand.
       if (!profile && !countryByHand.current && picked && !picked.apiUrl && picked.check?.ok) fixToIp(picked.check)
       return
     }
-    setProxyEdited(true)
   }
 
   /**
@@ -1172,7 +1189,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (run !== proxyCheckRun.current) return
     setProxyResult(result)
     setProxyCheckedAt(new Date().toISOString())
-    setProxyEdited(false)
+    if (checkStartKey.current === undefined) markChecked(); else setCheckedKey(checkStartKey.current)
     // The IP just checked is the one in use; what the IP check sites say about it comes next.
     setUseApiIp(true)
     setKeepCheck(true)
@@ -1237,6 +1254,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   async function testCurrentProxy(fill = false, refresh = false): Promise<void> {
     const run = ++proxyCheckRun.current
+    checkStartKey.current = proxyKey
     try {
       if (proxyMode === 'library') {
         await form.validateFields(['proxyId'])
@@ -1278,7 +1296,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       if (!(error && typeof error === 'object' && 'errorFields' in error)) {
         setProxyResult({ ok: false, latencyMs: 0, error: error instanceof Error ? error.message : String(error) })
         setProxyCheckedAt(new Date().toISOString())
-        setProxyEdited(false)
+        if (checkStartKey.current === undefined) markChecked(); else setCheckedKey(checkStartKey.current)
       } else {
         setTab('proxy')
       }
@@ -1837,7 +1855,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             value={route}
             status={tunnelStatus}
             disabledReason={route === shownRoute ? undefined : t("HTTPS 代理暂不支持网络加速，可改用 HTTP 或 SOCKS5")}
-            onChange={(next) => { form.setFieldValue('tunnel', next); setProxyEdited(true) }}
+            onChange={(next) => form.setFieldValue('tunnel', next)}
           />
         </Row>
       )}

@@ -25,6 +25,12 @@ export const GOOGLE_SEARCH: Json = {
   is_active: 1
 }
 
+/**
+ * The launcher's own entry in a window's Preferences (Chrome keeps preferences it does not know):
+ * official_base = 1 once the ungoogled-chromium workarounds were undone for a prism21+ kernel.
+ */
+const PRISM_PREFERENCES = 'prism_launcher'
+
 function child(parent: Json, key: string): Json {
   const value = parent[key]
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Json
@@ -38,7 +44,8 @@ export function patchChromePreferences(
   current: Json,
   fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
   startupMode?: BrowserProfile['startupMode'],
-  downloadFolder?: string
+  downloadFolder?: string,
+  officialBase = false
 ): Json | undefined {
   const next = structuredClone(current)
   // Settings → 下载位置: where the window saves downloads (and Save As starts). Unset leaves
@@ -64,13 +71,29 @@ export function patchChromePreferences(
   if (doNotTrack === 'default') delete next.enable_do_not_track
   else next.enable_do_not_track = doNotTrack === 'on'
 
-  // “Always use secure connections”: a typed www.example.com opens over https first, as in Chrome.
-  next.https_only_mode_enabled = true
-
-  // Search from the address bar with Google, unless the user picked another engine in the window.
-  // ungoogled-chromium writes its “No Search” engine there on first run, which counts as unset.
   const engine = (next.default_search_provider_data as Json | undefined)?.template_url_data as Json | undefined
-  if (!engine || engine.url === 'http://{searchTerms}') child(next, 'default_search_provider_data').template_url_data = GOOGLE_SEARCH
+  if (officialBase) {
+    // prism21+ (Google's Chromium source): Chrome's own defaults. Undo, once, what earlier launchers
+    // wrote for ungoogled-chromium kernels; whatever the user sets in the window afterwards is kept.
+    const marker = child(next, PRISM_PREFERENCES)
+    if (marker.official_base !== 1) {
+      if (next.https_only_mode_enabled === true) delete next.https_only_mode_enabled
+      marker.official_base = 1
+    }
+    // The launcher's own Google entry (never one the user picked): Chrome's built-in Google instead.
+    if (engine && engine.url === GOOGLE_SEARCH.url && engine.prepopulate_id === 0) {
+      const provider = next.default_search_provider_data as Json
+      delete provider.template_url_data
+      if (Object.keys(provider).length === 0) delete next.default_search_provider_data
+    }
+  } else {
+    // “Always use secure connections”: a typed www.example.com opens over https first, as in Chrome.
+    next.https_only_mode_enabled = true
+
+    // Search from the address bar with Google, unless the user picked another engine in the window.
+    // ungoogled-chromium writes its “No Search” engine there on first run, which counts as unset.
+    if (!engine || engine.url === 'http://{searchTerms}') child(next, 'default_search_provider_data').template_url_data = GOOGLE_SEARCH
+  }
 
   return JSON.stringify(next) === JSON.stringify(current) ? undefined : next
 }
@@ -83,7 +106,8 @@ export async function applyChromePreferences(
   userDataDir: string,
   fingerprint: Pick<FingerprintConfig, 'geolocationPermission' | 'doNotTrack'>,
   startupMode?: BrowserProfile['startupMode'],
-  downloadFolder?: string
+  downloadFolder?: string,
+  officialBase = false
 ): Promise<boolean> {
   const directory = join(userDataDir, 'Default')
   const path = join(directory, 'Preferences')
@@ -95,7 +119,7 @@ export async function applyChromePreferences(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
   }
-  const next = patchChromePreferences(current, fingerprint, startupMode, downloadFolder)
+  const next = patchChromePreferences(current, fingerprint, startupMode, downloadFolder, officialBase)
   if (!next) return false
   await mkdir(directory, { recursive: true })
   const temporary = `${path}.fb-tmp`

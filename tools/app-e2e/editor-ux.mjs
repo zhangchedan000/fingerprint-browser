@@ -163,6 +163,15 @@ try {
   const card = await run(`${drawer}.querySelector('.fb-ip-card')?.innerText.replace(/\\s+/g, ' ') ?? 'no card'`)
   check(card.includes('203.0.113.25') && card.includes('墨西哥'), `exit IP card: ${card}`)
   await shot('4-proxy-saved')
+  // Another 代理方式 marks the result as older; back on the one it was checked with, it is not (and IP 评分 with it).
+  const staleNow = () => run(`Boolean(${drawer}.querySelector('.fb-ip-card.is-stale, .fb-ip-card-row.is-stale'))`)
+  check(!(await staleNow()), 'the saved check is current')
+  await click('HTTP', drawer)
+  await delay(400)
+  check(await staleNow(), 'another 代理方式: the check is marked as older')
+  await click('从代理库选择', drawer)
+  await delay(400)
+  check(!(await staleNow()), 'back on 从代理库选择 (the proxy it was checked with): current again')
   // Unticked: closing the editor keeps nothing of that check.
   await run(`(() => { ${drawer}.querySelector('.fb-ip-mark.is-toggle')?.click(); return true })()`)
   await delay(300)

@@ -30,6 +30,13 @@ describe('launch arguments', () => {
     expect(first).not.toContain('--restore-last-session')
     expect(first).toContain(saved.startUrls[0])
   })
+  it('keeps <a ping> off through a proxy only on ungoogled-chromium kernels (prism21+ as Chrome)', () => {
+    const run = (officialBase?: boolean) => buildLaunchArgs(profile(), { userDataDir: '/data', proxyUrl: 'socks5://127.0.0.1:1080', officialBase })
+    expect(run()).toContain('--no-pings')
+    expect(run(true)).not.toContain('--no-pings')
+    expect(run(true)).toContain('--dns-prefetch-disable')
+    expect(run(true)).toContain('--disable-quic')
+  })
   it('keeps 155 and older from relaunching de-elevated, which leaves an empty Local State on a new profile', () => {
     const run = (engineVersion?: string) => buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion })
     expect(run('prism-155.0.8059.84')).toContain('--do-not-de-elevate')

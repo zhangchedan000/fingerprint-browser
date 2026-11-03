@@ -31,6 +31,8 @@ export interface LaunchArgumentOptions {
   engineVersion?: string
   /** The kernel binds sign-ins with software keys by itself (prism18+, kernel-features.ts); unknown: by its version name. */
   softwareDeviceKeys?: boolean
+  /** Google's Chromium source (prism21+, kernel-features.ts): <a ping> stays on, as in Chrome. */
+  officialBase?: boolean
   fingerprintKernel?: boolean
   /** The kernel uses its own Windows fonts (EngineStatus.builtInFonts, prism16+). */
   builtInFonts?: boolean
@@ -261,7 +263,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (options.proxyUrl) {
     args.push('--disable-quic')
     args.push('--dns-prefetch-disable')
-    args.push('--no-pings')
+    // ungoogled-chromium kernels: <a ping> off, as ungoogled-chromium has it (prism21+ keep Chrome's default).
+    if (!options.officialBase) args.push('--no-pings')
     args.push(`--proxy-server=${options.proxyUrl}`)
     args.push('--proxy-bypass-list=localhost;127.0.0.1')
   } else {

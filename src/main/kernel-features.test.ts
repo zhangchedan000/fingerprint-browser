@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelRelaysWebRtc, kernelUsesSoftwareDeviceKeys, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
+import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelIsOfficialBase, kernelRelaysWebRtc, executableIsOfficialBase, kernelUsesSoftwareDeviceKeys, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -77,4 +77,18 @@ it('knows the kernels that bind sign-ins with software keys by themselves (prism
   expect(kernelUsesSoftwareDeviceKeys({ releaseTag: '156.0.8078.47-prism17' })).toBe(false)
   expect(kernelUsesSoftwareDeviceKeys({ softwareDeviceKeys: true })).toBe(true)
   expect(kernelUsesSoftwareDeviceKeys({})).toBe(false)
+})
+
+it('knows the kernels built from Google\'s Chromium source (prism21+), installed or a local build', async () => {
+  expect(kernelIsOfficialBase({ releaseTag: 'prism21', assetName: 'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip' })).toBe(true)
+  expect(kernelIsOfficialBase({ releaseTag: '155.0.8059.84-prism21' })).toBe(true)
+  expect(kernelIsOfficialBase({ releaseTag: 'prism20' })).toBe(false)
+  expect(kernelIsOfficialBase({})).toBe(false)
+  const root = await mkdtemp(join(tmpdir(), 'prism-official-'))
+  const build = join(root, 'ungoogled-chromium-windows', 'build')
+  await mkdir(join(build, 'src', 'out', 'Default'), { recursive: true })
+  const exe = join(build, 'src', 'out', 'Default', 'chrome.exe')
+  expect(await executableIsOfficialBase(exe)).toBe(false)
+  await mkdir(join(build, 'prism-stages'))
+  expect(await executableIsOfficialBase(exe)).toBe(true)
 })

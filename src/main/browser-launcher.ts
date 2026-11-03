@@ -32,7 +32,7 @@ import type { Readable, Writable } from 'node:stream'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
 import type { WriteStream } from 'node:fs'
-import { executableHidesConfig, executableUsesSoftwareDeviceKeys } from './kernel-features'
+import { executableHidesConfig, executableIsOfficialBase, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
@@ -417,8 +417,9 @@ export class BrowserLauncher {
       }
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
+      const officialBase = engine.fingerprintKernel ? await executableIsOfficialBase(engine.executable) : false
       try {
-        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile))
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile), officialBase)
       } catch (error) {
         this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
           profileId: id,
@@ -439,6 +440,7 @@ export class BrowserLauncher {
         extensionPaths: this.extensions.paths(profile.extensionIds),
         engineVersion: engine.version,
         softwareDeviceKeys: engine.fingerprintKernel && profile.fingerprint.deviceBinding === 'on' ? await executableUsesSoftwareDeviceKeys(engine.executable) : undefined,
+        officialBase,
         builtInFonts: engine.builtInFonts,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
