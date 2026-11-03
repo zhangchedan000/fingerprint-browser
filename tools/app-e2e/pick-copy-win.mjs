@@ -78,7 +78,13 @@ try {
     await delay(500)
     await shot('picker-chosen.png')
     await click('添加到本机', '.ant-modal-footer')
-    await delay(8000)
+    // Added and the chosen copy put in: the page says 已添加到本机 (or shows the error).
+    let note = ''
+    for (let i = 0; i < 180 && !/已添加到本机|失败|错误|不能|请先/.test(note); i++) {
+      note = await evaluate(`[...document.querySelectorAll('.ant-notification-notice, .ant-message-notice')].map((x) => x.innerText.replace(/\\s+/g, ' ')).join(' | ')`)
+      await delay(500)
+    }
+    log('after adding', note || 'no message in 90 s')
   } else {
     await delay(5000)
   }
