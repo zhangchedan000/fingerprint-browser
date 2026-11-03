@@ -75,8 +75,11 @@ export class SystemProcessInspector implements ProcessInspector {
   async requestClose(pid: number): Promise<void> {
     if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('进程 ID 无效')
     if (process.platform === 'win32') {
-      // Without /F, taskkill requests WM_CLOSE instead of terminating Chromium abruptly.
-      await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T'], { windowsHide: true, timeout: 5000 })
+      // Without /F, taskkill posts WM_CLOSE to the browser's windows and Chromium shuts down normally
+      // (writing its cookies). Not /T: with it taskkill only refuses the browser process ("can only be
+      // terminated forcefully") and Chromium keeps running (Win11 test, 2026-11-03: /T never exited in
+      // 20 s; without it the browser exited in 0.5 s with its Cookies written).
+      await execFileAsync('taskkill.exe', ['/PID', String(pid)], { windowsHide: true, timeout: 5000 })
     } else process.kill(pid, 'SIGTERM')
   }
 
@@ -98,8 +101,9 @@ export class SystemProcessInspector implements ProcessInspector {
       throw new Error('遗留进程已经退出或 PID 已被其他进程复用，已取消终止操作')
     }
     if (process.platform === 'win32') {
-      await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T']).catch(() => undefined)
-      if (!await waitForExit(pid, 5000)) {
+      // A normal close first (no /T, see requestClose); ended only if it is still running after 30 s.
+      await execFileAsync('taskkill.exe', ['/PID', String(pid)]).catch(() => undefined)
+      if (!await waitForExit(pid, 30_000)) {
         if (!processMatchesUserData(await this.list(), pid, userDataPath)) return
         await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T', '/F'])
       }
