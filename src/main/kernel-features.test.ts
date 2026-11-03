@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { executableFitsWindowToScreen, kernelFitsWindowToScreen, kernelHasOwnFonts, kernelIsOfficialBase, kernelRelaysWebRtc, executableIsOfficialBase, kernelUsesSoftwareDeviceKeys, localBuildFitsWindowToScreen, localBuildRelaysWebRtc, prismRevision } from './kernel-features'
+import { executableSupported, kernelSupported, prismRevision, supportedReleases } from './kernel-features'
 
 it('reads the prism revision from release tags', () => {
   expect(prismRevision('kernel-156.0.8078.47-prism5')).toBe(5)
@@ -12,83 +12,46 @@ it('reads the prism revision from release tags', () => {
   expect(prismRevision('ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip')).toBe(5)
 })
 
-it('lets prism5 and later kernels claim a smaller screen', () => {
-  expect(kernelFitsWindowToScreen({ releaseTag: 'kernel-156.0.8078.47-prism4' })).toBe(false)
-  expect(kernelFitsWindowToScreen({ releaseTag: '156.0.8078.47-prism5' })).toBe(true)
-  expect(kernelFitsWindowToScreen({})).toBe(false)
-  expect(kernelFitsWindowToScreen({ windowScreen: true })).toBe(true)
-  expect(kernelFitsWindowToScreen({ releaseTag: 'v0.2.0', assetName: 'ungoogled-chromium_155.0.8059.84-prism5_windows_x64.zip' })).toBe(true)
+it('runs prism21 and later kernels only, by release tag, zip name or what an import recorded', () => {
+  expect(kernelSupported({ releaseTag: 'prism21', assetName: 'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip' })).toBe(true)
+  expect(kernelSupported({ releaseTag: '155.0.8059.84-prism21' })).toBe(true)
+  expect(kernelSupported({ releaseTag: 'v0.6.0', assetName: 'ungoogled-chromium_156.0.8078.47-prism22_windows_x64.zip' })).toBe(true)
+  expect(kernelSupported({ releaseTag: 'prism20' })).toBe(false)
+  expect(kernelSupported({ releaseTag: 'prism9', assetName: 'ungoogled-chromium_156.0.8078.47-prism9_windows_x64.zip' })).toBe(false)
+  expect(kernelSupported({})).toBe(false)
+  expect(kernelSupported({ assetName: 'local-build-win32-x64', supported: true })).toBe(true)
+  expect(kernelSupported({ assetName: 'local-build-win32-x64', supported: false })).toBe(false)
 })
 
-it('reads the default kernel from the manifest next to its executable', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'prism-kernels-'))
-  const kernel = (version: string, assetName: string) => {
+it('tells an installed kernel by its manifest and a local build by the prism-stages folder of Google\'s source', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'prism-supported-'))
+  const installed = (version: string, releaseTag: string) => {
     const folder = join(root, 'kernels', version)
     return mkdir(join(folder, 'browser'), { recursive: true })
-      .then(() => writeFile(join(folder, 'manifest.json'), JSON.stringify({ version, executableRelative: 'browser\\chrome.exe', assetName, releaseTag: 'v0.2.0' })))
+      .then(() => writeFile(join(folder, 'manifest.json'), JSON.stringify({ version, executableRelative: 'browser\\chrome.exe', releaseTag })))
       .then(() => join(folder, 'browser', 'chrome.exe'))
   }
-  expect(await executableFitsWindowToScreen(await kernel('prism-156.0.8078.47', 'ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip'))).toBe(true)
-  expect(await executableFitsWindowToScreen(await kernel('prism-155.0.8059.84', 'ungoogled-chromium_155.0.8059.84-prism4_windows_x64.zip'))).toBe(false)
-  expect(await executableFitsWindowToScreen(join(root, 'elsewhere', 'chrome.exe'))).toBe(false)
-})
+  expect(await executableSupported(await installed('prism-156.0.8078.47', 'prism21'))).toBe(true)
+  expect(await executableSupported(await installed('prism-155.0.8059.84', 'prism20'))).toBe(false)
 
-it('finds the window-screen patch in a local build lock', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'prism-lock-'))
-  await mkdir(join(root, 'out', 'Default'), { recursive: true })
-  const exe = join(root, 'out', 'Default', 'chrome.exe')
-  expect(await localBuildFitsWindowToScreen(exe)).toBe(false)
-  await writeFile(join(root, 'prism-build-lock.json'), '{"seriesPath":"extra/fingerprint/015-window-screen.patch"}')
-  expect(await localBuildFitsWindowToScreen(exe)).toBe(true)
-})
-
-it('claims the WebRTC relay only for prism7 and later (prism6 only changed media devices)', () => {
-  expect(kernelRelaysWebRtc({ releaseTag: '156.0.8078.47-prism6' })).toBe(false)
-  expect(kernelRelaysWebRtc({ releaseTag: 'kernel-155.0.8059.84-prism6' })).toBe(false)
-  expect(kernelRelaysWebRtc({ releaseTag: '156.0.8078.47-prism7' })).toBe(true)
-  expect(kernelRelaysWebRtc({ releaseTag: 'v0.5.0', assetName: 'ungoogled-chromium_156.0.8078.47-prism7_windows_x64.zip' })).toBe(true)
-  expect(kernelRelaysWebRtc({ releaseTag: 'v0.5.0', assetName: 'ungoogled-chromium_156.0.8078.47-prism6_windows_x64.zip' })).toBe(false)
-  expect(kernelRelaysWebRtc({ webrtcRelay: true })).toBe(true)
-})
-
-it('finds the WebRTC relay in a local build\'s source', async () => {
-  const src = await mkdtemp(join(tmpdir(), 'prism-src-'))
-  await mkdir(join(src, 'out', 'Default'), { recursive: true })
-  await mkdir(join(src, 'services', 'network', 'p2p'), { recursive: true })
-  const exe = join(src, 'out', 'Default', 'chrome.exe')
-  await writeFile(join(src, 'services', 'network', 'p2p', 'socket_udp.cc'), 'void P2PSocketUdp::Send() {}')
-  expect(await localBuildRelaysWebRtc(exe)).toBe(false)
-  await writeFile(join(src, 'services', 'network', 'p2p', 'socket_udp.cc'), 'std::string FingerprintUdpRelay() {}')
-  expect(await localBuildRelaysWebRtc(exe)).toBe(true)
-})
-
-it('knows the kernels with their own Windows fonts (prism16+) by release tag or asset name, not by kernel id', () => {
-  expect(kernelHasOwnFonts({ releaseTag: 'prism16', assetName: 'ungoogled-chromium_156.0.8078.47-prism16_windows_x64.zip' })).toBe(true)
-  expect(kernelHasOwnFonts({ releaseTag: '155.0.8059.84-prism16' })).toBe(true)
-  expect(kernelHasOwnFonts({ releaseTag: 'prism15', assetName: 'ungoogled-chromium_156.0.8078.47-prism15_windows_x64.zip' })).toBe(false)
-  expect(kernelHasOwnFonts({ releaseTag: 'prism17' })).toBe(true)
-  expect(kernelHasOwnFonts({ assetName: 'local-build-win32-x64', builtInFonts: true })).toBe(true)
-  expect(kernelHasOwnFonts({})).toBe(false)
-})
-
-it('knows the kernels that bind sign-ins with software keys by themselves (prism18+) by release tag or manifest', () => {
-  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: '156.0.8078.47-prism18' })).toBe(true)
-  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: 'prism18', assetName: 'ungoogled-chromium_156.0.8078.47-prism18_windows_x64.zip' })).toBe(true)
-  expect(kernelUsesSoftwareDeviceKeys({ releaseTag: '156.0.8078.47-prism17' })).toBe(false)
-  expect(kernelUsesSoftwareDeviceKeys({ softwareDeviceKeys: true })).toBe(true)
-  expect(kernelUsesSoftwareDeviceKeys({})).toBe(false)
-})
-
-it('knows the kernels built from Google\'s Chromium source (prism21+), installed or a local build', async () => {
-  expect(kernelIsOfficialBase({ releaseTag: 'prism21', assetName: 'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip' })).toBe(true)
-  expect(kernelIsOfficialBase({ releaseTag: '155.0.8059.84-prism21' })).toBe(true)
-  expect(kernelIsOfficialBase({ releaseTag: 'prism20' })).toBe(false)
-  expect(kernelIsOfficialBase({})).toBe(false)
-  const root = await mkdtemp(join(tmpdir(), 'prism-official-'))
   const build = join(root, 'ungoogled-chromium-windows', 'build')
   await mkdir(join(build, 'src', 'out', 'Default'), { recursive: true })
   const exe = join(build, 'src', 'out', 'Default', 'chrome.exe')
-  expect(await executableIsOfficialBase(exe)).toBe(false)
+  expect(await executableSupported(exe)).toBe(false)
   await mkdir(join(build, 'prism-stages'))
-  expect(await executableIsOfficialBase(exe)).toBe(true)
+  expect(await executableSupported(exe)).toBe(true)
+})
+
+it('lists prism21 and later downloads only', () => {
+  const release = (tag: string, name: string) => ({ tag, asset: { name } })
+  const listed = [
+    release('prism21', 'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip'),
+    release('prism21', 'ungoogled-chromium_155.0.8059.84-prism21_windows_x64.zip'),
+    release('prism20', 'ungoogled-chromium_156.0.8078.47-prism20_windows_x64.zip'),
+    release('v0.4.0', 'ungoogled-chromium_156.0.8078.47-prism9_windows_x64.zip')
+  ]
+  expect(supportedReleases(listed).map((item) => item.asset.name)).toEqual([
+    'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip',
+    'ungoogled-chromium_155.0.8059.84-prism21_windows_x64.zip'
+  ])
 })

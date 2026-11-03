@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -101,6 +101,19 @@ class FakeSpawnController {
   }
 }
 
+/**
+ * A prism21 kernel as installed (kernels\<id>\manifest.json): this process's own executable stands in
+ * for chrome.exe; the spawner is faked anyway.
+ */
+async function useTestKernel(settings: SettingsStore, vault: string): Promise<void> {
+  const folder = join(vault, 'kernels', 'prism-156.0.8078.47')
+  await mkdir(join(folder, 'browser'), { recursive: true })
+  const executable = join(folder, 'browser', 'chrome')
+  await symlink(process.execPath, executable)
+  await writeFile(join(folder, 'manifest.json'), JSON.stringify({ version: 'prism-156.0.8078.47', executableRelative: 'browser/chrome', releaseTag: 'prism21' }))
+  await settings.update({ browserExecutable: executable, fingerprintKernel: true, enginePreference: 'auto' })
+}
+
 async function waitUntil(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
@@ -121,7 +134,7 @@ async function launchFixture(profileCount: number, concurrency = 3): Promise<{
   const settings = new SettingsStore(vault)
   const extensions = new ExtensionStore(vault)
   await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-  await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+  await useTestKernel(settings, vault)
   const drafts = Array.from({ length: profileCount }, (_, index) => {
     const draft = defaultProfileDraft(index + 1)
     draft.name = `并发环境 ${index + 1}`
@@ -302,6 +315,15 @@ describe('BrowserLauncher orphan recovery', () => {
 })
 
 describe('BrowserLauncher concurrent lifecycle', () => {
+  it('opens windows only with prism21 and later kernels', async () => {
+    const { profiles, launcher, controller, ids } = await launchFixture(1)
+    // The same kernel folder with an older build in it (prism20, ungoogled-chromium base).
+    await writeFile(join(profiles.vaultPath, 'kernels', 'prism-156.0.8078.47', 'manifest.json'),
+      JSON.stringify({ version: 'prism-156.0.8078.47', executableRelative: 'browser/chrome', releaseTag: 'prism20' }))
+    await expect(launcher.launch(ids[0])).rejects.toThrow('这个内核不是 prism21')
+    expect(controller.children).toHaveLength(0)
+  })
+
   it('deduplicates simultaneous launches of the same profile', async () => {
     const { profiles, launcher, controller, ids } = await launchFixture(1)
     const launches = [launcher.launch(ids[0]), launcher.launch(ids[0]), launcher.launch(ids[0])]
@@ -384,7 +406,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     const settings = new SettingsStore(vault)
     const extensions = new ExtensionStore(vault)
     await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    await useTestKernel(settings, vault)
     // A window that opens its own pages (not 恢复上次): it used to be ended at once.
     const [profile] = await profiles.createMany([{ ...defaultProfileDraft(1), startupMode: 'urls' }])
     const controller = new FakeSpawnController()
@@ -474,7 +496,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     const settings = new SettingsStore(vault)
     const extensions = new ExtensionStore(vault)
     await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    await useTestKernel(settings, vault)
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
     draft.fingerprint.networkIdentityMode = 'proxy'
@@ -530,7 +552,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     const settings = new SettingsStore(vault)
     const extensions = new ExtensionStore(vault)
     await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    await useTestKernel(settings, vault)
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
     draft.fingerprint.networkIdentityMode = 'proxy'
@@ -581,7 +603,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     const settings = new SettingsStore(vault)
     const extensions = new ExtensionStore(vault)
     await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    await useTestKernel(settings, vault)
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
     // Filled in from a check of a Mexican IP before it was saved.
@@ -626,7 +648,7 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     const settings = new SettingsStore(vault)
     const extensions = new ExtensionStore(vault)
     await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
-    await settings.update({ browserExecutable: process.execPath, fingerprintKernel: false, enginePreference: 'auto' })
+    await useTestKernel(settings, vault)
     const draft = defaultProfileDraft()
     draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
     // Made with a Texas IP (a user's window); its new IP is in Kennewick, WA: still the US, Pacific time.

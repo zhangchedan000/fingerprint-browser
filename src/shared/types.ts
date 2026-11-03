@@ -1,5 +1,5 @@
 import type { UiLocale } from './i18n'
-import type { FontPackProgress, FontPackStatus } from './windows-font-packs'
+import type { FontPackProgress } from './windows-font-packs'
 export type BrowserPlatform = 'windows' | 'macos'
 export type BrowserBrand = 'Chrome' | 'Edge'
 export type HardwareProfileId =
@@ -431,12 +431,8 @@ export interface EngineStatus {
   fingerprintKernel: boolean
   label: string
   version?: string
-  /** The kernel keeps its window inside a claimed screen, so the claim may be smaller than the real one. */
-  windowScreen?: boolean
-  /** The kernel can send WebRTC UDP through the launcher's relay and remove WebRTC (prism7+). */
-  webrtcRelay?: boolean
-  /** The kernel uses its own Windows fonts, never this computer's (prism16+). */
-  builtInFonts?: boolean
+  /** A prism21+ kernel, the only kind this launcher opens windows with (kernel-features.ts). */
+  supported?: boolean
 }
 
 export interface KernelImportResult {
@@ -465,12 +461,8 @@ export interface KernelRelease {
   tag?: string
   /** A newer build of this installed kernel; installing it replaces the kernel in place. */
   update?: boolean
-  /** See EngineStatus.windowScreen. */
-  windowScreen?: boolean
-  /** See EngineStatus.webrtcRelay. */
-  webrtcRelay?: boolean
-  /** See EngineStatus.builtInFonts. */
-  builtInFonts?: boolean
+  /** See EngineStatus.supported. */
+  supported?: boolean
   /** An older build of its version, offered for rolling back; installing it replaces the kernel in place. */
   history?: boolean
 }
@@ -775,10 +767,7 @@ export interface BrowserApi {
     openDownloadFolder: () => Promise<void>
     /** The user's Downloads folder (Chrome's own default). */
     defaultDownloadFolder: () => Promise<string>
-    /** Windows language font packages on this computer. */
-    fontPacks: () => Promise<FontPackStatus>
-    /** Downloads packages from Microsoft and installs them for this user (all missing ones by default). */
-    installFontPacks: (scripts?: string[]) => Promise<FontPackStatus>
+    /** A language font package or the kernel's font package downloading into the kernel before a window opens. */
     onFontPackProgress: (listener: (progress: FontPackProgress) => void) => () => void
   }
   profiles: {

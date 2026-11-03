@@ -77,6 +77,12 @@ export function kernelShortName(id: string, among: readonly string[] = []): stri
 }
 
 /**
+ * The oldest Prism kernel this launcher runs: prism21, the first built from Google's own Chromium
+ * source. Older kernels (ungoogled-chromium base) go with the launchers released before it.
+ */
+export const SUPPORTED_PRISM_REVISION = 21
+
+/**
  * "kernel-156.0.8078.47-prism5" / "156.0.8078.47-prism5" → 5, prism-kernel-releases tags ("prism11")
  * → 11; app releases (v0.2.0) carry it in the zip name instead
  * ("ungoogled-chromium_156.0.8078.47-prism5_windows_x64.zip").

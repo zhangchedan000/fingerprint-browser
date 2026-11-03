@@ -76,7 +76,7 @@ async function run(plain) {
   await mkdir(kernelRoot, { recursive: true })
   await symlink(join(browser, '..'), join(kernelRoot, 'browser'), 'junction')
   await writeFile(join(kernelRoot, 'manifest.json'), JSON.stringify({
-    executableRelative: 'browser/chrome.exe', releaseTag: `${kernelName.replace(/^prism-/, '')}-prism17`, hiddenConfig: true, builtInFonts: true, webrtcRelay: true, windowScreen: true
+    executableRelative: 'browser/chrome.exe', releaseTag: `${kernelName.replace(/^prism-/, '')}-prism21`
   }))
   await writeFile(join(vault, 'settings.json'), JSON.stringify({ browserExecutable: join(kernelRoot, 'browser', 'chrome.exe'), fingerprintKernel: true, enginePreference: 'auto', recycleRetentionDays: 0 }))
   // Local mode: the test talks to no team server.

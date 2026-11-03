@@ -25,10 +25,8 @@ import { defaultKernelId, pinWindowsToCurrentKernel } from './kernel-pinning'
 import electronUpdater from 'electron-updater'
 import { AppUpdater, type UpdaterEngine } from './app-updater'
 import { registerAppUpdateIpc } from './app-update-ipc'
-import { fontPackStatus, installFontPack, installKernelFontPack, registerLanguageFontsIpc } from './language-fonts'
-import { installOtherWindowsFonts } from './other-windows-fonts'
+import { installKernelFontPack } from './language-fonts'
 import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
-import { windowsFontScript } from '../shared/windows-font-packs'
 import { TeamManager } from './team/team-manager'
 import { TEAM_FEATURE_ENABLED } from '../shared/team'
 import type { ProxyDraft } from '../shared/types'
@@ -235,8 +233,8 @@ app.whenReady().then(async () => {
   // A window from another computer opens here as it is: its kernel, 网络加速 and font pack are fetched.
   // Windows needing the same missing kernel wait for one download.
   const kernelInstalls = new Map<string, Promise<void>>()
-  // The other Windows' fonts come with the kernel; one install at a time.
-  let otherFontsInstall: Promise<void> = Promise.resolve()
+  // Fonts go into the kernels one download at a time.
+  let fontInstall: Promise<void> = Promise.resolve()
   launcher.setPrerequisites({
     installKernel: (version) => {
       const pending = kernelInstalls.get(version) ?? kernels.install(version).then(() => undefined).finally(() => kernelInstalls.delete(version))
@@ -244,29 +242,16 @@ app.whenReady().then(async () => {
       return pending
     },
     ensureTunnel: (route) => activeTunnel.ensureRunning(route),
-    ensureFonts: async (uiLocale) => {
-      const script = windowsFontScript(uiLocale)
-      const status = await fontPackStatus()
-      if (!script || !status.supported || !status.missing.includes(script)) return
-      logger?.info('窗口的系统语言缺字体包，自动下载', { script })
-      await installFontPack(script, (input, init) => net.fetch(input as string, init),
-        (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined)
-    },
     ensureKernelFontStore: (kernelExecutable) => {
-      const run = otherFontsInstall.then(() => ensureKernelFonts(true, kernelExecutable, vaultPath, (input, init) => net.fetch(input as string, init),
+      const run = fontInstall.then(() => ensureKernelFonts(kernelExecutable, vaultPath, (input, init) => net.fetch(input as string, init),
         (progress) => mainWindow?.webContents.send('fonts:progress', { script: KERNEL_FONT_PROGRESS, ...progress }), undefined, logger ?? undefined))
-      otherFontsInstall = run.catch(() => undefined)
+      fontInstall = run.catch(() => undefined)
       return run
     },
     ensureKernelFonts: (script, kernelExecutable, windows) => {
-      const run = otherFontsInstall.then(() => installKernelFontPack(script, kernelExecutable, windows, (input, init) => net.fetch(input as string, init),
+      const run = fontInstall.then(() => installKernelFontPack(script, kernelExecutable, windows, (input, init) => net.fetch(input as string, init),
         (progress) => mainWindow?.webContents.send('fonts:progress', progress), logger ?? undefined))
-      otherFontsInstall = run.catch(() => undefined)
-      return run
-    },
-    ensureOtherWindowsFonts: (set, kernelExecutable) => {
-      const run = otherFontsInstall.then(() => installOtherWindowsFonts(set, kernelExecutable, logger ?? undefined))
-      otherFontsInstall = run.catch(() => undefined)
+      fontInstall = run.catch(() => undefined)
       return run
     }
   })
@@ -338,11 +323,6 @@ app.whenReady().then(async () => {
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })
-  registerLanguageFontsIpc(
-    (input, init) => net.fetch(input as string, init),
-    (progress) => mainWindow?.webContents.send('fonts:progress', progress),
-    logger
-  )
   registerAppUpdateIpc(new AppUpdater(
     app.getVersion(),
     (progress) => mainWindow?.webContents.send('app:update-progress', progress),

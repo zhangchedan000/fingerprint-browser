@@ -1,10 +1,10 @@
 /**
  * Windows' language font packages ("Language.Fonts.<Script>" features on demand). A Windows in a
  * language with its own script has that package; Prism kernels (patch 007, prism7) show a window
- * the base Windows 11 fonts plus the package of its interface language and hide the rest. The
- * fonts must be on this computer for the window to show them, so the launcher downloads the
- * packages from Microsoft and installs their fonts for the current user (no administrator needed;
- * Chrome sees per-user fonts like system ones).
+ * the base Windows fonts plus the package of its interface language and hide the rest. The kernel
+ * brings Simplified Chinese and Arabic; any other package is downloaded before a window in that
+ * language opens and put into the kernel's own fonts (language-fonts.ts installKernelFontPack),
+ * never into this computer's Windows.
  *
  * The packages come from Microsoft's public Languages and Optional Features ISO 26100.1 (the one
  * patch 007's font names were taken from). The ISO is 6.8 GB, so each package is read by an HTTP
@@ -93,14 +93,4 @@ export interface FontPackProgress {
   receivedBytes: number
   totalBytes: number
   stage: 'downloading' | 'installing' | 'done'
-}
-
-export interface FontPackStatus {
-  /** Scripts whose package is on this computer. */
-  installed: string[]
-  /** Scripts of WINDOWS_FONT_PACKS still missing. */
-  missing: string[]
-  supported: boolean
-  /** Whether the other Windows' fonts (shipped with the kernel) are installed: Windows 10's for Windows 10 windows on Windows 11, Windows 11's the other way. */
-  otherWindowsFonts?: { hostPlatformVersion: string; win10: boolean; win11: boolean }
 }

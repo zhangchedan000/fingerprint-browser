@@ -1,4 +1,4 @@
-import { kernelChromiumVersion, kernelVendor, prismRevision } from './kernel-id'
+import { kernelChromiumVersion, kernelVendor } from './kernel-id'
 
 /** What a kernel can be told on its command line. */
 export function kernelMajor(version: string | null | undefined): number | undefined {
@@ -20,33 +20,18 @@ export function maxDeviceMemoryGb(version: string | null | undefined): 8 | 32 {
 }
 
 /**
- * The kernel ships a clean Windows 10 and 11's fonts and language font packages and windows use only
- * those (prism16, patch 007): nothing has to be installed into this computer's Windows.
- */
-export function kernelHasBuiltInFonts(version: string | null | undefined): boolean {
-  return (prismRevision(version ?? undefined) ?? 0) >= 16
-}
-
-/**
- * The Windows fonts of prism16+ kernels as a package of their own (`prism-system-fonts\win10`, `win11`:
+ * The Windows fonts of Prism kernels as a package of their own (`prism-system-fonts\win10`, `win11`:
  * base fonts, Simplified Chinese, Arabic, fallback.txt), published once in prism-kernel-releases and
  * kept in the data folder for every kernel (main/kernel-fonts.ts). A kernel whose fonts change gets a
  * new package version here.
  */
 export interface KernelFontPackage { version: number; url: string; size: number; sha256: string }
 
-const KERNEL_FONT_PACKAGES: readonly KernelFontPackage[] = [
-  {
-    version: 1,
-    url: 'https://github.com/zhangchedan000/prism-kernel-releases/releases/download/fonts-1/prism-system-fonts-1.zip',
-    size: 537670469,
-    sha256: 'de30a293b2de7788f4bcb6900c9058fe6106a0fe990454ba8642589d8fb96eb0'
-  }
-]
-
-/** The font package a kernel with its own fonts (EngineStatus.builtInFonts, prism16 and later) reads. */
-export function kernelFontPackage(builtInFonts: boolean | undefined): KernelFontPackage | undefined {
-  return builtInFonts ? KERNEL_FONT_PACKAGES[0] : undefined
+export const KERNEL_FONT_PACKAGE: KernelFontPackage = {
+  version: 1,
+  url: 'https://github.com/zhangchedan000/prism-kernel-releases/releases/download/fonts-1/prism-system-fonts-1.zip',
+  size: 537670469,
+  sha256: 'de30a293b2de7788f4bcb6900c9058fe6106a0fe990454ba8642589d8fb96eb0'
 }
 
 /** PCI vendor ids, as ANGLE names them (src/libANGLE/renderer/driver_utils.cpp). */

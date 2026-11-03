@@ -2,9 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { answerBlankPasswordCheck, applyChromePreferences, GOOGLE_SEARCH, patchChromePreferences } from './chrome-preferences'
-
-const ALWAYS = { https_only_mode_enabled: true, default_search_provider_data: { template_url_data: GOOGLE_SEARCH } }
+import { answerBlankPasswordCheck, applyChromePreferences, patchChromePreferences } from './chrome-preferences'
 
 const paths: string[] = []
 afterEach(async () => { await Promise.all(paths.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
@@ -27,9 +25,9 @@ describe('chrome preferences', () => {
   it('sets and clears geolocation and Do Not Track while keeping other settings', () => {
     const base = { profile: { name: 'x', default_content_setting_values: { notifications: 2 } }, other: true }
     const patched = patchChromePreferences(base, { geolocationPermission: 'block', doNotTrack: 'on' })!
-    expect(patched).toEqual({ profile: { name: 'x', default_content_setting_values: { notifications: 2, geolocation: 2 } }, other: true, enable_do_not_track: true, ...ALWAYS })
+    expect(patched).toEqual({ profile: { name: 'x', default_content_setting_values: { notifications: 2, geolocation: 2 } }, other: true, enable_do_not_track: true })
     const cleared = patchChromePreferences(patched, {})!
-    expect(cleared).toEqual({ profile: { name: 'x', default_content_setting_values: { notifications: 2 } }, other: true, ...ALWAYS })
+    expect(cleared).toEqual({ profile: { name: 'x', default_content_setting_values: { notifications: 2 } }, other: true })
     expect(patchChromePreferences(cleared, {})).toBeUndefined()
     expect(base.profile.default_content_setting_values).toEqual({ notifications: 2 })
   })
@@ -48,44 +46,19 @@ describe('chrome preferences', () => {
     expect(await readFile(join(corrupt, 'Default', 'Preferences'), 'utf8')).toBe('{not json')
   })
 
-  it('writes https-first and Google search once, then leaves the file alone', async () => {
+  it("leaves Chrome's own defaults (secure connections, search engine) to Chrome", async () => {
+    // Nothing to write for a new window with the defaults: Chrome makes its own file.
     const dir = await userData()
-    expect(await applyChromePreferences(dir, {})).toBe(true)
-    expect(JSON.parse(await readFile(join(dir, 'Default', 'Preferences'), 'utf8'))).toEqual(ALWAYS)
     expect(await applyChromePreferences(dir, {})).toBe(false)
-  })
-
-  it('keeps a search engine the user picked in the window', () => {
     const own = { https_only_mode_enabled: true, default_search_provider_data: { template_url_data: { short_name: 'Bing', keyword: 'bing.com' } } }
     expect(patchChromePreferences(own, {})).toBeUndefined()
-    const noSearch = { https_only_mode_enabled: true, default_search_provider_data: { template_url_data: { short_name: 'No Search', url: 'http://{searchTerms}' } } }
-    expect(patchChromePreferences(noSearch, {})).toEqual(ALWAYS)
-  })
-
-  it('leaves Chrome its own defaults on a prism21+ kernel and undoes the old workarounds once', () => {
-    // A window an earlier launcher opened on an ungoogled-chromium kernel.
-    const old = { other: true, ...ALWAYS }
-    const official = patchChromePreferences(old, {}, undefined, undefined, true)!
-    expect(official).toEqual({ other: true, prism_launcher: { official_base: 1 } })
-    expect(patchChromePreferences(official, {}, undefined, undefined, true)).toBeUndefined()
-    // The user turns secure connections on in the window afterwards: kept.
-    const own = { ...official, https_only_mode_enabled: true }
-    expect(patchChromePreferences(own, {}, undefined, undefined, true)).toBeUndefined()
-    // A new window: nothing but the marker.
-    expect(patchChromePreferences({}, {}, undefined, undefined, true)).toEqual({ prism_launcher: { official_base: 1 } })
-    // An engine the user picked (also Chrome's own Google) stays.
-    const picked = { prism_launcher: { official_base: 1 }, default_search_provider_data: { template_url_data: { short_name: 'Google', url: '{google:baseURL}search?q={searchTerms}', prepopulate_id: 1 } } }
-    expect(patchChromePreferences(picked, {}, undefined, undefined, true)).toBeUndefined()
-    // Only the launcher's Google entry goes, keeping anything else Chrome stored next to it.
-    const mixed = { prism_launcher: { official_base: 1 }, default_search_provider_data: { template_url_data: GOOGLE_SEARCH, mirrored: 1 } }
-    expect(patchChromePreferences(mixed, {}, undefined, undefined, true)).toEqual({ prism_launcher: { official_base: 1 }, default_search_provider_data: { mirrored: 1 } })
   })
 
   it('points downloads at the folder Settings names, and leaves them alone otherwise', () => {
     const next = patchChromePreferences({}, {}, undefined, 'D:\\下载\\18 环境 1')!
     expect((next.download as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
     expect((next.savefile as Record<string, unknown>).default_directory).toBe('D:\\下载\\18 环境 1')
-    expect(patchChromePreferences({}, {})!.download).toBeUndefined()
+    expect(patchChromePreferences({}, {})).toBeUndefined()
   })
 
   it("answers Chrome's blank Windows password check before a new profile starts, once", async () => {

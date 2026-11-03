@@ -21,7 +21,7 @@ import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseC
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import { detachKernelFolderFonts, ensureKernelFonts } from './kernel-fonts'
-import { kernelFitsWindowToScreen, kernelHasOwnFonts, localBuildFitsWindowToScreen, localBuildHasOwnFonts, localBuildRelaysWebRtc, kernelRelaysWebRtc } from './kernel-features'
+import { executableSupported, kernelSupported, supportedReleases, UNSUPPORTED_KERNEL } from './kernel-features'
 import type { AppSettings } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -46,12 +46,8 @@ interface InstalledKernelManifest extends KernelIntegrityFields {
   sourceRepo?: string
   releaseTag?: string
   publishedAt?: string
-  /** Local builds: built with patch 015 (window-screen); downloads tell by their release tag. */
-  windowScreen?: boolean
-  /** Local builds: built with patch 016 (webrtc-relay). */
-  webrtcRelay?: boolean
-  /** Local builds: their own Windows fonts (patch 007, prism16). */
-  builtInFonts?: boolean
+  /** Local builds: built from Google's source (prism21+, kernel-features.ts); downloads tell by their release tag. */
+  supported?: boolean
 }
 
 interface KernelActivationBackup {
@@ -112,6 +108,8 @@ async function findEntry(root: string, predicate: (name: string) => boolean, dep
   return undefined
 }
 
+const UNSUPPORTED_IMPORT = '这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核'
+
 export class KernelManager {
   private installingVersion: string | null = null
   private installAbort: AbortController | null = null
@@ -145,9 +143,7 @@ export class KernelManager {
         origin: manifest.source ?? 'release',
         executable,
         ...(manifest.releaseTag ? { tag: manifest.releaseTag } : {}),
-        windowScreen: kernelFitsWindowToScreen(manifest),
-        webrtcRelay: kernelRelaysWebRtc(manifest),
-        builtInFonts: kernelHasOwnFonts(manifest)
+        supported: kernelSupported(manifest)
       })
     }
     return releases.sort((first, second) => second.version.localeCompare(first.version, undefined, { numeric: true }))
@@ -169,7 +165,8 @@ export class KernelManager {
     if (sources.length && failures.length === sources.length && installed.size === 0) throw new Error(failures.join('；'))
 
     const withSha: Array<ReleaseCandidate & { sha256: string }> = []
-    for (const candidate of listed.flatMap((item) => item.candidates)) {
+    // Only kernels this launcher runs (prism21+); older ones stay with the launchers released before it.
+    for (const candidate of supportedReleases(listed.flatMap((item) => item.candidates))) {
       const sha256 = candidate.sha256 || await this.checksumFromFile(candidate)
       if (sha256) withSha.push({ ...candidate, sha256 })
     }
@@ -209,9 +206,8 @@ export class KernelManager {
         executable: manifest ? join(this.kernelPath(version), manifest.executableRelative) : undefined,
         source: release.source,
         tag: release.tag,
-        windowScreen: manifest ? kernelFitsWindowToScreen(manifest) : kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
-        webrtcRelay: manifest ? kernelRelaysWebRtc(manifest) : kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
-        builtInFonts: manifest ? kernelHasOwnFonts(manifest) : kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.asset.name }),
+        // The installed build (an older kernel this one updates), else the listed one, which is supported.
+        supported: manifest ? kernelSupported(manifest) : true,
         ...(row.kind === 'update' ? { update: true } : {})
       })
     }
@@ -235,9 +231,7 @@ export class KernelManager {
         executable: owner ? join(this.kernelPath(version), owner.executableRelative) : undefined,
         source: release.source,
         tag: release.tag,
-        windowScreen: kernelFitsWindowToScreen({ releaseTag: release.tag, assetName: release.asset.name }),
-        webrtcRelay: kernelRelaysWebRtc({ releaseTag: release.tag, assetName: release.asset.name }),
-        builtInFonts: kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.asset.name }),
+        supported: true,
         history: true
       })
     }
@@ -254,9 +248,7 @@ export class KernelManager {
         remoteAvailable: false,
         origin: manifest.source ?? 'release',
         executable: join(this.kernelPath(manifest.version), manifest.executableRelative),
-        windowScreen: kernelFitsWindowToScreen(manifest),
-        webrtcRelay: kernelRelaysWebRtc(manifest),
-        builtInFonts: kernelHasOwnFonts(manifest)
+        supported: kernelSupported(manifest)
       } satisfies KernelRelease))
     return [...remote, ...localOnly]
   }
@@ -346,6 +338,7 @@ export class KernelManager {
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
     const executable = await normalizeBrowserSelection(selection)
     const { version: baseVersion, sourceRoot, executableRelative } = await this.inspectLocalBuild(executable)
+    if (!await executableSupported(executable)) throw new Error(UNSUPPORTED_IMPORT)
     const sourceIntegrityRoot = process.platform === 'darwin' ? dirname(sourceRoot) : sourceRoot
     const sourceExecutableRelative = process.platform === 'darwin'
       ? join(basename(sourceRoot), 'Contents', 'MacOS', basename(executable))
@@ -411,9 +404,7 @@ export class KernelManager {
         ...integrity,
         source: 'local-build',
         target: `${process.platform}-${process.arch}`,
-        windowScreen: await localBuildFitsWindowToScreen(executable),
-        webrtcRelay: await localBuildRelaysWebRtc(executable),
-        builtInFonts: await localBuildHasOwnFonts(executable)
+        supported: true
       }
       await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
       await rename(stagingPath, destination)
@@ -443,6 +434,7 @@ export class KernelManager {
     const version = safeVersion(versionInput)
     const manifest = await this.readManifest(version)
     if (!manifest) throw new Error('该内核尚未安装')
+    if (!kernelSupported(manifest)) throw new Error(UNSUPPORTED_KERNEL)
     const executable = join(this.kernelPath(version), manifest.executableRelative)
     if (!await pathExists(executable)) throw new Error('内核文件不完整，请重新安装')
     const integrity = await verifyKernelIntegrity(this.kernelPath(version), manifest.executableRelative, manifest)
@@ -733,15 +725,15 @@ export class KernelManager {
   }
 
   /**
-   * prism16+: the kernel's Windows fonts go to the shared font package (kept across kernel updates) and
+   * The kernel's Windows fonts go to the shared font package (kept across kernel updates) and
    * the kernel gets a link to it; the package is downloaded once when no kernel brought it along.
    */
   private async prepareKernelFonts(release: KernelRelease): Promise<void> {
-    if (process.platform !== 'win32' || !kernelHasOwnFonts({ releaseTag: release.tag, assetName: release.assetName })) return
+    if (process.platform !== 'win32') return
     const manifest = await this.readManifest(release.version)
     if (!manifest) return
     // The kernel is in either way: a font package that did not come down is fetched again when a window opens.
-    await ensureKernelFonts(true, join(this.kernelPath(release.version), manifest.executableRelative), this.vaultPath, this.fetchImpl,
+    await ensureKernelFonts(join(this.kernelPath(release.version), manifest.executableRelative), this.vaultPath, this.fetchImpl,
       (progress) => this.emit(release, progress.stage === 'downloading' ? 'downloading' : 'installing', progress.receivedBytes, progress.totalBytes,
         progress.stage === 'downloading' ? '正在下载内核字体包（只需下载一次，以后更新内核不用再下）…' : '正在安装内核字体包…'),
       this.installAbort?.signal, this.logger).catch((error) => {

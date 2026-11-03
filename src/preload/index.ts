@@ -36,8 +36,6 @@ const api: BrowserApi = {
     chooseDownloadFolder: () => ipcRenderer.invoke('app:choose-download-folder'),
     openDownloadFolder: () => ipcRenderer.invoke('app:open-download-folder'),
     defaultDownloadFolder: () => ipcRenderer.invoke('app:default-download-folder'),
-    fontPacks: () => ipcRenderer.invoke('fonts:packs'),
-    installFontPacks: (scripts?: string[]) => ipcRenderer.invoke('fonts:install-packs', scripts),
     onFontPackProgress: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, progress: FontPackProgress): void => listener(progress)
       ipcRenderer.on('fonts:progress', handler)

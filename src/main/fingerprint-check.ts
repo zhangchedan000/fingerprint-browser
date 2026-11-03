@@ -1,7 +1,7 @@
 import { maxDeviceMemoryGb } from '../shared/kernel-capabilities'
 import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
-import { executableHidesConfig, executableIsOfficialBase, executableUsesSoftwareDeviceKeys } from './kernel-features'
+import { UNSUPPORTED_KERNEL } from './kernel-features'
 import { hideFingerprintArgs } from './encrypted-config'
 import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
@@ -159,7 +159,7 @@ const OS_NAME = { windows: 'Windows', macos: 'macOS' } as const
 /** Turns what the page saw into green / yellow / red results, one or more per editor row. */
 export function evaluateFingerprint(input: {
   fingerprint: FingerprintConfig
-  engine: Pick<EngineStatus, 'version' | 'fingerprintKernel' | 'webrtcRelay'>
+  engine: Pick<EngineStatus, 'version' | 'fingerprintKernel'>
   observed: FingerprintObserved
   expected: ExpectedIdentity
   proxy?: ProxyTestResult
@@ -266,10 +266,10 @@ export function evaluateFingerprint(input: {
     const [first, second] = observed[surface]
     const real = fp.disabledSpoofing.includes(surface)
     const twin = others.find((other) => other.observed[surface][0] === first)
-    // Before prism7 these stay real; prism7 gives each window its own unless set to real.
-    const alwaysReal = ALWAYS_REAL.has(surface) && !engine.webrtcRelay
-    if (surface === 'font' && engine.webrtcRelay && first === second) {
-      // prism7+: the fonts of a Windows in that language (or this computer's), never noise.
+    // A kernel without fingerprinting keeps these real; a Prism kernel gives each window its own unless set to real.
+    const alwaysReal = ALWAYS_REAL.has(surface) && !engine.fingerprintKernel
+    if (surface === 'font' && engine.fingerprintKernel && first === second) {
+      // The fonts of a Windows in that language (or this computer's), never noise.
       add({ row: surface, status: 'ok', message: fp.fontSource === 'host'
         ? `${name} 本机真实字体 · ${first}（用本机字体的窗口都相同）`
         : `${name} 跟随系统语言 · ${first}（同一语言的真实 Windows 相同，属正常）` })
@@ -370,6 +370,7 @@ const checkDialogs = new WeakMap<CdpClient, string[]>()
 async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: string, run: (client: CdpClient) => Promise<T>): Promise<T> {
   const { profile, engine } = options
   if (!engine.executable) throw new Error('没有找到浏览器内核，请先在内核管理里下载或导入')
+  if (!engine.supported) throw new Error(UNSUPPORTED_KERNEL)
   const userDataDir = await mkdtemp(join(tmpdir(), 'fb-fingerprint-check-'))
   let proxyUrl: string | undefined
   let child: ReturnType<typeof spawn> | undefined
@@ -384,15 +385,10 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     // A window exactly the screen's size is what headless browsers have (CreepJS counts it "like
     // headless": 31% instead of the 25% every desktop Chrome gets, measured 2026-10-31).
     const size = expectedIdentity(profile, options).screen
-    const softwareDeviceKeys = engine.fingerprintKernel && profile.fingerprint.deviceBinding === 'on' ? await executableUsesSoftwareDeviceKeys(engine.executable) : undefined
-    const officialBase = engine.fingerprintKernel ? await executableIsOfficialBase(engine.executable) : false
     const checkArgs = (height: number) => buildLaunchArgs({ ...profile, startupMode: 'urls', startUrls: [], window: { ...profile.window, mode: 'custom', x: -32000, y: -32000, width: size[0], height } }, {
       userDataDir,
       proxyUrl,
       engineVersion: engine.version,
-      softwareDeviceKeys,
-      officialBase,
-      builtInFonts: engine.builtInFonts,
       fingerprintKernel: engine.fingerprintKernel,
       hostHardwareConcurrency: options.hostHardwareConcurrency,
       hostPlatformVersion: options.hostPlatformVersion,
@@ -400,10 +396,6 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
       allowGeoConflict: true,
       hostScreen: options.hostScreen,
       // As a real launch of this window (browser-launcher.ts).
-      windowScreen: engine.windowScreen,
-      webrtcRelaySupported: engine.webrtcRelay,
-      languageFonts: engine.webrtcRelay,
-      seededAudioRects: engine.webrtcRelay,
       webrtcRelayPort: webrtcRelay?.port
     }).filter((arg) => !arg.startsWith('--window-name='))
     let args = checkArgs(size[1])
@@ -415,8 +407,8 @@ async function withCheckBrowser<T>(options: FingerprintRunOptions, startUrl: str
     if (options.headless) args.push('--headless=new', '--no-sandbox', '--enable-unsafe-swiftshader')
     if (options.extraArgs) args.push(...options.extraArgs)
     args.push(startUrl)
-    // As a real launch: a prism17+ kernel gets the fingerprint switches in an encrypted file.
-    if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1' && await executableHidesConfig(engine.executable)) {
+    // As a real launch: the fingerprint switches go in an encrypted file.
+    if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1') {
       const hidden = await hideFingerprintArgs(args, userDataDir)
       args.splice(0, args.length, ...hidden.args)
     }
@@ -587,13 +579,13 @@ export async function ipSiteCheck(options: FingerprintRunOptions, sites: readonl
 export function expectedIdentity(profile: BrowserProfile, options: Pick<FingerprintRunOptions, 'proxy' | 'hostHardwareConcurrency' | 'hostPlatformVersion' | 'hostScreen'> & { engine?: EngineStatus }): ExpectedIdentity {
   const fp = profile.fingerprint
   const identity = effectiveNetworkIdentity(fp, options.proxy?.ok ? options.proxy : undefined, { allowGeoConflict: true })
-  const size = launchedScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen, options.engine?.windowScreen).screen
+  const size = launchedScreen(fp, options.engine?.fingerprintKernel ? options.engine.version : undefined, options.hostScreen).screen
   const screen: [number, number] = [size.width, size.height]
   return {
     cores: fp.coresSource === 'host' ? options.hostHardwareConcurrency : fp.hardwareConcurrency,
     screen,
     timezone: identity.timezone,
     language: identity.language,
-    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion, options.engine?.fingerprintKernel === true && options.engine.builtInFonts === true)
+    platformVersion: effectivePlatformVersion(fp, options.hostPlatformVersion, options.engine?.fingerprintKernel === true)
   }
 }

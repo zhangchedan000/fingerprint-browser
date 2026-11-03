@@ -18,10 +18,9 @@ import type { ExtensionStore } from './extension-store'
 import { findManagedProcess, SystemProcessInspector, type ProcessInspector } from './process-inspector'
 import { assertFingerprintKernelCompatibility } from '../shared/fingerprint-consistency'
 import { safeErrorText } from './redaction'
-import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWindows11PlatformVersion, otherWindowsFonts, windows10HostFonts } from '../shared/hardware-profiles'
+import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWindows11PlatformVersion } from '../shared/hardware-profiles'
 import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
-import { kernelShipsSystemFonts, type PrismFontSet } from './other-windows-fonts'
 import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
@@ -32,8 +31,9 @@ import type { Readable, Writable } from 'node:stream'
 import { assertKernelCanOpenProfileData } from './profile-data-version'
 import { analyzeCrash, captureStream, isLaunchLogOf, launchLogArgs, launchLogFiles, pruneLaunchLogs, readLaunchLog, type CrashAnalysis } from './browser-log'
 import type { WriteStream } from 'node:fs'
-import { executableHidesConfig, executableIsOfficialBase, executableUsesSoftwareDeviceKeys } from './kernel-features'
 import { hideFingerprintArgs, removeConfigFile } from './encrypted-config'
+import { UNSUPPORTED_KERNEL } from './kernel-features'
+import { kernelFontsReady } from './kernel-fonts'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
 
@@ -114,13 +114,9 @@ export interface LaunchPrerequisites {
   installKernel(version: string): Promise<void>
   /** Starts 网络加速 when the window goes through it (and makes sure its node is there). */
   ensureTunnel(route: TunnelRoute): Promise<void>
-  /** Installs the Windows language font pack the window's system language needs, when missing. */
-  ensureFonts(uiLocale: string): Promise<void>
-  /** Installs fonts the kernel package ships (Windows 10's on Windows 11 and back; Windows 10's extras). */
-  ensureOtherWindowsFonts?(set: PrismFontSet, kernelExecutable: string): Promise<void>
-  /** prism16+: puts the language font package into the kernel's own fonts for that Windows version. */
+  /** Puts the language font package into the kernel's own fonts for that Windows version. */
   ensureKernelFonts?(script: string, kernelExecutable: string, windows: 'win10' | 'win11'): Promise<void>
-  /** prism16+: links the kernel to the shared Windows font package, downloading it once when needed. */
+  /** Links the kernel to the shared Windows font package, downloading it once when needed. */
   ensureKernelFontStore?(kernelExecutable: string): Promise<void>
 }
 
@@ -230,43 +226,26 @@ export class BrowserLauncher {
   }
 
   /**
-   * The fonts a window gets before it opens: its system language's pack (prism7+) and, on the other
-   * Windows, that Windows' fonts from the kernel (other-windows-fonts.ts). Fingerprint and deep checks
-   * call it too, so they see what the window will. Never fails: the window then uses this computer's.
+   * The fonts a window gets before it opens: the kernel's own Windows fonts (the shared font package
+   * linked into the kernel, downloaded once if no kernel brought it) and the package of the window's
+   * language, fetched into them when they lack it. Nothing is installed into this computer's Windows.
+   * Fingerprint and deep checks call it too, so they see what the window will. Never fails: a package
+   * that did not come down leaves the window without that language's fonts.
    */
-  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; webrtcRelay?: boolean; fingerprintKernel?: boolean; builtInFonts?: boolean }, profileId?: string): Promise<void> {
-    if (!this.prerequisites || !engine.executable) return
-    // prism16+ windows use the kernel's own Windows fonts and language packages, never this computer's:
-    // the shared font package is linked into the kernel (downloaded once if no kernel brought it), and
-    // the package of the window's language is fetched into it when it lacks it.
-    if (engine.fingerprintKernel && engine.builtInFonts && this.prerequisites.ensureKernelFontStore) {
+  async prepareFonts(fingerprint: FingerprintConfig, engine: { executable?: string | null; fingerprintKernel?: boolean }, profileId?: string): Promise<void> {
+    if (!this.prerequisites || !engine.executable || !engine.fingerprintKernel) return
+    if (this.prerequisites.ensureKernelFontStore) {
       await this.prerequisites.ensureKernelFontStore(engine.executable).catch((error) => {
         this.logger?.error('内核字体包没有准备好', { profileId, error: error instanceof Error ? error.message : String(error) })
       })
     }
-    if (await kernelShipsSystemFonts(engine.executable).catch(() => false)) {
-      const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
-      if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
-        const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion, true)) ? 'win11' : 'win10'
-        await this.prerequisites.ensureKernelFonts(script, engine.executable, windows).catch((error) => {
-          this.logger?.error('语言字体包没有放进内核，窗口照常打开（没有这个语言的字体）', { profileId, script, error: error instanceof Error ? error.message : String(error) })
-        })
-      }
-      return
-    }
-    if (fingerprint.fontSource !== 'host' && engine.webrtcRelay) {
-      // prism7+ shows the fonts of the system language: its pack is fetched like Windows would have it.
-      await this.prerequisites.ensureFonts(effectiveNetworkIdentity(fingerprint).uiLocale).catch((error) => {
-        this.logger?.error('语言字体包没有装上，窗口照常打开', { profileId, error: error instanceof Error ? error.message : String(error) })
-      })
-    }
-    const host = hostHardwareSnapshot()
-    const kernel = engine.fingerprintKernel === true
-    const otherFonts: PrismFontSet | undefined = otherWindowsFonts(fingerprint, host, kernel) ??
-      (windows10HostFonts(fingerprint, host, kernel) ? 'win10host' : undefined)
-    if (otherFonts && this.prerequisites.ensureOtherWindowsFonts) {
-      await this.prerequisites.ensureOtherWindowsFonts(otherFonts, engine.executable).catch((error) => {
-        this.logger?.error('另一版 Windows 的字体没有装上，窗口照常打开（这些字体用本机的）', { profileId, set: otherFonts, error: error instanceof Error ? error.message : String(error) })
+    // A language package goes into the kernel's fonts only once they are there (never a folder of its own).
+    if (!await kernelFontsReady(engine.executable).catch(() => false)) return
+    const script = windowsFontScript(effectiveNetworkIdentity(fingerprint).uiLocale)
+    if (fingerprint.fontSource !== 'host' && fingerprint.platform === 'windows' && script && this.prerequisites.ensureKernelFonts) {
+      const windows = isWindows11PlatformVersion(effectivePlatformVersion(fingerprint, hostHardwareSnapshot().platformVersion, true)) ? 'win11' : 'win10'
+      await this.prerequisites.ensureKernelFonts(script, engine.executable, windows).catch((error) => {
+        this.logger?.error('语言字体包没有放进内核，窗口照常打开（没有这个语言的字体）', { profileId, script, error: error instanceof Error ? error.message : String(error) })
       })
     }
   }
@@ -362,6 +341,8 @@ export class BrowserLauncher {
         ? `环境绑定的内核 ${profile.kernelVersion} 不可用，请先安装该版本或修改环境配置`
         : '没有找到浏览器内核，请先在“内核管理”里导入或下载 Prism 内核')
     }
+    // Only prism21+ kernels (kernel-features.ts): an older one is updated in 内核管理 first.
+    if (!engine.supported) throw new Error(UNSUPPORTED_KERNEL)
     if (profile.proxy.tunnel?.enabled && this.prerequisites) await this.prerequisites.ensureTunnel(profile.proxy.tunnel)
     await this.prepareFonts(profile.fingerprint, engine, id)
     const hostHardware = hostHardwareSnapshot()
@@ -409,17 +390,16 @@ export class BrowserLauncher {
           })
         }
       })
-      // 替换 on prism7+: WebRTC UDP through the proxy when it relays UDP (reached directly, not
+      // 替换: WebRTC UDP through the proxy when it relays UDP (reached directly, not
       // through the tunnel or a system proxy); otherwise the kernel only reports its address.
       webrtcRelay = await windowWebRtcRelay(profile, engine)
-      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && engine.webrtcRelay && profile.proxy.protocol === 'socks5') {
+      if (profile.fingerprint.webrtcPolicy === 'proxy_only' && profile.proxy.protocol === 'socks5') {
         this.logger?.info(webrtcRelay ? 'WebRTC 经代理 UDP 转发' : 'WebRTC 替换为代理 IP（代理不转发 UDP）', { profileId: id })
       }
       const runtimePath = this.profiles.profileRuntimePath(id)
       await mkdir(runtimePath, { recursive: true })
-      const officialBase = engine.fingerprintKernel ? await executableIsOfficialBase(engine.executable) : false
       try {
-        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile), officialBase)
+        await applyChromePreferences(this.profiles.profileDataPath(id), profile.fingerprint, profile.startupMode ?? 'urls', await this.downloadFolder(profile))
       } catch (error) {
         this.logger?.error('写入浏览器偏好设置失败，继续使用上次的设置', {
           profileId: id,
@@ -439,19 +419,12 @@ export class BrowserLauncher {
         proxyUrl: localProxyUrl,
         extensionPaths: this.extensions.paths(profile.extensionIds),
         engineVersion: engine.version,
-        softwareDeviceKeys: engine.fingerprintKernel && profile.fingerprint.deviceBinding === 'on' ? await executableUsesSoftwareDeviceKeys(engine.executable) : undefined,
-        officialBase,
-        builtInFonts: engine.builtInFonts,
         fingerprintKernel: engine.fingerprintKernel,
         hostHardwareConcurrency: hostHardware.hardwareConcurrency,
         hostPlatformVersion: hostHardware.platformVersion,
         proxyIdentity: profile.proxyCheck,
         allowGeoConflict: options.allowGeoConflict === true,
         hostScreen: this.hostScreen(),
-        windowScreen: engine.windowScreen,
-        webrtcRelaySupported: engine.webrtcRelay,
-        languageFonts: engine.webrtcRelay,
-        seededAudioRects: engine.webrtcRelay,
         webrtcRelayPort: webrtcRelay?.port,
         extraUrls: options.openUrl ? [options.openUrl] : undefined,
         firstOpen: !await hasSavedSession(this.profiles.profileDataPath(id))
@@ -470,9 +443,9 @@ export class BrowserLauncher {
       await mkdir(logFiles.folder, { recursive: true })
       await pruneLaunchLogs(logFiles.folder, 9)
       args.push(...launchLogArgs(logFiles))
-      // prism17+: the fingerprint switches go in an encrypted file, not on the command line (encrypted-config.ts).
+      // The fingerprint switches go in an encrypted file, not on the command line (encrypted-config.ts).
       let configFile: string | undefined
-      if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1' && await executableHidesConfig(engine.executable)) {
+      if (engine.fingerprintKernel && process.env.PRISM_PLAIN_FINGERPRINT_ARGS !== '1') {
         const hidden = await hideFingerprintArgs(args, join(runtimePath, 'config'))
         args.splice(0, args.length, ...hidden.args)
         configFile = hidden.file

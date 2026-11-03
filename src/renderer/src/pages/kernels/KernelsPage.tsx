@@ -9,7 +9,7 @@ import { PickWindowsModal } from '../../components/PickWindowsModal'
 import { useWorkspace } from '../../data/workspace'
 import type { PageProps } from '../registry'
 import { DownloadKernelModal } from './DownloadKernelModal'
-import { kernelName, kernelVendor, kernelFullName, prismRevision } from '../../../../shared/kernel-id'
+import { kernelName, kernelFullName, prismRevision } from '../../../../shared/kernel-id'
 
 const FOLLOW_DEFAULT = ''
 
@@ -138,12 +138,11 @@ export function KernelsPage({ navigate }: PageProps) {
         <span>
           <span>{kernelName(version, kernels.map((item) => item.version))}</span>
           <small className="fb-mono fb-muted fb-kernel-full">{[kernelFullName(version), kernel.tag].filter(Boolean).join(' · ')}</small>
-          {kernel.webrtcRelay && (
-            <Tooltip title={t("WebRTC 可经代理 UDP 转发，可完全关闭 WebRTC；字体按系统语言显示 Windows 自带字体")}>
-              <Tag color="blue" className="fb-inline-tag">{t("WebRTC 代理 · 语言字体")}</Tag>
+          {kernel.installed && !kernel.supported && (
+            <Tooltip title={t("prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21")}>
+              <Tag color="warning" className="fb-inline-tag">{t("需要更新")}</Tag>
             </Tooltip>
           )}
-          {kernelVendor(version) !== 'prism' && <Tooltip title={t("旧的第三方内核，已不再支持，可以删除")}><Tag color="default" className="fb-inline-tag">{t("已退役")}</Tag></Tooltip>}
         </span>
       )
     },

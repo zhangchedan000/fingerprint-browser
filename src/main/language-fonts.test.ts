@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { WINDOWS_FONT_PACKS, windowsFontScript } from '../shared/windows-font-packs'
-import { fontRegistryName, installKernelFontPack } from './language-fonts'
+import { installKernelFontPack } from './language-fonts'
 
 /** An sfnt with only a name table holding these full names (name id 4) as Windows UTF-16BE records. */
 function face(names: string[]): Buffer {
@@ -45,13 +45,6 @@ function collection(faces: Buffer[]): Buffer {
 }
 
 describe('language font packages', () => {
-  it('names a font the way the Windows Fonts key does, in English', () => {
-    expect(fontRegistryName(face(['바탕', 'Batang']), 'batang.ttf')).toBe('Batang (TrueType)')
-    expect(fontRegistryName(collection([face(['바탕', 'Batang']), face(['바탕체', 'BatangChe'])]), 'batang.ttc'))
-      .toBe('Batang & BatangChe (TrueType)')
-    expect(fontRegistryName(face([]), 'nyala.ttf')).toBe('nyala.ttf (TrueType)')
-  })
-
   it('has a package for every script a window language adds', () => {
     const scripts = new Set(WINDOWS_FONT_PACKS.map((pack) => pack.script))
     for (const language of ['zh-CN', 'zh-TW', 'ja', 'ko', 'th', 'ar', 'he', 'hi', 'bn', 'gu', 'pa', 'kn', 'ml', 'or', 'ta', 'te', 'si', 'km', 'lo', 'am', 'syr', 'chr', 'iu']) {

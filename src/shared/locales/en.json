@@ -2706,5 +2706,9 @@
   "浏览器好像卡住了": "The browser seems stuck",
   "窗口「{0}」关闭了 {1} 秒还没退出": "Window “{0}” has not exited {1} s after closing",
   "窗口「{0}」写入登录状态 {1} 秒还没完成": "Window “{0}” has not finished writing its sign-in state after {1} s",
-  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Nothing in the window’s data has been written for 10 seconds, so it may be stuck. Waiting is safest; forcing it closed may lose the last few seconds of changes (such as a sign-in just renewed)."
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Nothing in the window’s data has been written for 10 seconds, so it may be stuck. Waiting is safest; forcing it closed may lose the last few seconds of changes (such as a sign-in just renewed).",
+  "这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核": "This kernel is not prism21. The new launcher only runs prism21 and later kernels; update the kernel in Kernels",
+  "这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核": "This local build is not prism21 (built from Google's own source). The new launcher only imports prism21 and later kernels",
+  "需要更新": "Update needed",
+  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "A kernel older than prism21: this launcher no longer opens windows with it. Update to prism21"
 }

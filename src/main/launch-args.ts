@@ -6,7 +6,7 @@ import { resolveFingerprintBrandVersion } from '../shared/fingerprint-consistenc
 import { chromeAcceptLanguages, effectiveNetworkIdentity } from '../shared/network-identity'
 import { launchedScreen } from '../shared/screen'
 import { effectiveMediaDevices } from '../shared/media-devices'
-import { kernelVendor, prismRevision } from '../shared/kernel-id'
+import { kernelVendor } from '../shared/kernel-id'
 import { gpuAv1Support } from '../shared/gpu-catalog'
 import { keyboardLayoutFor, keyboardLayoutText } from '../shared/keyboard-layouts'
 
@@ -29,33 +29,17 @@ export interface LaunchArgumentOptions {
   remoteDebuggingPort?: number
   extensionPaths?: string[]
   engineVersion?: string
-  /** The kernel binds sign-ins with software keys by itself (prism18+, kernel-features.ts); unknown: by its version name. */
-  softwareDeviceKeys?: boolean
-  /** Google's Chromium source (prism21+, kernel-features.ts): <a ping> stays on, as in Chrome. */
-  officialBase?: boolean
+  /** A Prism kernel (prism21+, the only kind windows open with; kernel-features.ts). */
   fingerprintKernel?: boolean
-  /** The kernel uses its own Windows fonts (EngineStatus.builtInFonts, prism16+). */
-  builtInFonts?: boolean
   hostHardwareConcurrency?: number
   hostPlatformVersion?: string
   proxyIdentity?: ProxyCheckSummary
   allowGeoConflict?: boolean
   /** Real primary display size, used when the window follows the computer's screen. */
   hostScreen?: HostScreen
-  /** EngineStatus.windowScreen of the kernel this window runs. */
-  windowScreen?: boolean
-  /** EngineStatus.webrtcRelay of the kernel this window runs (prism7+). */
-  webrtcRelaySupported?: boolean
-  /** prism7+ (released with the WebRTC relay): fonts follow the interface language, never the host's. */
-  languageFonts?: boolean
-  /** prism7+: per-window audio samples (006) and whole-1/64-px rect offsets (008) from the seed. */
-  seededAudioRects?: boolean
   /** Port of the window's WebRTC UDP relay (webrtc-relay.ts), when the proxy relays UDP. */
   webrtcRelayPort?: number
 }
-
-/** First prism kernel whose device-bound sign-in keys are software keys by default (no switch needed). */
-export const SOFTWARE_DEVICE_KEYS_REVISION = 18
 
 export function profileWindowName(profile: Pick<BrowserProfile, 'serialNumber' | 'name'>): string {
   const name = profile.name
@@ -89,18 +73,20 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const hardwareConcurrency = (hardware?.hostMatched || fp.coresSource === 'host') && options.hostHardwareConcurrency
     ? options.hostHardwareConcurrency
     : fp.hardwareConcurrency
-  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion, options.fingerprintKernel === true && options.builtInFonts === true)
+  const kernel = options.fingerprintKernel === true
+  // The kernel's own Windows fonts (patch 007): a Windows window reports the version of those fonts.
+  const platformVersion = effectivePlatformVersion(fp, options.hostPlatformVersion, kernel)
   const alignedSeed = options.fingerprintKernel ? effectiveFingerprintSeed(fp, options.engineVersion) : fp.seed >>> 0
   if (alignedSeed === undefined) {
     // Checked before launch (assertFingerprintKernelCompatibility); never fall back to another card.
     throw new Error(`内核 ${options.engineVersion ?? ''} 没有这个窗口选的显卡，请在窗口设置里重新选择显卡`)
   }
   const seed = alignedSeed
-  // With language fonts the font list follows fontSource alone ('host': this computer's fonts),
-  // not the 'font' entry older templates put in disabledSpoofing.
+  // The font list follows fontSource alone ('host': this computer's fonts), not the 'font' entry
+  // older templates put in disabledSpoofing.
   const disabledSpoofing = [
-    ...effectiveDisabledSpoofing(fp).filter((surface) => !(options.languageFonts && surface === 'font')),
-    ...(options.languageFonts && fp.fontSource === 'host' ? ['font' as const] : [])
+    ...effectiveDisabledSpoofing(fp).filter((surface) => !(kernel && surface === 'font')),
+    ...(kernel && fp.fontSource === 'host' ? ['font' as const] : [])
   ]
   const brandVersion = resolveFingerprintBrandVersion(fp.brandVersion, {
     fingerprintKernel: options.fingerprintKernel === true,
@@ -113,8 +99,7 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   const { screen: { width: screenWidth, height: screenHeight }, scale: forcedScale } = launchedScreen(
     fp,
     options.fingerprintKernel ? options.engineVersion : undefined,
-    options.hostScreen,
-    options.windowScreen
+    options.hostScreen
   )
   const language = networkIdentity.language
   const acceptLanguages = chromeAcceptLanguages(language, networkIdentity.acceptLanguages)
@@ -170,8 +155,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
       args.push(`--fingerprint-gpu-vendor-id=${vendorId}`)
       args.push(`--fingerprint-gpu-device-id=${gpu.deviceId}`)
       args.push(`--fingerprint-gpu-description=${gpu.model}`)
-      // Video codecs of that card (patch 004, prism9+; older kernels ignore it): AV1 hardware
-      // decoding and encoding as WebCodecs and MediaCapabilities report them.
+      // Video codecs of that card (patch 004): AV1 hardware decoding and encoding as WebCodecs and
+      // MediaCapabilities report them.
       const av1 = gpuAv1Support(gpu.model)
       if (av1) args.push(`--fingerprint-gpu-av1=${av1}`)
     }
@@ -183,8 +168,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (networkIdentity.latitude !== undefined && networkIdentity.longitude !== undefined) {
     args.push(`--fingerprint-location=${networkIdentity.latitude},${networkIdentity.longitude},${networkIdentity.accuracyMeters ?? 25000}`)
   }
-  // Each window its own audio and ClientRects on prism7+, unless set to the real values.
-  if (options.fingerprintKernel && options.seededAudioRects) {
+  // Each window its own audio and ClientRects, unless set to the real values.
+  if (kernel) {
     if (!disabledSpoofing.includes('audio')) args.push('--fingerprinting-audio-noise')
     if (!disabledSpoofing.includes('clientrects')) args.push('--fingerprinting-client-rects-noise')
   }
@@ -195,17 +180,12 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   // Device-bound sign-ins (Device Bound Session Credentials, on by default on Windows since Chrome 146:
   // Google, YouTube, Douyin…), per window (fp.deviceBinding):
   // - 'on': bound like a real Chrome, but with a software key kept in the window's own data instead of
-  //   this computer's TPM, so the sign-in travels with the window to the team's other computers. prism18+
-  //   kernels use software keys by themselves; older ones are told so by a feature switch.
+  //   this computer's TPM (the kernel does so by itself, patch 001), so the sign-in travels with the
+  //   window to the team's other computers.
   // - otherwise: not bound; sites give ordinary cookies, as to a computer without a TPM.
-  const deviceBinding = fp.deviceBinding === 'on'
-  const disabledFeatures = deviceBinding
+  const disabledFeatures = fp.deviceBinding === 'on'
     ? ['CalculateNativeWinOcclusion']
     : ['CalculateNativeWinOcclusion', 'DeviceBoundSessions', 'EnableBoundSessionCredentials']
-  const softwareKeys = options.softwareDeviceKeys ?? (prismRevision(options.engineVersion) ?? 0) >= SOFTWARE_DEVICE_KEYS_REVISION
-  if (deviceBinding && !softwareKeys) {
-    args.push('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
-  }
   // Chrome checks pages reaching this computer and the LAN (Local Network Access) by default.
   if (fp.portScanProtection === false) disabledFeatures.push('LocalNetworkAccessChecks')
   // One switch: Chrome only reads the last --disable-features.
@@ -229,21 +209,20 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   }
   if (disabledSpoofing.length) args.push(`--disable-spoofing=${disabledSpoofing.join(',')}`)
   if (options.fingerprintKernel && kernelVendor(options.engineVersion) === 'prism') {
-    // Prism 4+: media devices (patch 014). Their names and the speech voices (patch 012) follow --lang
+    // Media devices (patch 014). Their names and the speech voices (patch 012) follow --lang
     // unless the window keeps its own (written in when saved, chosen in 语音 / 媒体设备名).
     const mediaDevices = effectiveMediaDevices(fp.mediaDevices, fp.seed >>> 0, effectiveGpu(fp, options.engineVersion)?.model)
     if (mediaDevices) args.push(`--fingerprint-media-devices=${mediaDevices}`)
     if (fp.mediaLocale) args.push(`--fingerprint-media-locale=${fp.mediaLocale}`)
     if (fp.voicesLocale) args.push(`--fingerprint-voices-locale=${fp.voicesLocale}`)
     // navigator.keyboard.getLayoutMap() of a Windows in the window's language, or the layout picked in
-    // 键盘布局 (patch 011, prism9+;
-    // older kernels ignore it and report this computer's layout).
+    // 键盘布局 (patch 011).
     const keyboardLayout = fp.keyboardLayout ?? keyboardLayoutFor(language)
     const keyboardText = keyboardLayout ? keyboardLayoutText(keyboardLayout) : undefined
     if (keyboardText) args.push(`--fingerprint-keyboard-layout=${Buffer.from(keyboardText, 'utf8').toString('base64')}`)
   }
   if (fp.webrtcPolicy === 'proxy_only' && options.webrtcRelayPort) {
-    // 替换 on prism7+ with a proxy that relays UDP: WebRTC really goes through the proxy.
+    // 替换 with a proxy that relays UDP: WebRTC really goes through the proxy.
     args.push('--webrtc-ip-handling-policy=default')
     args.push(`--fingerprint-webrtc-udp-relay=127.0.0.1:${options.webrtcRelayPort}`)
   } else if (fp.webrtcPolicy === 'proxy_only') {
@@ -253,8 +232,8 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
     // without a public IPv4 exit WebRTC simply stays blocked.
     const webrtcIp = publicIpv4(options.proxyIdentity?.ip)
     if (webrtcIp) args.push(`--fingerprint-webrtc-ip=${webrtcIp}`)
-  } else if (fp.webrtcPolicy === 'privacy' || (fp.webrtcPolicy === 'disabled' && !options.webrtcRelaySupported)) {
-    // 隐私 (and 禁止 on kernels that cannot remove WebRTC): no address reaches the page.
+  } else if (fp.webrtcPolicy === 'privacy' || (fp.webrtcPolicy === 'disabled' && !kernel)) {
+    // 隐私 (and 禁止 without a Prism kernel, which removes WebRTC): no address reaches the page.
     args.push('--disable-non-proxied-udp')
     args.push('--webrtc-ip-handling-policy=disable_non_proxied_udp')
   } else if (fp.webrtcPolicy === 'disabled') {
@@ -263,8 +242,6 @@ export function buildLaunchArgs(profile: BrowserProfile, options: LaunchArgument
   if (options.proxyUrl) {
     args.push('--disable-quic')
     args.push('--dns-prefetch-disable')
-    // ungoogled-chromium kernels: <a ping> off, as ungoogled-chromium has it (prism21+ keep Chrome's default).
-    if (!options.officialBase) args.push('--no-pings')
     args.push(`--proxy-server=${options.proxyUrl}`)
     args.push('--proxy-bypass-list=localhost;127.0.0.1')
   } else {

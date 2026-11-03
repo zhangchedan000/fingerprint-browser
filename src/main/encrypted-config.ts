@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
- * A window's fingerprint switches go to a prism17+ kernel in an encrypted file instead of on the
+ * A window's fingerprint switches go to the kernel in an encrypted file instead of on the
  * command line, so the process list (Task Manager, Process Explorer) of the browser and of its
  * child processes does not show them (patch 001, chrome/app/chrome_main.cc in the kernel).
  *

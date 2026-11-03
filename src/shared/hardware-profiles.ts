@@ -301,12 +301,11 @@ export function isWindows11PlatformVersion(version: string | undefined): boolean
 }
 
 /**
- * The platform version a window reports. Host hardware reports this computer's own. On a kernel with
- * its own Windows fonts (prism16+, builtInFonts) a Windows window reports the version of those fonts,
- * whatever this computer runs: 19.0.0 (Windows 11 24H2 / 25H2) or 10.0.0 (Windows 10 2004 and later).
- * On older kernels, whose fonts, media formats and emoji are this computer's, a Windows window on a
- * computer running the same Windows (10 or 11) reports this computer's own version; otherwise the
- * window's own setting (a Windows 10 window on Windows 11: 10.0.0).
+ * The platform version a window reports. Host hardware reports this computer's own. On a Prism kernel,
+ * which has its own Windows fonts (`builtInFonts`), a Windows window reports the version of those
+ * fonts, whatever this computer runs: 19.0.0 (Windows 11 24H2 / 25H2) or 10.0.0 (Windows 10 2004 and
+ * later). Without one (no fingerprint kernel), a Windows window on a computer running the same Windows
+ * (10 or 11) reports this computer's own version; otherwise the window's own setting.
  */
 export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId'>, hostPlatformVersion?: string, builtInFonts = false): string {
   if (hostPlatformVersion && hardwareProfile(config.hardwareProfileId)?.hostMatched) return hostPlatformVersion
@@ -316,41 +315,4 @@ export function effectivePlatformVersion(config: Pick<FingerprintConfig, 'platfo
   return isWindows11PlatformVersion(config.platformVersion) === isWindows11PlatformVersion(hostPlatformVersion)
     ? hostPlatformVersion
     : config.platformVersion
-}
-
-/** Fonts of the other Windows a window needs: Windows 10's on a Windows 11 computer or the other way round. */
-export type OtherWindows = 'win10' | 'win11'
-
-/**
- * Which other Windows' fonts a Windows window needs on this computer (prism13: the kernel package
- * ships them, the launcher installs them, patch 007 shows them): a Windows 10 window on Windows 11
- * gets Windows 10's emoji, a Windows 11 window on Windows 10 gets Windows 11's own fonts. Undefined
- * when the window claims this computer's Windows, uses this computer's real fonts, or not on Windows.
- */
-export function otherWindowsFonts(
-  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
-  host: { platform: BrowserPlatform; platformVersion: string },
-  fingerprintKernel: boolean
-): OtherWindows | undefined {
-  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return undefined
-  const hostWindows11 = isWindows11PlatformVersion(host.platformVersion)
-  const windowWindows11 = isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
-  if (hostWindows11 === windowWindows11) return undefined
-  return windowWindows11 ? 'win11' : 'win10'
-}
-
-/**
- * A Windows 10 window on a Windows 10 computer that lacks Sans Serif Collection (LTSC 21H2 does):
- * iphey reports a window that claims Windows 10 without it as an inconsistent fingerprint
- * ("butterfly", tested by changing only that name). It comes from the kernel's Windows 11 fonts and
- * prism14+ shows it to Windows 10 windows. Same conditions as otherWindowsFonts otherwise.
- */
-export function windows10HostFonts(
-  config: Pick<FingerprintConfig, 'platform' | 'platformVersion' | 'hardwareProfileId' | 'fontSource'>,
-  host: { platform: BrowserPlatform; platformVersion: string },
-  fingerprintKernel: boolean
-): boolean {
-  if (!fingerprintKernel || host.platform !== 'windows' || config.platform !== 'windows' || config.fontSource === 'host') return false
-  return !isWindows11PlatformVersion(host.platformVersion) &&
-    !isWindows11PlatformVersion(effectivePlatformVersion(config, host.platformVersion))
 }

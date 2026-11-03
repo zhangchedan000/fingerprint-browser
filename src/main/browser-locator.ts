@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import type { AppSettings, EngineStatus } from '../shared/types'
 import type { SettingsStore } from './settings-store'
-import { executableFitsWindowToScreen, executableHasOwnFonts, executableRelaysWebRtc, kernelHasOwnFonts, kernelRelaysWebRtc, kernelFitsWindowToScreen } from './kernel-features'
+import { executableSupported, kernelSupported } from './kernel-features'
 import {
   validateKernelIntegrityFields,
   verifyKernelIntegrity,
@@ -52,9 +52,7 @@ interface ManagedKernelManifest {
   criticalFilesSha256?: string
   releaseTag?: string
   assetName?: string
-  windowScreen?: boolean
-  webrtcRelay?: boolean
-  builtInFonts?: boolean
+  supported?: boolean
 }
 
 interface ProfileBrowserRuntime {
@@ -168,9 +166,7 @@ export async function locateExactBrowserForProfile(
                 ? 'Fingerprint Chromium（环境固定 · 旧版完整性清单）'
                 : 'Prism 内核（环境固定）',
               version,
-              windowScreen: kernelFitsWindowToScreen(manifest),
-              webrtcRelay: kernelRelaysWebRtc(manifest),
-              builtInFonts: kernelHasOwnFonts(manifest)
+              supported: kernelSupported(manifest)
             }
           }
         }
@@ -274,7 +270,8 @@ export async function locateBundledBrowser(
         source: 'bundled',
         fingerprintKernel: true,
         label: integrity.status === 'legacy' ? '内置 Fingerprint Chromium（旧版完整性清单）' : '内置 Fingerprint Chromium',
-        version: manifest.version
+        version: manifest.version,
+        supported: kernelSupported(manifest)
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') continue
@@ -327,9 +324,7 @@ export async function locateBrowserSelection(settings: AppSettings, resourcesPat
       fingerprintKernel: settings.fingerprintKernel,
       label: settings.fingerprintKernel ? 'Prism 内核' : '自定义 Chromium（兼容模式）',
       version: settings.fingerprintKernel ? inferFingerprintKernelVersion(settings.browserExecutable) : undefined,
-      windowScreen: settings.fingerprintKernel ? await executableFitsWindowToScreen(settings.browserExecutable) : undefined,
-      webrtcRelay: settings.fingerprintKernel ? await executableRelaysWebRtc(settings.browserExecutable) : undefined,
-      builtInFonts: settings.fingerprintKernel ? await executableHasOwnFonts(settings.browserExecutable) : undefined
+      supported: settings.fingerprintKernel ? await executableSupported(settings.browserExecutable) : false
     }
   }
 

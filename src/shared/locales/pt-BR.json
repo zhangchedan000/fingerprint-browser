@@ -2706,5 +2706,9 @@
   "浏览器好像卡住了": "O navegador parece travado",
   "窗口「{0}」关闭了 {1} 秒还没退出": "A janela “{0}” não saiu {1} s depois de fechada",
   "窗口「{0}」写入登录状态 {1} 秒还没完成": "A janela “{0}” não terminou de gravar o estado de login após {1} s",
-  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Nada foi gravado nos dados da janela há 10 segundos; ela pode estar travada. Esperar é o mais seguro; forçar o fechamento pode perder os últimos segundos de alterações (como um login recém-renovado)."
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Nada foi gravado nos dados da janela há 10 segundos; ela pode estar travada. Esperar é o mais seguro; forçar o fechamento pode perder os últimos segundos de alterações (como um login recém-renovado).",
+  "这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核": "Este kernel não é prism21. O novo inicializador só usa kernels prism21 ou posteriores; atualize o kernel em Kernels",
+  "这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核": "Esta compilação local não é prism21 (compilada a partir do código original do Google). O novo inicializador só importa kernels prism21 ou posteriores",
+  "需要更新": "Atualização necessária",
+  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "Kernel anterior ao prism21: este inicializador não abre mais janelas com ele. Atualize para o prism21"
 }

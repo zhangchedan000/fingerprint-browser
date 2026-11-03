@@ -2706,5 +2706,9 @@
   "浏览器好像卡住了": "Le navigateur semble bloqué",
   "窗口「{0}」关闭了 {1} 秒还没退出": "La fenêtre « {0} » n’est toujours pas fermée {1} s après la demande",
   "窗口「{0}」写入登录状态 {1} 秒还没完成": "La fenêtre « {0} » n’a pas fini d’écrire son état de connexion après {1} s",
-  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Rien n’a été écrit dans les données de la fenêtre depuis 10 secondes : elle est peut-être bloquée. Attendre est le plus sûr ; forcer la fermeture peut perdre les dernières secondes de changements (comme une connexion tout juste renouvelée)."
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Rien n’a été écrit dans les données de la fenêtre depuis 10 secondes : elle est peut-être bloquée. Attendre est le plus sûr ; forcer la fermeture peut perdre les dernières secondes de changements (comme une connexion tout juste renouvelée).",
+  "这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核": "Ce noyau n'est pas prism21. Le nouveau lanceur n'utilise que les noyaux prism21 et suivants ; mettez à jour le noyau dans Noyaux",
+  "这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核": "Cette version locale n'est pas prism21 (compilée depuis le code source d'origine de Google). Le nouveau lanceur n'importe que les noyaux prism21 et suivants",
+  "需要更新": "Mise à jour requise",
+  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "Noyau antérieur à prism21 : ce lanceur n'ouvre plus de fenêtres avec lui. Mettez à jour vers prism21"
 }

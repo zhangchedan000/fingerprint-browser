@@ -65,9 +65,9 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
       ))}
       <div className="fb-nav-spacer" />
       <button type="button" className="fb-kernel-status" onClick={() => onNavigate('kernels')}>
-        <span className={`fb-kernel-dot${engine?.fingerprintKernel ? ' ready' : ''}`} />
+        <span className={`fb-kernel-dot${engine?.fingerprintKernel && engine.supported ? ' ready' : ''}`} />
         <span>
-          <strong>{engine?.fingerprintKernel ? t("内核已连接") : t("配置浏览器内核")}</strong>
+          <strong>{engine?.fingerprintKernel && engine.supported ? t("内核已连接") : t("配置浏览器内核")}</strong>
           <small>{engine?.version ? kernelName(engine.version) : mt(engine?.label ?? t("正在检查…"))}</small>
         </span>
       </button>

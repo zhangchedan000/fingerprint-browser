@@ -1,165 +1,56 @@
-import { prismRevision } from '../shared/kernel-id'
+import { prismRevision, SUPPORTED_PRISM_REVISION } from '../shared/kernel-id'
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-/**
- * Prism patch 015 (window-screen) keeps the browser window inside the screen a window claims, so
- * such kernels may claim a screen smaller than the real one. It first shipped in the prism5 builds.
- */
-const WINDOW_SCREEN_REVISION = 5
-const WINDOW_SCREEN_PATCH = '015-window-screen'
-/**
- * WebRTC UDP through the launcher's relay and the "禁止" mode (patch 013), released with fonts by
- * system language (007) and per-window audio and rects (006, 008). First shipped in prism7: the
- * prism6 builds only changed 014. Older kernels ignore the switches and would send WebRTC UDP
- * directly, so this must never be claimed for them.
- */
-const WEBRTC_RELAY_REVISION = 7
-/** Where a local build's source shows the relay is in (patch 013 in prism7). */
-const WEBRTC_RELAY_SOURCE = { file: 'services/network/p2p/socket_udp.cc', marker: 'FingerprintUdpRelay' }
-/**
- * Windows fonts of its own (patch 007, prism16): the kernel reads `prism-system-fonts` next to chrome.exe
- * and never this computer's fonts, so nothing is installed into Windows (kernel-fonts.ts links the shared
- * font package there).
- */
-const BUILT_IN_FONTS_REVISION = 16
-/** Where a local build's source shows its own fonts (patch 007 in prism16). */
-const BUILT_IN_FONTS_SOURCE = { file: 'components/services/font_data/font_data_service_impl.cc', marker: 'PrismFontManager' }
+export { prismRevision, SUPPORTED_PRISM_REVISION }
 
 /**
- * Fingerprint switches in an encrypted file instead of on the command line (patch 001, prism17):
- * --fingerprint-config=<file>, see encrypted-config.ts. Older kernels would ignore the file and
- * run without a fingerprint, so this is only claimed for kernels that read it.
+ * This launcher runs prism21 and later kernels only: Google's own Chromium source with the 15 Prism
+ * patches (private repo official-base/). Older kernels (ungoogled-chromium base, prism20 and before)
+ * belong to the launchers released before it (v0.5.59 and earlier), which stay downloadable.
  */
-const HIDDEN_CONFIG_REVISION = 17
-const HIDDEN_CONFIG_SOURCE = { file: 'chrome/app/chrome_main.cc', marker: 'PrismExpandConfig' }
+/** What a window on an older kernel is told when it is opened or checked. */
+export const UNSUPPORTED_KERNEL = '这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核'
 
-export { prismRevision }
-
-/**
- * Device-bound sign-ins with software keys kept in the window's data, never this computer's TPM
- * (patch 001, prism18): such kernels need no feature switch for it.
- */
-const SOFTWARE_DEVICE_KEYS_REVISION = 18
-const SOFTWARE_DEVICE_KEYS_SOURCE = { file: 'components/unexportable_keys/unexportable_key_task_manager.cc', marker: 'Prism: software keys' }
+type KernelNames = { releaseTag?: string; assetName?: string; supported?: boolean }
 
 /**
- * Google's own Chromium source instead of ungoogled-chromium's defaults (prism21, private repo
- * official-base/): Chrome's search engines, HTTPS upgrades and <a ping> are as in Chrome, so the
- * launcher's workarounds for ungoogled-chromium (https-only mode, its own Google engine, --no-pings)
- * are left out. A local build of it was prepared in stages (build\prism-stages next to src).
+ * A kernel by its manifest (a local build records `supported` when imported) or by its release tag or
+ * zip name ("prism21", "…-prism21_windows_x64.zip").
  */
-const OFFICIAL_BASE_REVISION = 21
+export function kernelSupported(names: KernelNames): boolean {
+  return names.supported ?? (prismRevision(names.releaseTag) ?? prismRevision(names.assetName) ?? 0) >= SUPPORTED_PRISM_REVISION
+}
+
+/** The listed kernel downloads this launcher offers: prism21 and later (older ones are not shown at all). */
+export function supportedReleases<R extends { tag: string; asset: { name: string } }>(releases: readonly R[]): R[] {
+  return releases.filter((release) => kernelSupported({ releaseTag: release.tag, assetName: release.asset.name }))
+}
+
+/** A local build of Google's source was prepared in stages: build\prism-stages next to its src folder. */
 const OFFICIAL_BASE_STAGES = 'prism-stages'
 
-type ManifestFeatures = { windowScreen?: boolean; webrtcRelay?: boolean; builtInFonts?: boolean; hiddenConfig?: boolean; softwareDeviceKeys?: boolean; officialBase?: boolean; releaseTag?: string; assetName?: string }
-
-const revisionOf = (manifest: ManifestFeatures) => prismRevision(manifest.releaseTag) ?? prismRevision(manifest.assetName) ?? 0
-
-export function kernelFitsWindowToScreen(manifest: ManifestFeatures): boolean {
-  return manifest.windowScreen ?? revisionOf(manifest) >= WINDOW_SCREEN_REVISION
-}
-
-export function kernelRelaysWebRtc(manifest: ManifestFeatures): boolean {
-  return manifest.webrtcRelay ?? revisionOf(manifest) >= WEBRTC_RELAY_REVISION
-}
-
-export function kernelHasOwnFonts(manifest: ManifestFeatures): boolean {
-  return manifest.builtInFonts ?? revisionOf(manifest) >= BUILT_IN_FONTS_REVISION
-}
-
-export function kernelHidesConfig(manifest: ManifestFeatures): boolean {
-  return manifest.hiddenConfig ?? revisionOf(manifest) >= HIDDEN_CONFIG_REVISION
-}
-
-export function kernelUsesSoftwareDeviceKeys(manifest: ManifestFeatures): boolean {
-  return manifest.softwareDeviceKeys ?? revisionOf(manifest) >= SOFTWARE_DEVICE_KEYS_REVISION
-}
-
-export function kernelIsOfficialBase(manifest: ManifestFeatures): boolean {
-  return manifest.officialBase ?? revisionOf(manifest) >= OFFICIAL_BASE_REVISION
-}
-
-/** Whether this kernel (installed or a local build) is built from Google's Chromium source (prism21+). */
-export async function executableIsOfficialBase(executable: string): Promise<boolean> {
-  const manifest = await installedManifestOf(executable)
-  return manifest ? kernelIsOfficialBase(manifest) : localBuildHasFolder(executable, OFFICIAL_BASE_STAGES)
-}
-
-/** Whether this kernel (installed or a local build) binds sign-ins with software keys by itself (prism18+). */
-export async function executableUsesSoftwareDeviceKeys(executable: string): Promise<boolean> {
-  const manifest = await installedManifestOf(executable)
-  return manifest ? kernelUsesSoftwareDeviceKeys(manifest) : localBuildSourceHas(executable, SOFTWARE_DEVICE_KEYS_SOURCE.file, SOFTWARE_DEVICE_KEYS_SOURCE.marker)
-}
-
-/** Whether this kernel (installed or a local build) reads the encrypted --fingerprint-config file. */
-export async function executableHidesConfig(executable: string): Promise<boolean> {
-  const manifest = await installedManifestOf(executable)
-  return manifest ? kernelHidesConfig(manifest) : localBuildSourceHas(executable, HIDDEN_CONFIG_SOURCE.file, HIDDEN_CONFIG_SOURCE.marker)
-}
-
 /**
- * The kernel chosen as default is stored by its executable path: an installed kernel
- * (kernels\<version>\browser\chrome.exe) has its manifest.json a folder or two above it,
- * a local build is checked through its source tree.
+ * Whether this kernel executable (installed, with manifest.json a folder or two above it, or a local
+ * build's out\Default\chrome.exe) is one this launcher runs.
  */
-export async function executableFitsWindowToScreen(executable: string): Promise<boolean> {
+export async function executableSupported(executable: string): Promise<boolean> {
   const manifest = await installedManifestOf(executable)
-  return manifest ? kernelFitsWindowToScreen(manifest) : localBuildFitsWindowToScreen(executable)
+  return manifest ? kernelSupported(manifest) : localBuildHasFolder(executable, OFFICIAL_BASE_STAGES)
 }
 
-export async function executableRelaysWebRtc(executable: string): Promise<boolean> {
-  const manifest = await installedManifestOf(executable)
-  return manifest ? kernelRelaysWebRtc(manifest) : localBuildRelaysWebRtc(executable)
-}
-
-export async function executableHasOwnFonts(executable: string): Promise<boolean> {
-  const manifest = await installedManifestOf(executable)
-  return manifest ? kernelHasOwnFonts(manifest) : localBuildHasOwnFonts(executable)
-}
-
-async function installedManifestOf(executable: string): Promise<ManifestFeatures | undefined> {
+async function installedManifestOf(executable: string): Promise<KernelNames | undefined> {
   let folder = dirname(executable)
   for (let level = 0; level < 3; level++) {
     try {
       const manifest = JSON.parse(await readFile(join(folder, 'manifest.json'), 'utf8')) as Record<string, unknown>
-      if (typeof manifest.executableRelative === 'string') return manifest as ManifestFeatures
+      if (typeof manifest.executableRelative === 'string') return manifest as KernelNames
     } catch { /* not a kernel folder */ }
     const parent = dirname(folder)
     if (parent === folder) break
     folder = parent
   }
   return undefined
-}
-
-/**
- * A local build (out\Default\chrome.exe) carries the patches it was built with in the source
- * tree's prism-build-lock.json, a few folders above the executable.
- */
-export async function localBuildFitsWindowToScreen(executable: string): Promise<boolean> {
-  return localBuildHasPatch(executable, WINDOW_SCREEN_PATCH)
-}
-
-export async function localBuildRelaysWebRtc(executable: string): Promise<boolean> {
-  return localBuildSourceHas(executable, WEBRTC_RELAY_SOURCE.file, WEBRTC_RELAY_SOURCE.marker)
-}
-
-export async function localBuildHasOwnFonts(executable: string): Promise<boolean> {
-  return localBuildSourceHas(executable, BUILT_IN_FONTS_SOURCE.file, BUILT_IN_FONTS_SOURCE.marker)
-}
-
-/** A local build's own source tree (src\out\Default\chrome.exe → src) contains the marker. */
-async function localBuildSourceHas(executable: string, file: string, marker: string): Promise<boolean> {
-  let folder = dirname(executable)
-  for (let level = 0; level < 4; level++) {
-    try {
-      return (await readFile(join(folder, ...file.split('/')), 'utf8')).includes(marker)
-    } catch { /* not the source root */ }
-    const parent = dirname(folder)
-    if (parent === folder) break
-    folder = parent
-  }
-  return false
 }
 
 /** A folder of this name sits next to a local build's source tree (src\out\Default\chrome.exe → build). */
@@ -169,19 +60,6 @@ async function localBuildHasFolder(executable: string, name: string): Promise<bo
     try {
       if ((await stat(join(folder, name))).isDirectory()) return true
     } catch { /* not here */ }
-    const parent = dirname(folder)
-    if (parent === folder) break
-    folder = parent
-  }
-  return false
-}
-
-async function localBuildHasPatch(executable: string, patch: string): Promise<boolean> {
-  let folder = dirname(executable)
-  for (let level = 0; level < 4; level++) {
-    try {
-      return (await readFile(join(folder, 'prism-build-lock.json'), 'utf8')).includes(patch)
-    } catch { /* not in this folder */ }
     const parent = dirname(folder)
     if (parent === folder) break
     folder = parent

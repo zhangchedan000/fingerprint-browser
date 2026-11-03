@@ -26,7 +26,7 @@ const version = 'prism-156.0.8078.47'
 const kernel = join(userData, 'vault', 'kernels', version)
 await mkdir(join(kernel, 'browser'), { recursive: true })
 await writeFile(join(kernel, 'browser', 'chrome'), '#!/bin/sh\n', { mode: 0o755 })
-await writeFile(join(kernel, 'manifest.json'), JSON.stringify({ version, executableRelative: 'browser/chrome', releaseTag: '156.0.8078.47-prism9', assetName: 'ungoogled-chromium_156.0.8078.47-prism9_windows_x64.zip', sha256: '0'.repeat(64), installedAt: new Date().toISOString(), windowScreen: true, webrtcRelay: true }))
+await writeFile(join(kernel, 'manifest.json'), JSON.stringify({ version, executableRelative: 'browser/chrome', releaseTag: 'prism21', assetName: 'ungoogled-chromium_156.0.8078.47-prism21_windows_x64.zip', sha256: '0'.repeat(64), installedAt: new Date().toISOString(), windowScreen: true, webrtcRelay: true }))
 process.env.PRISM_E2E_TEAM_OFFLINE = '1'
 
 // A saved window with a typed proxy and an account, both with passwords, and a check of its proxy.

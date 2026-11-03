@@ -6,15 +6,17 @@ import { dirname, join, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
-import { kernelFontPackage, type KernelFontPackage } from '../shared/kernel-capabilities'
+import { KERNEL_FONT_PACKAGE, type KernelFontPackage } from '../shared/kernel-capabilities'
 import type { Logger } from './app-logger'
-import { PRISM_SYSTEM_FONTS_FOLDER } from './other-windows-fonts'
 
 const execFileAsync = promisify(execFile)
 type Fetch = typeof fetch
 
+/** A clean Windows 10 and 11's fonts the kernel uses itself (patch 007), next to chrome.exe. */
+export const PRISM_SYSTEM_FONTS_FOLDER = 'prism-system-fonts'
+
 /**
- * prism16+ kernels read their Windows fonts from `prism-system-fonts` next to chrome.exe. The fonts
+ * Prism kernels read their Windows fonts from `prism-system-fonts` next to chrome.exe. The fonts
  * (about 550 MB) change far less often than the kernel, so they live once per font package version
  * in the data folder (`kernel-fonts\v<n>`), shared by every kernel and kept across kernel updates,
  * and each kernel gets a directory junction to them. The language packages the launcher downloads
@@ -28,6 +30,11 @@ export const kernelFontStore = (vaultPath: string, pkg: KernelFontPackage) => jo
 
 const exists = (path: string) => access(path).then(() => true, () => false)
 const samePath = (a: string, b: string) => resolve(a).replace(/[\\/]+$/, '').toLowerCase() === resolve(b).replace(/[\\/]+$/, '').toLowerCase()
+
+/** The kernel's Windows fonts are in place (its link to the shared store, or fonts of its own). */
+export async function kernelFontsReady(executable: string): Promise<boolean> {
+  return exists(join(dirname(executable), PRISM_SYSTEM_FONTS_FOLDER, 'win11', 'base'))
+}
 
 /** The store holds both Windows' base fonts and fallback rules. */
 export async function kernelFontStoreReady(store: string): Promise<boolean> {
@@ -152,12 +159,11 @@ export async function installKernelFontStore(store: string, pkg: KernelFontPacka
 }
 
 /**
- * Makes a prism16+ kernel's fonts ready: links it to the shared store, downloading the store first when
- * neither the store nor the kernel package has the fonts. Kernels without built-in fonts: nothing to do.
+ * Makes a kernel's fonts ready: links it to the shared store, downloading the store first when
+ * neither the store nor the kernel package has the fonts.
  */
-export async function ensureKernelFonts(builtInFonts: boolean | undefined, kernelExecutable: string, vaultPath: string, fetchImpl: Fetch, onProgress: (progress: KernelFontDownloadProgress) => void, signal?: AbortSignal, logger?: Logger): Promise<void> {
-  const pkg = kernelFontPackage(builtInFonts)
-  if (!pkg) return
+export async function ensureKernelFonts(kernelExecutable: string, vaultPath: string, fetchImpl: Fetch, onProgress: (progress: KernelFontDownloadProgress) => void, signal?: AbortSignal, logger?: Logger): Promise<void> {
+  const pkg = KERNEL_FONT_PACKAGE
   const store = kernelFontStore(vaultPath, pkg)
   const browserFolder = dirname(kernelExecutable)
   if (await linkKernelFonts(browserFolder, store, logger)) return

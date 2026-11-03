@@ -205,12 +205,12 @@ export async function openWebRtcRelay(proxy: ProxyConfig): Promise<WebRtcRelay |
 }
 
 /**
- * The relay for a window set to 替换 on a prism7+ kernel whose SOCKS5 proxy relays UDP. A proxy
+ * The relay for a window set to 替换 on a Prism kernel whose SOCKS5 proxy relays UDP. A proxy
  * reached through the tunnel or a system proxy is skipped: the relay must talk to it directly.
  * Undefined means the kernel only reports the proxy's address (the fallback).
  */
-export async function windowWebRtcRelay(profile: Pick<BrowserProfile, 'fingerprint' | 'proxy'>, engine: Pick<EngineStatus, 'webrtcRelay'>): Promise<WebRtcRelay | undefined> {
-  if (profile.fingerprint.webrtcPolicy !== 'proxy_only' || !engine.webrtcRelay || profile.proxy.protocol !== 'socks5') return undefined
+export async function windowWebRtcRelay(profile: Pick<BrowserProfile, 'fingerprint' | 'proxy'>, engine: Pick<EngineStatus, 'fingerprintKernel'>): Promise<WebRtcRelay | undefined> {
+  if (profile.fingerprint.webrtcPolicy !== 'proxy_only' || !engine.fingerprintKernel || profile.proxy.protocol !== 'socks5') return undefined
   if (await localProxyFor(profile.proxy)) return undefined
   return openWebRtcRelay(profile.proxy).catch(() => undefined)
 }

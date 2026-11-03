@@ -2706,5 +2706,9 @@
   "浏览器好像卡住了": "Tarayıcı takılmış görünüyor",
   "窗口「{0}」关闭了 {1} 秒还没退出": "“{0}” penceresi kapatıldıktan {1} sn sonra hâlâ çıkmadı",
   "窗口「{0}」写入登录状态 {1} 秒还没完成": "“{0}” penceresi oturum durumunu {1} sn’de yazmayı bitirmedi",
-  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Pencerenin verilerine 10 saniyedir hiçbir şey yazılmadı; takılmış olabilir. Beklemek en güvenlisi; zorla kapatmak son birkaç saniyenin değişikliklerini (ör. yeni yenilenen oturum) kaybettirebilir."
+  "最近 10 秒窗口数据没有任何写入，可能卡住了。继续等最安全；强制结束可能丢掉最后几秒的改动（比如刚续期的登录）。": "Pencerenin verilerine 10 saniyedir hiçbir şey yazılmadı; takılmış olabilir. Beklemek en güvenlisi; zorla kapatmak son birkaç saniyenin değişikliklerini (ör. yeni yenilenen oturum) kaybettirebilir.",
+  "这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核": "Bu çekirdek prism21 değil. Yeni başlatıcı yalnızca prism21 ve sonraki çekirdekleri kullanır; çekirdeği Çekirdekler bölümünden güncelleyin",
+  "这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核": "Bu yerel derleme prism21 değil (Google'ın kendi kaynak kodundan derlenmiş). Yeni başlatıcı yalnızca prism21 ve sonraki çekirdekleri içe aktarır",
+  "需要更新": "Güncelleme gerekli",
+  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "prism21 öncesi çekirdek: bu başlatıcı artık onunla pencere açmıyor. prism21 sürümüne güncelleyin"
 }

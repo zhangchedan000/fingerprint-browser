@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defaultProfileDraft } from '../shared/defaults'
 import type { BrowserProfile, ProxyCheckSummary } from '../shared/types'
 import { buildLaunchArgs, publicIpv4 } from './launch-args'
 import { defaultHardwareProfileId } from '../shared/hardware-profiles'
 import { followingLocales, savedFingerprint } from '../shared/network-identity'
+import { PRISM21_CASES } from './__fixtures__/prism21-cases'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
 
@@ -30,12 +33,11 @@ describe('launch arguments', () => {
     expect(first).not.toContain('--restore-last-session')
     expect(first).toContain(saved.startUrls[0])
   })
-  it('keeps <a ping> off through a proxy only on ungoogled-chromium kernels (prism21+ as Chrome)', () => {
-    const run = (officialBase?: boolean) => buildLaunchArgs(profile(), { userDataDir: '/data', proxyUrl: 'socks5://127.0.0.1:1080', officialBase })
-    expect(run()).toContain('--no-pings')
-    expect(run(true)).not.toContain('--no-pings')
-    expect(run(true)).toContain('--dns-prefetch-disable')
-    expect(run(true)).toContain('--disable-quic')
+  it('keeps Chrome\'s <a ping> through a proxy, with DNS prefetch and QUIC off', () => {
+    const args = buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', proxyUrl: 'socks5://127.0.0.1:1080' })
+    expect(args).not.toContain('--no-pings')
+    expect(args).toContain('--dns-prefetch-disable')
+    expect(args).toContain('--disable-quic')
   })
   it('keeps 155 and older from relaunching de-elevated, which leaves an empty Local State on a new profile', () => {
     const run = (engineVersion?: string) => buildLaunchArgs(profile(), { userDataDir: '/data', fingerprintKernel: true, engineVersion })
@@ -95,8 +97,8 @@ describe('launch arguments', () => {
     expect(version('19.0.0')).toBe('--fingerprint-platform-version=19.0.0')
   })
 
-  it('reports the version of its own Windows fonts on a prism16 kernel, whatever this computer runs', () => {
-    const prism16 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', builtInFonts: true }
+  it('reports the version of the kernel\'s own Windows fonts, whatever this computer runs', () => {
+    const prism16 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const version = (platformVersion: string, hostPlatformVersion?: string) => buildLaunchArgs(profile({ ...WINDOWS, platformVersion }), { ...prism16, hostPlatformVersion })
       .find((arg) => arg.startsWith('--fingerprint-platform-version='))
     // Windows 11 on 22H2 (15) or Windows 10: 19.0.0, the 25H2 fonts the kernel carries.
@@ -108,7 +110,7 @@ describe('launch arguments', () => {
   })
 
   it('gives a window of its own screen its own scale, not this computer\'s', () => {
-    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const scale = (width: number, height: number, scaleFactor?: number) => buildLaunchArgs(profile({ platform: 'windows', screenWidth: width, screenHeight: height }), { ...kernel, hostScreen: { width: 2560, height: 1440, scaleFactor } })
       .filter((arg) => arg.startsWith('--force-device-scale-factor'))
     // 1920 × 1080 is 100%: forced only on a computer at another scale.
@@ -195,17 +197,17 @@ describe('launch arguments', () => {
     }
     const other = buildLaunchArgs(profile({ webrtcPolicy: 'default' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
     expect(other.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg.startsWith('--webrtc-ip-handling-policy'))).toBe(false)
-    // 替换 with a proxy that relays UDP (prism7+): through the relay, no address replaced.
-    const relayed = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check('203.45.6.7'), webrtcRelaySupported: true, webrtcRelayPort: 40123 })
+    // 替换 with a proxy that relays UDP: through the relay, no address replaced.
+    const relayed = buildLaunchArgs(profile({ webrtcPolicy: 'proxy_only' }), { ...kernel, proxyIdentity: check('203.45.6.7'), webrtcRelayPort: 40123 })
     expect(relayed).toContain('--fingerprint-webrtc-udp-relay=127.0.0.1:40123')
     expect(relayed).toContain('--webrtc-ip-handling-policy=default')
     expect(relayed.some((arg) => arg.startsWith('--fingerprint-webrtc-ip') || arg === '--disable-non-proxied-udp')).toBe(false)
-    // 隐私: no address; 禁止: no WebRTC on prism7+, 隐私 on older kernels.
+    // 隐私: no address; 禁止: no WebRTC (隐私 without a Prism kernel).
     const privacy = buildLaunchArgs(profile({ webrtcPolicy: 'privacy' }), { ...kernel, proxyIdentity: check('203.45.6.7') })
     expect(privacy).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
     expect(privacy.some((arg) => arg.startsWith('--fingerprint-webrtc-ip'))).toBe(false)
-    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), { ...kernel, webrtcRelaySupported: true })).toContain('--fingerprint-webrtc-disabled')
-    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), kernel)).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
+    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), kernel)).toContain('--fingerprint-webrtc-disabled')
+    expect(buildLaunchArgs(profile({ webrtcPolicy: 'disabled' }), { userDataDir: '/data' })).toContain('--webrtc-ip-handling-policy=disable_non_proxied_udp')
     expect(publicIpv4(' 8.8.4.4 ')).toBe('8.8.4.4')
     expect(publicIpv4('172.20.0.1')).toBeUndefined()
     expect(publicIpv4('256.1.1.1')).toBeUndefined()
@@ -214,11 +216,11 @@ describe('launch arguments', () => {
   it('never shows the host fonts on kernels whose fonts follow the interface language', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const real = profile({ disabledSpoofing: ['font'] })
-    expect(buildLaunchArgs(real, kernel).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
-    expect(buildLaunchArgs(real, { ...kernel, languageFonts: true }).some((arg) => arg.includes('font'))).toBe(false)
+    expect(buildLaunchArgs(real, { userDataDir: '/data' }).some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
+    expect(buildLaunchArgs(real, kernel).some((arg) => arg.includes('font'))).toBe(false)
     const opened = buildLaunchArgs(profile({}), { ...kernel, extraUrls: ['https://iphey.com/'] })
     expect(opened.at(-1)).toBe('https://iphey.com/')
-    const host = buildLaunchArgs(profile({ fontSource: 'host' }), { ...kernel, languageFonts: true })
+    const host = buildLaunchArgs(profile({ fontSource: 'host' }), kernel)
     expect(host.some((arg) => arg.startsWith('--disable-spoofing=') && arg.includes('font'))).toBe(true)
   })
 
@@ -236,14 +238,14 @@ describe('launch arguments', () => {
     expect(chosen).toContain('--accept-lang=de-DE,de,en-US,en')
   })
 
-  it('lets a Prism window claim a screen larger than the real one, never a smaller one', () => {
+  it('lets a Prism window claim a screen larger or smaller than the real one', () => {
     const prism = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', hostScreen: { width: 2560, height: 1440 } }
     const large = buildLaunchArgs(profile({ screenWidth: 3440, screenHeight: 1440 }), prism)
     expect(large).toContain('--fingerprint-screen-width=3440')
     expect(large).toContain('--fingerprint-screen-height=1440')
     const small = buildLaunchArgs(profile({ screenWidth: 1920, screenHeight: 1080 }), prism)
-    expect(small).toContain('--fingerprint-screen-width=2560')
-    expect(small).toContain('--fingerprint-screen-height=1440')
+    expect(small).toContain('--fingerprint-screen-width=1920')
+    expect(small).toContain('--fingerprint-screen-height=1080')
   })
 
   it('shows a 4K window the way Windows runs a 4K monitor: 150%, pages see 2560 × 1440', () => {
@@ -296,7 +298,7 @@ describe('launch arguments', () => {
   })
 
   it('leaves room for the default taskbar of the window\'s Windows in screen.availHeight', () => {
-    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47', windowScreen: true }
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
     const win11 = profile({ platform: 'windows', platformVersion: '19.0.0', screenWidth: 1920, screenHeight: 1080 })
     const win10 = profile({ platform: 'windows', platformVersion: '10.0.0', screenWidth: 1920, screenHeight: 1080 })
     // This computer's taskbar (auto-hidden here) never shows.
@@ -305,14 +307,13 @@ describe('launch arguments', () => {
     expect(buildLaunchArgs(win10, kernel)).toContain('--fingerprint-screen-avail-height=1040')
   })
 
-  it('gives each window its own audio and rects on prism7 unless set to real', () => {
+  it('gives each window its own audio and rects unless set to real', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
-    const seeded = buildLaunchArgs(profile(), { ...kernel, seededAudioRects: true })
+    const seeded = buildLaunchArgs(profile(), kernel)
     expect(seeded).toContain('--fingerprinting-audio-noise')
     expect(seeded).toContain('--fingerprinting-client-rects-noise')
-    const real = buildLaunchArgs(profile({ disabledSpoofing: ['audio', 'clientrects'] }), { ...kernel, seededAudioRects: true })
+    const real = buildLaunchArgs(profile({ disabledSpoofing: ['audio', 'clientrects'] }), kernel)
     expect(real.some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
-    expect(buildLaunchArgs(profile(), kernel).some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
   })
 
   it('turns Chrome\'s port scan protection off only when asked', () => {
@@ -323,22 +324,23 @@ describe('launch arguments', () => {
       .toEqual(['--disable-features=CalculateNativeWinOcclusion,DeviceBoundSessions,EnableBoundSessionCredentials,LocalNetworkAccessChecks'])
   })
 
-  it('binds sign-ins to the device only for windows set to 绑定, with software keys', () => {
-    const prism17 = { userDataDir: '/data', fingerprintKernel: true, engineVersion: '156.0.8078.47-prism17' }
-    const off = buildLaunchArgs(profile(), prism17)
+  it('binds sign-ins to the device only for windows set to 绑定 (the kernel keeps software keys by itself)', () => {
+    const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
+    const off = buildLaunchArgs(profile(), kernel)
     expect(off.find((arg) => arg.startsWith('--disable-features'))).toContain('DeviceBoundSessions,EnableBoundSessionCredentials')
-    expect(off.some((arg) => arg.startsWith('--enable-features'))).toBe(false)
-    const on = buildLaunchArgs(profile({ deviceBinding: 'on' }), prism17)
+    const on = buildLaunchArgs(profile({ deviceBinding: 'on' }), kernel)
     expect(on.find((arg) => arg.startsWith('--disable-features'))).toBe('--disable-features=CalculateNativeWinOcclusion')
-    expect(on).toContain('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
-    // prism18+ uses software keys by itself: no switch on the command line.
-    const prism18 = buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...prism17, engineVersion: '156.0.8078.47-prism18' })
-    expect(prism18.some((arg) => arg.startsWith('--enable-features'))).toBe(false)
-    expect(prism18.find((arg) => arg.startsWith('--disable-features'))).toBe('--disable-features=CalculateNativeWinOcclusion')
-    // A downloaded kernel's id has no prism number ("prism-156.0.8078.47"): its manifest says (softwareDeviceKeys).
-    const installed = { ...prism17, engineVersion: 'prism-156.0.8078.47' }
-    expect(buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...installed, softwareDeviceKeys: true }).some((arg) => arg.startsWith('--enable-features'))).toBe(false)
-    expect(buildLaunchArgs(profile({ deviceBinding: 'on' }), { ...installed, softwareDeviceKeys: false })).toContain('--enable-features=EnableBoundSessionCredentialsSoftwareKeysForManualTesting')
+    expect([...off, ...on].some((arg) => arg.startsWith('--enable-features'))).toBe(false)
+  })
+
+  it('launches prism21 windows with exactly the arguments the last launcher that knew older kernels gave them', () => {
+    const before = JSON.parse(readFileSync(join(__dirname, '__fixtures__', 'prism21-launch-args.json'), 'utf8')) as Record<string, string[]>
+    expect(Object.keys(before).sort()).toEqual(PRISM21_CASES.map((item) => item.name).sort())
+    for (const item of PRISM21_CASES) {
+      const fingerprint = { ...(item.windows ? WINDOWS : {}), ...item.fingerprint } as Partial<BrowserProfile['fingerprint']>
+      const args = buildLaunchArgs({ ...profile(fingerprint), ...item.profile } as BrowserProfile, { userDataDir: '/data', fingerprintKernel: true, engineVersion: item.engine, ...item.options })
+      expect(args, item.name).toEqual(before[item.name])
+    }
   })
 
   it('keeps windows covered by other windows running', () => {

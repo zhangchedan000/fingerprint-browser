@@ -1,7 +1,5 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
-import { fontPackLabel, windowsFontScript, type FontPackStatus } from '../../../../shared/windows-font-packs'
-import { FontPackDownload } from '../../components/FontPackDownload'
-import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenFloor, screenKind } from '../../../../shared/screen'
+import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import { fittingCountryZone, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
@@ -36,8 +34,7 @@ import {
   defaultHardwareProfileId,
   editableFingerprint,
   effectiveGpu,
-  gpuChoices,
-  otherWindowsFonts
+  gpuChoices
 } from '../../../../shared/hardware-profiles'
 import { deviceName, formatMac, isRandomMac, macAddress, macVendor, type NoiseSurface } from '../../../../shared/device-identity'
 import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
@@ -174,7 +171,7 @@ const MACOS_VERSIONS = [
   { value: '15.0.0', label: 'macOS 15' }
 ]
 
-/** This computer's screen; kernels before prism5 can only claim one at least this large (screenFloor). */
+/** This computer's screen. */
 function hostScreen(): { width: number; height: number } {
   return { width: window.screen.width, height: window.screen.height }
 }
@@ -538,7 +535,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   // 换一换 on a fingerprint value runs the check again once the new settings are in the form.
   const [recheck, setRecheck] = useState(false)
   const [checkReport, setCheckReport] = useState<FingerprintCheckReport | null>(null)
-  const [fontPacks, setFontPacks] = useState<FontPackStatus>()
   const [checkError, setCheckError] = useState('')
   /** A new window's country picked by hand: a proxy picked afterwards leaves it as it is. */
   const countryByHand = useRef(false)
@@ -635,7 +631,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     // comes in. A window on a library proxy whose check worked and that has none about this IP reads it.
     const onLibrary = Boolean(profile?.proxyId && proxies.some((item) => item.id === profile.proxyId && !item.apiUrl))
     if (profile) void ipScore.follow({ profileId: profile.id }, profile.proxyCheck?.ip, { readIfMissing: onLibrary && profile.proxyCheck?.ok === true })
-    void window.browserApi.app.fontPacks().then(setFontPacks).catch(() => undefined)
     setPasteText('')
     setPasted(null)
     setPasteError('')
@@ -689,24 +684,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         fingerprintKernel: true,
         label: pinnedKernel ? t("Prism 内核（环境固定）") : t("固定内核未安装"),
         version: kernelVersion,
-        windowScreen: pinnedKernel?.windowScreen,
-        webrtcRelay: pinnedKernel?.webrtcRelay,
-        builtInFonts: pinnedKernel?.builtInFonts
+        supported: pinnedKernel?.supported
       }
     : engine
   const versionWarning = fingerprintVersionWarning(fp.brandVersion ?? '', selectedEngine)
-  // prism16+: the kernel brings a clean Windows' fonts and language packages; nothing to install here.
-  const builtInFonts = selectedEngine?.fingerprintKernel === true && selectedEngine.builtInFonts === true
-  const otherFonts = !builtInFonts && fontPacks?.otherWindowsFonts
-    ? otherWindowsFonts(fp, { platform: 'windows', platformVersion: fontPacks.otherWindowsFonts.hostPlatformVersion }, selectedEngine?.fingerprintKernel === true)
-    : undefined
   // The GPU list depends on the kernel this window will actually run.
   const windowKernelVersion = selectedEngine?.fingerprintKernel ? selectedEngine.version : undefined
-  // prism5+ kernels keep the window inside the claimed screen, so it may be smaller than this one.
-  const windowScreen = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.windowScreen)
-  // prism7+ kernels relay WebRTC UDP through the proxy and can remove WebRTC.
-  const webrtcRelay = Boolean(selectedEngine?.fingerprintKernel && selectedEngine.webrtcRelay)
-  const floor = screenFloor(hostScreen(), windowScreen)
   // A check describes the settings it ran with; any change since makes it out of date.
   const typedProxy = Form.useWatch('proxy', { form, preserve: true }) as ProxyConfig | undefined
   const currentSettingsKey = checkedSettingsKey(
@@ -954,12 +937,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     )
   }
 
-  /** Audio and ClientRects stay as the real machine computes them (kernel patches 006, 008). */
-  function realSurface(surface: NoiseSurface) {
-    const value = measured(surface)
-    return <Fixed>{value ? t("本机真实 · {0}", value) : t("本机真实（与真实 Chrome 一致）")}</Fixed>
-  }
-
   /** The two choices, each showing the value a site reads once the check has measured it. */
   function noiseOptions(surface: NoiseSurface, real: boolean) {
     const value = measured(surface)
@@ -970,7 +947,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     ]
   }
 
-  /** prism7+: each window its own audio / ClientRects (patches 006, 008), or the real values. */
+  /** Each window its own audio / ClientRects (patches 006, 008), or the real values. */
   function seededControl(surface: NoiseSurface, label: string) {
     const real = fp.disabledSpoofing.includes(surface)
     return (
@@ -993,7 +970,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         value={real ? 'real' : 'noise'}
         onChange={(next: string) => setSpoofing(surface, next === 'noise')}
         options={noiseOptions(surface, real)}
-        onShuffle={webrtcRelay ? reseedAndCheck : reseedNoise}
+        onShuffle={reseedAndCheck}
         shuffleDisabled={real}
       />
     )
@@ -1018,7 +995,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (fp.platform !== 'windows') return {}
     const model = key.split('|')[0]
     const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, floor, Math.random, hostScale()) : undefined
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, undefined, Math.random, hostScale()) : undefined
     return {
       cpu: cpu.model,
       coresSource: 'profile',
@@ -1051,7 +1028,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
 
   function shuffleScreen(): void {
     const current = `${fp.screenWidth}x${fp.screenHeight}`
-    chooseScreen(pickOther(screenChoices(floor, hostScale()).map(({ width, height }) => `${width}x${height}`), current))
+    chooseScreen(pickOther(screenChoices(undefined, hostScale()).map(({ width, height }) => `${width}x${height}`), current))
   }
 
   function chooseCores(value: number | 'host'): void {
@@ -1098,7 +1075,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** "一键随机指纹": a new computer — new noise, GPU, cores and screen. */
   function randomizeAll(): void {
     const list = kernelGpuList(windowKernelVersion, fp.platform)
-    const { width, height } = randomScreen(floor, Math.random, hostScale()) ?? hostScreen()
+    const { width, height } = randomScreen(undefined, Math.random, hostScale()) ?? hostScreen()
     const gpu = list?.length ? gpuKey(list[Math.floor(Math.random() * list.length)]) : undefined
     patchFingerprint({
       seed: randomSeed(),
@@ -1457,8 +1434,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           : undefined
       }
       case 'use-prism': {
-        // The newest installed Prism kernel (prism7 and later).
-        const prism = kernels.filter((kernel) => kernel.installed && kernel.webrtcRelay).map((kernel) => kernel.version).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1)
+        // The newest installed kernel this launcher runs (prism21 and later).
+        const prism = kernels.filter((kernel) => kernel.installed && kernel.supported).map((kernel) => kernel.version).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1)
         return prism && kernelVersion !== prism ? { label: t("改用内核 {0}", kernelName(prism)), apply: () => form.setFieldValue('kernelVersion', prism) } : undefined
       }
       case 'use-real':
@@ -1935,7 +1912,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const [microphones, outputs, cameras] = set.split(',').map(Number)
     return t("麦克风 {0} · 音频输出 {1} · 摄像头 {2}", microphones, outputs, cameras)
   }
-  const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen(), windowScreen)
+  const shownScreen = effectiveScreen(fp, windowKernelVersion, hostScreen())
   const screenValue = fp.screenSource === 'host' || (shownScreen.width !== fp.screenWidth || shownScreen.height !== fp.screenHeight)
     ? 'host'
     : screenCustom || !isChoice(fp.screenWidth, fp.screenHeight)
@@ -1977,7 +1954,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const autoUiLocale = chromeUiLocaleFor(shownLanguage)
   // prism7+ kernels (same release as the WebRTC relay) show the fonts of the interface language.
   const windowUiLocale = fp.uiLocale ?? autoUiLocale
-  const fontScript = windowsFontScript(windowUiLocale)
   const autoVoicesLocale = voiceLocaleForLanguage(windowUiLocale)
   const autoMediaLocale = mediaLocaleFor(windowUiLocale)
   const countryLocale = localeForCountry(fp.region)
@@ -2012,7 +1988,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const keyboardPicked = fp.keyboardLayout && fp.keyboardLayout !== autoKeyboardLayout
   const followLanguageKeyboard: QuickFix = { label: t("改成 {0}", keyboardLayoutName(autoKeyboardLayout ?? '') ?? ''), apply: () => patchFingerprint({ keyboardLayout: undefined }) }
   // A size desktops with this card usually have (the first 常见 one in the list).
-  const usualScreen = screenOdd ? usualScreenFor(gpu!.model, screenChoices(floor, hostScale())) : undefined
+  const usualScreen = screenOdd ? usualScreenFor(gpu!.model, screenChoices(undefined, hostScale())) : undefined
   const screenFix: QuickFix | undefined = usualScreen
     ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
     : undefined
@@ -2026,7 +2002,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     : undefined
   // Larger than this computer's monitor: the largest offered size that fits it (one desktops with this card have, when there is one).
   const fittingScreens = screenLarger
-    ? screenChoices(floor, hostScale())
+    ? screenChoices(undefined, hostScale())
       .filter((choice) => choice.physical.width <= hostPhysical.width && choice.physical.height <= hostPhysical.height)
       .sort((x, y) => y.physical.width * y.physical.height - x.physical.width * x.physical.height)
     : []
@@ -2212,77 +2188,32 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           options={[{ value: 'ask', label: t("询问") }, { value: 'allow', label: t("允许") }, { value: 'block', label: t("禁止") }]}
         />
       </Row>
-      {webrtcRelay ? (
-        <Row
-          label={t("字体")}
-          check={checkFor('font')}
-          fix={checkFix('font')}
-          hint={fp.fontSource === 'host'
-            ? t("这台电脑装的所有字体，用本机字体的窗口都一样")
-            : t("Windows 自带字体 + 系统语言的字体包，本机另装的不显示")}
-        >
-          <Select
-            className="fb-fp-select"
-            value={fp.fontSource ?? 'language'}
-            onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
-            options={[
-              { value: 'language', label: followSystem(`${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
-              { value: 'host', label: t("本机真实字体") }
-            ]}
-          />
-          {fp.fontSource !== 'host' && builtInFonts && (
-            <div className="fb-check-results">
-              <div className="fb-check-item is-ok">
-                <span className="fb-check-dot" />
-                <span className="fb-check-message">{t("这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑")}</span>
-              </div>
+      <Row
+        label={t("字体")}
+        check={checkFor('font')}
+        fix={checkFix('font')}
+        hint={fp.fontSource === 'host'
+          ? t("这台电脑装的所有字体，用本机字体的窗口都一样")
+          : t("Windows 自带字体 + 系统语言的字体包，本机另装的不显示")}
+      >
+        <Select
+          className="fb-fp-select"
+          value={fp.fontSource ?? 'language'}
+          onChange={(fontSource) => patchFingerprint({ fontSource: fontSource === 'host' ? 'host' : undefined })}
+          options={[
+            { value: 'language', label: followSystem(`${ownLanguageName(windowUiLocale)} · ${windowUiLocale}`) },
+            { value: 'host', label: t("本机真实字体") }
+          ]}
+        />
+        {fp.fontSource !== 'host' && (
+          <div className="fb-check-results">
+            <div className="fb-check-item is-ok">
+              <span className="fb-check-dot" />
+              <span className="fb-check-message">{t("这个语言的 Windows 字体由内核提供（需要时自动从微软官方下载），不装进电脑")}</span>
             </div>
-          )}
-          {fp.fontSource !== 'host' && !builtInFonts && fontScript && fontPacks?.supported && (
-            // Whether this computer has the package the window's language needs: red until it is
-            // downloaded, since the window would lack fonts every Windows in that language has.
-            <div className="fb-check-results">
-              {fontPacks.missing.includes(fontScript) ? (
-                <>
-                  <div className="fb-check-item is-bad">
-                    <span className="fb-check-dot" />
-                    <span className="fb-check-message">
-                      {t("这台电脑缺少{0}字体包：窗口里没有这些字体，和真实的该语言 Windows 不一致。请下载，从微软官方下载，不需要管理员权限。", fontPackLabel(fontScript, getLocale()))}
-                    </span>
-                  </div>
-                  <FontPackDownload scripts={[fontScript]} onInstalled={setFontPacks} />
-                </>
-              ) : (
-                <div className="fb-check-item is-ok">
-                  <span className="fb-check-dot" />
-                  <span className="fb-check-message">{t("已安装{0}字体包", fontPackLabel(fontScript, getLocale()))}</span>
-                </div>
-              )}
-            </div>
-          )}
-          {otherFonts && fontPacks?.otherWindowsFonts && (
-            // Fonts of the other Windows this window needs on this computer: they come with the
-            // kernel and are installed when the window opens; until then they are this computer's.
-            <div className="fb-check-results">
-              {fontPacks.otherWindowsFonts[otherFonts] ? (
-                <div className="fb-check-item is-ok">
-                  <span className="fb-check-dot" />
-                  <span className="fb-check-message">{t("已装好 Windows {0} 窗口要用的字体", otherFonts === 'win11' ? '11' : '10')}</span>
-                </div>
-              ) : (
-                <div className="fb-check-item is-warn">
-                  <span className="fb-check-dot" />
-                  <span className="fb-check-message">
-                    {t("这台电脑是 Windows {0}：Windows {1} 窗口要用 Windows {1} 自己的字体（随内核附带），打开窗口时自动安装。", otherFonts === 'win11' ? '10' : '11', otherFonts === 'win11' ? '11' : '10')}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </Row>
-      ) : (
-        <Row label={t("字体")} check={checkFor('font')} fix={checkFix('font')}>{noiseControl('font', t("字体"))}</Row>
-      )}
+          </div>
+        )}
+      </Row>
 
       <Row label={t("语音")} hint={t("网页能读到的朗读语音")} fix={fp.voicesLocale && fp.voicesLocale !== autoVoicesLocale ? followSystemLanguage('voicesLocale') : undefined}>
         <Select
@@ -2393,9 +2324,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         )}
       </Row>
       {kernelSpoofsScreen(windowKernelVersion) ? (
-        <Row label={t("分辨率")} check={checkFor('screen')} fix={(laptopScreen ? laptopFix : screenOdd ? screenFix : undefined) ?? (screenLarger ? largerFix : undefined) ?? checkFix('screen')} hint={windowScreen
-          ? t("网站读到的屏幕尺寸，浏览器窗口不会比它大")
-          : t("当前内核只能选不小于这台电脑屏幕（{0} × {1}）的分辨率；要选 1920 × 1080 等更小的，请换 prism5 及以上内核，或在内核管理里重新导入本地内核", hostScreen().width, hostScreen().height)}>
+        <Row label={t("分辨率")} check={checkFor('screen')} fix={(laptopScreen ? laptopFix : screenOdd ? screenFix : undefined) ?? (screenLarger ? largerFix : undefined) ?? checkFix('screen')} hint={t("网站读到的屏幕尺寸，浏览器窗口不会比它大")}>
           <Space wrap size={8}>
             <ValueChoice
               label={t("分辨率")}
@@ -2406,7 +2335,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               options={[
                 { value: 'host', label: t("本机真实") },
                 // The sizes desktops with this card usually have come first, marked 常见.
-                ...screenChoices(floor, hostScale())
+                ...screenChoices(undefined, hostScale())
                   .map(({ width, height, physical }) => ({ width, height, physical, usual: Boolean(gpu?.model && !gpuReal && screenSuitsGpu(gpu.model, physical)) }))
                   .sort((a, b) => Number(b.usual) - Number(a.usual))
                   .map(({ width, height, physical, usual }) => ({
@@ -2418,8 +2347,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             />
             {screenValue === 'custom' && screenCustom && (
               <>
-                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={floor?.width ?? 800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
-                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={floor?.height ?? 600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenWidth']} noStyle><InputNumber min={800} max={7680} precision={0} prefix="W" aria-label={t("屏幕宽度")} /></Form.Item>
+                <Form.Item name={['fingerprint', 'screenHeight']} noStyle><InputNumber min={600} max={4320} precision={0} prefix="H" aria-label={t("屏幕高度")} /></Form.Item>
               </>
             )}
           </Space>
@@ -2484,19 +2413,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         check={checkFor('webrtc')}
         fix={checkFix('webrtc')}
         hint={fp.webrtcPolicy === 'proxy_only'
-          ? webrtcRelay
-            ? proxyResult?.udp === true
-              ? t("网站看到代理 IP，视频通话能用")
-              : proxyResult?.udp === false
-                ? t("只报代理 IP，这个代理不支持 UDP，视频通话用不了")
-                : t("报代理 IP；代理支持 UDP 时还能视频通话")
-            : t("替换为代理 IP，防止泄露本机 IP")
+          ? proxyResult?.udp === true
+            ? t("网站看到代理 IP，视频通话能用")
+            : proxyResult?.udp === false
+              ? t("只报代理 IP，这个代理不支持 UDP，视频通话用不了")
+              : t("报代理 IP；代理支持 UDP 时还能视频通话")
           : fp.webrtcPolicy === 'privacy'
             ? t("开着 WebRTC，网站拿不到 IP")
             : fp.webrtcPolicy === 'disabled'
-              ? webrtcRelay
-                ? t("完全关掉；真 Chrome 都有 WebRTC，网站可能起疑")
-                : t("这个内核不能关闭 WebRTC，按「隐私」处理")
+              ? t("完全关掉；真 Chrome 都有 WebRTC，网站可能起疑")
               : t("和原版 Chrome 一样，会暴露本机真实 IP")}
       >
         <Select
@@ -2518,17 +2443,17 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <h3 className="fb-fp-group">{t("指纹值")}</h3>
           <span className="fb-fp-card-sub">{t("每个窗口不同，同一窗口每次一样")}</span>
         </div>
-      <Row label="Canvas" check={checkFor('canvas')} fix={checkFix('canvas')} hint={webrtcRelay ? undefined : t("字体和 Canvas 共用一个种子，换一换会一起换")}>
+      <Row label="Canvas" check={checkFor('canvas')} fix={checkFix('canvas')}>
         {noiseControl('canvas', 'Canvas')}
-        {webrtcRelay && measuredLine('canvas')}
+        {measuredLine('canvas')}
       </Row>
-      <Row label="AudioContext" check={checkFor('audio')} fix={checkFix('audio')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
-        {webrtcRelay ? seededControl('audio', 'AudioContext') : realSurface('audio')}
-        {webrtcRelay && measuredLine('audio')}
+      <Row label="AudioContext" check={checkFor('audio')} fix={checkFix('audio')}>
+        {seededControl('audio', 'AudioContext')}
+        {measuredLine('audio')}
       </Row>
-      <Row label="ClientRects" check={checkFor('clientrects')} fix={checkFix('clientrects')} hint={webrtcRelay ? undefined : t("这个内核只能用本机真实值")}>
-        {webrtcRelay ? seededControl('clientrects', 'ClientRects') : realSurface('clientrects')}
-        {webrtcRelay && measuredLine('clientrects')}
+      <Row label="ClientRects" check={checkFor('clientrects')} fix={checkFix('clientrects')}>
+        {seededControl('clientrects', 'ClientRects')}
+        {measuredLine('clientrects')}
       </Row>
       </section>
 

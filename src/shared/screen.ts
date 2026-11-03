@@ -3,10 +3,8 @@ import { kernelVendor } from './kernel-id'
 
 /**
  * Prism kernels report the window's resolution as screen.width/height, availWidth/availHeight and
- * the CSS device-width media query. A window wider than its screen gives the claim away, so a
- * kernel that cannot keep its window inside the claimed screen (before prism5, see
- * EngineStatus.windowScreen) may only claim a screen at least as large as the real one. Other
- * kernels always show the real screen.
+ * the CSS device-width media query, and keep the browser window inside it (patch 015), so any size
+ * may be claimed. Other browsers always show the real screen.
  */
 export function kernelSpoofsScreen(kernelVersion: string | null | undefined): boolean {
   return kernelVendor(kernelVersion) === 'prism'
@@ -56,14 +54,6 @@ function validHost(host: ScreenSize | undefined): ScreenSize | undefined {
   return host && Number.isInteger(host.width) && Number.isInteger(host.height) && host.width > 0 && host.height > 0 ? host : undefined
 }
 
-/**
- * The real screen a claim has to cover, or undefined when the kernel keeps its window inside the
- * claimed screen and any size will do.
- */
-export function screenFloor(host: ScreenSize | undefined, windowScreen: boolean | undefined): ScreenSize | undefined {
-  return windowScreen ? undefined : host
-}
-
 /** What a monitor of this size is called: its common name and shape. */
 export function screenKind(physical: ScreenSize): { name?: string; ratio: string; ultrawide: boolean } {
   const ratio = physical.width / physical.height
@@ -102,14 +92,12 @@ export function randomScreen(floor: ScreenSize | undefined, random: () => number
 export function effectiveScreen(
   fp: Pick<FingerprintConfig, 'screenSource' | 'screenWidth' | 'screenHeight'>,
   kernelVersion: string | null | undefined,
-  host: ScreenSize | undefined,
-  windowScreen = false
+  host: ScreenSize | undefined
 ): ScreenSize {
   const real = validHost(host)
   const own = { width: fp.screenWidth, height: fp.screenHeight }
   if (!real) return own
   if (!kernelSpoofsScreen(kernelVersion) || fp.screenSource === 'host') return real
-  if (!windowScreen && !fits(own, real)) return real
   return own
 }
 
@@ -122,10 +110,9 @@ export function effectiveScreen(
 export function launchedScreen(
   fp: Pick<FingerprintConfig, 'screenSource' | 'screenWidth' | 'screenHeight'>,
   kernelVersion: string | null | undefined,
-  host: ScreenSize | undefined,
-  windowScreen = false
+  host: ScreenSize | undefined
 ): { screen: ScreenSize; scale?: number } {
-  const claimed = effectiveScreen(fp, kernelVersion, host, windowScreen)
+  const claimed = effectiveScreen(fp, kernelVersion, host)
   const own = kernelSpoofsScreen(kernelVersion) && fp.screenSource !== 'host' &&
     claimed.width === fp.screenWidth && claimed.height === fp.screenHeight
   return own ? { scale: 1, ...scaledScreen(claimed) } : { screen: claimed }

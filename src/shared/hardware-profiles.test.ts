@@ -8,8 +8,7 @@ import {
   HARDWARE_PROFILES,
   hardwareProfile,
   defaultHardwareProfileId,
-  refreshSeededGpuIdentity,
-  otherWindowsFonts, windows10HostFonts
+  refreshSeededGpuIdentity
 } from './hardware-profiles'
 import { gpuKey, kernelGpuList, MEASURED_KERNELS } from './gpu-catalog'
 import { validateProfileDraft } from './validation'
@@ -136,28 +135,5 @@ describe('Prism kernels', () => {
     const list = kernelGpuList('prism-155.0.8059.84', 'windows')!
     expect(list.length).toBeGreaterThan(40)
     expect(list.every((gpu) => gpu.vendor === 'NVIDIA' && !/Laptop/.test(gpu.model))).toBe(true)
-  })
-})
-
-describe('fonts of the other Windows', () => {
-  const windows = (platformVersion: string, extra: Partial<ReturnType<typeof defaultFingerprint>> = {}) =>
-    ({ ...defaultFingerprint(1), platform: 'windows' as const, hardwareProfileId: 'windows-seeded-nvidia' as const, platformVersion, ...extra })
-  const host = (platformVersion: string) => ({ platform: 'windows' as const, platformVersion })
-  it('gives a Windows 10 window on Windows 11 the Windows 10 set and the other way round', () => {
-    expect(otherWindowsFonts(windows('10.0.0'), host('19.0.0'), true)).toBe('win10')
-    expect(otherWindowsFonts(windows('19.0.0'), host('10.0.0'), true)).toBe('win11')
-  })
-  it('needs nothing on the same Windows, with real fonts, or without the fingerprint kernel', () => {
-    expect(otherWindowsFonts(windows('19.0.0'), host('15.0.0'), true)).toBeUndefined()
-    expect(otherWindowsFonts(windows('10.0.0'), host('10.0.0'), true)).toBeUndefined()
-    expect(otherWindowsFonts(windows('10.0.0', { fontSource: 'host' }), host('19.0.0'), true)).toBeUndefined()
-    expect(otherWindowsFonts(windows('10.0.0'), host('19.0.0'), false)).toBeUndefined()
-  })
-  it('gives a Windows 10 window on Windows 10 Sans Serif Collection, nothing else', () => {
-    expect(windows10HostFonts(windows('10.0.0'), host('10.0.0'), true)).toBe(true)
-    expect(windows10HostFonts(windows('10.0.0'), host('19.0.0'), true)).toBe(false)
-    expect(windows10HostFonts(windows('19.0.0'), host('10.0.0'), true)).toBe(false)
-    expect(windows10HostFonts(windows('10.0.0', { fontSource: 'host' }), host('10.0.0'), true)).toBe(false)
-    expect(windows10HostFonts(windows('10.0.0'), host('10.0.0'), false)).toBe(false)
   })
 })
