@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { availableParallelism, release } from 'node:os'
+import { availableParallelism, release, type, version } from 'node:os'
 import type { BrowserPlatform } from '../shared/types'
 
 export interface HostHardwareSnapshot {
@@ -23,6 +23,40 @@ export function windowsUniversalApiContract(read: () => string = () => execFileS
   } catch {
     return undefined
   }
+}
+
+/**
+ * This computer's system as Windows names it in the registry (HKLM\SOFTWARE\Microsoft\Windows NT\
+ * CurrentVersion): ProductName and DisplayVersion, e.g. "Windows 10 Enterprise LTSC 2021 21H2".
+ * Windows 11 still says "Windows 10" in ProductName; build 22000 and later is Windows 11.
+ * Undefined when the registry cannot be read.
+ */
+export function windowsSystemName(read: () => string = () => execFileSync('reg', [
+  'query', 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion'
+], { encoding: 'utf8', windowsHide: true, timeout: 3000 })): string | undefined {
+  try {
+    const output = read()
+    const value = (name: string) => output.match(new RegExp(`^\\s*${name}\\s+REG_\\w+\\s+(.+?)\\s*$`, 'im'))?.[1]
+    let product = value('ProductName')
+    if (!product) return undefined
+    const build = Number(value('CurrentBuild') ?? value('CurrentBuildNumber'))
+    if (build >= 22000) product = product.replace(/^Windows 10\b/, 'Windows 11')
+    const display = value('DisplayVersion') ?? value('ReleaseId')
+    return (display && !product.includes(display) ? `${product} ${display}` : product).slice(0, 200)
+  } catch {
+    return undefined
+  }
+}
+
+let systemName: string | undefined | null = null
+
+/** This computer's system for its cloud copies (read once). */
+export function hostSystemName(): string | undefined {
+  if (systemName === null) {
+    systemName = process.platform === 'win32' ? windowsSystemName() : `${type() === 'Darwin' ? 'macOS' : type()} ${release()}`.trim()
+    if (!systemName && process.platform === 'win32') systemName = version() || undefined
+  }
+  return systemName
 }
 
 export function hostPlatformVersion(platform: BrowserPlatform, operatingSystemRelease: string, contract?: () => string | undefined): string {

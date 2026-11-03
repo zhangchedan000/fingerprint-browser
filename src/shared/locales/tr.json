@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "Bu pencere henüz bulutta değil",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "Takım sunucusu henüz güncellenmedi, bu yüzden bilgisayar başına yedekler şimdilik geri yüklenemiyor",
   "这个备份已经不在了": "Bu yedek artık yok",
-  "测试模式设置无效": "Geçersiz test modu ayarı"
+  "测试模式设置无效": "Geçersiz test modu ayarı",
+  "云端最新": "Buluttaki en yeni",
+  "全部改成：": "Tümünü şuna çevir:",
+  "删除“{0}”在云端的这份备份？": "“{0}” bilgisayarının buluttaki yedeği silinsin mi?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Yalnızca bu yedek (son yedek {0}) silinir; pencere ve diğer bilgisayarların yedekleri kalır. Bu bilgisayarınkiyse pencere bir sonraki normal kapanışta yeniden yüklenir.",
+  "只有这一份：{0}": "Yalnızca bu: {0}",
+  "某台电脑的": "Bir bilgisayarınki",
+  "添加到本机：用哪台电脑的登录状态": "Bu bilgisayara ekle: hangi bilgisayarın oturum durumu",
+  "用哪份": "Hangi yedek",
+  "编号 {0}": "ID {0}",
+  "选一台电脑": "Bilgisayar seçin",
+  "默认规则": "Varsayılan kural",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Varsayılan kural: bu bilgisayarda daha önce kullanılan pencereler bu bilgisayarın yedeğini, diğerleri buluttaki en yeniyi alır. Tek yedeği olan ya da hiç olmayan pencereler doğrudan eklenir.",
+  "默认：云端最新": "Varsayılan: buluttaki en yeni",
+  "默认：本机那份": "Varsayılan: bu bilgisayarınki",
+  "（最新）": "(en yeni)",
+  "（本机）": "(bu bilgisayar)"
 }

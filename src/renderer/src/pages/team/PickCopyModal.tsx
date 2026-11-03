@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Modal, Table, Tag } from 'antd'
+import { Alert, Button, Modal, Table } from 'antd'
 import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamDeviceStateView } from '../../../../shared/team'
+import { DeviceCopyComputer } from '../../components/DeviceCopyComputer'
 import { formatBytes, shortDateTime } from '../../components/format'
 
 export interface PickCopyRequest {
@@ -58,12 +59,7 @@ export function PickCopyModal({ request, onClose }: { request?: PickCopyRequest;
           {
             title: t("电脑"),
             dataIndex: 'deviceName',
-            render: (name: string, state) => (
-              <span>
-                {name}
-                {state.thisComputer && <Tag color="blue" style={{ marginLeft: 8 }}>{t("本机")}</Tag>}
-              </span>
-            )
+            render: (_name: string, state) => <DeviceCopyComputer state={state} states={request?.states ?? []} />
           },
           { title: t("账号"), dataIndex: 'userName' },
           { title: t("最后备份"), dataIndex: 'updated', render: (value: string) => shortDateTime(value, getLocale()) },

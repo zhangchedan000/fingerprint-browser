@@ -1216,6 +1216,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     await testCurrentProxy(true)
   }
 
+  /**
+   * 直连 / HTTP / HTTPS / SOCKS5 typed into the window, without the API 提取 link: the link stays in the
+   * form (it is back on switching to API 提取) but is not this proxy's, so checks, saving and the IP 评分
+   * do not take the link's proxy instead.
+   */
+  function typedProxyConfig(): ProxyConfig {
+    return { ...(form.getFieldValue('proxy') as ProxyConfig), apiUrl: undefined }
+  }
+
   /** API 提取 typed into the window: only the link; the proxy comes from it when saved and at every launch. */
   function apiProxy(): ProxyConfig {
     return { protocol: 'http', host: '', username: '', password: '', apiUrl: String(form.getFieldValue(['proxy', 'apiUrl']) ?? '').trim(), tunnel: route }
@@ -1257,7 +1266,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       }
       if (proxyProtocol !== 'direct') await form.validateFields([['proxy', 'host'], ['proxy', 'port']])
       setTestingProxy(true)
-      followCheckedIp(await window.browserApi.proxy.test({ ...form.getFieldValue('proxy'), tunnel: route }, profile?.id), run, fill)
+      followCheckedIp(await window.browserApi.proxy.test({ ...typedProxyConfig(), tunnel: route }, profile?.id), run, fill)
     } catch (error) {
       if (run !== proxyCheckRun.current) return
       if (proxyMode === 'api' && profile && savedApiLink()) {
@@ -1379,7 +1388,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         ? { proxyId: values.proxyId, proxy: { protocol: 'direct' as const, host: '', username: '', password: '' } }
         : proxyMode === 'api'
           ? { proxy: apiProxy() }
-          : { proxy: values.proxy }),
+          : { proxy: typedProxyConfig() }),
       ...(proxyProtocol !== 'direct' ? { tunnel: route } : {}),
       draftSession: draftSession.current,
       account: values.account,

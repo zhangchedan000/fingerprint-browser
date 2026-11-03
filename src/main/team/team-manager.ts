@@ -37,6 +37,7 @@ import { adoptWindowExtensions, windowExtensions } from './team-extensions'
 import type { ExtensionStore } from '../extension-store'
 import { fingerprintCheckStore } from '../fingerprint-check'
 import { windowsKeyProtector, type KeyProtector } from './saved-passwords'
+import { hostSystemName } from '../host-hardware'
 
 interface TeamLink {
   teamId: string
@@ -1255,12 +1256,20 @@ export class TeamManager {
     return {
       id: state.id,
       deviceName: state.device_name || state.device.slice(0, 8),
+      deviceShort: state.device.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6),
+      os: state.device_os || undefined,
       userName: state.expand?.user?.name || state.expand?.user?.username || '',
       thisComputer: state.user === this.user?.id && state.device === this.device.id,
       updated: state.updated,
       size: Number(state.data_size ?? 0),
       rev: state.data_rev
     }
+  }
+
+  /** Deletes one computer's cloud copy of a cloud window (the window and the other copies stay). */
+  async removeDeviceState(stateId: string): Promise<void> {
+    await this.requireApi().removeDeviceState(stateId)
+    this.logger?.info('已删除一台电脑的云端备份', { stateId })
   }
 
   /**
@@ -1337,7 +1346,7 @@ export class TeamManager {
   /** This computer: its fixed id (made on first use) and its name. */
   private get device(): UploadDevice {
     if (!this.file.deviceId) this.file.deviceId = randomUUID()
-    return { id: this.file.deviceId, name: hostname() }
+    return { id: this.file.deviceId, name: hostname(), os: hostSystemName() }
   }
 
   /** This account's copy from this computer, if the server keeps per-computer copies and has one. */

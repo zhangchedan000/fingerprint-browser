@@ -226,6 +226,7 @@ const api: BrowserApi = {
     addToComputer: (id) => ipcRenderer.invoke('team:add-to-computer', id),
     deviceStates: (profileId) => ipcRenderer.invoke('team:device-states', profileId),
     cloudDeviceStates: (teamId) => ipcRenderer.invoke('team:cloud-device-states', teamId),
+    removeDeviceState: (stateId) => ipcRenderer.invoke('team:remove-device-state', stateId),
     restoreDeviceState: (profileId, stateId) => ipcRenderer.invoke('team:restore-device-state', profileId, stateId),
     sync: () => ipcRenderer.invoke('team:sync'),
     logs: (query) => ipcRenderer.invoke('team:logs', query),

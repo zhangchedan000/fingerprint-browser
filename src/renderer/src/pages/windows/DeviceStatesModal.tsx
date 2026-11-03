@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Empty, Modal, Spin, Table, Tag } from 'antd'
+import { Alert, Button, Empty, Modal, Space, Spin, Table } from 'antd'
 import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamDeviceStateView } from '../../../../shared/team'
 import type { BrowserProfileView } from '../../../../shared/types'
+import { DeviceCopyComputer } from '../../components/DeviceCopyComputer'
 import { formatBytes, humanError, isEditable, shortDateTime } from '../../components/format'
 
 interface DeviceStatesModalProps {
@@ -52,6 +53,25 @@ export function DeviceStatesModal({ profile, onClose, onRestored }: DeviceStates
     })
   }
 
+  /** Deletes one copy from the cloud (the window and the other copies stay). */
+  function remove(state: TeamDeviceStateView): void {
+    Modal.confirm({
+      title: t("删除“{0}”在云端的这份备份？", state.deviceName),
+      content: t("只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。", shortDateTime(state.updated, getLocale())),
+      okText: t("删除"),
+      okButtonProps: { danger: true },
+      cancelText: t("取消"),
+      onOk: async () => {
+        try {
+          await window.browserApi.team.removeDeviceState(state.id)
+          setStates((items) => items?.filter((item) => item.id !== state.id))
+        } catch (reason) {
+          setError(humanError(reason))
+        }
+      }
+    })
+  }
+
   const closed = profile ? isEditable(profile) : false
   return (
     <Modal
@@ -82,12 +102,7 @@ export function DeviceStatesModal({ profile, onClose, onRestored }: DeviceStates
             {
               title: t("电脑"),
               dataIndex: 'deviceName',
-              render: (name: string, state) => (
-                <span>
-                  {name}
-                  {state.thisComputer && <Tag color="blue" style={{ marginLeft: 8 }}>{t("本机")}</Tag>}
-                </span>
-              )
+              render: (_name: string, state) => <DeviceCopyComputer state={state} states={states} />
             },
             { title: t("账号"), dataIndex: 'userName' },
             { title: t("最后备份"), dataIndex: 'updated', render: (value: string) => shortDateTime(value, getLocale()) },
@@ -96,9 +111,14 @@ export function DeviceStatesModal({ profile, onClose, onRestored }: DeviceStates
               title: '',
               key: 'restore',
               render: (_value, state) => (
-                <Button size="small" disabled={!closed || Boolean(restoring)} loading={restoring === state.id} onClick={() => restore(state)}>
-                  {t("恢复")}
-                </Button>
+                <Space size={6}>
+                  <Button size="small" disabled={!closed || Boolean(restoring)} loading={restoring === state.id} onClick={() => restore(state)}>
+                    {t("恢复")}
+                  </Button>
+                  <Button size="small" danger disabled={restoring === state.id} onClick={() => remove(state)}>
+                    {t("删除")}
+                  </Button>
+                </Space>
               )
             }
           ]}

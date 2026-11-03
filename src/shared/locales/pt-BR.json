@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "Esta janela ainda não está na nuvem",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "O servidor da equipe ainda não foi atualizado, então backups por computador ainda não podem ser restaurados",
   "这个备份已经不在了": "Este backup não existe mais",
-  "测试模式设置无效": "Configuração de modo de teste inválida"
+  "测试模式设置无效": "Configuração de modo de teste inválida",
+  "云端最新": "Mais recente na nuvem",
+  "全部改成：": "Mudar tudo para:",
+  "删除“{0}”在云端的这份备份？": "Excluir o backup na nuvem de “{0}”?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Só este backup (último backup {0}) é excluído; a janela e os backups de outros computadores continuam. Se for o deste computador, um novo será enviado na próxima vez que a janela fechar normalmente.",
+  "只有这一份：{0}": "Só este: {0}",
+  "某台电脑的": "De um computador",
+  "添加到本机：用哪台电脑的登录状态": "Adicionar a este computador: estado de login de qual computador",
+  "用哪份": "Qual backup",
+  "编号 {0}": "ID {0}",
+  "选一台电脑": "Escolha um computador",
+  "默认规则": "Regra padrão",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Regra padrão: janelas já usadas neste computador recebem o backup deste computador; as outras, o mais recente da nuvem. Janelas com um backup ou nenhum são adicionadas direto.",
+  "默认：云端最新": "Padrão: mais recente da nuvem",
+  "默认：本机那份": "Padrão: o deste computador",
+  "（最新）": "(mais recente)",
+  "（本机）": "(este computador)"
 }

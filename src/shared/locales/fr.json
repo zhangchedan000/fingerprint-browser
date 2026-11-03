@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "Cette fenêtre n’est pas encore dans le cloud",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "Le serveur d’équipe n’est pas encore mis à jour, la restauration par ordinateur n’est pas encore possible",
   "这个备份已经不在了": "Cette sauvegarde n’existe plus",
-  "测试模式设置无效": "Réglage du mode test invalide"
+  "测试模式设置无效": "Réglage du mode test invalide",
+  "云端最新": "La plus récente dans le cloud",
+  "全部改成：": "Tout passer à :",
+  "删除“{0}”在云端的这份备份？": "Supprimer la sauvegarde cloud de « {0} » ?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Seule cette sauvegarde (dernière sauvegarde {0}) est supprimée ; la fenêtre et les sauvegardes des autres ordinateurs restent. Si c’est celle de cet ordinateur, une nouvelle sera envoyée à la prochaine fermeture normale de la fenêtre.",
+  "只有这一份：{0}": "Une seule : {0}",
+  "某台电脑的": "Celle d’un ordinateur",
+  "添加到本机：用哪台电脑的登录状态": "Ajouter à cet ordinateur : l’état de connexion de quel ordinateur",
+  "用哪份": "Quelle sauvegarde",
+  "编号 {0}": "ID {0}",
+  "选一台电脑": "Choisir un ordinateur",
+  "默认规则": "Règle par défaut",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Règle par défaut : les fenêtres déjà utilisées sur cet ordinateur reçoivent sa sauvegarde, les autres la plus récente du cloud. Les fenêtres avec une seule sauvegarde ou aucune sont ajoutées directement.",
+  "默认：云端最新": "Par défaut : la plus récente du cloud",
+  "默认：本机那份": "Par défaut : celle de cet ordinateur",
+  "（最新）": "(la plus récente)",
+  "（本机）": "(cet ordinateur)"
 }

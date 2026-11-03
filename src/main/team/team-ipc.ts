@@ -34,6 +34,7 @@ export function registerTeamIpc(team: TeamManager): void {
   ipcMain.handle('team:add-to-computer', (_event, id: string) => team.restoreToComputer(id))
   ipcMain.handle('team:device-states', (_event, profileId: string) => team.deviceStates(profileId))
   ipcMain.handle('team:cloud-device-states', (_event, teamId: string) => team.cloudDeviceStates(teamId))
+  ipcMain.handle('team:remove-device-state', (_event, stateId: string) => team.removeDeviceState(stateId))
   ipcMain.handle('team:restore-device-state', (_event, profileId: string, stateId: string) => team.restoreDeviceState(profileId, stateId))
   ipcMain.handle('team:sync', () => team.sync())
   ipcMain.handle('team:logs', (_event, query: TeamLogQuery) => team.logs(query))

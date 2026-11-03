@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "Cửa sổ này chưa có trên đám mây",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "Máy chủ nhóm chưa được cập nhật nên tạm thời chưa thể khôi phục bản sao lưu theo máy",
   "这个备份已经不在了": "Bản sao lưu này không còn nữa",
-  "测试模式设置无效": "Cài đặt chế độ thử nghiệm không hợp lệ"
+  "测试模式设置无效": "Cài đặt chế độ thử nghiệm không hợp lệ",
+  "云端最新": "Bản mới nhất trên đám mây",
+  "全部改成：": "Đổi tất cả thành:",
+  "删除“{0}”在云端的这份备份？": "Xóa bản sao lưu trên đám mây của “{0}”?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Chỉ xóa bản này (sao lưu lần cuối {0}); cửa sổ và bản sao lưu của các máy khác vẫn giữ. Nếu là bản của máy này, lần đóng cửa sổ bình thường tiếp theo sẽ tải lên bản mới.",
+  "只有这一份：{0}": "Chỉ có bản này: {0}",
+  "某台电脑的": "Của một máy",
+  "添加到本机：用哪台电脑的登录状态": "Thêm vào máy này: dùng trạng thái đăng nhập của máy nào",
+  "用哪份": "Dùng bản nào",
+  "编号 {0}": "Mã {0}",
+  "选一台电脑": "Chọn một máy",
+  "默认规则": "Quy tắc mặc định",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Quy tắc mặc định: cửa sổ máy này từng dùng sẽ lấy bản của máy này, các cửa sổ khác lấy bản mới nhất trên đám mây. Cửa sổ chỉ có một bản hoặc chưa có được thêm ngay.",
+  "默认：云端最新": "Mặc định: bản mới nhất trên đám mây",
+  "默认：本机那份": "Mặc định: bản của máy này",
+  "（最新）": "(mới nhất)",
+  "（本机）": "(máy này)"
 }

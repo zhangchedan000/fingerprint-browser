@@ -9,6 +9,7 @@ import { StatusPill } from '../../components/StatusPill'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import { batchAssignees, type BatchAssignMode } from './batch-assign'
+import { BatchPickCopyModal, type BatchPickRequest, type BatchPickRow } from './BatchPickCopyModal'
 import { PickCopyModal, type PickCopyRequest } from './PickCopyModal'
 import type { PageProps } from '../registry'
 
@@ -482,6 +483,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [batchAssigning, setBatchAssigning] = useState(false)
   const [pickingCopy, setPickingCopy] = useState<PickCopyRequest>()
+  const [pickingCopies, setPickingCopies] = useState<BatchPickRequest>()
   // A refresh drops windows that are gone from the selection.
   useEffect(() => setSelectedIds((ids) => ids.filter((id) => profiles.some((profile) => profile.id === id))), [profiles])
   const selected = profiles.filter((profile) => selectedIds.includes(profile.id))
@@ -503,21 +505,42 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     }
   }
 
+  /** A cloud window's copies per computer, newest first (none when the server cannot say). */
+  async function copiesOf(profile: TeamProfileView) {
+    try {
+      return await window.browserApi.team.cloudDeviceStates(profile.id)
+    } catch {
+      return []
+    }
+  }
+
   /**
    * Before a cloud window comes onto this computer: when this computer had it before (this account has a
-   * copy from this computer), which computer's login state goes in. undefined: no question (a computer
-   * that never had it takes the latest), null: cancelled.
+   * copy from this computer) and there is more than one copy, which computer's login state goes in.
+   * undefined: no question (one copy or none; a computer that never had it takes the latest), null: cancelled.
    */
   async function chooseCopy(profile: TeamProfileView): Promise<string | null | undefined> {
     if (profile.localId) return undefined
-    let states
-    try {
-      states = await window.browserApi.team.cloudDeviceStates(profile.id)
-    } catch {
-      return undefined
-    }
-    if (!states.some((state) => state.thisComputer)) return undefined
+    const states = await copiesOf(profile)
+    if (states.length < 2 || !states.some((state) => state.thisComputer)) return undefined
     return new Promise((resolve) => setPickingCopy({ name: profile.name, states, resolve }))
+  }
+
+  /**
+   * 批量「添加到本机」: when any of the windows has more than one copy, the user picks which one goes into
+   * each (the usual rule unless changed); then they are added one after another.
+   */
+  async function addManyHere(rows: TeamProfileView[]): Promise<void> {
+    setBusy('add')
+    const picks: BatchPickRow[] = await Promise.all(rows.map(async (profile) => ({ profile, states: await copiesOf(profile) })))
+    setBusy(undefined)
+    let choices: Map<string, string | undefined> | null = new Map()
+    if (picks.some((row) => row.states.length > 1)) {
+      choices = await new Promise<Map<string, string | undefined> | null>((resolve) => setPickingCopies({ rows: picks, resolve }))
+    }
+    if (!choices) return
+    const picked = choices
+    await runMany('add', rows, (profile) => addWithCopy(profile, picked.get(profile.id)), t("已添加到本机"))
   }
 
   /** Adds the window here, then puts the chosen computer's copy in (before the first open). */
@@ -750,7 +773,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
               icon: <DownloadOutlined />,
               disabled: Boolean(busy) || !notHere.length,
               loading: busy === 'add',
-              onClick: () => void runMany('add', notHere, (profile) => window.browserApi.team.addToComputer(profile.id), t("已添加到本机"))
+              onClick: () => void addManyHere(notHere)
             }
           ],
           menu: owner ? [
@@ -776,6 +799,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       />
       <AssignModal open={Boolean(assigning)} profile={assigning} members={members} onClose={() => setAssigning(undefined)} onSaved={reload} />
       <BatchAssignModal open={batchAssigning} profiles={selected} members={members} onClose={() => setBatchAssigning(false)} onSave={assignMany} />
+      <BatchPickCopyModal request={pickingCopies} onClose={() => setPickingCopies(undefined)} />
       <PickCopyModal request={pickingCopy} onClose={() => setPickingCopy(undefined)} />
     </>
   )

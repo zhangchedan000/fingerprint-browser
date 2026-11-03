@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "This window is not in the cloud yet",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "The team server has not been updated yet, so per-computer backups cannot be restored for now",
   "这个备份已经不在了": "This backup no longer exists",
-  "测试模式设置无效": "Invalid test mode setting"
+  "测试模式设置无效": "Invalid test mode setting",
+  "云端最新": "Latest in the cloud",
+  "全部改成：": "Set all to:",
+  "删除“{0}”在云端的这份备份？": "Delete the cloud backup from “{0}”?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Only this backup (last backed up {0}) is deleted; the window and other computers’ backups stay. If it is this computer’s, a new one is uploaded the next time the window closes normally.",
+  "只有这一份：{0}": "Only this one: {0}",
+  "某台电脑的": "One computer’s",
+  "添加到本机：用哪台电脑的登录状态": "Add to this computer: which computer’s sign-in state",
+  "用哪份": "Which backup",
+  "编号 {0}": "ID {0}",
+  "选一台电脑": "Choose a computer",
+  "默认规则": "Default rule",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Default rule: windows this computer used before get this computer’s backup, others get the latest one in the cloud. Windows with one backup or none are added directly.",
+  "默认：云端最新": "Default: latest in the cloud",
+  "默认：本机那份": "Default: this computer’s",
+  "（最新）": "(latest)",
+  "（本机）": "(this computer)"
 }

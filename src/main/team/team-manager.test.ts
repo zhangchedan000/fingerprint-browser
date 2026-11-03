@@ -44,6 +44,7 @@ interface FakeDeviceState {
   user: string
   device: string
   device_name: string
+  device_os?: string
   data: string
   data_rev: number
   data_sha256: string
@@ -119,6 +120,13 @@ function fakeServer() {
           .map((state) => ({ ...state, expand: { user: publicUser(users.find((item) => item.id === state.user)!) } }))
         return json(200, { items, page: 1, totalItems: items.length })
       }
+      if (request.method === 'DELETE') {
+        // 1761600009: the owner deletes any copy, a member their own.
+        const state = id ? deviceStates.get(id) : undefined
+        if (!state || (user.role !== 'owner' && state.user !== user.id)) return json(404, {})
+        deviceStates.delete(state.id)
+        return new Response(null, { status: 204 })
+      }
       const form = await request.formData()
       const existing = id ? deviceStates.get(id) : undefined
       if (id && (!existing || existing.user !== user.id)) return json(404, {})
@@ -131,6 +139,7 @@ function fakeServer() {
         data: '', data_rev: 0, data_sha256: '', data_size: 0, updated: ''
       }
       state.device_name = String(form.get('device_name') ?? '')
+      if (form.get('device_os')) state.device_os = String(form.get('device_os'))
       state.data_rev += 1
       state.data = `device_${state.data_rev}.tgz`
       state.data_sha256 = String(form.get('data_sha256') ?? '')
@@ -329,6 +338,8 @@ describe('TeamManager', () => {
     expect(states.map((state) => state.thisComputer).sort()).toEqual([false, true])
     // The same list by cloud id, for adding the window here again (TeamPage asks which copy goes in).
     expect(await a.team.cloudDeviceStates(teamId)).toEqual(states)
+    // Each copy says its computer's system and the start of its computer id.
+    expect(states.every((state) => state.os && state.deviceShort.length === 6)).toBe(true)
     await a.team.restoreDeviceState(local.id, states.find((state) => !state.thisComputer)!.id)
     expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
     await a.team.beforeLaunch(local.id)
@@ -354,6 +365,13 @@ describe('TeamManager', () => {
     expect(server.records.get(teamId)).toMatchObject({ data_rev: 4 })
     const bCopy = [...server.deviceStates.values()].find((state) => state.device_name && state.data_rev === 2)
     expect(bCopy).toBeDefined()
+
+    // A copy can be deleted; the window and the other copies stay.
+    const before = await a.team.deviceStates(local.id)
+    await a.team.removeDeviceState(before.find((state) => !state.thisComputer)!.id)
+    const after = await a.team.deviceStates(local.id)
+    expect(after.map((state) => state.id)).toEqual(before.filter((state) => state.thisComputer).map((state) => state.id))
+    expect(server.records.get(teamId)).toBeDefined()
   })
 
   it('applies the owner’s config changes on the member’s next open', async () => {

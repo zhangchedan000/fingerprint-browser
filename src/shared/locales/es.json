@@ -2684,5 +2684,21 @@
   "这个窗口还没有存到云端": "Esta ventana aún no está en la nube",
   "团队服务器还没有更新，暂时不能按电脑恢复备份": "El servidor del equipo aún no se ha actualizado, por ahora no se pueden restaurar copias por equipo",
   "这个备份已经不在了": "Esta copia ya no existe",
-  "测试模式设置无效": "Configuración de modo de prueba no válida"
+  "测试模式设置无效": "Configuración de modo de prueba no válida",
+  "云端最新": "Lo más reciente en la nube",
+  "全部改成：": "Cambiar todo a:",
+  "删除“{0}”在云端的这份备份？": "¿Eliminar la copia en la nube de “{0}”?",
+  "只删这一份（最后备份 {0}），窗口和其他电脑的备份不受影响。删的是本机那份时，下次正常关闭窗口会重新上传一份。": "Solo se elimina esta copia (última copia {0}); la ventana y las copias de otros equipos se conservan. Si es la de este equipo, se subirá una nueva la próxima vez que la ventana se cierre normalmente.",
+  "只有这一份：{0}": "Solo esta: {0}",
+  "某台电脑的": "De un equipo",
+  "添加到本机：用哪台电脑的登录状态": "Añadir a este equipo: estado de sesión de qué equipo",
+  "用哪份": "Qué copia",
+  "编号 {0}": "ID {0}",
+  "选一台电脑": "Elige un equipo",
+  "默认规则": "Regla predeterminada",
+  "默认规则：本机以前用过的窗口用本机那份备份，没有的用云端最新的一份。只有一份或没有备份的窗口直接添加。": "Regla predeterminada: las ventanas que este equipo ya usó reciben la copia de este equipo; las demás, la más reciente de la nube. Las ventanas con una copia o ninguna se añaden directamente.",
+  "默认：云端最新": "Predeterminado: la más reciente de la nube",
+  "默认：本机那份": "Predeterminado: la de este equipo",
+  "（最新）": "(más reciente)",
+  "（本机）": "(este equipo)"
 }

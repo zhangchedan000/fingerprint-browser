@@ -135,6 +135,10 @@ export interface TeamDeviceStateView {
   id: string
   /** The computer's name when it last uploaded. */
   deviceName: string
+  /** The first characters of the computer's fixed id (tells apart two computers with one name). */
+  deviceShort: string
+  /** The computer's system when it last uploaded (copies from older apps: none). */
+  os?: string
   /** The account it belongs to. */
   userName: string
   /** This computer's own copy (this account, this computer). */

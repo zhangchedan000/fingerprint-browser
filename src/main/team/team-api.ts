@@ -45,6 +45,8 @@ export interface RemoteDeviceState {
   user: string
   device: string
   device_name: string
+  /** The computer's system when it last uploaded (e.g. "Windows 11 Pro 25H2"); empty from older apps. */
+  device_os?: string
   data: string
   data_rev: number
   data_sha256?: string
@@ -57,6 +59,8 @@ export interface RemoteDeviceState {
 export interface UploadDevice {
   id: string
   name: string
+  /** Its system, as the registry names it (sent with its own copy). */
+  os?: string
 }
 
 interface RemoteUser {
@@ -479,6 +483,7 @@ export class TeamApi {
       form.append('device', key.device.id)
     }
     form.append('device_name', key.device.name)
+    if (key.device.os) form.append('device_os', key.device.os)
     form.append('data_size', String(data.size))
     form.append('data_sha256', data.sha256)
     form.append('data', await openAsBlob(data.file), 'profile.tgz')
@@ -486,6 +491,11 @@ export class TeamApi {
     return id
       ? this.request('PATCH', `/api/collections/team_device_states/records/${encodeURIComponent(id)}`, form, timeout)
       : this.request('POST', '/api/collections/team_device_states/records', form, timeout)
+  }
+
+  /** Deletes one computer's copy (the owner: anyone's; a member: their own). */
+  async removeDeviceState(id: string): Promise<void> {
+    await this.request('DELETE', `/api/collections/team_device_states/records/${encodeURIComponent(id)}`)
   }
 
   async downloadData(profile: RemoteProfile | RemoteDeviceState, target: string): Promise<void> {
