@@ -1350,7 +1350,7 @@ export class TeamManager {
       if (config) link.configRev = record.config_rev
       link.pendingUpload = false
       await this.save()
-      this.logger?.info('[登录态] 关闭窗口：已上传，覆盖云端那一份', { profileId: id, rev: record.data_rev, bytes: packed.size })
+      this.logger?.info('[登录态] 已上传，覆盖云端那一份', { profileId: id, rev: record.data_rev, bytes: packed.size })
     } finally {
       await rm(packed.file, { force: true })
     }
