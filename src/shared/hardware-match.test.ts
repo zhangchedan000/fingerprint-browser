@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cpuWeights, gpuTier, matchedHardware, matchedScreen, matchingCpus, memoryWeights, screenSuitsGpu, STEAM_CPU_CORES } from './hardware-match'
+import { cpuWeights, gpuTier, matchedHardware, matchedScreen, matchingCpus, memoryWeights, screenSuitsGpu, screenWeights, STEAM_CPU_CORES } from './hardware-match'
 
 const steps = (n: number) => Array.from({ length: n }, (_, i) => () => (i + 0.5) / n)
 
@@ -62,13 +62,19 @@ describe('hardware matched to the GPU', () => {
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4060', { width: 3840, height: 2160 })).toBe(false)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4090', { width: 1920, height: 1080 })).toBe(false)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4090', { width: 3840, height: 2160 })).toBe(true)
-    const entry = steps(500).map((random) => matchedScreen('NVIDIA GeForce RTX 3050', random))
-    expect(entry.every((size) => size?.width === 1920)).toBe(true)
+    const share = (gpu: string, w: number, h: number) => screenWeights(gpu).find(([choice]) => choice.physical.width === w && choice.physical.height === h)?.[1] ?? 0
+    // Entry mostly 1080p (the survey alone), mid mostly 2K, high and top mostly 4K.
+    expect(share('NVIDIA GeForce RTX 3050', 1920, 1080)).toBeGreaterThan(0.9)
+    expect(share('NVIDIA GeForce RTX 4060', 2560, 1440)).toBeCloseTo(0.6, 6)
+    expect(share('NVIDIA GeForce RTX 4060', 1920, 1080)).toBeGreaterThan(0.3)
+    expect(share('NVIDIA GeForce RTX 4070', 3840, 2160)).toBeCloseTo(0.6, 6)
+    expect(share('NVIDIA GeForce RTX 4090', 3840, 2160)).toBeCloseTo(0.6, 6)
+    expect(share('NVIDIA GeForce RTX 4090', 1920, 1080)).toBe(0)
+    for (const gpu of ['NVIDIA GeForce RTX 3050', 'NVIDIA GeForce RTX 4060', 'NVIDIA GeForce RTX 4070', 'NVIDIA GeForce RTX 4090']) {
+      expect(screenWeights(gpu).reduce((sum, [, weight]) => sum + weight, 0)).toBeCloseTo(1, 6)
+    }
     const top = steps(1000).map((random) => matchedScreen('NVIDIA GeForce RTX 4090', random))
-    const share = (w: number, h: number) => top.filter((size) => size?.width === w && size.height === h).length / top.length
-    expect(share(1920, 1080)).toBe(0)
-    expect(share(2560, 1440)).toBeGreaterThan(0.7)
-    expect(share(3840, 2160)).toBeGreaterThan(0.15)
-    expect(share(3440, 1440)).toBeGreaterThan(0.09)
+    expect(top.filter((size) => size?.width === 3840).length / 1000).toBeGreaterThan(0.55)
+    expect(steps(500).map((random) => matchedScreen('NVIDIA GeForce RTX 3050', random)).every((size) => size?.width === 1920)).toBe(true)
   })
 })

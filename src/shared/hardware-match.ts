@@ -1,6 +1,6 @@
 import { CPU_MODELS, type CpuModel } from './cpu-catalog'
 import type { DeviceMemoryGb } from './types'
-import { screenChoices, type ScreenSize } from './screen'
+import { screenChoices, type ScreenChoice, type ScreenSize } from './screen'
 
 /**
  * A GPU picked for a window brings a CPU, memory size and resolution. The card decides what can go
@@ -131,13 +131,30 @@ export function screenSuitsGpu(gpuModel: string, physical: { width: number; heig
 }
 
 /**
- * A resolution for a desktop with this card, by its Steam share among the sizes this computer can
- * claim that suit the card (screenSuitsGpu); undefined when none does.
+ * The size most desktops with each class of card have (user, 2026-11-04: an entry card mostly 1080p,
+ * mid-range mostly 2K, high-end mostly 4K): it comes up at least MAIN_SCREEN_SHARE of the time, the
+ * others share the rest as in the Steam survey (an entry card's 1080p is above it in the survey alone).
  */
-export function matchedScreen(gpuModel: string, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
+export const MAIN_SCREEN: Readonly<Record<GpuTier, string>> = { entry: '1920x1080', mid: '2560x1440', high: '3840x2160', top: '3840x2160' }
+export const MAIN_SCREEN_SHARE = 0.6
+
+/** Each size that goes with the card (SCREEN_CLASSES) and how often it comes up (MAIN_SCREEN). */
+export function screenWeights(gpuModel: string, scale = 1): Array<[ScreenChoice, number]> {
+  const tier = gpuTier(gpuModel)
   const choices = screenChoices(undefined, scale).filter((choice) => screenSuitsGpu(gpuModel, choice.physical))
-  if (!choices.length) return undefined
-  const picked = pick(choices.map((choice) => [choice, choice.weight] as [typeof choice, number]), random)
+  const isMain = (choice: ScreenChoice) => `${choice.physical.width}x${choice.physical.height}` === MAIN_SCREEN[tier]
+  const total = choices.reduce((sum, choice) => sum + choice.weight, 0)
+  const main = choices.find(isMain)
+  const others = total - (main?.weight ?? 0)
+  if (!main || !others || main.weight / total >= MAIN_SCREEN_SHARE) return choices.map((choice) => [choice, choice.weight / total])
+  return choices.map((choice) => [choice, isMain(choice) ? MAIN_SCREEN_SHARE : (1 - MAIN_SCREEN_SHARE) * choice.weight / others])
+}
+
+/** A resolution for a desktop with this card (screenWeights); undefined when none fits. */
+export function matchedScreen(gpuModel: string, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
+  const weights = screenWeights(gpuModel, scale)
+  if (!weights.length) return undefined
+  const picked = pick(weights, random)
   return { width: picked.width, height: picked.height }
 }
 
