@@ -9,6 +9,7 @@ import { followingLocales, savedFingerprint } from '../shared/network-identity'
 import { PRISM21_CASES } from './__fixtures__/prism21-cases'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
+const MACOS = { platform: 'macos' as const, hardwareProfileId: defaultHardwareProfileId('macos') }
 
 function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): BrowserProfile {
   const draft = defaultProfileDraft()
@@ -337,7 +338,9 @@ describe('launch arguments', () => {
     const before = JSON.parse(readFileSync(join(__dirname, '__fixtures__', 'prism21-launch-args.json'), 'utf8')) as Record<string, string[]>
     expect(Object.keys(before).sort()).toEqual(PRISM21_CASES.map((item) => item.name).sort())
     for (const item of PRISM21_CASES) {
-      const fingerprint = { ...(item.windows ? WINDOWS : {}), ...item.fingerprint } as Partial<BrowserProfile['fingerprint']>
+      // The cases without a platform were recorded on Linux, where a new window defaults to macOS
+      // (defaultProfileDraft follows this computer); on a Windows test machine it would default to Windows.
+      const fingerprint = { ...(item.windows ? WINDOWS : MACOS), ...item.fingerprint } as Partial<BrowserProfile['fingerprint']>
       const args = buildLaunchArgs({ ...profile(fingerprint), ...item.profile } as BrowserProfile, { userDataDir: '/data', fingerprintKernel: true, engineVersion: item.engine, ...item.options })
       expect(args, item.name).toEqual(before[item.name])
     }
