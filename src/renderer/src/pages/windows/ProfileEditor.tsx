@@ -1856,6 +1856,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Radio.Group
           optionType="button"
+          className="fb-proxy-modes"
           value={proxyMode === 'library' && subscriptionPick ? 'subscription' : proxyMode}
           onChange={(event) => {
             const next = event.target.value as ProxyMode | 'subscription'

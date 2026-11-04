@@ -143,6 +143,9 @@ button, input, textarea { font: inherit; }
 .fb-name-editable { cursor: text; }
 .fb-name-editable:hover { color: var(--fb-accent); }
 .fb-serial-cell { display: flex; align-items: center; gap: 2px; }
+/* 代理方式: seven choices on one line in the editor. */
+.fb-proxy-modes { display: flex; flex-wrap: nowrap; }
+.fb-proxy-modes .ant-radio-button-wrapper { padding-inline: 10px; white-space: nowrap; }
 .fb-name-cell strong { display: block; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .fb-color-mark { flex: none; width: 4px; height: 26px; border-radius: 2px; }
 .fb-tags { display: flex; gap: 4px; margin-top: 3px; }
