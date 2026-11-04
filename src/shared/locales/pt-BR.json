@@ -2533,7 +2533,6 @@
   "网页读不到型号；硬件并发数自动等于它的线程数": "As páginas não leem o modelo; a concorrência de hardware vira o número de threads dele",
   "网页读不到，只用来区分窗口": "As páginas não leem; só serve para distinguir janelas",
   "网页里的时间按它显示": "Os horários das páginas aparecem nele",
-  "自动：音箱 + USB 耳麦，保存后固定；没授权的网站只看到有哪几类设备": "Auto: caixas de som + headset USB, fixo ao salvar; sites sem permissão só veem os tipos de dispositivo",
   "设置改了，要重新检测": "Configuração mudou; verifique de novo",
   "还没检测": "Ainda não verificado",
   "这个代理还没检测，检测后按 IP 配": "Este proxy ainda não foi verificado; ao verificar, tudo segue o IP",
@@ -2712,5 +2711,6 @@
   "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "Kernel anterior ao prism21: este inicializador não abre mais janelas com ele. Atualize para o prism21",
   "GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 {0} 分钟后再试": "O GitHub está recusando por enquanto: este computador esgotou as consultas desta hora; tente de novo em cerca de {0} min",
   "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "O GitHub está recusando por enquanto (HTTP {0}); tente de novo em alguns minutos",
-  "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Outro programa está usando a pasta do kernel, então ela não pode ser atualizada agora. Normalmente é um programa em segundo plano do método de entrada (como o serviço em nuvem do Sogou): depois de digitar com ele no navegador, ele continua usando a pasta do kernel. Feche esse programa ou reinicie o computador e clique em Atualizar de novo"
+  "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Outro programa está usando a pasta do kernel, então ela não pode ser atualizada agora. Normalmente é um programa em segundo plano do método de entrada (como o serviço em nuvem do Sogou): depois de digitar com ele no navegador, ele continua usando a pasta do kernel. Feche esse programa ou reinicie o computador e clique em Atualizar de novo",
+  "自动：音箱 + USB 耳麦，约十分之一的窗口另有摄像头，保存后固定；没授权的网站只看到有哪几类设备": "Automático: alto-falantes + headset USB, e cerca de uma em cada dez janelas também uma webcam; fixado ao salvar. Sites sem permissão veem só quais tipos de dispositivo existem"
 }

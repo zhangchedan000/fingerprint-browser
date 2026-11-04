@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { autoMediaDevices, effectiveMediaDevices, isLaptopGpu, isMediaDevicesChoice, legacyAutoMediaDevices, MEDIA_SETUPS } from './media-devices'
 
 describe('media devices', () => {
-  it('starts every window on speakers and a USB headset', () => {
-    for (const model of ['NVIDIA GeForce RTX 3050', 'NVIDIA GeForce RTX 4090', 'NVIDIA GeForce RTX 4060 Laptop GPU', undefined]) {
-      const sets = new Set(Array.from({ length: 100 }, (_, seed) => autoMediaDevices(seed, model)))
-      expect([...sets]).toEqual(['1,2,0'])
-    }
+  it('starts windows on speakers and a USB headset, about one in ten also with a webcam, fixed by the seed', () => {
+    const sets = Array.from({ length: 2000 }, (_, seed) => autoMediaDevices(seed * 7919 + 13))
+    expect(new Set(sets)).toEqual(new Set(['1,2,0', '2,2,1']))
+    const webcam = sets.filter((set) => set === '2,2,1').length / sets.length
+    expect(webcam).toBeGreaterThan(0.07)
+    expect(webcam).toBeLessThan(0.13)
+    expect(autoMediaDevices(123456)).toBe(autoMediaDevices(123456))
+    expect(autoMediaDevices(123456, 'NVIDIA GeForce RTX 4090')).toBe(autoMediaDevices(123456, 'NVIDIA GeForce RTX 3050'))
     expect(MEDIA_SETUPS.find((setup) => setup.set === '1,2,0')).toMatchObject({ microphones: 1, speakers: 1, headphones: 1, cameras: 0 })
     // Every set is one of the setups offered, each counted in full.
     for (const setup of MEDIA_SETUPS) {

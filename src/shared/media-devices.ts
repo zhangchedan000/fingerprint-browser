@@ -64,12 +64,21 @@ function seededRandom(seed: number): () => number {
 /** The set a new window starts with: speakers and a USB headset (microphone + headphones). */
 export const DEFAULT_MEDIA_DEVICES = '1,2,0'
 
+/** The same with a webcam (its own microphone): speakers, a USB headset and a camera. */
+export const WEBCAM_MEDIA_DEVICES = '2,2,1'
+
+/** Share of windows whose 自动 set has a webcam (user, 2026-11-04: most desktops have none, keep it small). */
+export const WEBCAM_SHARE = 0.1
+
 /**
- * The set 自动 stands for: the same for every window (the seed and GPU are kept in the signature
- * for windows written before this rule). Saved windows keep the set they were saved with.
+ * The set 自动 stands for, fixed by the window's seed: speakers and a USB headset, the most usual
+ * desktop (user, 2026-11-04); one window in ten also has a webcam. No public survey gives how many
+ * desktops have one, so the share is the user's call, kept small. Saved windows keep the set they
+ * were saved with (savedFingerprint writes it in).
  */
-export function autoMediaDevices(_seed: number, _gpuModel?: string): string {
-  return DEFAULT_MEDIA_DEVICES
+export function autoMediaDevices(seed: number, _gpuModel?: string): string {
+  const next = seededRandom((seed ^ 0x5eedca3) >>> 0)
+  return next() < WEBCAM_SHARE ? WEBCAM_MEDIA_DEVICES : DEFAULT_MEDIA_DEVICES
 }
 
 /**
