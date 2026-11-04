@@ -98,14 +98,37 @@ function pick<T>(items: ReadonlyArray<[T, number]>, random: () => number): T {
 }
 
 /**
- * Each suiting CPU weighted so that core counts come up as often as in the Steam survey: a core
- * count's share is split evenly among the suiting CPUs that have it.
+ * Intel and AMD among desktops (%), roughly as in the Steam survey (2026: Intel about 52, AMD about 48).
+ * The vendor is picked first: weighting by core count alone gave recent cards mostly AMD, because Intel's
+ * desktop CPUs since the 12th generation have 10 to 24 cores and the survey's large 6- and 8-core shares
+ * then fell almost only to Ryzen 5 and 7 (an RTX 5080 got AMD 81% of the time).
  */
-export function cpuWeights(cpus: readonly CpuModel[]): Array<[CpuModel, number]> {
+export const CPU_VENDOR_SHARE: Readonly<Record<string, number>> = { Intel: 52, AMD: 48 }
+
+/** Within one vendor: each core count's Steam share split evenly among the CPUs that have it. */
+function coreWeights(cpus: readonly CpuModel[]): Array<[CpuModel, number]> {
   const perCores = new Map<number, number>()
   for (const cpu of cpus) perCores.set(cpu.cores, (perCores.get(cpu.cores) ?? 0) + 1)
   const weighted = cpus.map((cpu): [CpuModel, number] => [cpu, (STEAM_CPU_CORES[cpu.cores] ?? 0) / perCores.get(cpu.cores)!])
   return weighted.some(([, weight]) => weight > 0) ? weighted : cpus.map((cpu) => [cpu, 1])
+}
+
+/**
+ * Each suiting CPU's weight: its vendor's share (CPU_VENDOR_SHARE, the other vendor's too when one
+ * has no suiting CPU), then within the vendor by core count as in the Steam survey.
+ */
+export function cpuWeights(cpus: readonly CpuModel[]): Array<[CpuModel, number]> {
+  const vendors = [...new Set(cpus.map((cpu) => cpu.vendor))]
+  const share = (vendor: string) => CPU_VENDOR_SHARE[vendor] ?? 0
+  const total = vendors.reduce((sum, vendor) => sum + share(vendor), 0)
+  const weights = new Map<CpuModel, number>()
+  for (const vendor of vendors) {
+    const inner = coreWeights(cpus.filter((cpu) => cpu.vendor === vendor))
+    const sum = inner.reduce((acc, [, weight]) => acc + weight, 0)
+    const vendorShare = total > 0 ? share(vendor) / total : 1 / vendors.length
+    for (const [cpu, weight] of inner) weights.set(cpu, vendorShare * weight / sum)
+  }
+  return cpus.map((cpu) => [cpu, weights.get(cpu) ?? 0])
 }
 
 /** Memory sizes for this card with their Steam shares: 8 GB only beside an entry card. */
@@ -116,12 +139,13 @@ export function memoryWeights(gpuModel: string): Array<[DeviceMemoryGb, number]>
 
 /**
  * The monitors (physical pixels) a desktop with each class of card goes with (user, 2026-11-04: the
- * resolution matches the card too): an entry card a 1080p-class screen, a top card nothing below 1440p.
+ * resolution matches the card too): an entry card a 1080p-class screen, from mid-range up mostly 2K,
+ * nothing below 1440p from the upper mid-range up.
  */
 export const SCREEN_CLASSES: Readonly<Record<GpuTier, readonly string[]>> = {
   entry: ['1920x1080', '1920x1200'],
   mid: ['1920x1080', '1920x1200', '2560x1080', '2560x1440'],
-  high: ['1920x1080', '2560x1440', '3440x1440', '3840x2160'],
+  high: ['2560x1440', '3440x1440', '3840x2160'],
   top: ['2560x1440', '3440x1440', '3840x2160']
 }
 
@@ -131,12 +155,16 @@ export function screenSuitsGpu(gpuModel: string, physical: { width: number; heig
 }
 
 /**
- * The size most desktops with each class of card have (user, 2026-11-04: an entry card mostly 1080p,
- * mid-range mostly 2K, high-end mostly 4K): it comes up at least MAIN_SCREEN_SHARE of the time, the
- * others share the rest as in the Steam survey (an entry card's 1080p is above it in the survey alone).
+ * The size most desktops with each class of card have (user, 2026-11-04: entry mostly 1080p, mid-range
+ * and upper mid-range mostly 2K, high-end mostly 4K): it comes up MAIN_SCREEN_SHARE of the time; an
+ * ultrawide comes up as often as in the Steam survey overall (3440 × 1440 3.22%, 2560 × 1080 0.68%:
+ * few people have one); the other sizes share the rest as in the survey. An entry card's 1080p is above
+ * the main share in the survey alone, so entry cards keep the survey's shares.
  */
-export const MAIN_SCREEN: Readonly<Record<GpuTier, string>> = { entry: '1920x1080', mid: '2560x1440', high: '3840x2160', top: '3840x2160' }
-export const MAIN_SCREEN_SHARE = 0.6
+export const MAIN_SCREEN: Readonly<Record<GpuTier, string>> = { entry: '1920x1080', mid: '2560x1440', high: '2560x1440', top: '3840x2160' }
+export const MAIN_SCREEN_SHARE = 0.75
+
+const isUltrawide = (choice: ScreenChoice) => choice.physical.width / choice.physical.height > 2.3
 
 /** Each size that goes with the card (SCREEN_CLASSES) and how often it comes up (MAIN_SCREEN). */
 export function screenWeights(gpuModel: string, scale = 1): Array<[ScreenChoice, number]> {
@@ -145,9 +173,17 @@ export function screenWeights(gpuModel: string, scale = 1): Array<[ScreenChoice,
   const isMain = (choice: ScreenChoice) => `${choice.physical.width}x${choice.physical.height}` === MAIN_SCREEN[tier]
   const total = choices.reduce((sum, choice) => sum + choice.weight, 0)
   const main = choices.find(isMain)
-  const others = total - (main?.weight ?? 0)
-  if (!main || !others || main.weight / total >= MAIN_SCREEN_SHARE) return choices.map((choice) => [choice, choice.weight / total])
-  return choices.map((choice) => [choice, isMain(choice) ? MAIN_SCREEN_SHARE : (1 - MAIN_SCREEN_SHARE) * choice.weight / others])
+  if (!main || main.weight / total >= MAIN_SCREEN_SHARE) return choices.map((choice) => [choice, choice.weight / total])
+  // SCREEN_CHOICES weights are percentages of all computers: an ultrawide keeps its own.
+  const ultrawide = choices.filter((choice) => !isMain(choice) && isUltrawide(choice))
+  const ultrawideShare = ultrawide.reduce((sum, choice) => sum + choice.weight / 100, 0)
+  const others = choices.filter((choice) => !isMain(choice) && !isUltrawide(choice))
+  const othersWeight = others.reduce((sum, choice) => sum + choice.weight, 0)
+  const mainShare = othersWeight ? MAIN_SCREEN_SHARE : 1 - ultrawideShare
+  const restShare = 1 - mainShare - ultrawideShare
+  return choices.map((choice) => [choice, isMain(choice)
+    ? mainShare
+    : isUltrawide(choice) ? choice.weight / 100 : restShare * choice.weight / othersWeight])
 }
 
 /** A resolution for a desktop with this card (screenWeights); undefined when none fits. */

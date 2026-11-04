@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cpuWeights, gpuTier, matchedHardware, matchedScreen, matchingCpus, memoryWeights, screenSuitsGpu, screenWeights, STEAM_CPU_CORES } from './hardware-match'
+import { CPU_VENDOR_SHARE, cpuWeights, gpuTier, matchedHardware, matchedScreen, matchingCpus, memoryWeights, screenSuitsGpu, screenWeights, STEAM_CPU_CORES } from './hardware-match'
 
 const steps = (n: number) => Array.from({ length: n }, (_, i) => () => (i + 0.5) / n)
 
@@ -32,11 +32,22 @@ describe('hardware matched to the GPU', () => {
     expect(matchingCpus('NVIDIA GeForce RTX 4070').some((cpu) => /Core i3|Ryzen 3/.test(cpu.model))).toBe(false)
   })
 
-  it('gives each core count its Steam survey share, split among the CPUs that have it', () => {
-    const weights = cpuWeights(matchingCpus('NVIDIA GeForce RTX 4070'))
-    const byCores = new Map<number, number>()
-    for (const [cpu, weight] of weights) byCores.set(cpu.cores, (byCores.get(cpu.cores) ?? 0) + weight)
-    for (const [cores, total] of byCores) expect(total).toBeCloseTo(STEAM_CPU_CORES[cores] ?? 0, 6)
+  it('picks Intel or AMD by their share first, then core counts by the Steam survey within the vendor', () => {
+    for (const gpu of ['NVIDIA GeForce RTX 2060', 'NVIDIA GeForce RTX 3070', 'NVIDIA GeForce RTX 4070', 'NVIDIA GeForce RTX 4090', 'NVIDIA GeForce RTX 5070', 'NVIDIA GeForce RTX 5080']) {
+      const weights = cpuWeights(matchingCpus(gpu))
+      const total = weights.reduce((sum, [, weight]) => sum + weight, 0)
+      const intel = weights.filter(([cpu]) => cpu.vendor === 'Intel').reduce((sum, [, weight]) => sum + weight, 0)
+      // Before: an RTX 5080 got AMD 81% of the time (6- and 8-core shares fell to Ryzen only).
+      expect(intel / total).toBeCloseTo(CPU_VENDOR_SHARE.Intel / (CPU_VENDOR_SHARE.Intel + CPU_VENDOR_SHARE.AMD), 6)
+      for (const vendor of ['Intel', 'AMD'] as const) {
+        const own = weights.filter(([cpu]) => cpu.vendor === vendor)
+        const byCores = new Map<number, number>()
+        for (const [cpu, weight] of own) byCores.set(cpu.cores, (byCores.get(cpu.cores) ?? 0) + weight)
+        const coreTotal = [...byCores.keys()].reduce((sum, cores) => sum + (STEAM_CPU_CORES[cores] ?? 0), 0)
+        const vendorTotal = own.reduce((sum, [, weight]) => sum + weight, 0)
+        for (const [cores, weight] of byCores) expect(weight / vendorTotal).toBeCloseTo((STEAM_CPU_CORES[cores] ?? 0) / coreTotal, 6)
+      }
+    }
   })
 
   it('picks memory by the Steam survey; 8 GB only beside an entry card; capped by what the kernel can report', () => {
@@ -60,21 +71,28 @@ describe('hardware matched to the GPU', () => {
     expect(screenSuitsGpu('NVIDIA GeForce RTX 3050', { width: 1920, height: 1080 })).toBe(true)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4060', { width: 2560, height: 1440 })).toBe(true)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4060', { width: 3840, height: 2160 })).toBe(false)
+    expect(screenSuitsGpu('NVIDIA GeForce RTX 4070', { width: 1920, height: 1080 })).toBe(false)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4090', { width: 1920, height: 1080 })).toBe(false)
     expect(screenSuitsGpu('NVIDIA GeForce RTX 4090', { width: 3840, height: 2160 })).toBe(true)
     const share = (gpu: string, w: number, h: number) => screenWeights(gpu).find(([choice]) => choice.physical.width === w && choice.physical.height === h)?.[1] ?? 0
-    // Entry mostly 1080p (the survey alone), mid mostly 2K, high and top mostly 4K.
+    // Entry mostly 1080p (the survey alone); mid and upper mid mostly 2K, high-end mostly 4K, 75% each;
+    // ultrawides as often as in the survey overall; the rest by the survey.
     expect(share('NVIDIA GeForce RTX 3050', 1920, 1080)).toBeGreaterThan(0.9)
-    expect(share('NVIDIA GeForce RTX 4060', 2560, 1440)).toBeCloseTo(0.6, 6)
-    expect(share('NVIDIA GeForce RTX 4060', 1920, 1080)).toBeGreaterThan(0.3)
-    expect(share('NVIDIA GeForce RTX 4070', 3840, 2160)).toBeCloseTo(0.6, 6)
-    expect(share('NVIDIA GeForce RTX 4090', 3840, 2160)).toBeCloseTo(0.6, 6)
+    expect(share('NVIDIA GeForce RTX 4060', 2560, 1440)).toBeCloseTo(0.75, 6)
+    expect(share('NVIDIA GeForce RTX 4060', 2560, 1080)).toBeCloseTo(0.0068, 6)
+    expect(share('NVIDIA GeForce RTX 4060', 1920, 1080)).toBeCloseTo((1 - 0.75 - 0.0068) * 51.93 / (51.93 + 3.01), 6)
+    expect(share('NVIDIA GeForce RTX 4070', 2560, 1440)).toBeCloseTo(0.75, 6)
+    expect(share('NVIDIA GeForce RTX 4070', 3440, 1440)).toBeCloseTo(0.0322, 6)
+    expect(share('NVIDIA GeForce RTX 4070', 3840, 2160)).toBeCloseTo(1 - 0.75 - 0.0322, 6)
+    expect(share('NVIDIA GeForce RTX 4090', 3840, 2160)).toBeCloseTo(0.75, 6)
+    expect(share('NVIDIA GeForce RTX 4090', 3440, 1440)).toBeCloseTo(0.0322, 6)
+    expect(share('NVIDIA GeForce RTX 4090', 2560, 1440)).toBeCloseTo(1 - 0.75 - 0.0322, 6)
     expect(share('NVIDIA GeForce RTX 4090', 1920, 1080)).toBe(0)
     for (const gpu of ['NVIDIA GeForce RTX 3050', 'NVIDIA GeForce RTX 4060', 'NVIDIA GeForce RTX 4070', 'NVIDIA GeForce RTX 4090']) {
       expect(screenWeights(gpu).reduce((sum, [, weight]) => sum + weight, 0)).toBeCloseTo(1, 6)
     }
     const top = steps(1000).map((random) => matchedScreen('NVIDIA GeForce RTX 4090', random))
-    expect(top.filter((size) => size?.width === 3840).length / 1000).toBeGreaterThan(0.55)
+    expect(top.filter((size) => size?.width === 3840).length / 1000).toBeGreaterThan(0.7)
     expect(steps(500).map((random) => matchedScreen('NVIDIA GeForce RTX 3050', random)).every((size) => size?.width === 1920)).toBe(true)
   })
 })
