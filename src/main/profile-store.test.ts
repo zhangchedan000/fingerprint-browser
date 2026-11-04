@@ -179,6 +179,19 @@ describe('ProfileStore', () => {
     expect(reopened.get(profile.id).fingerprint.seed).toBe(profile.fingerprint.seed)
   })
 
+  it('renames in place (trimmed, never empty, at most 60 characters), keeping everything else', async () => {
+    const repository = await store()
+    const profile = await repository.create(defaultProfileDraft())
+    const renamed = await repository.rename(profile.id, '  新名字  ')
+    expect(renamed.name).toBe('新名字')
+    expect(renamed.fingerprint).toEqual(profile.fingerprint)
+    await expect(repository.rename(profile.id, '   ')).rejects.toThrow('环境名称不能为空')
+    await expect(repository.rename(profile.id, 'x'.repeat(61))).rejects.toThrow('60')
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect(reopened.get(profile.id).name).toBe('新名字')
+  })
+
   it('preserves, replaces or clears a stored proxy password without exposing a marker on disk', async () => {
     const repository = await store()
     const draft = defaultProfileDraft()

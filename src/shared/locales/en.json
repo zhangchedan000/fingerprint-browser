@@ -2713,5 +2713,7 @@
   "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "GitHub is refusing for now (HTTP {0}); try again in a few minutes",
   "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Another program is holding the kernel folder, so it cannot be updated right now. Usually it is an input method's background program (such as Sogou Input's cloud service): after you type with it in the browser, it keeps the kernel folder in use. Quit that program or restart the computer, then click Update again",
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Auto: mostly speakers + a USB headset; a few entry-level cards only a headset or only speakers, a few high-end cards also a webcam; fixed once saved. Sites without permission only see which kinds of devices there are",
-  "各数据库判断不一：{0}": "databases disagree: {0}"
+  "各数据库判断不一：{0}": "databases disagree: {0}",
+  "修改名称": "Rename",
+  "点击修改名称": "Click to rename"
 }

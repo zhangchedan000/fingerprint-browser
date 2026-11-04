@@ -783,6 +783,7 @@ export interface BrowserApi {
     update: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
     /** An open window: name, group, note, account and the like; proxy and fingerprint stay as launched. */
     updateDetails: (id: string, draft: ProfileDraft) => Promise<BrowserProfileView>
+    rename: (id: string, name: string) => Promise<BrowserProfileView>
     duplicate: (id: string) => Promise<BrowserProfileView>
     /** The 序号 the next new window gets here (its default name is 环境 + that number). */
     nextSerial: () => Promise<number>

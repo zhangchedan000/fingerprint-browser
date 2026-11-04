@@ -135,6 +135,14 @@ button, input, textarea { font: inherit; }
 .fb-table-panel .ant-pagination { padding: 0 16px; }
 .fb-name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .fb-name-cell > div { min-width: 0; }
+/* The pencil sits at the right edge of the cell, at the same place on every row. */
+.fb-name-cell > .fb-name-text { flex: 1; }
+.fb-name-cell > .fb-name-input { flex: 1; min-width: 0; }
+.fb-name-edit { flex: none; margin-left: auto; color: var(--fb-text-faint); }
+.fb-name-edit:hover { color: var(--fb-accent); }
+.fb-name-editable { cursor: text; }
+.fb-name-editable:hover { color: var(--fb-accent); }
+.fb-serial-cell { display: flex; align-items: center; gap: 2px; }
 .fb-name-cell strong { display: block; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .fb-color-mark { flex: none; width: 4px; height: 26px; border-radius: 2px; }
 .fb-tags { display: flex; gap: 4px; margin-top: 3px; }

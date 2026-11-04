@@ -1569,6 +1569,19 @@ export class ProfileStore {
     return this.resolve(profile)
   }
 
+  /** A new name only (the window list's rename in place); allowed while the window runs, like updateDetails. */
+  async rename(id: string, input: string): Promise<BrowserProfile> {
+    const name = typeof input === 'string' ? input.trim() : ''
+    if (!name) throw new Error('环境名称不能为空')
+    if (name.length > PROFILE_NAME_MAX_LENGTH) throw new Error('环境名称不能超过 60 个字符')
+    const current = this.stored(id)
+    if (current.name === name) return this.resolve(current)
+    const profile: StoredProfile = { ...current, name, updatedAt: new Date().toISOString() }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
   async setFavorite(id: string, favorite: boolean): Promise<BrowserProfile> {
     if (typeof favorite !== 'boolean') throw new Error('收藏状态无效')
     const current = this.stored(id)

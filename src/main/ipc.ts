@@ -112,6 +112,13 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await team.afterLocalEdit(id)
     return profile
   })
+  ipcMain.handle('profiles:rename', async (_event, id: string, name: string) => {
+    team.assertEditable(id)
+    await assertUniqueWindowName(typeof name === 'string' ? name.trim() : name, id)
+    const profile = publicProfile(await profiles.rename(id, name))
+    await team.afterLocalEdit(id)
+    return profile
+  })
   ipcMain.handle('profiles:duplicate', async (_event, id: string) => {
     team.assertEditable(id)
     const profile = publicProfile(await profiles.duplicate(id))

@@ -2713,5 +2713,7 @@
   "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "GitHub şimdilik reddediyor (HTTP {0}); birkaç dakika sonra yeniden deneyin",
   "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Çekirdek klasörünü başka bir program kullanıyor, bu yüzden şu anda güncellenemiyor. Genellikle bir giriş yönteminin arka plan programıdır (ör. Sogou girişinin bulut hizmeti): tarayıcıda onunla yazdıktan sonra çekirdek klasörünü kullanmaya devam eder. O programı kapatın ya da bilgisayarı yeniden başlatın, sonra Güncelle'ye yeniden tıklayın",
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Otomatik: çoğunlukla hoparlör + USB kulaklık; bazı giriş seviyesi kartlarda yalnızca kulaklık ya da yalnızca hoparlör, bazı üst seviye kartlarda ayrıca web kamerası; kaydedince sabitlenir. İzni olmayan siteler yalnızca hangi tür cihazlar olduğunu görür",
-  "各数据库判断不一：{0}": "veritabanları farklı diyor: {0}"
+  "各数据库判断不一：{0}": "veritabanları farklı diyor: {0}",
+  "修改名称": "Yeniden adlandır",
+  "点击修改名称": "Yeniden adlandırmak için tıklayın"
 }

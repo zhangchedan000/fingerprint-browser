@@ -70,6 +70,9 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [editorOpen, setEditorOpen] = useState(false)
   const [nextSerial, setNextSerial] = useState(1)
   const [testModeBusy, setTestModeBusy] = useState('')
+  // Rename in place (the name, or the pencil at the right of the name cell).
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | undefined>()
+  const [renameBusy, setRenameBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState<'group' | 'proxy' | null>(null)
   const [batchTags, setBatchTags] = useState('')
@@ -89,6 +92,25 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
 
   const selected = profiles.filter((profile) => selectedIds.includes(profile.id))
   const upsert = (profile: BrowserProfileView): void => ws.upsertProfiles([profile])
+
+  async function saveRename(): Promise<void> {
+    if (!renaming || renameBusy) return
+    const profile = profiles.find((item) => item.id === renaming.id)
+    const name = renaming.name.trim()
+    if (!profile || !name || name === profile.name) {
+      setRenaming(undefined)
+      return
+    }
+    setRenameBusy(true)
+    try {
+      upsert(await window.browserApi.profiles.rename(profile.id, name))
+      setRenaming(undefined)
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
 
   const visibleProfiles = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -524,9 +546,21 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
     {
       title: t("序号"),
       dataIndex: 'serialNumber',
-      width: 64,
+      width: 84,
       sorter: (first, second) => first.serialNumber - second.serialNumber,
-      render: (serial: number) => <span className="fb-muted">{serial}</span>
+      render: (serial: number, profile) => (
+        <div className="fb-serial-cell">
+          <span className="fb-muted">{serial}</span>
+          <Button
+            type="text"
+            size="small"
+            className={`favorite-button${profile.favorite ? ' active' : ''}`}
+            aria-label={profile.favorite ? t("取消收藏") : t("收藏环境")}
+            icon={profile.favorite ? <StarFilled /> : <StarOutlined />}
+            onClick={() => void window.browserApi.profiles.setFavorite(profile.id, !profile.favorite).then(upsert).catch(ws.fail)}
+          />
+        </div>
+      )
     },
     {
       title: t("窗口名称"),
@@ -537,8 +571,22 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         <div className="fb-name-cell">
           <StatusDot status={profile.status} error={profile.lastError} onOpen={() => void openCrashHistory(profile)} />
           <span className="fb-color-mark" style={{ background: profile.color }} aria-hidden="true" />
-          <div>
-            <strong title={profile.name}>{profile.name}</strong>
+          {renaming?.id === profile.id ? (
+            <Input
+              size="small"
+              autoFocus
+              className="fb-name-input"
+              value={renaming.name}
+              maxLength={60}
+              disabled={renameBusy}
+              onChange={(event) => setRenaming({ id: profile.id, name: event.target.value })}
+              onPressEnter={() => void saveRename()}
+              onBlur={() => void saveRename()}
+              onKeyDown={(event) => { if (event.key === 'Escape') setRenaming(undefined) }}
+            />
+          ) : (
+          <div className="fb-name-text">
+            <strong title={t("点击修改名称")} className="fb-name-editable" onClick={() => setRenaming({ id: profile.id, name: profile.name })}>{profile.name}</strong>
             {profile.tags.length > 0 && (
               <span className="fb-tags">
                 {profile.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}
@@ -546,14 +594,19 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
               </span>
             )}
           </div>
-          <Button
-            type="text"
-            size="small"
-            className={`favorite-button${profile.favorite ? ' active' : ''}`}
-            aria-label={profile.favorite ? t("取消收藏") : t("收藏环境")}
-            icon={profile.favorite ? <StarFilled /> : <StarOutlined />}
-            onClick={() => void window.browserApi.profiles.setFavorite(profile.id, !profile.favorite).then(upsert).catch(ws.fail)}
-          />
+          )}
+          {renaming?.id !== profile.id && (
+            <Tooltip title={t("修改名称")}>
+              <Button
+                type="text"
+                size="small"
+                className="fb-name-edit"
+                aria-label={t("修改名称")}
+                icon={<EditOutlined />}
+                onClick={() => setRenaming({ id: profile.id, name: profile.name })}
+              />
+            </Tooltip>
+          )}
         </div>
       )
     },
