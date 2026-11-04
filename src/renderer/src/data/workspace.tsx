@@ -132,6 +132,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setProfiles((current) => current.filter((profile) => !removed.has(profile.id)))
   }, [])
 
+  // Another computer of the account changed, deleted or restored windows (team sync).
+  useEffect(() => window.browserApi.profiles.onReload(() => { void reloadProfiles().catch(() => undefined) }), [reloadProfiles])
+
   // A library proxy checked or its IP 评分 read anywhere (a window, the proxy page): every page shows the latest.
   useEffect(() => window.browserApi.proxy.onChanged(() => { void reloadLibraries().catch(() => undefined) }), [reloadLibraries])
 

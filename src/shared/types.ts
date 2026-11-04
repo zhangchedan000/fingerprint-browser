@@ -874,6 +874,8 @@ export interface BrowserApi {
     currentCookies: (id: string) => Promise<{ count: number; text: string }>
     removeMany: (ids: string[]) => Promise<void>
     onChanged: (listener: (profile: BrowserProfileView) => void) => () => void
+    /** Windows changed, deleted or restored on another computer of the account (team sync). */
+    onReload: (listener: () => void) => () => void
   }
   engine: {
     status: () => Promise<EngineStatus>

@@ -2191,7 +2191,6 @@
   "已是最新": "Déjà à jour",
   "已添加到本机": "Ajoutée à cet ordinateur",
   "删除云端窗口“{0}”？": "Supprimer la fenêtre cloud « {0} » ?",
-  "云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。": "La configuration et l'état de connexion dans le cloud seront supprimés et personne ne pourra plus l'ouvrir ; la copie sur cet ordinateur part à la corbeille. Les copies sur d'autres ordinateurs restent, mais ne peuvent plus être ouvertes.",
   "我": "Moi",
   "主账号分配": "Attribuée par le compte principal",
   "创建人": "Créée par",
@@ -2715,5 +2714,10 @@
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Auto : le plus souvent haut-parleurs + casque USB ; quelques cartes d’entrée de gamme seulement un casque ou seulement des haut-parleurs, quelques cartes haut de gamme aussi une webcam ; fixé à l’enregistrement. Les sites sans autorisation ne voient que les types d’appareils présents",
   "各数据库判断不一：{0}": "les bases de données divergent : {0}",
   "修改名称": "Renommer",
-  "点击修改名称": "Cliquez pour renommer"
+  "点击修改名称": "Cliquez pour renommer",
+  "云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。": "La configuration et l'état de connexion dans le cloud sont supprimés définitivement et personne ne pourra l'ouvrir ; la copie de chaque ordinateur va dans sa corbeille (la restaurer la renvoie comme une nouvelle fenêtre). Pour la supprimer tout en pouvant la restaurer, supprimez-la dans la liste des fenêtres.",
+  "已删除（回收站）": "Supprimée (corbeille)",
+  "已恢复（所有电脑都会恢复）": "Restaurée (sur tous les ordinateurs)",
+  "这个窗口已在其他电脑删除（在回收站里，可以恢复）": "Cette fenêtre a été supprimée sur un autre ordinateur (elle est dans la corbeille et peut être restaurée)",
+  "这个窗口已被删除，只有主账号可以恢复": "Cette fenêtre a été supprimée ; seul le compte principal peut la restaurer"
 }

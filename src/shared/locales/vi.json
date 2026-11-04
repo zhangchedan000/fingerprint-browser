@@ -2191,7 +2191,6 @@
   "已是最新": "Đã là mới nhất",
   "已添加到本机": "Đã thêm vào máy này",
   "删除云端窗口“{0}”？": "Xóa cửa sổ đám mây “{0}”?",
-  "云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。": "Cấu hình và trạng thái đăng nhập trên đám mây sẽ bị xóa, không ai mở được nữa; bản sao trên máy này chuyển vào thùng rác. Bản sao trên các máy khác vẫn còn nhưng không mở được.",
   "我": "Tôi",
   "主账号分配": "Tài khoản chính gán",
   "创建人": "Người tạo",
@@ -2715,5 +2714,10 @@
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Tự động: phần lớn là loa + tai nghe USB; một số card phổ thông chỉ có tai nghe hoặc chỉ có loa, một số card cao cấp có thêm webcam; cố định sau khi lưu. Trang web không được cấp quyền chỉ thấy có những loại thiết bị nào",
   "各数据库判断不一：{0}": "các cơ sở dữ liệu không thống nhất: {0}",
   "修改名称": "Đổi tên",
-  "点击修改名称": "Nhấp để đổi tên"
+  "点击修改名称": "Nhấp để đổi tên",
+  "云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。": "Cấu hình và trạng thái đăng nhập trên đám mây bị xóa vĩnh viễn, không ai mở được nữa; bản sao trên mỗi máy chuyển vào thùng rác (khôi phục sẽ tải lên lại như cửa sổ mới). Muốn xóa mà vẫn khôi phục được, hãy xóa trong danh sách cửa sổ.",
+  "已删除（回收站）": "Đã xóa (thùng rác)",
+  "已恢复（所有电脑都会恢复）": "Đã khôi phục (trên mọi máy)",
+  "这个窗口已在其他电脑删除（在回收站里，可以恢复）": "Cửa sổ này đã bị xóa trên máy khác (đang ở thùng rác, có thể khôi phục)",
+  "这个窗口已被删除，只有主账号可以恢复": "Cửa sổ này đã bị xóa; chỉ tài khoản chính mới khôi phục được"
 }

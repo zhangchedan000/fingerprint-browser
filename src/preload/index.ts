@@ -116,6 +116,11 @@ const api: BrowserApi = {
       const handler = (_event: Electron.IpcRendererEvent, profile: BrowserProfileView): void => listener(profile)
       ipcRenderer.on('profiles:changed', handler)
       return () => ipcRenderer.removeListener('profiles:changed', handler)
+    },
+    onReload: (listener: () => void) => {
+      const handler = (): void => listener()
+      ipcRenderer.on('profiles:reload', handler)
+      return () => ipcRenderer.removeListener('profiles:reload', handler)
     }
   },
   engine: {

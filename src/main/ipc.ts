@@ -606,13 +606,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return publicProfile(profile)
   })
   ipcMain.handle('profiles:purge-trash', async (_event, trashId: string) => {
-    await profiles.purgeTrash(trashId)
+    const profileId = await profiles.purgeTrash(trashId)
     logger.info('回收站环境已永久删除', { trashId })
+    // A team window: deleted for the account too (every computer's recycle bin drops it).
+    await team.purged([profileId])
   })
   ipcMain.handle('profiles:empty-trash', async () => {
-    const count = await profiles.emptyTrash()
-    logger.info('环境回收站已清空', { count })
-    return count
+    const ids = await profiles.emptyTrash()
+    logger.info('环境回收站已清空', { count: ids.length })
+    await team.purged(ids)
+    return ids.length
   })
   ipcMain.handle('app:preferences', () => validPreferences(settings.get()))
   ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
@@ -770,7 +773,12 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const error = await shell.openPath(folder)
     if (error) throw new Error(`无法打开日志目录：${error}`)
   })
-  ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => publicProfile(await profiles.setFavorite(id, favorite)))
+  ipcMain.handle('profiles:set-favorite', async (_event, id: string, favorite: boolean) => {
+    const profile = publicProfile(await profiles.setFavorite(id, favorite))
+    // 收藏 follows the account (team-manager cloudConfig).
+    await team.afterLocalEdit(id).catch(() => undefined)
+    return profile
+  })
   // 测试模式: turning it off first uploads this computer's login state (team-manager setTestMode).
   ipcMain.handle('profiles:set-test-mode', async (_event, id: string, on: boolean) => publicProfile(await team.setTestMode(id, on === true)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {

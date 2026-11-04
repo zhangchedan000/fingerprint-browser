@@ -2191,7 +2191,6 @@
   "已是最新": "Zaten güncel",
   "已添加到本机": "Bu bilgisayara eklendi",
   "删除云端窗口“{0}”？": "“{0}” bulut penceresi silinsin mi?",
-  "云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。": "Buluttaki yapılandırma ve oturum durumu silinir, kimse açamaz; bu bilgisayardaki kopya çöp kutusuna taşınır. Diğer bilgisayarlardaki kopyalar kalır ama açılamaz.",
   "我": "Ben",
   "主账号分配": "Ana hesap atadı",
   "创建人": "Oluşturan",
@@ -2715,5 +2714,10 @@
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Otomatik: çoğunlukla hoparlör + USB kulaklık; bazı giriş seviyesi kartlarda yalnızca kulaklık ya da yalnızca hoparlör, bazı üst seviye kartlarda ayrıca web kamerası; kaydedince sabitlenir. İzni olmayan siteler yalnızca hangi tür cihazlar olduğunu görür",
   "各数据库判断不一：{0}": "veritabanları farklı diyor: {0}",
   "修改名称": "Yeniden adlandır",
-  "点击修改名称": "Yeniden adlandırmak için tıklayın"
+  "点击修改名称": "Yeniden adlandırmak için tıklayın",
+  "云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。": "Buluttaki yapılandırma ve oturum durumu kalıcı olarak silinir, kimse açamaz; her bilgisayardaki kopya geri dönüşüm kutusuna gider (geri yüklenirse yeni pencere olarak yeniden yüklenir). Geri yüklenebilir şekilde silmek için pencere listesinden silin.",
+  "已删除（回收站）": "Silindi (geri dönüşüm kutusu)",
+  "已恢复（所有电脑都会恢复）": "Geri yüklendi (tüm bilgisayarlarda)",
+  "这个窗口已在其他电脑删除（在回收站里，可以恢复）": "Bu pencere başka bir bilgisayarda silindi (geri dönüşüm kutusunda, geri yüklenebilir)",
+  "这个窗口已被删除，只有主账号可以恢复": "Bu pencere silindi; yalnızca ana hesap geri yükleyebilir"
 }

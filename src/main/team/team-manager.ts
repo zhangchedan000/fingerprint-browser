@@ -54,6 +54,36 @@ interface TeamLink {
   deviceRev?: number
 }
 
+/**
+ * A window deleted on this computer, and what the account knows of it. Deleting is account-wide (user,
+ * 2026-11-04: one account on several computers keeps one state; a deleted window goes to every
+ * computer's recycle bin and can be restored from any of them): the cloud window is marked deleted
+ * (config.deletedAt), not removed, so it stays restorable.
+ * - 'deleted': the cloud window is marked deleted;
+ * - 'pending': deleted here while the server could not be reached; marked at the next sync;
+ * - 'local': a window assigned to a member, who may not delete it for the account: gone here only;
+ * - unset: deleted by a version before account-wide deleting (here only): marked deleted at the next
+ *   sync unless it was used or changed elsewhere since, in which case it comes back here.
+ */
+interface RemovedLink extends TeamLink {
+  cloud?: 'deleted' | 'pending' | 'local'
+}
+
+/** When the cloud window was deleted for the account (in the recycle bins), or undefined. */
+function cloudDeletedAt(config: unknown): string | undefined {
+  const value = config && typeof config === 'object' ? (config as { deletedAt?: unknown }).deletedAt : undefined
+  return typeof value === 'string' && value ? value : undefined
+}
+
+function withoutDeletedAt(config: unknown): Record<string, unknown> {
+  const { deletedAt: _deletedAt, ...rest } = (config && typeof config === 'object' ? config : {}) as Record<string, unknown>
+  return rest
+}
+
+function plainLink({ cloud: _cloud, ...link }: RemovedLink): TeamLink {
+  return link
+}
+
 interface TeamFile {
   schemaVersion: 1
   server: string
@@ -68,7 +98,7 @@ interface TeamFile {
    * Windows deleted on this computer: the cloud keeps them, this computer does not pull them
    * again, and restoring one from the recycle bin links it back.
    */
-  removed?: Record<string, TeamLink>
+  removed?: Record<string, RemovedLink>
   /** The account last signed in here, shown in local mode. */
   userName?: string
   displayName?: string
@@ -166,10 +196,12 @@ export class TeamManager {
     return this.cloudSeeds
   }
 
-  private cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string } } {
+  private cloudConfig(profile: BrowserProfile): ProfileDraft & { origin: { serialNumber: number; createdAt: string }; favorite: boolean } {
     const sources = this.tunnelSources?.(profile.tunnel) ?? []
     return {
       ...cloudConfig(profile),
+      // 收藏 follows the account too.
+      favorite: profile.favorite === true,
       ...(sources.length ? { tunnelSources: sources } : {}),
       ...(profile.apiProxy ? {
         apiState: {
@@ -282,6 +314,21 @@ export class TeamManager {
   }
 
   private restoring?: Promise<void>
+
+  /** Resolves once the saved sign-in was checked at start (signed in or not). */
+  async whenOnline(): Promise<void> {
+    await this.restoring
+  }
+
+  private poll?: NodeJS.Timeout
+  /** While signed in, every computer of the account looks at the cloud this often (one state everywhere). */
+  pollMs = 30_000
+
+  private startPolling(): void {
+    if (this.poll || this.pollMs <= 0 || this.syncDelayMs < 0) return
+    this.poll = setInterval(() => this.scheduleSync(), this.pollMs)
+    this.poll.unref?.()
+  }
   /** Why the saved sign-in could not be checked (server unreachable); the app stays locked. */
   private offline?: string
   private verifiedAt = 0
@@ -305,6 +352,7 @@ export class TeamManager {
       this.file.token = this.secrets.encode(api.token)
       await this.save()
       this.scheduleSync()
+      this.startPolling()
       void this.pushRewritten()
       this.settling = this.afterOnline()
     } catch (error) {
@@ -785,6 +833,7 @@ export class TeamManager {
     this.rememberUser(user)
     await this.save()
     this.scheduleSync()
+    this.startPolling()
     this.settling = this.afterOnline()
     this.logger?.info('团队已登录', { server: normalized, user: user.username, role: user.role })
     return this.status()
@@ -823,6 +872,8 @@ export class TeamManager {
     this.api = undefined
     this.user = undefined
     this.file.token = ''
+    if (this.poll) clearInterval(this.poll)
+    this.poll = undefined
     await this.save()
     return this.status()
   }
@@ -964,6 +1015,7 @@ export class TeamManager {
         sourceId: record.source_id,
         localId: this.localIdOf(record.id),
         removedHere: removed.has(record.id),
+        deletedAt: cloudDeletedAt(record.config),
         lock: lock
           ? { holderId: lock.holder, holderName: holder?.name || holder?.username || '', device: lock.device, expires: lock.expires }
           : undefined
@@ -1030,9 +1082,14 @@ export class TeamManager {
   }
 
   /**
-   * Every window is a cloud window. Windows of this account that are not on this computer come
-   * down (config now, login state on first open); windows of this computer not in the cloud yet
-   * go up. Windows deleted here stay in the cloud and are not pulled again.
+   * One account, one state on every computer (user, 2026-11-04). Every window is a cloud window:
+   * - windows of the account not on this computer come down (config now, login state on first open);
+   *   windows of this computer not in the cloud yet go up;
+   * - a window changed on another computer takes the change here once it is closed, without opening it;
+   * - a window deleted anywhere goes to this computer's recycle bin (the cloud keeps it, marked
+   *   deleted); restored anywhere, it comes back here (from this recycle bin, or from the cloud);
+   *   permanently deleted anywhere, this computer's recycle bin drops it too.
+   * Whatever happened last, on whichever computer, is what every computer shows.
    */
   async sync(): Promise<{ added: number; uploaded: number }> {
     if (!this.online) return { added: 0, uploaded: 0 }
@@ -1041,25 +1098,99 @@ export class TeamManager {
       return this.sync()
     }
     let result = { added: 0, uploaded: 0 }
+    let changed = false
     this.syncing = (async () => {
       await this.restoring
       if (!this.api || !this.user) return
+      const api = this.api
       const removed = this.file.removed ?? (this.file.removed = {})
-      // Restored from the recycle bin: linked again rather than uploaded as a new window.
-      for (const [profileId, link] of Object.entries(removed)) {
-        if (this.profiles.list().some((profile) => profile.id === profileId)) {
-          this.file.links[profileId] = link
-          delete removed[profileId]
+      const records = await api.listProfiles()
+      const byId = new Map(records.map((record) => [record.id, record]))
+      this.noteCloudSeeds(records)
+      const here = () => new Set(this.profiles.list().map((profile) => profile.id))
+
+      // Restored here from the recycle bin: linked again (not uploaded as a new window), and restored
+      // for the account when it was deleted there.
+      for (const [profileId, entry] of Object.entries(removed)) {
+        if (!here().has(profileId)) continue
+        delete removed[profileId]
+        const record = byId.get(entry.teamId)
+        // Permanently deleted elsewhere meanwhile: it goes up again as a new window.
+        if (!record) continue
+        const link = plainLink(entry)
+        this.file.links[profileId] = link
+        if (cloudDeletedAt(record.config) && !this.isReadOnly(link)) {
+          const saved = await api.saveProfile(record.id, { config: this.cloudConfig(this.profiles.get(profileId)) })
+          link.configRev = saved.config_rev
+          byId.set(record.id, saved)
+          this.logger?.info('从回收站恢复的窗口在账号里也恢复了', { profileId, teamId: record.id })
         }
       }
-      const records = await this.api.listProfiles()
-      this.noteCloudSeeds(records)
+
+      // Windows deleted here, against the account.
+      for (const [profileId, entry] of Object.entries(removed)) {
+        const record = byId.get(entry.teamId)
+        if (!record) {
+          // Permanently deleted for the account: this recycle bin drops it too.
+          if (entry.cloud === 'deleted') {
+            await this.purgeLocalTrash(profileId)
+            changed = true
+          }
+          delete removed[profileId]
+          continue
+        }
+        if (cloudDeletedAt(record.config)) {
+          entry.cloud = 'deleted'
+          entry.configRev = record.config_rev
+          continue
+        }
+        if (entry.cloud === 'local') continue
+        if (entry.cloud === 'pending') {
+          await this.markCloudDeleted(entry, record)
+          continue
+        }
+        // Deleted here before deleting was account-wide: deleted for the account now, unless it was
+        // used or changed elsewhere since (then the account has it, and so does this computer).
+        if (entry.cloud === undefined && record.config_rev === entry.configRev && record.data_rev === entry.dataRev) {
+          await this.markCloudDeleted(entry, record)
+          continue
+        }
+        // Restored (or used) on another computer: back here too.
+        await this.restoreHere(profileId, entry, record)
+        changed = true
+      }
+
       const hidden = new Set(Object.values(removed).map((link) => link.teamId))
       for (const record of records) {
-        if (this.localIdOf(record.id) || hidden.has(record.id)) continue
-        await this.addToComputer(record.id, record)
+        const current = byId.get(record.id) ?? record
+        const localId = this.localIdOf(record.id)
+        if (localId) {
+          if (!this.isClosed(localId)) continue
+          if (cloudDeletedAt(current.config)) {
+            // Deleted on another computer: into this recycle bin (a running window when it closes).
+            await this.moveToRecycleBin(localId, current)
+            changed = true
+          } else if (current.config_rev > this.file.links[localId].configRev) {
+            await this.applyCloudConfig(localId, current)
+            changed = true
+          }
+          continue
+        }
+        // Deleted for the account: not brought to a computer that never had it (the Team page lists it).
+        if (hidden.has(record.id) || cloudDeletedAt(current.config)) continue
+        await this.addToComputer(record.id, current)
         result.added += 1
       }
+
+      // Linked windows the account no longer has (permanently deleted, or taken back from a member).
+      for (const [localId, link] of Object.entries(this.file.links)) {
+        if (byId.has(link.teamId) || !here().has(localId) || !this.isClosed(localId)) continue
+        delete this.file.links[localId]
+        await this.profiles.remove(localId)
+        this.logger?.info('账号里已没有这个窗口，本机的移到回收站', { profileId: localId, teamId: link.teamId })
+        changed = true
+      }
+
       for (const profile of this.profiles.list()) {
         // A running window goes up once it is closed (afterExit runs sync again).
         if (this.file.links[profile.id] || !this.isClosed(profile.id)) continue
@@ -1082,7 +1213,99 @@ export class TeamManager {
       this.syncing = undefined
     }
     if (result.added || result.uploaded) this.logger?.info('云端窗口已同步', result)
+    if (changed || result.added) this.onProfilesChanged?.()
     return result
+  }
+
+  /** The window list changed in the background (sync): the app reloads it. */
+  onProfilesChanged?: () => void
+
+  /** Marks a cloud window deleted for the account (it stays restorable), or notes it as gone here only. */
+  private async markCloudDeleted(entry: RemovedLink, known?: RemoteProfile): Promise<void> {
+    if (this.isReadOnly(entry)) {
+      entry.cloud = 'local'
+      return
+    }
+    const api = this.requireApi()
+    const record = known ?? await api.getProfile(entry.teamId)
+    if (cloudDeletedAt(record.config)) {
+      entry.configRev = record.config_rev
+    } else {
+      const saved = await api.saveProfile(entry.teamId, { config: { ...withoutDeletedAt(record.config), deletedAt: new Date().toISOString() } })
+      entry.configRev = saved.config_rev
+      this.logger?.info('窗口已在账号里删除（各电脑进回收站）', { teamId: entry.teamId })
+    }
+    entry.cloud = 'deleted'
+  }
+
+  /** A window deleted on another computer: this computer's copy goes to the recycle bin. */
+  private async moveToRecycleBin(localId: string, record: RemoteProfile): Promise<void> {
+    const link = this.file.links[localId]
+    delete this.file.links[localId]
+    ;(this.file.removed ??= {})[localId] = { ...link, configRev: record.config_rev, cloud: 'deleted' }
+    await this.save()
+    await this.profiles.remove(localId)
+    this.logger?.info('窗口在其他电脑删除了，本机的移到回收站', { profileId: localId, teamId: record.id })
+  }
+
+  /** A window deleted here and restored elsewhere: back from this recycle bin, or from the cloud. */
+  private async restoreHere(profileId: string, entry: RemovedLink, record: RemoteProfile): Promise<void> {
+    delete this.file.removed![profileId]
+    const trashed = (await this.profiles.listTrash()).find((item) => item.profileId === profileId)
+    if (trashed) {
+      try {
+        await this.profiles.restore(trashed.trashId)
+        this.file.links[profileId] = plainLink(entry)
+        if (record.config_rev > entry.configRev && this.isClosed(profileId)) await this.applyCloudConfig(profileId, record)
+        this.logger?.info('窗口在其他电脑恢复了，本机也从回收站恢复', { profileId, teamId: record.id })
+        return
+      } catch (error) {
+        this.logger?.error('从本机回收站恢复失败，改从云端拉', { profileId, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    await this.addToComputer(record.id, record)
+  }
+
+  /** Takes the cloud config of a closed window changed elsewhere (as opening it would). */
+  private async applyCloudConfig(localId: string, record: RemoteProfile): Promise<void> {
+    const current = this.profiles.get(localId)
+    const draft = configDraft(record.config, record.name)
+    await this.profiles.update(localId, { ...draft, extensionIds: current.extensionIds })
+    await this.applyCloudExtras(localId, record.config)
+    const favorite = (record.config as { favorite?: unknown }).favorite
+    if (typeof favorite === 'boolean' && favorite !== Boolean(this.profiles.get(localId).favorite)) await this.profiles.setFavorite(localId, favorite)
+    this.file.links[localId].configRev = record.config_rev
+  }
+
+  /** Drops this computer's recycle-bin copy of a window (permanently deleted for the account). */
+  private async purgeLocalTrash(profileId: string): Promise<void> {
+    for (const item of (await this.profiles.listTrash()).filter((trashed) => trashed.profileId === profileId)) {
+      await this.profiles.purgeTrash(item.trashId)
+    }
+  }
+
+  /**
+   * Windows permanently deleted from this recycle bin (by hand, emptied, or past the retention days):
+   * deleted from the cloud too, so every computer drops them. Members' assigned windows only here.
+   */
+  async purged(profileIds: string[]): Promise<void> {
+    const removed = this.file.removed ?? {}
+    for (const profileId of profileIds) {
+      const entry = removed[profileId]
+      if (!entry) continue
+      if (entry.cloud === 'local' || this.isReadOnly(entry) || !this.online || !this.api) {
+        if (entry.cloud === 'local' || this.isReadOnly(entry)) delete removed[profileId]
+        continue
+      }
+      try {
+        await this.api.removeProfile(entry.teamId)
+      } catch (error) {
+        if (!(error instanceof TeamApiError && error.status === 404)) throw error
+      }
+      delete removed[profileId]
+      this.logger?.info('回收站里永久删除的窗口，云端也删了', { profileId, teamId: entry.teamId })
+    }
+    await this.save()
   }
 
   /** Owner: who may use these cloud windows (the owner always can). */
@@ -1097,8 +1320,9 @@ export class TeamManager {
   }
 
   /**
-   * Owner: deletes a cloud window for everyone. This computer's copy goes to the recycle bin
-   * too (it would otherwise go up again as a new window); other computers keep theirs, unopenable.
+   * Owner: deletes a cloud window for everyone, for good. This computer's copy goes to the recycle bin
+   * too (it would otherwise go up again as a new window); other computers' copies go to theirs at their
+   * next sync (sync: linked windows the account no longer has).
    */
   async unshare(teamId: string): Promise<void> {
     const api = await this.requireOwner()
@@ -1189,6 +1413,10 @@ export class TeamManager {
       } catch (error) {
         if (error instanceof TeamApiError && error.status === 404) throw new Error('这个团队窗口已被收回或删除')
         throw error
+      }
+      if (cloudDeletedAt(record.config)) {
+        this.scheduleSync()
+        throw new Error('这个窗口已在其他电脑删除（在回收站里，可以恢复）')
       }
       if (link.pendingUpload && record.data_rev === link.dataRev) {
         // Last close could not upload and nobody has changed it since.
@@ -1392,21 +1620,50 @@ export class TeamManager {
   /** The sync after signing in or reconnecting (afterOnline), for flush(). */
   private settling: Promise<void> = Promise.resolve()
 
-  /** A window was deleted here: the cloud keeps it, this computer does not pull it again. */
+  /**
+   * A window was deleted here: deleted for the account (every computer moves it to its recycle bin;
+   * the cloud keeps it, marked deleted, so any computer can restore it). Without the server it is
+   * marked at the next sync.
+   */
   async forget(id: string): Promise<void> {
     const link = this.file.links[id]
     if (!link) return
-    ;(this.file.removed ??= {})[id] = link
+    const entry: RemovedLink = { ...link, cloud: 'pending' }
+    ;(this.file.removed ??= {})[id] = entry
     delete this.file.links[id]
+    await this.save()
+    if (!this.online || !this.api) return
+    try {
+      await this.markCloudDeleted(entry)
+    } catch (error) {
+      // 404: gone from the cloud already; anything else: tried again at the next sync.
+      if (error instanceof TeamApiError && error.status === 404) delete this.file.removed![id]
+      else this.logger?.error('窗口没能在账号里删除，下次同步再试', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+    }
     await this.save()
   }
 
-  /** Puts a window deleted here back on this computer (from the Team page). */
+  /**
+   * Puts a cloud window on this computer (from the Team page). One deleted for the account is restored
+   * for it: this computer's recycle-bin copy comes back when it has one, every other computer gets it too.
+   */
   async restoreToComputer(teamId: string): Promise<string> {
-    for (const [profileId, link] of Object.entries(this.file.removed ?? {})) {
-      if (link.teamId === teamId) delete this.file.removed![profileId]
+    const api = this.requireApi()
+    let record = await api.getProfile(teamId)
+    if (cloudDeletedAt(record.config)) {
+      const owner = this.file.role === 'owner' || record.owner === this.file.userId
+      if (!owner) throw new Error('这个窗口已被删除，只有主账号可以恢复')
+      record = await api.saveProfile(teamId, { config: withoutDeletedAt(record.config) })
+    }
+    for (const [profileId, entry] of Object.entries(this.file.removed ?? {})) {
+      if (entry.teamId !== teamId) continue
+      await this.restoreHere(profileId, entry, record)
+      await this.save()
+      const localId = this.localIdOf(teamId)
+      if (localId) return localId
     }
     await this.save()
-    return this.addToComputer(teamId)
+    return this.addToComputer(teamId, record)
   }
+
 }

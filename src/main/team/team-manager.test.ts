@@ -158,6 +158,11 @@ function fakeServer() {
       const existing = id ? records.get(id) : undefined
       if (id && (!existing || !visible(existing, user))) return json(404, {})
       if (request.method === 'GET') return json(200, existing)
+      if (request.method === 'DELETE') {
+        if (user.role !== 'owner') return json(404, {})
+        records.delete(id!)
+        return new Response(null, { status: 204 })
+      }
       const form = await request.formData()
       const field = (name: string) => form.get(name) === null ? undefined : String(form.get(name))
       // Members change only their own windows, and never who may use them.
@@ -199,9 +204,9 @@ function fakeServer() {
 }
 
 /** One computer: its vault, windows, and the cookie jar of each window's browser. */
-async function computer(server: ReturnType<typeof fakeServer>) {
-  const vault = await mkdtemp(join(tmpdir(), 'team-manager-'))
-  roots.push(vault)
+async function computer(server: ReturnType<typeof fakeServer>, existingVault?: string) {
+  const vault = existingVault ?? await mkdtemp(join(tmpdir(), 'team-manager-'))
+  if (!existingVault) roots.push(vault)
   const profiles = new ProfileStore(vault)
   await profiles.initialize()
   const jars = new Map<string, PortableCookie[]>()
@@ -485,7 +490,7 @@ describe('TeamManager', () => {
     expect(status.offline).toBeUndefined()
   })
 
-  it('puts members’ own windows in the cloud too, and deleting here keeps the cloud copy', async () => {
+  it('puts members’ own windows in the cloud too; deleting is for the account and restoring brings it back', async () => {
     const server = fakeServer()
     const owner = await computer(server)
     const member = await computer(server)
@@ -504,13 +509,17 @@ describe('TeamManager', () => {
     expect(await owner.team.sync()).toEqual({ added: 1, uploaded: 0 })
     expect((await owner.team.listProfiles()).map((item) => [item.name, item.ownerId])).toEqual([['小A 改过的', 'member1']])
 
-    // Deleted here: the cloud keeps it and the next sync does not bring it back.
+    // Deleted here: deleted for the account (marked in the cloud, restorable), the next sync does not bring it back.
     const ownerCopy = owner.team.links()[0].profileId
     const teamId = owner.team.links()[0].teamId
     await owner.profiles.remove(ownerCopy)
     await owner.team.forget(ownerCopy)
     expect(await owner.team.sync()).toEqual({ added: 0, uploaded: 0 })
-    expect(await owner.team.listProfiles()).toMatchObject([{ id: teamId, localId: undefined, removedHere: true }])
+    expect(await owner.team.listProfiles()).toMatchObject([{ id: teamId, localId: undefined, removedHere: true, deletedAt: expect.any(String) }])
+    // The member's computer moves its copy to the recycle bin.
+    await member.team.sync()
+    expect(member.profiles.list()).toEqual([])
+    expect((await member.profiles.listTrash()).map((item) => item.profileId)).toEqual([own.id])
 
     // Restored from the recycle bin: linked again, not uploaded as a second window.
     const trashed = (await owner.profiles.listTrash()).find((item) => item.profileId === ownerCopy)!
@@ -518,6 +527,100 @@ describe('TeamManager', () => {
     expect(await owner.team.sync()).toEqual({ added: 0, uploaded: 0 })
     expect(owner.team.links()).toMatchObject([{ profileId: ownerCopy, teamId }])
     expect(server.records.size).toBe(1)
+    expect((server.records.get(teamId)!.config as { deletedAt?: string }).deletedAt).toBeUndefined()
+    // …and on the member's computer it comes back from its recycle bin.
+    await member.team.sync()
+    expect(member.profiles.list().map((profile) => profile.id)).toEqual([own.id])
+  })
+
+  it('keeps one state on every computer of an account: edits, 收藏, deleting, restoring, deleting for good', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    const window1 = await a.profiles.create({ ...defaultProfileDraft(), name: '窗口一' })
+    const window2 = await a.profiles.create({ ...defaultProfileDraft(), name: '窗口二' })
+    await a.team.sync()
+    await b.team.sync()
+    const onB = (name: string) => b.profiles.list().find((profile) => profile.name === name)
+    expect(b.profiles.list().map((profile) => profile.name).sort()).toEqual(['窗口一', '窗口二'])
+
+    // Renamed, regrouped and starred on A: B shows it without opening the window.
+    const changed = vi.fn()
+    b.team.onProfilesChanged = changed
+    await a.profiles.update(window1.id, { ...a.profiles.get(window1.id), name: '窗口一改', group: '美国', note: '备注' })
+    await a.profiles.setFavorite(window1.id, true)
+    await a.team.afterLocalEdit(window1.id)
+    await b.team.sync()
+    expect(onB('窗口一改')).toMatchObject({ group: '美国', note: '备注', favorite: true })
+    expect(changed).toHaveBeenCalled()
+
+    // Deleted on A: in both recycle bins; a new computer does not get it.
+    await a.profiles.remove(window2.id)
+    await a.team.forget(window2.id)
+    await b.team.sync()
+    expect(onB('窗口二')).toBeUndefined()
+    expect((await b.profiles.listTrash()).map((item) => item.name)).toEqual(['窗口二'])
+    const c = await computer(server)
+    await c.team.login('http://team.test', 'boss', 'ownerpass')
+    await c.team.sync()
+    expect(c.profiles.list().map((profile) => profile.name)).toEqual(['窗口一改'])
+    expect((await c.team.listProfiles()).find((item) => item.name === '窗口二')).toMatchObject({ deletedAt: expect.any(String), localId: undefined })
+
+    // Restored on B: back on A too (from A's recycle bin, the same window).
+    const trashedOnB = (await b.profiles.listTrash()).find((item) => item.name === '窗口二')!
+    await b.profiles.restore(trashedOnB.trashId)
+    await b.team.sync()
+    await a.team.sync()
+    expect(a.profiles.list().map((profile) => profile.id)).toContain(window2.id)
+    expect(await a.profiles.listTrash()).toEqual([])
+
+    // Deleted again on B and deleted for good from B's recycle bin: gone from every computer and the cloud.
+    const window2OnB = onB('窗口二')!
+    await b.profiles.remove(window2OnB.id)
+    await b.team.forget(window2OnB.id)
+    await a.team.sync()
+    expect((await a.profiles.listTrash()).map((item) => item.profileId)).toEqual([window2.id])
+    const trashId = (await b.profiles.listTrash())[0].trashId
+    await b.team.purged([await b.profiles.purgeTrash(trashId)])
+    expect([...server.records.values()].map((record) => record.name)).toEqual(['窗口一改'])
+    await a.team.sync()
+    expect(await a.profiles.listTrash()).toEqual([])
+
+  })
+
+  it('handles windows deleted here by an older version: deleted for the account unless used elsewhere since', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    const idle = await a.profiles.create({ ...defaultProfileDraft(), name: '没人再用' })
+    const used = await a.profiles.create({ ...defaultProfileDraft(), name: '别处还在用' })
+    await a.team.sync()
+    await b.team.sync()
+    // An older version on A: deleted here only (the removed list without a mark).
+    const teamFile = join(a.vault, 'team.json')
+    for (const profile of [idle, used]) await a.profiles.remove(profile.id)
+    const file = JSON.parse(await readFile(teamFile, 'utf8'))
+    for (const profile of [idle, used]) {
+      file.removed = { ...(file.removed ?? {}), [profile.id]: file.links[profile.id] }
+      delete file.links[profile.id]
+    }
+    await writeFile(teamFile, JSON.stringify(file))
+    // B kept using one of them (its config changed since).
+    const usedOnB = b.profiles.list().find((profile) => profile.name === '别处还在用')!
+    await b.profiles.update(usedOnB.id, { ...b.profiles.get(usedOnB.id), note: '还在用' })
+    await b.team.afterLocalEdit(usedOnB.id)
+    // A starts the new version.
+    const a2 = await computer(server, a.vault)
+    await a2.team.sync()
+    expect(a2.profiles.list().map((profile) => profile.name)).toEqual(['别处还在用'])
+    expect(a2.profiles.get(used.id).note).toBe('还在用')
+    await b.team.sync()
+    expect(b.profiles.list().map((profile) => profile.name)).toEqual(['别处还在用'])
+    expect((await b.profiles.listTrash()).map((item) => item.name)).toEqual(['没人再用'])
   })
 
   it('keeps a failed upload and sends it on the next open', async () => {

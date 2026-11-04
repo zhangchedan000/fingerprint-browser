@@ -165,8 +165,8 @@ app.whenReady().then(async () => {
       bundledVersion: kernelMigration.bundledVersion
     })
   }
-  const purgedTrashCount = await profiles.purgeTrashOlderThan(settings.get().recycleRetentionDays)
-  if (purgedTrashCount) logger.info('已按保留策略自动清理环境回收站', { count: purgedTrashCount })
+  const purgedTrash = await profiles.purgeTrashOlderThan(settings.get().recycleRetentionDays)
+  if (purgedTrash.length) logger.info('已按保留策略自动清理环境回收站', { count: purgedTrash.length })
   const profileStorageHealth = profiles.storageHealth()
   if (profileStorageHealth.recoveredFromBackup) logger.error('环境元数据已从备份恢复', profileStorageHealth)
   if (!profileStorageHealth.backupHealthy) logger.error('环境元数据备份不可用', profileStorageHealth.backupError)
@@ -317,9 +317,15 @@ app.whenReady().then(async () => {
   // A window's extensions go to other computers with its login state.
   activeTeam.extensions = extensions
   activeTeam.onProfileAdded = (id) => mainWindow?.webContents.send('profiles:changed', publicProfile(profiles.get(id)))
+  // Windows changed, deleted or restored on another computer of the account: the list reloads.
+  activeTeam.onProfilesChanged = () => mainWindow?.webContents.send('profiles:reload')
   // A new window's seed is none the team's cloud windows use (the seed decides Canvas and AudioContext).
   profiles.setSeedsInUse(() => activeTeam.seedsInUse())
   await activeTeam.initialize()
+  // Windows past the recycle-bin retention: deleted for the account too, once signed in.
+  if (purgedTrash.length) void activeTeam.whenOnline().then(() => activeTeam.purged(purgedTrash)).catch((error: unknown) => {
+    logger?.error('回收站自动清理的团队窗口没能在云端删除', { error: error instanceof Error ? error.message : String(error) })
+  })
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)
   registerIpc({ profiles, settings, launcher, kernels, extensions, cookies, logger, backups, workspaceMigration, appSession, team: activeTeam })

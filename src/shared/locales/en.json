@@ -2191,7 +2191,6 @@
   "已是最新": "Already up to date",
   "已添加到本机": "Added to this computer",
   "删除云端窗口“{0}”？": "Delete cloud window “{0}”?",
-  "云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。": "Its configuration and sign-in state in the cloud will be deleted and no one will be able to open it; the copy on this computer moves to Trash. Copies on other computers stay but can't be opened.",
   "我": "Me",
   "主账号分配": "Assigned by owner account",
   "创建人": "Created by",
@@ -2715,5 +2714,10 @@
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Auto: mostly speakers + a USB headset; a few entry-level cards only a headset or only speakers, a few high-end cards also a webcam; fixed once saved. Sites without permission only see which kinds of devices there are",
   "各数据库判断不一：{0}": "databases disagree: {0}",
   "修改名称": "Rename",
-  "点击修改名称": "Click to rename"
+  "点击修改名称": "Click to rename",
+  "云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。": "The cloud config and login state are deleted for good and nobody can open it; every computer's copy goes to its recycle bin (restoring one uploads it again as a new window). To delete it so it can still be restored, delete it in the window list.",
+  "已删除（回收站）": "Deleted (recycle bin)",
+  "已恢复（所有电脑都会恢复）": "Restored (on every computer)",
+  "这个窗口已在其他电脑删除（在回收站里，可以恢复）": "This window was deleted on another computer (it is in the recycle bin and can be restored)",
+  "这个窗口已被删除，只有主账号可以恢复": "This window was deleted; only the main account can restore it"
 }

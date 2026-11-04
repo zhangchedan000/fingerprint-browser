@@ -1284,7 +1284,8 @@ export class ProfileStore {
     return names
   }
 
-  async purgeTrash(trashId: string): Promise<void> {
+  /** Deletes a recycle-bin entry for good; returns the window's id. */
+  async purgeTrash(trashId: string): Promise<string> {
     if (!/^[a-zA-Z0-9-]+$/.test(trashId)) throw new Error('回收站条目标识无效')
     const target = join(this.vaultPath, 'recycle-bin', 'profiles', trashId)
     let record: DeletedProfileRecord
@@ -1295,21 +1296,25 @@ export class ProfileStore {
     }
     if (record.schemaVersion !== 1 || !record.profile?.id) throw new Error('回收站条目元数据无效，已取消永久删除')
     await rm(target, { recursive: true, force: true })
+    return record.profile.id
   }
 
-  async emptyTrash(): Promise<number> {
+  /** Empties the recycle bin; returns the ids of the windows deleted for good. */
+  async emptyTrash(): Promise<string[]> {
     const items = await this.listTrash()
     for (const item of items) await this.purgeTrash(item.trashId)
-    return items.length
+    return items.map((item) => item.profileId)
   }
 
-  async purgeTrashOlderThan(days: number): Promise<number> {
-    if (days === 0) return 0
+  /** Deletes recycle-bin entries past the retention days for good; returns the windows' ids. */
+  async purgeTrashOlderThan(days: number): Promise<string[]> {
+    if (days === 0) return []
     if (days !== 7 && days !== 30 && days !== 90) throw new Error('回收站保留天数无效')
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
     const root = join(this.vaultPath, 'recycle-bin', 'profiles')
     await mkdir(root, { recursive: true })
     const expired: string[] = []
+    const ids: string[] = []
     for (const entry of await readdir(root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
       try {
@@ -1319,8 +1324,8 @@ export class ProfileStore {
         // Incomplete entries are deliberately preserved for manual inspection.
       }
     }
-    for (const trashId of expired) await this.purgeTrash(trashId)
-    return expired.length
+    for (const trashId of expired) ids.push(await this.purgeTrash(trashId))
+    return ids
   }
 
   /**

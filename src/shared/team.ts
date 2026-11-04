@@ -80,8 +80,10 @@ export interface TeamProfileView {
   lock?: TeamLockView
   /** The window on this computer linked to it, if any. */
   localId?: string
-  /** Deleted on this computer; the cloud keeps it and it is not pulled again by itself. */
+  /** Deleted on this computer (in its recycle bin). */
   removedHere: boolean
+  /** Deleted for the account (in every computer's recycle bin; restorable) since this time. */
+  deletedAt?: string
   /** The owner's own window it was shared from (owner only). */
   sourceId: string
 }

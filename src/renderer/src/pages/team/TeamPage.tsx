@@ -523,7 +523,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     try {
       await window.browserApi.team.addToComputer(profile.id)
       await ws.reloadProfiles()
-      ws.notify.success(t("已添加到本机"))
+      ws.notify.success(profile.deletedAt ? t("已恢复（所有电脑都会恢复）") : t("已添加到本机"))
       reload()
     } catch (error) {
       ws.fail(error)
@@ -535,7 +535,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   function removeFromCloud(profile: TeamProfileView): void {
     Modal.confirm({
       title: t("删除云端窗口“{0}”？", profile.name),
-      content: t("云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。"),
+      content: t("云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。"),
       okText: t("删除"),
       okButtonProps: { danger: true },
       cancelText: t("取消"),
@@ -591,7 +591,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       title: t("删除 {0} 个云端窗口？", rows.length),
       content: <>
         <p>{names}</p>
-        <p>{t("云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。")}</p>
+        <p>{t("云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。")}</p>
       </>,
       okText: t("删除"),
       okButtonProps: { danger: true },
@@ -657,7 +657,8 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
       width: 130,
       render: (_value, row) => row.localId
         ? <StatusPill tone="success">{t("已在本机")}</StatusPill>
-        : <StatusPill>{row.removedHere ? t("已从本机删除") : t("未添加")}</StatusPill>
+        // Deleted for the account: in every computer's recycle bin, restorable from any of them or here.
+        : <StatusPill>{row.deletedAt ? t("已删除（回收站）") : row.removedHere ? t("已从本机删除") : t("未添加")}</StatusPill>
     },
     {
       title: t("操作"),
@@ -675,7 +676,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
                     {running ? t("运行中") : t("打开")}
                   </Button>
                 )
-              : <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} onClick={() => void addHere(row)}>{t("添加到本机")}</Button>}
+              : <Button size="small" type="link" autoInsertSpace={false} loading={busy === row.id} onClick={() => void addHere(row)}>{row.deletedAt ? t("恢复") : t("添加到本机")}</Button>}
             {owner && <Button size="small" type="link" autoInsertSpace={false} onClick={() => setAssigning(row)}>{t("分配")}</Button>}
             {owner && (
               <Dropdown

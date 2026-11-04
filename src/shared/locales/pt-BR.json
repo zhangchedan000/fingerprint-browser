@@ -2191,7 +2191,6 @@
   "已是最新": "Já está atualizado",
   "已添加到本机": "Adicionada a este computador",
   "删除云端窗口“{0}”？": "Excluir a janela na nuvem “{0}”?",
-  "云端的配置和登录状态会被删除，所有人都打不开它；这台电脑上的副本移到回收站。其他电脑上的副本留着但打不开。": "A configuração e o estado de login na nuvem serão excluídos e ninguém conseguirá abri-la; a cópia neste computador vai para a lixeira. As cópias em outros computadores continuam lá, mas não abrem.",
   "我": "Eu",
   "主账号分配": "Atribuída pela conta principal",
   "创建人": "Criada por",
@@ -2715,5 +2714,10 @@
   "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Automático: quase sempre alto-falantes + headset USB; algumas placas de entrada só headset ou só alto-falantes, algumas placas topo de linha também uma webcam; fixado ao salvar. Sites sem permissão veem só quais tipos de dispositivo existem",
   "各数据库判断不一：{0}": "os bancos de dados divergem: {0}",
   "修改名称": "Renomear",
-  "点击修改名称": "Clique para renomear"
+  "点击修改名称": "Clique para renomear",
+  "云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。": "A configuração e o estado de login na nuvem são excluídos para sempre e ninguém poderá abri-la; a cópia de cada computador vai para a lixeira dele (restaurá-la envia de novo como uma nova janela). Para excluir podendo restaurar, exclua na lista de janelas.",
+  "已删除（回收站）": "Excluída (lixeira)",
+  "已恢复（所有电脑都会恢复）": "Restaurada (em todos os computadores)",
+  "这个窗口已在其他电脑删除（在回收站里，可以恢复）": "Esta janela foi excluída em outro computador (está na lixeira e pode ser restaurada)",
+  "这个窗口已被删除，只有主账号可以恢复": "Esta janela foi excluída; só a conta principal pode restaurá-la"
 }

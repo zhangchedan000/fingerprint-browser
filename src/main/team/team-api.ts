@@ -368,9 +368,15 @@ export class TeamApi {
     await this.request('DELETE', `/api/collections/users/records/${encodeURIComponent(id)}`)
   }
 
+  /** Every cloud window the account sees (all pages: a window missing here counts as deleted). */
   async listProfiles(): Promise<RemoteProfile[]> {
-    const result = await this.request<ListResult<RemoteProfile>>('GET', '/api/collections/team_profiles/records?perPage=500&sort=name&expand=data_by&fields=*,expand.data_by.name,expand.data_by.username')
-    return result.items
+    const items: RemoteProfile[] = []
+    for (let page = 1; page <= 100; page += 1) {
+      const result = await this.request<ListResult<RemoteProfile>>('GET', `/api/collections/team_profiles/records?page=${page}&perPage=500&sort=name&expand=data_by&fields=*,expand.data_by.name,expand.data_by.username`)
+      items.push(...result.items)
+      if (result.items.length < 500 || (result.totalPages && page >= result.totalPages)) break
+    }
+    return items
   }
 
   getProfile(id: string): Promise<RemoteProfile> {
