@@ -675,8 +675,14 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     return () => { current = false }
   }, [form, open, profile, suggestedIndex])
 
-  const pinnedKernel = kernels.find((kernel) => kernel.version === kernelVersion)
-    ?? kernels.find((kernel) => Boolean(kernel.executable) && Boolean(kernelVersion) && sameChromiumKernel(kernel.version, kernelVersion))
+  // As the launch resolves it (locateBrowserForProfile): the window's own id when this launcher runs that
+  // kernel, else the same Chromium version under another id that it runs, else whatever is there.
+  const exactKernel = kernels.find((kernel) => kernel.version === kernelVersion)
+  const siblingKernels = kernels.filter((kernel) => Boolean(kernel.executable) && Boolean(kernelVersion) && kernel.version !== kernelVersion && sameChromiumKernel(kernel.version, kernelVersion))
+  const pinnedKernel = (exactKernel?.executable && exactKernel.supported !== false ? exactKernel : undefined)
+    ?? siblingKernels.find((kernel) => kernel.supported !== false)
+    ?? exactKernel
+    ?? siblingKernels[0]
   const selectedEngine: EngineStatus | null = kernelVersion
     ? {
         executable: pinnedKernel?.executable ?? null,

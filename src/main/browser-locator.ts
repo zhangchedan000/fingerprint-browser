@@ -71,8 +71,9 @@ function validKernelVersion(version: string): boolean {
 }
 
 /**
- * Resolve the kernel a window is pinned to. When this computer has no kernel by that exact id, a
- * kernel of the same build family and Chromium version installed here is used instead: the same
+ * Resolve the kernel a window is pinned to. When this computer has no kernel by that exact id, or
+ * only one this launcher does not run, a kernel of the same build family and Chromium version
+ * installed here is used instead (one it runs first): the same
  * kernel imported on two computers gets different ids ("prism-155.0.8059.84" on one,
  * "prism-155.0.8059.84-202610261927" on the other), and a window synced from one must still open
  * on the other. Never falls back to another Chromium version or another browser.
@@ -84,12 +85,19 @@ export async function locateBrowserForProfile(
   runtime: ProfileBrowserRuntime = {}
 ): Promise<EngineStatus> {
   const exact = await locateExactBrowserForProfile(settingsStore, vaultPath, kernelVersion, runtime)
-  if (exact.executable || !kernelVersion.trim()) return exact
+  if (!kernelVersion.trim()) return exact
+  // A kernel this launcher runs (prism21+) is taken as it is. One it does not run (an older kernel
+  // still installed under the window's id, e.g. "prism-155.0.8059.84-202610261927" next to the
+  // prism21 "prism-155.0.8059.84") gives way to a sibling it runs.
+  if (exact.executable && exact.supported !== false) return exact
+  let fallback: EngineStatus | undefined
   for (const sibling of await sameChromiumKernelIds(vaultPath, kernelVersion.trim())) {
     const engine = await locateExactBrowserForProfile(settingsStore, vaultPath, sibling, runtime).catch(() => undefined)
-    if (engine?.executable) return engine
+    if (!engine?.executable) continue
+    if (engine.supported !== false) return engine
+    fallback ??= engine
   }
-  return exact
+  return exact.executable ? exact : fallback ?? exact
 }
 
 /** Installed kernel ids other than `id` with the same build family and Chromium version, newest import first. */

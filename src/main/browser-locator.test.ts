@@ -17,14 +17,14 @@ async function vault(): Promise<string> {
   return root
 }
 
-async function installKernel(vaultPath: string, id: string): Promise<void> {
+async function installKernel(vaultPath: string, id: string, releaseTag = 'prism21'): Promise<void> {
   const root = join(vaultPath, 'kernels', id)
   await mkdir(join(root, 'bin'), { recursive: true })
   const executableRelative = 'bin/chrome'
   await writeFile(join(root, executableRelative), `kernel ${id}`)
   await chmod(join(root, executableRelative), 0o755)
   const integrity = await collectKernelIntegrity(root, executableRelative)
-  await writeFile(join(root, 'manifest.json'), JSON.stringify({ schemaVersion: 2, version: id, executableRelative, ...integrity }))
+  await writeFile(join(root, 'manifest.json'), JSON.stringify({ schemaVersion: 2, version: id, executableRelative, releaseTag, ...integrity }))
 }
 
 afterEach(async () => {
@@ -48,6 +48,21 @@ describe('locateBrowserForProfile', () => {
     await installKernel(vaultPath, 'prism-155.0.8059.84-202611011200')
     const engine = await locateBrowserForProfile(settings, vaultPath, 'prism-155.0.8059.84', { resourcesPath: vaultPath })
     expect(engine.version).toBe('prism-155.0.8059.84-202611011200')
+  })
+
+  it('leaves an older kernel under the window\'s own id for the prism21 build of the same version', async () => {
+    const vaultPath = await vault()
+    await installKernel(vaultPath, 'prism-155.0.8059.84-202610261927', 'prism20')
+    await installKernel(vaultPath, 'prism-155.0.8059.84', 'prism21')
+    const engine = await locateBrowserForProfile(settings, vaultPath, 'prism-155.0.8059.84-202610261927', { resourcesPath: vaultPath })
+    expect(engine.version).toBe('prism-155.0.8059.84')
+    expect(engine.supported).toBe(true)
+    // Only the older one here: it is still what the window gets (and is then told to update).
+    const alone = await vault()
+    await installKernel(alone, 'prism-155.0.8059.84-202610261927', 'prism20')
+    const old = await locateBrowserForProfile(settings, alone, 'prism-155.0.8059.84', { resourcesPath: alone })
+    expect(old.version).toBe('prism-155.0.8059.84-202610261927')
+    expect(old.supported).toBe(false)
   })
 
   it('never uses another Chromium version or build family', async () => {
