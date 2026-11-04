@@ -17,7 +17,7 @@ import {
   type KernelIntegrityFields
 } from './kernel-integrity'
 import type { SettingsStore } from './settings-store'
-import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { checksumFor, githubFailure, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 import { validKernelSources } from '../shared/kernel-sources'
 import type { Logger } from './app-logger'
 import { detachKernelFolderFonts, ensureKernelFonts } from './kernel-fonts'
@@ -54,6 +54,40 @@ interface KernelActivationBackup {
   schemaVersion: 1
   recordedAt: string
   settings: AppSettings
+}
+
+/** A program holds the folder (Windows: EPERM / EBUSY / EACCES on rename); worth waiting a little. */
+function folderInUse(error: unknown): boolean {
+  return ['EPERM', 'EBUSY', 'EACCES'].includes((error as NodeJS.ErrnoException | undefined)?.code ?? '')
+}
+
+export const KERNEL_FOLDER_IN_USE = '内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新'
+
+/**
+ * Moves an installed kernel aside. Chrome makes its own folder its working folder (chrome_exe_main_win.cc
+ * SetCwdForBrowserProcess, main_dll_loader_win.cc), and programs it starts keep it, such as an input
+ * method's background service; Windows does not rename a folder that is any process's working folder.
+ * Tries a few times (such a program may be closing), then says what to do.
+ */
+export async function renameKernelFolder(
+  from: string,
+  to: string,
+  logger?: Logger,
+  tries = 5,
+  delayMs = 1000,
+  renameImpl: (from: string, to: string) => Promise<void> = rename
+): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await renameImpl(from, to)
+      return
+    } catch (error) {
+      if (!folderInUse(error)) throw error
+      logger?.info('内核文件夹被占用，稍后重试', { folder: from, attempt, error: error instanceof Error ? error.message : String(error) })
+      if (attempt >= tries) throw new Error(KERNEL_FOLDER_IN_USE)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
 }
 
 function safeVersion(version: string): string {
@@ -158,11 +192,13 @@ export class KernelManager {
         return { candidates: releaseCandidates(source, await this.fetchReleases(releasesUrl(source))) }
       } catch (error) {
         this.logger?.error('获取内核版本失败', { source, error: error instanceof Error ? error.message : String(error) })
-        return { candidates: [], error: `${source}：${error instanceof Error ? error.message : String(error)}` }
+        // The reason alone (the log has the project): the same reason from every project is said once.
+        return { candidates: [], error: error instanceof Error ? error.message : String(error) }
       }
     }))
     const failures = listed.flatMap((item) => item.error ? [item.error] : [])
-    if (sources.length && failures.length === sources.length && installed.size === 0) throw new Error(failures.join('；'))
+    // Every source failed: say why (installed kernels are listed on their own page), not an empty list.
+    if (sources.length && failures.length === sources.length) throw new Error([...new Set(failures)].join('；'))
 
     const withSha: Array<ReleaseCandidate & { sha256: string }> = []
     // Only kernels this launcher runs (prism21+); older ones stay with the launchers released before it.
@@ -276,7 +312,7 @@ export class KernelManager {
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
       signal: AbortSignal.timeout(15_000)
     })
-    if (!response.ok) throw new Error(`获取内核版本失败（GitHub HTTP ${response.status}）`)
+    if (!response.ok) throw new Error(githubFailure(response.status, response.headers, Date.now()))
     return await response.json() as GithubRelease[]
   }
 
@@ -749,7 +785,7 @@ export class KernelManager {
       return
     }
     const previous = `${target}.old-${Date.now()}`
-    await rename(target, previous)
+    await renameKernelFolder(target, previous, this.logger)
     try {
       await rename(staging, target)
     } catch (error) {

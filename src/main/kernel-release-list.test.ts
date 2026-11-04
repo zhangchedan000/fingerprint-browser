@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checksumFor, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, windowsKernelAssets, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
+import { checksumFor, githubFailure, isSourceDownloadUrl, olderBuilds, planKernelRows, releaseCandidates, windowsKernelAssets, type GithubRelease, type ReleaseCandidate } from './kernel-release-list'
 
 const asset = (name: string, digest: string | null = null) => ({ name, size: 200_000_000, browser_download_url: `https://github.com/a/b/releases/download/t/${name}`, digest })
 const release = (tag: string, assets: GithubRelease['assets'], extra: Partial<GithubRelease> = {}): GithubRelease =>
@@ -77,5 +77,19 @@ describe('kernel releases from a GitHub project', () => {
       candidate('zhangchedan000/prism-kernel-releases', 'prism9', '2026-11-05T00:00:00Z')
     ])
     expect(rows.map((row) => `${row.kind}:${row.release.sha256}`)).toEqual(['update:prism9'])
+  })
+})
+
+describe('why GitHub would not list the releases', () => {
+  const headers = (values: Record<string, string>) => ({ get: (name: string) => values[name] ?? null })
+  it('says when the hourly limit resets', () => {
+    const now = Date.UTC(2026, 10, 4, 2, 0, 0)
+    const reset = String(now / 1000 + 25 * 60 + 5)
+    expect(githubFailure(403, headers({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': reset }), now))
+      .toBe('GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 26 分钟后再试')
+  })
+  it('names other refusals and failures', () => {
+    expect(githubFailure(403, headers({}), 0)).toBe('GitHub 暂时拒绝访问（HTTP 403），请过几分钟再试')
+    expect(githubFailure(502, headers({}), 0)).toBe('获取内核版本失败（GitHub HTTP 502）')
   })
 })

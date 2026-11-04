@@ -143,3 +143,18 @@ export function olderBuilds<R extends ReleaseCandidate>(releases: readonly R[], 
   const shown = new Set(rows.map((row) => row.release))
   return releases.filter((release) => !shown.has(release)).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 }
+
+/**
+ * Why GitHub would not list the releases. Without signing in, GitHub's API allows 60 requests an hour
+ * per address; past that it answers 403 (or 429) with x-ratelimit-remaining 0 and the time it resets
+ * (x-ratelimit-reset, Unix seconds), so the message says when to try again.
+ */
+export function githubFailure(status: number, headers: { get(name: string): string | null }, now: number): string {
+  const reset = Number(headers.get('x-ratelimit-reset'))
+  if ((status === 403 || status === 429) && headers.get('x-ratelimit-remaining') === '0' && reset > 0) {
+    const minutes = Math.max(1, Math.ceil((reset * 1000 - now) / 60_000))
+    return `GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 ${minutes} 分钟后再试`
+  }
+  if (status === 403 || status === 429) return `GitHub 暂时拒绝访问（HTTP ${status}），请过几分钟再试`
+  return `获取内核版本失败（GitHub HTTP ${status}）`
+}

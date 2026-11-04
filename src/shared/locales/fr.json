@@ -2709,5 +2709,8 @@
   "这个内核不是 prism21，新版启动器只能用 prism21 及以后的内核，请在「内核管理」里更新内核": "Ce noyau n'est pas prism21. Le nouveau lanceur n'utilise que les noyaux prism21 et suivants ; mettez à jour le noyau dans Noyaux",
   "这个本地构建不是 prism21（谷歌原版源码编译），新版启动器只能导入 prism21 及以后的内核": "Cette version locale n'est pas prism21 (compilée depuis le code source d'origine de Google). Le nouveau lanceur n'importe que les noyaux prism21 et suivants",
   "需要更新": "Mise à jour requise",
-  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "Noyau antérieur à prism21 : ce lanceur n'ouvre plus de fenêtres avec lui. Mettez à jour vers prism21"
+  "prism21 之前的内核，这个启动器不再用它打开窗口：请更新到 prism21": "Noyau antérieur à prism21 : ce lanceur n'ouvre plus de fenêtres avec lui. Mettez à jour vers prism21",
+  "GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 {0} 分钟后再试": "GitHub refuse pour l’instant : cet ordinateur a épuisé ses requêtes de l’heure ; réessayez dans environ {0} min",
+  "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "GitHub refuse pour l’instant (HTTP {0}) ; réessayez dans quelques minutes",
+  "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Un autre programme utilise le dossier du noyau, il ne peut donc pas être mis à jour pour l’instant. C’est souvent le programme en arrière-plan d’une méthode de saisie (comme le service cloud de Sogou) : après une saisie dans le navigateur, il garde le dossier du noyau ouvert. Quittez ce programme ou redémarrez l’ordinateur, puis cliquez à nouveau sur Mettre à jour"
 }
