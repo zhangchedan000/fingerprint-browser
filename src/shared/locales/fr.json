@@ -2712,5 +2712,6 @@
   "GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 {0} 分钟后再试": "GitHub refuse pour l’instant : cet ordinateur a épuisé ses requêtes de l’heure ; réessayez dans environ {0} min",
   "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "GitHub refuse pour l’instant (HTTP {0}) ; réessayez dans quelques minutes",
   "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Un autre programme utilise le dossier du noyau, il ne peut donc pas être mis à jour pour l’instant. C’est souvent le programme en arrière-plan d’une méthode de saisie (comme le service cloud de Sogou) : après une saisie dans le navigateur, il garde le dossier du noyau ouvert. Quittez ce programme ou redémarrez l’ordinateur, puis cliquez à nouveau sur Mettre à jour",
-  "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Auto : le plus souvent haut-parleurs + casque USB ; quelques cartes d’entrée de gamme seulement un casque ou seulement des haut-parleurs, quelques cartes haut de gamme aussi une webcam ; fixé à l’enregistrement. Les sites sans autorisation ne voient que les types d’appareils présents"
+  "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Auto : le plus souvent haut-parleurs + casque USB ; quelques cartes d’entrée de gamme seulement un casque ou seulement des haut-parleurs, quelques cartes haut de gamme aussi une webcam ; fixé à l’enregistrement. Les sites sans autorisation ne voient que les types d’appareils présents",
+  "各数据库判断不一：{0}": "les bases de données divergent : {0}"
 }

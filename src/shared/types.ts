@@ -510,6 +510,11 @@ export interface ProxyTestResult {
   geoConfidence?: 'consensus' | 'single-source' | 'conflict'
   geoSources?: string[]
   geoConflict?: string
+  /**
+   * The time zone each geo database gave for the IP, grouped as Windows reports them, most votes
+   * first; `timezone` is the winning group's. Only set when the databases disagree.
+   */
+  timezoneVotes?: Array<{ timezone: string; sources: string[] }>
   /** The two lookups saw different exit IPs: the proxy gives a new one for every connection. */
   rotating?: boolean
   /** API 提取 checked in the editor: the address the link gave, and where that server is (not kept with the check). */

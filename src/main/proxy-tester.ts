@@ -4,6 +4,7 @@ import { isIP } from 'node:net'
 import type { ProxyConfig, ProxyTestResult, ServerPlace } from '../shared/types'
 import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute } from './proxy-bridge'
 import { safeErrorText } from './redaction'
+import { windowsReportedZone } from '../shared/windows-time-zones'
 
 const IP_CHECK_URL = 'https://api.ipify.org?format=json'
 /** A check gives up after this long: a proxy that does not answer is reported, not waited for. */
@@ -257,14 +258,34 @@ export interface GeoAnswer {
 }
 
 /**
+ * The time zones the services gave, grouped as Windows reports them (New York and Detroit are one
+ * zone), most votes first; a tie goes to the group answered first. Databases often disagree on the
+ * city of a data-centre IP (11-04: one IP was New York for four services, Chicago for two, Los
+ * Angeles for one), so the zone is the majority's, as most sites' databases would place it.
+ */
+export function timezoneVotes(answers: GeoAnswer[]): Array<{ timezone: string; sources: string[] }> {
+  const groups = new Map<string, { timezone: string; sources: string[]; first: number }>()
+  answers.forEach(({ source, result }, index) => {
+    if (!result.timezone) return
+    const key = windowsReportedZone(result.timezone, result.countryCode) ?? result.timezone
+    const group = groups.get(key) ?? { timezone: result.timezone, sources: [], first: index }
+    group.sources.push(source)
+    groups.set(key, group)
+  })
+  return [...groups.values()]
+    .sort((x, y) => y.sources.length - x.sources.length || x.first - y.first)
+    .map(({ timezone, sources }) => ({ timezone, sources }))
+}
+
+/**
  * Two services' answers for the same connection. Different exit IPs mean the proxy hands out a new
  * IP per connection (a rotating proxy). Same IP, different countries: the databases disagree. Same
  * country: agreed; a city they disagree on is left out (the country is what counts).
  */
-export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer): ProxyTestResult {
+export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAnswer[] = []): ProxyTestResult {
   const a = first.result
   const b = second.result
-  const geoSources = [first.source, second.source]
+  const geoSources = [first.source, second.source, ...more.map((answer) => answer.source)]
   const where = (result: ProxyTestResult) => [result.countryCode, result.city].filter(Boolean).join(' ')
   if (a.ip && b.ip && a.ip !== b.ip) {
     const geoConflict = `这个代理每个连接换一个出口 IP（轮换代理）：${a.ip}（${where(a) || '未知'}）、${b.ip}（${where(b) || '未知'}）`
@@ -290,11 +311,15 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer): ProxyTestR
     }
   }
   const sameCity = Boolean(a.city && b.city && a.city.toLowerCase() === b.city.toLowerCase())
+  // The time zone most databases give (the same country's answers only), not the first one's.
+  const votes = timezoneVotes([first, second, ...more].filter((answer) => !answer.result.countryCode || !a.countryCode
+    || answer.result.countryCode.toUpperCase() === a.countryCode.toUpperCase()))
   return {
     ...a,
     countryCode: a.countryCode ?? b.countryCode,
     country: a.country ?? b.country,
-    timezone: a.timezone ?? b.timezone,
+    timezone: votes[0]?.timezone ?? a.timezone ?? b.timezone,
+    ...(votes.length > 1 ? { timezoneVotes: votes } : {}),
     networkRisk: a.networkRisk ?? b.networkRisk,
     ...(sameCity ? {} : { city: undefined, region: undefined }),
     geoConfidence: 'consensus',
@@ -369,14 +394,14 @@ const isSiteProblem = (error: unknown) => error instanceof SiteError || /timeout
  * Two answers from different services, picked at random; a service that fails is replaced by the
  * next. A failure of the proxy itself (refused, reset, authentication) ends the search at once.
  */
-export async function geoAnswers(dispatcher: ProxyAgent | undefined, signal: AbortSignal, startedAt: number, sources = GEO_SOURCES): Promise<{ answers: GeoAnswer[]; failures: string[] }> {
+export async function geoAnswers(dispatcher: ProxyAgent | undefined, signal: AbortSignal, startedAt: number, sources = GEO_SOURCES, want = 2): Promise<{ answers: GeoAnswer[]; failures: string[] }> {
   const order = [...sources].sort(() => Math.random() - 0.5)
   const answers: GeoAnswer[] = []
   const failures: string[] = []
   let next = 0
   let fatal: unknown
   const worker = async () => {
-    while (answers.length < 2 && next < order.length && fatal === undefined && !signal.aborted) {
+    while (answers.length < want && next < order.length && fatal === undefined && !signal.aborted) {
       const source = order[next++]
       try {
         const data = await lookupJson<Json>(source.url, dispatcher, signal)
@@ -407,7 +432,19 @@ async function testProxyOnce(config: ProxyConfig, direct: boolean, signal: Abort
     localProxy = await openProxyBridge(config, {}, { direct })
     dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
     const { answers, failures } = await geoAnswers(dispatcher, signal, startedAt)
-    if (answers.length >= 2) return { ...mergeGeoLookups(answers[0], answers[1]), latencyMs: answers[0].result.latencyMs }
+    if (answers.length >= 2) {
+      // The two disagree on the time zone (same country, same IP): ask the other services and go by the majority.
+      const [a, b] = answers.map((answer) => answer.result)
+      const zone = (result: ProxyTestResult) => result.timezone && (windowsReportedZone(result.timezone, result.countryCode) ?? result.timezone)
+      let more: GeoAnswer[] = []
+      if (a.ip === b.ip && a.countryCode === b.countryCode && zone(a) && zone(b) && zone(a) !== zone(b) && !signal.aborted) {
+        const asked = new Set(answers.map((answer) => answer.source))
+        const rest = GEO_SOURCES.filter((source) => !asked.has(source.name))
+        more = (await geoAnswers(dispatcher, signal, startedAt, rest, rest.length).catch(() => ({ answers: [] as GeoAnswer[] }))).answers
+          .filter((answer) => !answer.result.ip || answer.result.ip === a.ip)
+      }
+      return { ...mergeGeoLookups(answers[0], answers[1], more), latencyMs: answers[0].result.latencyMs }
+    }
     if (answers.length === 1) {
       return {
         ...answers[0].result,

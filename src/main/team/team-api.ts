@@ -409,7 +409,8 @@ export class TeamApi {
       form.append('data', await openAsBlob(data.file), 'profile.tgz')
     }
     // Large login states take a while over a slow line.
-    const timeout = data ? Math.max(120_000, data.size / 50) : 30_000
+    // Whole milliseconds: AbortSignal.timeout takes an integer (10 332 160 bytes / 50 was 206643.2 and threw).
+    const timeout = data ? Math.max(120_000, Math.ceil(data.size / 50)) : 30_000
     return id
       ? this.request('PATCH', `/api/collections/team_profiles/records/${encodeURIComponent(id)}`, form, timeout)
       : this.request('POST', '/api/collections/team_profiles/records', form, timeout)

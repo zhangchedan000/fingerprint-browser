@@ -116,6 +116,32 @@ describe('proxy geolocation result', () => {
     })
   })
 
+  it('takes the time zone most services give when they disagree on the city', () => {
+    const answer = (source: string, city: string, timezone: string) =>
+      ({ source, result: parseSecondaryGeoLookup({ ip: '203.0.113.7', country_code: 'US', city, timezone }, 10) })
+    // 11-04: four services said Frankfort KY (New York), two Chicago, one Los Angeles; the first two asked were LA and Chicago.
+    const merged = mergeGeoLookups(answer('ipinfo.io', 'Los Angeles', 'America/Los_Angeles'), answer('geojs.io', '', 'America/Chicago'), [
+      answer('ipwho.is', 'Frankfort', 'America/New_York'), answer('ipapi.co', 'Frankfort', 'America/New_York'),
+      answer('ipapi.is', 'Frankfort', 'America/New_York'), answer('ip.sb', 'Frankfort', 'America/Chicago'),
+      answer('ip-api', 'Frankfort', 'America/Detroit')
+    ])
+    expect(merged.timezone).toBe('America/New_York')
+    expect(merged.timezoneVotes).toEqual([
+      { timezone: 'America/New_York', sources: ['ipwho.is', 'ipapi.co', 'ipapi.is', 'ip-api'] },
+      { timezone: 'America/Chicago', sources: ['geojs.io', 'ip.sb'] },
+      { timezone: 'America/Los_Angeles', sources: ['ipinfo.io'] }
+    ])
+    expect(merged.geoSources).toHaveLength(7)
+  })
+
+  it('leaves the votes out when the services agree', () => {
+    const a = parseSecondaryGeoLookup({ ip: '203.0.113.7', country_code: 'US', timezone: 'America/New_York' }, 10)
+    const b = parseSecondaryGeoLookup({ ip: '203.0.113.7', country_code: 'US', timezone: 'America/Detroit' }, 10)
+    const merged = mergeGeoLookups({ source: 'ipwho.is', result: a }, { source: 'ipapi.co', result: b })
+    expect(merged.timezone).toBe('America/New_York')
+    expect(merged.timezoneVotes).toBeUndefined()
+  })
+
   it('reads the other services in the pool', () => {
     const parse = (name: string, data: Record<string, unknown>) => GEO_SOURCES.find((source) => source.name === name)!.parse(data, 5)
     expect(parse('ipinfo.io', { ip: '23.165.248.241', country: 'US', city: 'Los Angeles', loc: '34.05,-118.24', org: 'AS13335 Example', timezone: 'America/Los_Angeles' }))
