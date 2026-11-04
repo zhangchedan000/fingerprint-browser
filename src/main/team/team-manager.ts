@@ -110,8 +110,10 @@ interface TeamFile {
   localTouched?: string[]
   /** Activation codes of standby servers (the owner's computer), encrypted like the token. */
   activationCodes?: Record<string, string>
-  /** The last proxy library and 网络加速 sent to the server (a hash of it). */
+  /** The account's libraries (proxies, groups, 网络加速 nodes, settings) as this computer last sent or took them (a hash). */
   workspaceHash?: string
+  /** The server's version (updated time) of those libraries this computer last sent or took; unset: never synced both ways. */
+  workspaceSeen?: string
   /** This computer's fixed id for its own copies of login states (made once, kept). */
   deviceId?: string
 }
@@ -692,31 +694,66 @@ export class TeamManager {
     return this.connectServer(url, activation)
   }
 
-  // ---- proxy library and 网络加速 of the account ------------------------------------
+  // ---- the account's libraries: proxies, groups, 网络加速 nodes, settings ------------------
 
-  /** Set by the app: this computer's proxy library and node sources, and how to add missing ones. */
+  /** Set by the app: this computer's libraries, and how to take the account's ('merge': add what is
+   *  missing, keep the rest; 'mirror': become the same). */
   workspaceExport?: () => Promise<unknown>
-  workspaceImport?: (data: unknown) => Promise<void>
+  workspaceImport?: (data: unknown, mode: 'merge' | 'mirror') => Promise<void>
   private workspaceId?: string
 
-  /** Sends the proxy library and 网络加速 when they changed since the last time. */
+  private static workspaceHashOf(data: unknown): string {
+    return createHash('sha256').update(JSON.stringify(data)).digest('hex')
+  }
+
+  /**
+   * One set of libraries for the account on every computer (user, 2026-11-04), whoever changed them
+   * last: changed here since the last sync → sent (this computer's are the latest); changed on another
+   * computer → taken as they are (added, changed and removed here too). The first time on a computer
+   * (or from a version before this) the two are merged, so nothing on either side is lost; also when
+   * both changed between two syncs.
+   */
   async pushWorkspace(): Promise<void> {
     if (!this.online || !this.api || !this.user || !this.workspaceExport) return
-    const data = await this.workspaceExport()
-    const hash = createHash('sha256').update(JSON.stringify(data)).digest('hex')
-    if (hash === this.file.workspaceHash) return
-    if (!this.workspaceId) this.workspaceId = (await this.api.getWorkspace())?.id
-    this.workspaceId = await this.api.saveWorkspace(this.workspaceId, this.user.id, data)
-    this.file.workspaceHash = hash
+    const api = this.api
+    const version = await api.workspaceVersion()
+    this.workspaceId = version?.id
+    const localHash = TeamManager.workspaceHashOf(await this.workspaceExport())
+    const firstTime = this.file.workspaceSeen === undefined
+    const changedHere = localHash !== this.file.workspaceHash
+    const changedThere = Boolean(version) && version!.updated !== this.file.workspaceSeen
+    if (version && this.workspaceImport && (firstTime || (changedHere && changedThere))) {
+      const record = await api.getWorkspace()
+      if (record?.data) await this.workspaceImport(record.data, 'merge')
+      await this.sendWorkspace()
+      return
+    }
+    if (changedHere || !version) {
+      await this.sendWorkspace()
+      return
+    }
+    if (changedThere && this.workspaceImport) {
+      const record = await api.getWorkspace()
+      if (record?.data) await this.workspaceImport(record.data, 'mirror')
+      // What this computer has now (an entry still in use here may stay) counts as taken, not as a change here.
+      this.file.workspaceHash = TeamManager.workspaceHashOf(await this.workspaceExport())
+      this.file.workspaceSeen = record?.updated ?? version!.updated
+      await this.save()
+      this.logger?.info('代理库、分组、加速节点和设置已按账号同步', { from: record?.updated })
+    }
+  }
+
+  private async sendWorkspace(): Promise<void> {
+    const data = await this.workspaceExport!()
+    const saved = await this.requireApi().saveWorkspace(this.workspaceId, this.user!.id, data)
+    this.workspaceId = saved.id
+    this.file.workspaceHash = TeamManager.workspaceHashOf(data)
+    this.file.workspaceSeen = saved.updated ?? ''
     await this.save()
   }
 
-  /** Adds what the server has and this computer misses (a new computer, or after a switch). */
+  /** Right after signing in or reconnecting: the account's libraries (pushWorkspace merges the first time). */
   private async pullWorkspace(): Promise<void> {
-    if (!this.online || !this.api || !this.workspaceImport) return
-    const record = await this.api.getWorkspace()
-    this.workspaceId = record?.id
-    if (record?.data) await this.workspaceImport(record.data)
     await this.pushWorkspace()
   }
 
@@ -1381,6 +1418,15 @@ export class TeamManager {
     } catch (error) {
       this.logger?.error('云端窗口配置同步失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
       throw new Error(`本机已保存，但同步到云端失败：${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /** Several windows changed here at once (batch assign, a group or library proxy changed): each goes up. */
+  async pushConfigs(ids: string[]): Promise<void> {
+    for (const id of new Set(ids)) {
+      await this.afterLocalEdit(id).catch((error) => {
+        this.logger?.error('窗口配置没有同步到云端', { profileId: id, error: error instanceof Error ? error.message : String(error) })
+      })
     }
   }
 

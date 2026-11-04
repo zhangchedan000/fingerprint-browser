@@ -782,13 +782,17 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   // 测试模式: turning it off first uploads this computer's login state (team-manager setTestMode).
   ipcMain.handle('profiles:set-test-mode', async (_event, id: string, on: boolean) => publicProfile(await team.setTestMode(id, on === true)))
   ipcMain.handle('profiles:classify-many', async (_event, ids: string[], patch) => {
-    return (await profiles.classifyMany(ids, patch)).map(publicProfile)
+    const changed = await profiles.classifyMany(ids, patch)
+    await team.pushConfigs(changed.map((profile) => profile.id))
+    return changed.map(publicProfile)
   })
   ipcMain.handle('profiles:assign-many', async (_event, ids: string[], patch: AssignPatch) => {
     if (patch?.extensionId !== undefined && !(await extensions.list()).some((extension) => extension.id === patch.extensionId)) {
       throw new Error('扩展不存在或已被移除')
     }
-    return (await profiles.assignMany(ids, patch)).map(publicProfile)
+    const changed = await profiles.assignMany(ids, patch)
+    await team.pushConfigs(changed.map((profile) => profile.id))
+    return changed.map(publicProfile)
   })
   ipcMain.handle('profiles:set-kernel-many', async (_event, ids: string[], kernelVersion: string) => {
     const version = typeof kernelVersion === 'string' ? kernelVersion.trim() : kernelVersion
@@ -797,7 +801,9 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       const available = mergeKernelCatalog(managed, bundled).some((kernel) => kernel.version === version && kernel.installed && kernel.executable)
       if (!available) throw new Error(`内核 ${version} 尚未安装，请先在内核管理中导入`)
     }
-    return (await profiles.setKernelMany(ids, version)).map(publicProfile)
+    const changed = await profiles.setKernelMany(ids, version)
+    await team.pushConfigs(changed.map((profile) => profile.id))
+    return changed.map(publicProfile)
   })
   ipcMain.handle('profiles:remove-many', async (_event, ids: string[]) => {
     for (const id of ids) {
@@ -1051,10 +1057,17 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     const windows = profiles.list()
     return { ...result, created: result.created.map((proxy) => publicProxyRecord(proxy, windows)) }
   })
-  ipcMain.handle('proxy:update', async (_event, id: string, draft) => proxyView((await profiles.updateProxy(id, await resolveDraft(draft as ProxyDraft))).id))
-  ipcMain.handle('proxy:remove', (_event, id: string, replaceWith?: unknown) => {
+  // Windows on a library proxy carry it in their cloud config: they go up when it changes.
+  ipcMain.handle('proxy:update', async (_event, id: string, draft) => {
+    const view = proxyView((await profiles.updateProxy(id, await resolveDraft(draft as ProxyDraft))).id)
+    await team.pushConfigs(profiles.proxyUsers(id).map((profile) => profile.id))
+    return view
+  })
+  ipcMain.handle('proxy:remove', async (_event, id: string, replaceWith?: unknown) => {
     if (replaceWith !== undefined && typeof replaceWith !== 'string') throw new Error('替换代理参数无效')
-    return profiles.removeProxy(id, replaceWith)
+    const users = profiles.proxyUsers(id).map((profile) => profile.id)
+    await profiles.removeProxy(id, replaceWith)
+    await team.pushConfigs(users)
   })
   /** route: the 网络加速 of the window being edited; without it, the proxy's own default. */
   ipcMain.handle('proxy:check', async (_event, id: string, routeInput?: unknown) => {
@@ -1076,8 +1089,17 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     return profiles.listGroups().map((group) => publicGroupRecord(group, windows))
   })
   ipcMain.handle('groups:create', async (_event, draft) => publicGroupRecord(await profiles.createGroup(draft), profiles.list()))
-  ipcMain.handle('groups:update', async (_event, id: string, draft) => publicGroupRecord(await profiles.updateGroup(id, draft), profiles.list()))
-  ipcMain.handle('groups:remove', (_event, id: string) => profiles.removeGroup(id))
+  // Windows carry their group's name in their cloud config: they go up when it is renamed or removed.
+  ipcMain.handle('groups:update', async (_event, id: string, draft) => {
+    const record = await profiles.updateGroup(id, draft)
+    await team.pushConfigs(profiles.list().filter((profile) => profile.groupId === id).map((profile) => profile.id))
+    return publicGroupRecord(record, profiles.list())
+  })
+  ipcMain.handle('groups:remove', async (_event, id: string) => {
+    const members = profiles.list().filter((profile) => profile.groupId === id).map((profile) => profile.id)
+    await profiles.removeGroup(id)
+    await team.pushConfigs(members)
+  })
   ipcMain.handle('diagnostics:session-health', () => appSession.recoveryStatus())
   if (process.env.PRISM_E2E === '1') {
     ipcMain.handle('diagnostics:e2e-quit', () => app.quit())

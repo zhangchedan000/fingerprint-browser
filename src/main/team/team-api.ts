@@ -282,16 +282,22 @@ export class TeamApi {
     return this.request('POST', '/api/team/activate', { code }, 5 * 60_000)
   }
 
-  async getWorkspace(): Promise<{ id: string; data: unknown } | undefined> {
-    const page = await this.request<{ items: Array<{ id: string; data: unknown }> }>('GET', '/api/collections/team_workspaces/records?perPage=1')
+  async getWorkspace(): Promise<{ id: string; data: unknown; updated?: string } | undefined> {
+    const page = await this.request<{ items: Array<{ id: string; data: unknown; updated?: string }> }>('GET', '/api/collections/team_workspaces/records?perPage=1')
     return page.items[0]
   }
 
-  async saveWorkspace(id: string | undefined, userId: string, data: unknown): Promise<string> {
+  /** The workspace's id and when it last changed, without its data (looked at every sync). */
+  async workspaceVersion(): Promise<{ id: string; updated?: string } | undefined> {
+    const page = await this.request<{ items: Array<{ id: string; updated?: string }> }>('GET', '/api/collections/team_workspaces/records?perPage=1&fields=id,updated')
+    return page.items[0]
+  }
+
+  async saveWorkspace(id: string | undefined, userId: string, data: unknown): Promise<{ id: string; updated?: string }> {
     const record = id
-      ? await this.request<{ id: string }>('PATCH', `/api/collections/team_workspaces/records/${encodeURIComponent(id)}`, { data })
-      : await this.request<{ id: string }>('POST', '/api/collections/team_workspaces/records', { user: userId, data })
-    return record.id
+      ? await this.request<{ id: string; updated?: string }>('PATCH', `/api/collections/team_workspaces/records/${encodeURIComponent(id)}`, { data })
+      : await this.request<{ id: string; updated?: string }>('POST', '/api/collections/team_workspaces/records', { user: userId, data })
+    return { id: record.id, updated: record.updated }
   }
 
   setup(code: string, username: string, name: string, password: string): Promise<{ ok: boolean }> {

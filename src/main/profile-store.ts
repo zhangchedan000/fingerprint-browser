@@ -1180,6 +1180,93 @@ export class ProfileStore {
     this.notify(members.map((profile) => profile.id))
   }
 
+  // ---- the account's libraries on every computer (team sync) -------------------------------
+
+  /**
+   * Makes the proxy library what the account's is (another computer changed it last): proxies it
+   * lacks are added, changed notes and 网络加速 taken, ones the account no longer has removed (unless
+   * windows here still use them: they follow when those windows' configs arrive). A proxy is the
+   * same one by its API link, or by type, address, port, user and password. Returns whether anything changed.
+   */
+  async mirrorProxies(inputs: unknown): Promise<boolean> {
+    if (!Array.isArray(inputs)) return false
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const key = (proxy: { apiUrl?: string; protocol: string; host: string; port?: number; username: string; password: string }) =>
+        proxy.apiUrl ? `api ${proxy.apiUrl}` : `${proxy.protocol} ${proxy.host} ${proxy.port ?? ''} ${proxy.username} ${proxy.password}`
+      const wanted = new Map<string, ProxyDraft>()
+      for (const input of inputs) {
+        try {
+          const draft = validateProxyDraft(input as ProxyDraft)
+          wanted.set(key(draft), draft)
+        } catch {
+          // An entry this version cannot read is left alone.
+        }
+      }
+      let changed = false
+      const here = new Map(this.library.listProxies().map((proxy) => [key(proxy), proxy]))
+      for (const [identity, draft] of wanted) {
+        const existing = here.get(identity)
+        if (!existing) {
+          this.library.addProxy(draft, now)
+          changed = true
+        } else if (existing.note !== draft.note || JSON.stringify(existing.tunnel ?? null) !== JSON.stringify(draft.tunnel ?? null)) {
+          this.library.updateProxy(existing.id, { ...draft, password: existing.password }, now)
+          const updated = this.library.getProxy(existing.id)
+          if (draft.tunnel) updated.tunnel = draft.tunnel
+          else delete updated.tunnel
+          changed = true
+        }
+      }
+      for (const [identity, proxy] of here) {
+        if (wanted.has(identity) || this.proxyUsers(proxy.id).length) continue
+        this.library.deleteProxy(proxy.id)
+        changed = true
+      }
+      if (changed) await this.persist()
+      return changed
+    })
+  }
+
+  /**
+   * Makes the group list what the account's is: groups by name, with their colour and note; one the
+   * account no longer has is removed when no window here is in it. Returns whether anything changed.
+   */
+  async mirrorGroups(inputs: unknown): Promise<boolean> {
+    if (!Array.isArray(inputs)) return false
+    return this.withLibraryRollback(async () => {
+      const now = new Date().toISOString()
+      const wanted = new Map<string, GroupDraft>()
+      for (const input of inputs) {
+        const value = (input && typeof input === 'object' ? input : {}) as Partial<GroupDraft>
+        if (typeof value.name !== 'string' || !value.name.trim()) continue
+        wanted.set(value.name.trim(), { name: value.name.trim(), color: typeof value.color === 'string' ? value.color : undefined, note: typeof value.note === 'string' ? value.note : '' })
+      }
+      let changed = false
+      for (const draft of wanted.values()) {
+        const existing = this.library.findGroup(draft.name)
+        try {
+          if (!existing) {
+            this.library.addGroup(draft, now)
+            changed = true
+          } else if ((draft.color && existing.color !== draft.color) || existing.note !== (draft.note ?? '')) {
+            this.library.updateGroup(existing.id, { ...draft, color: draft.color ?? existing.color })
+            changed = true
+          }
+        } catch {
+          // An invalid group is left out.
+        }
+      }
+      for (const group of this.library.listGroups()) {
+        if (wanted.has(group.name) || [...this.profiles.values()].some((profile) => profile.groupId === group.id)) continue
+        this.library.deleteGroup(group.id)
+        changed = true
+      }
+      if (changed) await this.persist()
+      return changed
+    })
+  }
+
   // ---- removal and recycle bin -----------------------------------------------------------
 
   async removeMany(idsInput: string[]): Promise<void> {

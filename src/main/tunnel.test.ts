@@ -248,6 +248,15 @@ describe('node sources travel with a window', () => {
       expect(status.sources.map((source) => source.name)).toEqual(['JP', 'US'])
       // B's own JP stays as it was.
       expect(b.source(status.sources[0].id).content).toContain('own')
+
+      // The account's sources changed on A last: B becomes the same (JP replaced, US kept, none extra).
+      expect(await b.mirrorSources(a.sourcesFor({ enabled: true, mode: 'auto' }))).toBe(true)
+      const mirrored = await b.status()
+      expect(mirrored.sources.map((source) => source.name)).toEqual(['US', 'JP'])
+      expect(b.source(mirrored.sources[1].id).content).toBe('https://sub.example.com/token')
+      expect(await b.mirrorSources(a.sourcesFor({ enabled: true, mode: 'auto' }))).toBe(false)
+      expect(await b.mirrorSources([])).toBe(true)
+      expect((await b.status()).sources).toEqual([])
     } finally {
       await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
     }

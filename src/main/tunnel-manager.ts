@@ -240,6 +240,36 @@ export class TunnelManager {
     await this.notify()
   }
 
+  /**
+   * Makes the node sources what the account's are (another computer changed them last), by name:
+   * missing ones added, changed ones updated, ones the account no longer has removed. Whether 网络加速
+   * is on and the chosen node stay this computer's own. Returns whether anything changed.
+   */
+  async mirrorSources(input: unknown): Promise<boolean> {
+    if (!Array.isArray(input)) return false
+    const wanted: Array<ReturnType<typeof validateTunnelSource>> = []
+    for (const item of input) {
+      try { wanted.push(validateTunnelSource(item as Record<string, unknown>)) } catch { /* unreadable: left out */ }
+    }
+    const current = this.stored.sources.map((source) => ({ source, content: this.codec.decode(source.content) }))
+    const same = wanted.length === current.length && wanted.every((source) => current.some((item) =>
+      item.source.name === source.name && item.source.kind === source.kind && item.content === source.content))
+    if (same) return false
+    const now = new Date().toISOString()
+    const sources: TunnelSource[] = wanted.map((source) => {
+      const existing = current.find((item) => item.source.name === source.name)
+      return existing && existing.source.kind === source.kind && existing.content === source.content
+        ? existing.source
+        : { id: existing?.source.id ?? randomUUID().slice(0, 8), ...source, content: this.codec.encode(source.content), updatedAt: now }
+    })
+    const selected = this.stored.selected && sources.some((source) => this.stored.selected!.startsWith(`${source.name} · `)) ? this.stored.selected : undefined
+    this.logger?.info('网络加速节点已按账号同步', { sources: sources.map((source) => source.name) })
+    await this.replaceSources({ ...this.stored, selected, sources, enabled: this.stored.enabled && sources.length > 0 })
+    if (!sources.length) await this.stop()
+    await this.notify()
+    return true
+  }
+
   /** A window going through 网络加速 opens with it running (started here when it is off). */
   async ensureRunning(route: TunnelRoute): Promise<void> {
     if (!this.stored.enabled) {

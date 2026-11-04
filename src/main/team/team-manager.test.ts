@@ -65,6 +65,9 @@ function fakeServer() {
   const files = new Map<string, Buffer>()
   const locks = new Map<string, { holder: string; expires: number; device: string }>()
   const deviceStates = new Map<string, FakeDeviceState>()
+  // team_workspaces: one per account; updated is a new time on every write.
+  const workspaces = new Map<string, { id: string; user: string; data: unknown; updated: string }>()
+  let clock = 0
   let sequence = 0
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const userOf = (request: Request) => users.find((user) => request.headers.get('authorization') === `token-${user.id}`)
@@ -90,6 +93,20 @@ function fakeServer() {
     }
     if (!user) return json(401, {})
     if (path === '/api/files/token') return json(200, { token: 'file-token' })
+    const workspaceMatch = /^\/api\/collections\/team_workspaces\/records(?:\/(\w+))?$/.exec(path)
+    if (workspaceMatch) {
+      const own = [...workspaces.values()].find((item) => item.user === user.id)
+      if (request.method === 'GET') {
+        const items = own ? [url.searchParams.get('fields') === 'id,updated' ? { id: own.id, updated: own.updated } : own] : []
+        return json(200, { items, page: 1, totalItems: items.length })
+      }
+      const body = await request.json() as { data: unknown }
+      const record = own ?? { id: `ws${++sequence}`, user: user.id, data: null, updated: '' }
+      record.data = body.data
+      record.updated = `2026-11-04 00:00:${String(++clock).padStart(2, '0')}.000Z`
+      workspaces.set(record.id, record)
+      return json(200, record)
+    }
     if (path === '/api/collections/team_locks/records') {
       return json(200, { items: [...locks].map(([profile, lock]) => ({ id: profile, profile, ...lock })), page: 1, totalItems: locks.size })
     }
@@ -200,7 +217,7 @@ function fakeServer() {
     }
     return json(404, { message: `fake server: ${request.method} ${path}` })
   }
-  return { fetcher: fetcher as typeof fetch, records, locks, deviceStates }
+  return { fetcher: fetcher as typeof fetch, records, locks, deviceStates, workspaces }
 }
 
 /** One computer: its vault, windows, and the cookie jar of each window's browser. */
@@ -588,6 +605,64 @@ describe('TeamManager', () => {
     await a.team.sync()
     expect(await a.profiles.listTrash()).toEqual([])
 
+  })
+
+  it('keeps one proxy library and one group list for the account: added, changed and removed anywhere', async () => {
+    const server = fakeServer()
+    const wire = (pc: Awaited<ReturnType<typeof computer>>) => {
+      pc.team.workspaceExport = async () => ({
+        proxies: pc.profiles.listProxies().map(({ protocol, host, port, username, password, note, apiUrl, tunnel }) => ({ protocol, host, port, username, password, note, apiUrl, tunnel })),
+        groups: pc.profiles.listGroups().map(({ name, color, note }) => ({ name, color, note }))
+      })
+      pc.team.workspaceImport = async (data, mode) => {
+        const value = data as { proxies: unknown[]; groups: Array<{ name: string; color: string; note: string }> }
+        if (mode === 'mirror') {
+          await pc.profiles.mirrorProxies(value.proxies)
+          await pc.profiles.mirrorGroups(value.groups)
+        } else {
+          if (value.proxies.length) await pc.profiles.createProxies(value.proxies as never)
+          for (const group of value.groups) if (!pc.profiles.listGroups().some((item) => item.name === group.name)) await pc.profiles.createGroup(group)
+        }
+      }
+      return pc
+    }
+    const a = wire(await computer(server))
+    const b = wire(await computer(server))
+    const proxy = (host: string, note = '') => ({ protocol: 'socks5' as const, host, port: 1080, username: 'u', password: 'p', note })
+    // B already has a proxy of its own before it ever signs in: the first sync merges, nothing is lost.
+    await b.profiles.createProxy(proxy('b-own.example'))
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await a.profiles.createProxy(proxy('a-one.example'))
+    await a.profiles.createGroup({ name: '美国', color: '#ff0000', note: '' })
+    await a.team.sync()
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.sync()
+    await a.team.sync()
+    const hosts = (pc: typeof a) => pc.profiles.listProxies().map((item) => item.host).sort()
+    expect(hosts(a)).toEqual(['a-one.example', 'b-own.example'])
+    expect(hosts(b)).toEqual(['a-one.example', 'b-own.example'])
+    expect(b.profiles.listGroups().map((group) => group.name)).toEqual(['美国'])
+
+    // Changed on B (a note, a new group, one proxy removed): A becomes the same.
+    const one = b.profiles.listProxies().find((item) => item.host === 'a-one.example')!
+    await b.profiles.updateProxy(one.id, { ...proxy('a-one.example', '主力'), passwordStored: true, password: '' } as never)
+    await b.profiles.removeProxy(b.profiles.listProxies().find((item) => item.host === 'b-own.example')!.id)
+    await b.profiles.createGroup({ name: '日本', color: '#00ff00', note: '' })
+    await b.team.sync()
+    await a.team.sync()
+    expect(a.profiles.listProxies().map((item) => [item.host, item.note])).toEqual([['a-one.example', '主力']])
+    expect(a.profiles.listGroups().map((group) => group.name).sort()).toEqual(['日本', '美国'])
+
+    // Removed on A: B drops it too; a group a window here still uses stays until the window moves.
+    await a.profiles.removeGroup(a.profiles.listGroups().find((group) => group.name === '美国')!.id)
+    await a.team.sync()
+    await b.team.sync()
+    expect(b.profiles.listGroups().map((group) => group.name)).toEqual(['日本'])
+    // Nothing changed anywhere: nothing more is sent.
+    const before = [...server.workspaces.values()][0].updated
+    await a.team.sync()
+    await b.team.sync()
+    expect([...server.workspaces.values()][0].updated).toBe(before)
   })
 
   it('handles windows deleted here by an older version: deleted for the account unless used elsewhere since', async () => {
