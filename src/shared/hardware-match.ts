@@ -1,12 +1,16 @@
 import { CPU_MODELS, type CpuModel } from './cpu-catalog'
 import type { DeviceMemoryGb } from './types'
+import { screenChoices, type ScreenSize } from './screen'
 
 /**
- * A GPU picked for a window brings a CPU and memory size. How often each value comes up follows the
- * Steam Hardware & Software Survey (store.steampowered.com/hwsurvey, PC, October 2026); no public
- * survey breaks these down by graphics card, so the card only rules out what does not fit it:
- * a CPU sold more than two years apart from the card, and on a top card 8 GB or an i3 / Ryzen 3.
- * The editor applies the match as a default; every field stays editable.
+ * A GPU picked for a window brings a CPU, memory size and resolution. The card decides what can go
+ * with it, as desktops are built (user, 2026-11-04: a high-end CPU never with a low-end card, nor the
+ * other way round): a CPU of a class that suits the card's class and sold within two years of it, no
+ * 8 GB beside a mid-range or better card, no 4K or ultrawide screen beside an entry card. Among what
+ * fits, how often each value comes up follows the Steam Hardware & Software Survey
+ * (store.steampowered.com/hwsurvey, PC, October 2026); no public survey breaks these down by card,
+ * so the classes are build practice, the shares are data. The editor applies the match as a default;
+ * every field stays editable.
  */
 export type GpuTier = 'entry' | 'mid' | 'high' | 'top'
 
@@ -68,12 +72,15 @@ export const STEAM_CPU_CORES: Readonly<Record<number, number>> = {
  */
 export const STEAM_DEVICE_MEMORY: ReadonlyArray<[DeviceMemoryGb, number]> = [[8, 9.47], [16, 43.37], [32, 45.28]]
 
-/** CPUs that suit the card: on sale within two years of it; no i3 / Ryzen 3 with a top card. */
+/** CPU classes (1 = i3 / Ryzen 3 … 4 = i9 / Ryzen 9 / Ultra 9) that go with each class of card. */
+export const CPU_CLASSES: Readonly<Record<GpuTier, readonly number[]>> = { entry: [1, 2], mid: [2, 3], high: [2, 3, 4], top: [3, 4] }
+
+/** CPUs that suit the card: of a class that goes with it (CPU_CLASSES) and on sale within two years of it. */
 export function matchingCpus(gpuModel: string): CpuModel[] {
-  const top = gpuTier(gpuModel) === 'top'
+  const classes = CPU_CLASSES[gpuTier(gpuModel)]
   const year = gpuYear(gpuModel)
   const suited = CPU_MODELS.filter((cpu) => {
-    if (top && cpuClass(cpu) === 1) return false
+    if (!classes.includes(cpuClass(cpu))) return false
     const cpuYear = FAMILY_YEARS[cpu.family]
     return year === undefined || cpuYear === undefined || Math.abs(cpuYear - year) <= 2
   })
@@ -101,10 +108,27 @@ export function cpuWeights(cpus: readonly CpuModel[]): Array<[CpuModel, number]>
   return weighted.some(([, weight]) => weight > 0) ? weighted : cpus.map((cpu) => [cpu, 1])
 }
 
-/** Memory sizes for this card with their Steam shares: a top card never 8 GB. */
+/** Memory sizes for this card with their Steam shares: 8 GB only beside an entry card. */
 export function memoryWeights(gpuModel: string): Array<[DeviceMemoryGb, number]> {
-  const top = gpuTier(gpuModel) === 'top'
-  return STEAM_DEVICE_MEMORY.filter(([gb]) => !(top && gb === 8)).map(([gb, share]) => [gb, share])
+  const entry = gpuTier(gpuModel) === 'entry'
+  return STEAM_DEVICE_MEMORY.filter(([gb]) => entry || gb !== 8).map(([gb, share]) => [gb, share])
+}
+
+/** Whether a desktop with this card has a screen of this size: an entry card no 4K or ultrawide. */
+export function screenSuitsGpu(gpuModel: string, physical: { width: number; height: number }): boolean {
+  if (gpuTier(gpuModel) !== 'entry') return true
+  return !(physical.height >= 2160 || physical.width / physical.height > 2.3)
+}
+
+/**
+ * A resolution for a desktop with this card, by its Steam share among the sizes this computer can
+ * claim that suit the card (screenSuitsGpu); undefined when none does.
+ */
+export function matchedScreen(gpuModel: string, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
+  const choices = screenChoices(undefined, scale).filter((choice) => screenSuitsGpu(gpuModel, choice.physical))
+  if (!choices.length) return undefined
+  const picked = pick(choices.map((choice) => [choice, choice.weight] as [typeof choice, number]), random)
+  return { width: picked.width, height: picked.height }
 }
 
 export function matchedHardware(

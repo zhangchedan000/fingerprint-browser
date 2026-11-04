@@ -41,7 +41,7 @@ import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
-import { matchedHardware } from '../../../../shared/hardware-match'
+import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
@@ -1001,7 +1001,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     if (fp.platform !== 'windows') return {}
     const model = key.split('|')[0]
     const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? randomScreen(undefined, Math.random, hostScale()) : undefined
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, Math.random, hostScale()) : undefined
     return {
       cpu: cpu.model,
       coresSource: 'profile',
