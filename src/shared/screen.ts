@@ -12,15 +12,24 @@ export function kernelSpoofsScreen(kernelVersion: string | null | undefined): bo
 
 export interface ScreenSize { width: number; height: number }
 
-/** Common desktop resolutions, with a rough share used when a window gets a random one. */
+/**
+ * Common desktop resolutions, each with its share (%) of "Primary Display Resolution" in the Steam
+ * Hardware & Software Survey (store.steampowered.com/hwsurvey, PC, October 2026), used when a
+ * window gets a random one. No public survey breaks these down by graphics card.
+ */
 export const SCREEN_CHOICES: ReadonlyArray<ScreenSize & { weight: number }> = [
-  { width: 1920, height: 1080, weight: 40 },
-  { width: 1920, height: 1200, weight: 4 },
-  { width: 2560, height: 1080, weight: 3 },
-  { width: 2560, height: 1440, weight: 22 },
-  { width: 3440, height: 1440, weight: 6 },
-  { width: 3840, height: 2160, weight: 12 }
+  { width: 1920, height: 1080, weight: 51.93 },
+  { width: 1920, height: 1200, weight: 3.01 },
+  { width: 2560, height: 1080, weight: 0.68 },
+  { width: 2560, height: 1440, weight: 22.48 },
+  { width: 3440, height: 1440, weight: 3.22 },
+  { width: 3840, height: 2160, weight: 5.08 }
 ]
+
+/** Marked 常见 in the editor: at least 5% of computers in the survey (1080p, 1440p, 4K). */
+export function screenIsCommon(physical: ScreenSize): boolean {
+  return (SCREEN_CHOICES.find((choice) => choice.width === physical.width && choice.height === physical.height)?.weight ?? 0) >= 5
+}
 
 /**
  * A monitor's size in CSS pixels at a Windows display scale, as Chrome on Windows reports it:

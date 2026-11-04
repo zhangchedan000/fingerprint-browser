@@ -2384,7 +2384,6 @@
   "这个窗口没有使用 API 提取": "This window does not use an extraction API",
   "API · 当前 IP": "API · current IP",
   "{0} 前有效": "Valid until {0}",
-  "{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑": "Computers with a {0} rarely have a {1} × {2} screen; sites may find it unlike a real computer",
   "{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上": "{0} usually uses {1}, this is {2}; sites may notice the language does not match the country",
   "{0}默认": "{0} default",
   "{0}；不会按它配置国家和语言，启动时会再检测并由你确认": "{0}; the country and languages are not set from it; it is checked again at launch and you confirm",

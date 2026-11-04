@@ -1,5 +1,5 @@
 import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
-import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenKind } from '../../../../shared/screen'
+import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenIsCommon, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
 import { fittingCountryZone, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
@@ -41,7 +41,7 @@ import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
-import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
+import { matchedHardware } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
@@ -996,12 +996,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     })
   }
 
-  /** A CPU, core count and memory a real desktop with this card would have; all stay editable. */
+  /** A CPU, core count, memory and resolution for a desktop with this card (Steam survey shares); all stay editable. */
   function matchedToGpu(key: string): Partial<FingerprintConfig> {
     if (fp.platform !== 'windows') return {}
     const model = key.split('|')[0]
     const { cpu, deviceMemory } = matchedHardware(model, maxDeviceMemoryGb(windowKernelVersion))
-    const screen = kernelSpoofsScreen(windowKernelVersion) ? matchedScreen(model, undefined, Math.random, hostScale()) : undefined
+    const screen = kernelSpoofsScreen(windowKernelVersion) ? randomScreen(undefined, Math.random, hostScale()) : undefined
     return {
       cpu: cpu.model,
       coresSource: 'profile',
@@ -1924,9 +1924,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     : screenCustom || !isChoice(fp.screenWidth, fp.screenHeight)
       ? 'custom'
       : `${fp.screenWidth}x${fp.screenHeight}`
-  // The resolution a site sees, as the monitor's own pixels, against what desktops with this card have.
+  // The resolution a site sees, as the monitor's own pixels.
   const screenPhysical = { width: Math.round(shownScreen.width * hostScale()), height: Math.round(shownScreen.height * hostScale()) }
-  const screenOdd = Boolean(gpu?.model && !gpuReal && !screenSuitsGpu(gpu.model, screenPhysical))
   // No longer offered: today mostly 16-inch laptops.
   const laptopScreen = fp.screenSource !== 'host' && screenPhysical.width === 2560 && screenPhysical.height === 1600
   // Larger than this computer's monitor: maximize stops at this monitor, full screen gives a smaller page.
@@ -1993,11 +1992,6 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const autoKeyboardLayout = keyboardLayoutFor(fp.language ?? '')
   const keyboardPicked = fp.keyboardLayout && fp.keyboardLayout !== autoKeyboardLayout
   const followLanguageKeyboard: QuickFix = { label: t("改成 {0}", keyboardLayoutName(autoKeyboardLayout ?? '') ?? ''), apply: () => patchFingerprint({ keyboardLayout: undefined }) }
-  // A size desktops with this card usually have (the first 常见 one in the list).
-  const usualScreen = screenOdd ? usualScreenFor(gpu!.model, screenChoices(undefined, hostScale())) : undefined
-  const screenFix: QuickFix | undefined = usualScreen
-    ? { label: t("改成 {0}", `${usualScreen.physical.width} × ${usualScreen.physical.height}`), apply: () => chooseScreen(`${usualScreen.width}x${usualScreen.height}`) }
-    : undefined
   // No longer offered (today mostly 16-inch laptops): the desktop size next to it.
   const laptopFix: QuickFix = {
     label: t("改成 {0}", '2560 × 1440'),
@@ -2006,13 +2000,13 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const smallMemoryFix: QuickFix | undefined = fp.deviceMemory && SMALL_DEVICE_MEMORY.includes(fp.deviceMemory)
     ? { label: t("改为 8 GB"), apply: () => patchFingerprint({ deviceMemory: 8 }) }
     : undefined
-  // Larger than this computer's monitor: the largest offered size that fits it (one desktops with this card have, when there is one).
+  // Larger than this computer's monitor: the largest offered size that fits it (a common one, when there is one).
   const fittingScreens = screenLarger
     ? screenChoices(undefined, hostScale())
       .filter((choice) => choice.physical.width <= hostPhysical.width && choice.physical.height <= hostPhysical.height)
       .sort((x, y) => y.physical.width * y.physical.height - x.physical.width * x.physical.height)
     : []
-  const fittingScreen = (gpu?.model && !gpuReal ? usualScreenFor(gpu.model, fittingScreens) : undefined) ?? fittingScreens[0]
+  const fittingScreen = usualScreenFor(fittingScreens) ?? fittingScreens[0]
   // None offered fits (a monitor smaller than every common size): this computer's own.
   const largerFix: QuickFix | undefined = !screenLarger ? undefined : fittingScreen
     ? { label: t("改成 {0}", `${fittingScreen.physical.width} × ${fittingScreen.physical.height}`), apply: () => chooseScreen(`${fittingScreen.width}x${fittingScreen.height}`) }
@@ -2330,7 +2324,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         )}
       </Row>
       {kernelSpoofsScreen(windowKernelVersion) ? (
-        <Row label={t("分辨率")} check={checkFor('screen')} fix={(laptopScreen ? laptopFix : screenOdd ? screenFix : undefined) ?? (screenLarger ? largerFix : undefined) ?? checkFix('screen')} hint={t("网站读到的屏幕尺寸，浏览器窗口不会比它大")}>
+        <Row label={t("分辨率")} check={checkFor('screen')} fix={(laptopScreen ? laptopFix : undefined) ?? (screenLarger ? largerFix : undefined) ?? checkFix('screen')} hint={t("网站读到的屏幕尺寸，浏览器窗口不会比它大")}>
           <Space wrap size={8}>
             <ValueChoice
               label={t("分辨率")}
@@ -2340,9 +2334,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               onShuffle={shuffleScreen}
               options={[
                 { value: 'host', label: t("本机真实") },
-                // The sizes desktops with this card usually have come first, marked 常见.
+                // The sizes most computers have (Steam survey, 5% and up) come first, marked 常见.
                 ...screenChoices(undefined, hostScale())
-                  .map(({ width, height, physical }) => ({ width, height, physical, usual: Boolean(gpu?.model && !gpuReal && screenSuitsGpu(gpu.model, physical)) }))
+                  .map(({ width, height, physical }) => ({ width, height, physical, usual: screenIsCommon(physical) }))
                   .sort((a, b) => Number(b.usual) - Number(a.usual))
                   .map(({ width, height, physical, usual }) => ({
                     value: `${width}x${height}`,
@@ -2367,7 +2361,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             <RowWarning fix={laptopFix}>
               {t("2560 × 1600 现在主要是 16 寸笔记本的屏幕，和台式机显卡不搭")}
             </RowWarning>
-          ) : screenOdd && <RowWarning fix={screenFix}>{t("{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑", gpu!.model, screenPhysical.width, screenPhysical.height)}</RowWarning>}
+          ) : null}
           {screenLarger && (
             <RowWarning fix={largerFix}>
               {t("比本机屏幕（{0} × {1}）大：最大化只铺满本机屏幕；别用网页全屏，网站能看出来", hostPhysical.width, hostPhysical.height)}

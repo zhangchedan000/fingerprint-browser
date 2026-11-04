@@ -1,6 +1,5 @@
 import { localeForCountry } from './network-identity'
-import { screenSuitsGpu } from './hardware-match'
-import type { ScreenChoice } from './screen'
+import { screenIsCommon, type ScreenChoice } from './screen'
 import { COUNTRY_ZONES } from './windows-time-zones-data'
 import { defaultCountryZone, windowsReportedZone } from './windows-time-zones'
 
@@ -66,7 +65,7 @@ export function languageFitsCountry(language: string, country: string): boolean 
   return samePrimary(language, usual.language) || language.split('-')[1]?.toUpperCase() === country.toUpperCase()
 }
 
-/** A size desktops with this card usually have, from the sizes offered (the first such). */
-export function usualScreenFor(gpuModel: string, choices: ScreenChoice[]): ScreenChoice | undefined {
-  return choices.find((choice) => screenSuitsGpu(gpuModel, choice.physical))
+/** A size most computers have (screenIsCommon), from the sizes offered (the first such). */
+export function usualScreenFor(choices: ScreenChoice[]): ScreenChoice | undefined {
+  return choices.find((choice) => screenIsCommon(choice.physical))
 }

@@ -1,11 +1,12 @@
 import { CPU_MODELS, type CpuModel } from './cpu-catalog'
 import type { DeviceMemoryGb } from './types'
-import { screenChoices, type ScreenSize } from './screen'
 
 /**
- * A GPU picked for a window brings a CPU and memory size a real desktop with that card would have:
- * a CPU class that suits the card and was on sale around the same years, and the RAM such builds
- * usually carry. The editor applies the match as a default; every field stays editable.
+ * A GPU picked for a window brings a CPU and memory size. How often each value comes up follows the
+ * Steam Hardware & Software Survey (store.steampowered.com/hwsurvey, PC, October 2026); no public
+ * survey breaks these down by graphics card, so the card only rules out what does not fit it:
+ * a CPU sold more than two years apart from the card, and on a top card 8 GB or an i3 / Ryzen 3.
+ * The editor applies the match as a default; every field stays editable.
  */
 export type GpuTier = 'entry' | 'mid' | 'high' | 'top'
 
@@ -20,12 +21,16 @@ export function gpuTier(model: string): GpuTier {
   return 'entry'
 }
 
-/** Launch year of a GPU series (RTX 20 → 2019 … RTX 50 → 2025), undefined when unknown. */
+/**
+ * The first full year a series was on sale (launch dates from Wikipedia: RTX 20 2018-09-20,
+ * RTX 30 2020-09-17, RTX 40 2022-10-12, RTX 50 2025-01-30), undefined when unknown.
+ */
 function gpuYear(model: string): number | undefined {
   const series = model.match(/RTX (\d)0\d0/)?.[1]
   return series ? ({ 2: 2019, 3: 2021, 4: 2023, 5: 2025 } as Record<string, number>)[series] : undefined
 }
 
+/** The first full year each CPU family was on sale, the same way as gpuYear. */
 const FAMILY_YEARS: Record<string, number> = {
   'Coffee Lake Refresh (9th)': 2019,
   'Comet Lake (10th)': 2020,
@@ -49,19 +54,57 @@ function cpuClass(cpu: CpuModel): number {
   return match ? (Number(match[1]) - 1) / 2 : 2
 }
 
-const CPU_CLASSES: Record<GpuTier, number[]> = { entry: [1, 2], mid: [2, 3], high: [2, 3, 4], top: [3, 4] }
-const MEMORY: Record<GpuTier, DeviceMemoryGb[]> = { entry: [8, 16, 16], mid: [16, 16, 32], high: [16, 32, 32], top: [32] }
+/** Steam survey, October 2026, "Physical CPUs": share of computers (%) by core count. */
+export const STEAM_CPU_CORES: Readonly<Record<number, number>> = {
+  1: 0.02, 2: 2.75, 3: 0.09, 4: 11.76, 5: 0.2, 6: 28.12, 7: 0.01, 8: 28.63, 10: 6.97, 12: 4.93,
+  14: 4.89, 16: 6.01, 18: 0.26, 20: 2.27, 22: 0.01, 24: 3.05
+}
 
-/** CPUs that suit the card: its class, launched within two years of the card's series. */
+/**
+ * Steam survey, October 2026, "System RAM" (%), summed by the navigator.deviceMemory Chrome reports
+ * for it (nearest power of two, ties down, at most 32: third_party/blink/common/device_memory/
+ * approximated_device_memory.cc): 8 GB 7.02 + 12 GB 2.45; 16 GB 41.27 + 24 GB 2.10;
+ * 28 GB 0.51 + 32 GB 38.18 + 48 GB 1.16 + 60 GB 0.93 + 64 GB 3.95 + more 0.55.
+ */
+export const STEAM_DEVICE_MEMORY: ReadonlyArray<[DeviceMemoryGb, number]> = [[8, 9.47], [16, 43.37], [32, 45.28]]
+
+/** CPUs that suit the card: on sale within two years of it; no i3 / Ryzen 3 with a top card. */
 export function matchingCpus(gpuModel: string): CpuModel[] {
-  const tier = gpuTier(gpuModel)
+  const top = gpuTier(gpuModel) === 'top'
   const year = gpuYear(gpuModel)
   const suited = CPU_MODELS.filter((cpu) => {
-    if (!CPU_CLASSES[tier].includes(cpuClass(cpu))) return false
+    if (top && cpuClass(cpu) === 1) return false
     const cpuYear = FAMILY_YEARS[cpu.family]
     return year === undefined || cpuYear === undefined || Math.abs(cpuYear - year) <= 2
   })
   return suited.length ? suited : [...CPU_MODELS]
+}
+
+function pick<T>(items: ReadonlyArray<[T, number]>, random: () => number): T {
+  const total = items.reduce((sum, [, weight]) => sum + weight, 0)
+  let roll = random() * total
+  for (const [item, weight] of items) {
+    roll -= weight
+    if (roll < 0) return item
+  }
+  return items[items.length - 1][0]
+}
+
+/**
+ * Each suiting CPU weighted so that core counts come up as often as in the Steam survey: a core
+ * count's share is split evenly among the suiting CPUs that have it.
+ */
+export function cpuWeights(cpus: readonly CpuModel[]): Array<[CpuModel, number]> {
+  const perCores = new Map<number, number>()
+  for (const cpu of cpus) perCores.set(cpu.cores, (perCores.get(cpu.cores) ?? 0) + 1)
+  const weighted = cpus.map((cpu): [CpuModel, number] => [cpu, (STEAM_CPU_CORES[cpu.cores] ?? 0) / perCores.get(cpu.cores)!])
+  return weighted.some(([, weight]) => weight > 0) ? weighted : cpus.map((cpu) => [cpu, 1])
+}
+
+/** Memory sizes for this card with their Steam shares: a top card never 8 GB. */
+export function memoryWeights(gpuModel: string): Array<[DeviceMemoryGb, number]> {
+  const top = gpuTier(gpuModel) === 'top'
+  return STEAM_DEVICE_MEMORY.filter(([gb]) => !(top && gb === 8)).map(([gb, share]) => [gb, share])
 }
 
 export function matchedHardware(
@@ -69,43 +112,7 @@ export function matchedHardware(
   maxMemoryGb: number,
   random: () => number = Math.random
 ): { cpu: CpuModel; deviceMemory: DeviceMemoryGb } {
-  const cpus = matchingCpus(gpuModel)
-  const memory = MEMORY[gpuTier(gpuModel)]
-  const deviceMemory = memory[Math.floor(random() * memory.length)]
-  return {
-    cpu: cpus[Math.floor(random() * cpus.length)],
-    deviceMemory: (Math.min(deviceMemory, maxMemoryGb) as DeviceMemoryGb)
-  }
-}
-
-/** How often each resolution goes with a card of this tier (keys "width x height"). */
-const SCREENS: Record<GpuTier, Record<string, number>> = {
-  entry: { '1920x1080': 70, '2560x1440': 25, '1920x1200': 5 },
-  mid: { '1920x1080': 45, '2560x1440': 40, '2560x1080': 5, '1920x1200': 5, '3440x1440': 5 },
-  high: { '1920x1080': 20, '2560x1440': 50, '3440x1440': 12, '3840x2160': 13 },
-  top: { '2560x1440': 40, '3840x2160': 35, '3440x1440': 20 }
-}
-
-/**
- * A resolution a desktop with this card usually has, among those this computer can claim (see
- * screenFloor); the floor itself when none of the tier's sizes fits.
- */
-export function matchedScreen(gpuModel: string, floor: ScreenSize | undefined, random: () => number = Math.random, scale = 1): ScreenSize | undefined {
-  const weights = SCREENS[gpuTier(gpuModel)]
-  const choices = screenChoices(floor, scale)
-    .map((choice) => ({ ...choice, weight: weights[`${choice.physical.width}x${choice.physical.height}`] ?? 0 }))
-    .filter((choice) => choice.weight > 0)
-  if (!choices.length) return floor
-  let roll = random() * choices.reduce((sum, choice) => sum + choice.weight, 0)
-  for (const choice of choices) {
-    roll -= choice.weight
-    if (roll < 0) return { width: choice.width, height: choice.height }
-  }
-  const last = choices[choices.length - 1]
-  return { width: last.width, height: last.height }
-}
-
-/** Whether a desktop with this card usually has a screen of this physical size (the table above). */
-export function screenSuitsGpu(gpuModel: string, physical: ScreenSize): boolean {
-  return (SCREENS[gpuTier(gpuModel)][`${physical.width}x${physical.height}`] ?? 0) > 0
+  const cpu = pick(cpuWeights(matchingCpus(gpuModel)), random)
+  const deviceMemory = pick(memoryWeights(gpuModel), random)
+  return { cpu, deviceMemory: Math.min(deviceMemory, maxMemoryGb) as DeviceMemoryGb }
 }

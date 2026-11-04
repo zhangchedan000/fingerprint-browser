@@ -2384,7 +2384,6 @@
   "这个窗口没有使用 API 提取": "Cette fenêtre n'utilise pas d'API d'extraction",
   "API · 当前 IP": "API · IP actuelle",
   "{0} 前有效": "Valable jusqu’au {0}",
-  "{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑": "Les ordinateurs équipés d’une {0} ont rarement un écran de {1} × {2} ; les sites peuvent trouver que cela ne ressemble pas à un vrai ordinateur",
   "{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上": "En {0}, on utilise généralement {1}, ici c’est {2} ; les sites peuvent remarquer que la langue ne correspond pas au pays",
   "{0}默认": "par défaut pour {0}",
   "{0}；不会按它配置国家和语言，启动时会再检测并由你确认": "{0} ; le pays et les langues ne seront pas définis d’après elle ; elle sera revérifiée au lancement et vous confirmerez",

@@ -2384,7 +2384,6 @@
   "这个窗口没有使用 API 提取": "Cửa sổ này không dùng API",
   "API · 当前 IP": "API · IP hiện tại",
   "{0} 前有效": "Có hiệu lực đến {0}",
-  "{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑": "Máy dùng {0} hiếm khi có màn hình {1} × {2}; trang web có thể thấy không giống máy thật",
   "{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上": "{0} thường dùng {1}, ở đây là {2}; trang web có thể nhận ra ngôn ngữ không khớp quốc gia",
   "{0}默认": "mặc định của {0}",
   "{0}；不会按它配置国家和语言，启动时会再检测并由你确认": "{0}; quốc gia và ngôn ngữ sẽ không đặt theo nó; khi khởi động sẽ kiểm tra lại và bạn xác nhận",

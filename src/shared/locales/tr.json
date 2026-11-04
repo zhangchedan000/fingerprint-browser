@@ -2384,7 +2384,6 @@
   "这个窗口没有使用 API 提取": "Bu pencere API kullanmıyor",
   "API · 当前 IP": "API · mevcut IP",
   "{0} 前有效": "{0} tarihine kadar geçerli",
-  "{0} 的电脑很少配 {1} × {2} 的屏幕，网站可能觉得不像真电脑": "{0} bulunan bilgisayarlarda {1} × {2} ekran nadirdir; siteler bunu gerçek bir bilgisayara benzetmeyebilir",
   "{0}常用的是 {1}，这里是 {2}；网站可能发现语言和国家对不上": "{0} genelde {1} kullanır, burada {2}; siteler dilin ülkeyle uyuşmadığını fark edebilir",
   "{0}默认": "{0} varsayılanı",
   "{0}；不会按它配置国家和语言，启动时会再检测并由你确认": "{0}; ülke ve diller buna göre ayarlanmaz; başlatırken yeniden denetlenir ve onayınız istenir",

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { screenSuitsGpu } from './hardware-match'
-import { gpuChoices } from './hardware-profiles'
 import { localeForCountry } from './network-identity'
 import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
-import { screenChoices } from './screen'
+import { screenChoices, screenIsCommon } from './screen'
 import { COUNTRY_ZONES } from './windows-time-zones-data'
 import { countryWindowsZones, windowsCountries } from './windows-time-zones'
 
@@ -70,18 +68,14 @@ describe('one-click fix values', () => {
     expect(languageFitsCountry('ja-JP', 'US')).toBe(false)
   })
 
-  it('offers only sizes the card usually has, from the sizes the editor lists', () => {
-    for (const platform of ['windows', 'macos'] as const) {
-      for (const gpu of gpuChoices(platform)) {
-        for (const scale of [1, 1.25, 1.5, 2]) {
-          const choices = screenChoices(undefined, scale)
-          const usual = usualScreenFor(gpu.model, choices)
-          if (!usual) continue
-          expect(choices).toContain(usual)
-          expect(screenSuitsGpu(gpu.model, usual.physical), `${gpu.model} @${scale}`).toBe(true)
-        }
-      }
+  it('offers a size most computers have, from the sizes the editor lists', () => {
+    for (const scale of [1, 1.25, 1.5, 2]) {
+      const choices = screenChoices(undefined, scale)
+      const usual = usualScreenFor(choices)
+      expect(usual && choices.includes(usual)).toBe(true)
+      expect(screenIsCommon(usual!.physical), `@${scale}`).toBe(true)
     }
+    expect(usualScreenFor(screenChoices(undefined).filter((choice) => !screenIsCommon(choice.physical)))).toBeUndefined()
   })
 })
 

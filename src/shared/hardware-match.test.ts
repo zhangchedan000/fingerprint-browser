@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { gpuTier, matchedHardware, matchedScreen, matchingCpus } from './hardware-match'
+import { cpuWeights, gpuTier, matchedHardware, matchingCpus, memoryWeights, STEAM_CPU_CORES } from './hardware-match'
+
+const steps = (n: number) => Array.from({ length: n }, (_, i) => () => (i + 0.5) / n)
 
 describe('hardware matched to the GPU', () => {
   it('ranks cards by tier', () => {
@@ -10,30 +12,34 @@ describe('hardware matched to the GPU', () => {
     expect(gpuTier('NVIDIA GeForce RTX 4070 Ti SUPER')).toBe('top')
   })
 
-  it('pairs a high-end card with an i7/i9 or Ryzen 7/9 of its era', () => {
+  it('pairs a card with CPUs sold within two years of it, never an i3 / Ryzen 3 with a top card', () => {
     const cpus = matchingCpus('NVIDIA GeForce RTX 4090')
     expect(cpus.length).toBeGreaterThan(10)
-    expect(cpus.every((cpu) => /i7|i9|Ryzen [79]|Ultra [79]/.test(cpu.model))).toBe(true)
-    expect(cpus.some((cpu) => cpu.model.includes('9900K') && !cpu.model.includes('12'))).toBe(false)
+    expect(cpus.some((cpu) => /Core i3|Ryzen 3/.test(cpu.model))).toBe(false)
+    expect(cpus.some((cpu) => cpu.model.includes('9900K'))).toBe(false)
+    const entry = matchingCpus('NVIDIA GeForce RTX 3050')
+    expect(entry.some((cpu) => /i7|i9|Ryzen [79]/.test(cpu.model))).toBe(true)
+    expect(entry.some((cpu) => /Core Ultra/.test(cpu.model))).toBe(false)
   })
 
-  it('pairs an entry card with an i3/i5 or Ryzen 3/5', () => {
-    expect(matchingCpus('NVIDIA GeForce RTX 3050').every((cpu) => /i[35]|Ryzen [35]/.test(cpu.model))).toBe(true)
+  it('gives each core count its Steam survey share, split among the CPUs that have it', () => {
+    const weights = cpuWeights(matchingCpus('NVIDIA GeForce RTX 4070'))
+    const byCores = new Map<number, number>()
+    for (const [cpu, weight] of weights) byCores.set(cpu.cores, (byCores.get(cpu.cores) ?? 0) + weight)
+    for (const [cores, total] of byCores) expect(total).toBeCloseTo(STEAM_CPU_CORES[cores] ?? 0, 6)
   })
 
-  it('gives top cards 32 GB, capped by what the kernel can report', () => {
-    expect(matchedHardware('NVIDIA GeForce RTX 4090', 32).deviceMemory).toBe(32)
+  it('picks memory by the Steam survey; a top card never gets 8 GB; capped by what the kernel can report', () => {
+    expect(memoryWeights('NVIDIA GeForce RTX 3060').map(([gb]) => gb)).toEqual([8, 16, 32])
+    expect(memoryWeights('NVIDIA GeForce RTX 4090').map(([gb]) => gb)).toEqual([16, 32])
+    const sizes = steps(1000).map((random) => matchedHardware('NVIDIA GeForce RTX 3060', 32, random).deviceMemory)
+    const share = (gb: number) => sizes.filter((size) => size === gb).length / sizes.length
+    expect(share(8)).toBeGreaterThan(0.08)
+    expect(share(8)).toBeLessThan(0.12)
+    expect(share(16)).toBeGreaterThan(0.43)
+    expect(share(32)).toBeGreaterThan(0.44)
+    expect(steps(200).every((random) => matchedHardware('NVIDIA GeForce RTX 4090', 32, random).deviceMemory !== 8)).toBe(true)
     expect(matchedHardware('NVIDIA GeForce RTX 4090', 8).deviceMemory).toBe(8)
-    const { cpu } = matchedHardware('NVIDIA GeForce RTX 3080', 32, () => 0)
-    expect(cpu.threads).toBeGreaterThan(0)
-  })
-
-  it('gives top cards large screens and never one smaller than the real one', () => {
-    const sizes = Array.from({ length: 200 }, (_, i) => matchedScreen('NVIDIA GeForce RTX 4090', { width: 1920, height: 1080 }, () => i / 200))
-    expect(sizes.some((size) => size?.width === 3840)).toBe(true)
-    expect(sizes.some((size) => size?.width === 1920)).toBe(false)
-    const entry = matchedScreen('NVIDIA GeForce RTX 3050', { width: 2560, height: 1440 }, () => 0)
-    expect(entry).toEqual({ width: 2560, height: 1440 })
-    expect(matchedScreen('NVIDIA GeForce RTX 3050', { width: 1920, height: 1080 }, () => 0)).toEqual({ width: 1920, height: 1080 })
+    expect(matchedHardware('NVIDIA GeForce RTX 3080', 32, () => 0).cpu.threads).toBeGreaterThan(0)
   })
 })
