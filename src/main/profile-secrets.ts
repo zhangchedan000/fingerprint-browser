@@ -6,6 +6,9 @@ export function sameProxyIdentity(first: ProxyConfig, second: ProxyConfig): bool
     && first.host.trim() === second.host.trim()
     && first.port === second.port
     && first.username === second.username
+    // 订阅: the same node of the same subscription (they all have an empty address).
+    && first.subscription?.source === second.subscription?.source
+    && first.subscription?.node === second.subscription?.node
 }
 
 export function privateProxyConfig(proxy: ProxyConfig): ProxyConfig {

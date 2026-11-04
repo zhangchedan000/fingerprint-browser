@@ -46,6 +46,7 @@ export class WorkspaceLibrary {
     return proxy && {
       protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username, password: proxy.password,
       ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}),
+      ...(proxy.subscription ? { subscription: { ...proxy.subscription } } : {}),
       ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {})
     }
   }
@@ -56,7 +57,8 @@ export class WorkspaceLibrary {
    */
   findProxy(config: ProxyConfig, keepSavedPassword = false): ProxyRecord | undefined {
     if (config.protocol === 'direct') return undefined
-    const candidates = this.listProxies().filter((proxy) => sameProxyIdentity(proxy, config))
+    if (config.subscription) return this.findSubscriptionProxy(config.subscription)
+    const candidates = this.listProxies().filter((proxy) => !proxy.subscription && sameProxyIdentity(proxy, config))
     if (keepSavedPassword && !config.password) return candidates[0]
     return candidates.find((proxy) => proxy.password === config.password)
   }
@@ -70,7 +72,7 @@ export class WorkspaceLibrary {
     const config = validateProxyConfig(input)
     if (config.protocol === 'direct') return ''
     // An API proxy is the same one by its extraction link, whatever proxy it gave this time.
-    const existing = config.apiUrl ? this.findApiProxy(config.apiUrl) : this.findProxy(config, config.passwordStored === true)
+    const existing = config.apiUrl ? this.findApiProxy(config.apiUrl) : config.subscription ? this.findSubscriptionProxy(config.subscription) : this.findProxy(config, config.passwordStored === true)
     if (existing) {
       if (check && (!existing.check || existing.check.checkedAt < check.checkedAt)) existing.check = check
       return existing.id
@@ -87,11 +89,17 @@ export class WorkspaceLibrary {
       updatedAt: now,
       ...(check ? { check } : {}),
       ...(config.apiUrl ? { apiUrl: config.apiUrl } : {}),
+      ...(config.subscription ? { subscription: { ...config.subscription } } : {}),
       // A proxy typed into a window starts with that window's 网络加速 as its default.
       ...(config.tunnel ? { tunnel: config.tunnel } : {})
     }
     this.proxies.set(record.id, record)
     return record.id
+  }
+
+  /** The library entry of a subscription node (the same one by subscription and node name). */
+  findSubscriptionProxy(ref: { source: string; node: string }): ProxyRecord | undefined {
+    return this.listProxies().find((proxy) => proxy.subscription?.source === ref.source && proxy.subscription.node === ref.node)
   }
 
   /** The library's API proxy with this extraction URL (an API proxy is the same one by its URL). */
@@ -101,7 +109,7 @@ export class WorkspaceLibrary {
 
   addProxy(input: ProxyDraft, now: string): ProxyRecord {
     const draft = validateProxyDraft(input)
-    if (draft.apiUrl ? this.findApiProxy(draft.apiUrl) : this.findProxy(draft)) throw new Error('代理库中已有相同的代理')
+    if (draft.apiUrl ? this.findApiProxy(draft.apiUrl) : draft.subscription ? this.findSubscriptionProxy(draft.subscription) : this.findProxy(draft)) throw new Error('代理库中已有相同的代理')
     const record: ProxyRecord = {
       id: randomUUID(),
       protocol: draft.protocol,
@@ -113,6 +121,7 @@ export class WorkspaceLibrary {
       createdAt: now,
       updatedAt: now,
       ...(draft.apiUrl ? { apiUrl: draft.apiUrl } : {}),
+      ...(draft.subscription ? { subscription: { ...draft.subscription } } : {}),
       ...(draft.tunnel ? { tunnel: draft.tunnel } : {})
     }
     this.proxies.set(record.id, record)
@@ -123,7 +132,7 @@ export class WorkspaceLibrary {
     const current = this.getProxy(id)
     const draft = validateProxyDraft(input)
     const password = !draft.password && draft.passwordStored && sameProxyIdentity(draft, current) ? current.password : draft.password
-    const duplicate = draft.apiUrl ? this.findApiProxy(draft.apiUrl) : this.findProxy({ ...draft, password })
+    const duplicate = draft.apiUrl ? this.findApiProxy(draft.apiUrl) : draft.subscription ? this.findSubscriptionProxy(draft.subscription) : this.findProxy({ ...draft, password })
     if (duplicate && duplicate.id !== id) throw new Error('代理库中已有相同的代理')
     const connectionChanged = !sameProxyIdentity(draft, current) || password !== current.password
     const record: ProxyRecord = {
@@ -138,6 +147,8 @@ export class WorkspaceLibrary {
     }
     if (draft.apiUrl) record.apiUrl = draft.apiUrl
     else delete record.apiUrl
+    if (draft.subscription) record.subscription = { ...draft.subscription }
+    else delete record.subscription
     if (draft.tunnel) record.tunnel = draft.tunnel
     // A check of the old connection says nothing about the new one.
     if (connectionChanged) {

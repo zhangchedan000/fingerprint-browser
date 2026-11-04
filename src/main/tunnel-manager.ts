@@ -8,7 +8,7 @@ import type { LocalProxy } from './proxy-bridge'
 import { ProxyAgent, request } from 'undici'
 import type { SecretCodec } from './secret-codec'
 import {
-  AUTO_TUNNEL_GROUP, DELAY_TEST_URL, NODE_SLOT_COUNT, PROBE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, probeGroup, providerName,
+  AUTO_TUNNEL_GROUP, CHAIN_MARK, DELAY_TEST_URL, NODE_SLOT_COUNT, PROBE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, probeGroup, providerName,
   validateTunnelSource, type TunnelSource
 } from './tunnel-config'
 
@@ -89,8 +89,31 @@ export class TunnelManager {
     private readonly logger?: Logger,
     private readonly onChanged: (status: TunnelStatus) => void = () => undefined,
     private readonly delayTestUrl = DELAY_TEST_URL,
-    private readonly exitIpUrl = EXIT_IP_URL
+    private readonly exitIpUrl = EXIT_IP_URL,
+    /**
+     * The subscriptions' copy (订阅, windows go out from a node): more nodes in use at once, runs whenever
+     * it has sources, and offers every node through the acceleration tunnel too (chainPort).
+     */
+    private readonly options: { slotCount?: number; alwaysOn?: boolean; chainPort?: () => Promise<number> } = {}
   ) {}
+
+  private get slotCount(): number {
+    return this.options.slotCount ?? NODE_SLOT_COUNT
+  }
+
+  /**
+   * The local port of one subscription node (订阅) for a window, started when needed. With `chained`,
+   * the node is reached through 网络加速 (the relay); a node the account no longer has is an error.
+   */
+  async nodeProxy(ref: { source: string; node: string }, chained: boolean): Promise<LocalProxy> {
+    if (!this.stored.sources.some((source) => source.name === ref.source)) throw new Error(`订阅「${ref.source}」已不存在，请在代理设置里重新选择`)
+    if (this.state !== 'running' && this.state !== 'starting') await this.restart()
+    for (let waited = 0; this.state === 'starting' && waited < 30_000; waited += 250) await delay(250)
+    if (this.state !== 'running') throw new Error(`订阅节点没有运行起来${this.error ? `：${this.error}` : ''}`)
+    const name = `${ref.source}${chained ? CHAIN_MARK : ''} · ${ref.node}`
+    if (!(await this.groupNames(nodeSlotGroup(0))).includes(name)) throw new Error(`订阅「${ref.source}」里没有节点「${ref.node}」了，请在代理设置里重新选择节点`)
+    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(name)] }
+  }
 
   private get file(): string {
     return join(this.vaultPath, 'tunnel.json')
@@ -137,9 +160,9 @@ export class TunnelManager {
     const next = this.slotting.then(async () => {
       const known = this.slots.indexOf(node)
       if (known >= 0) return known
-      if (!(await this.groupNames()).includes(node)) throw new Error(`获取不到代理 IP（加速节点「${node}」已不存在，请在代理设置里重新选择）`)
+      if (!(await this.groupNames(nodeSlotGroup(0))).includes(node)) throw new Error(`获取不到代理 IP（加速节点「${node}」已不存在，请在代理设置里重新选择）`)
       const index = this.slots.includes('') ? this.slots.indexOf('') : this.slots.length
-      if (index >= NODE_SLOT_COUNT) throw new Error(`同时固定使用的加速节点不能超过 ${NODE_SLOT_COUNT} 个`)
+      if (index >= this.slotCount) throw new Error(`同时使用的节点不能超过 ${this.slotCount} 个`)
       await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
       this.slots[index] = node
       return index
@@ -172,8 +195,14 @@ export class TunnelManager {
     return this.notify()
   }
 
+  /** Subscriptions are named by windows (订阅): a name is used once. */
+  private assertFreeName(name: string, id?: string): void {
+    if (this.options.alwaysOn && this.stored.sources.some((source) => source.name === name && source.id !== id)) throw new Error('已有同名的订阅，请换一个名称')
+  }
+
   async addSource(input: { name?: unknown; kind?: unknown; content?: unknown }): Promise<TunnelStatus> {
     const source = validateTunnelSource(input)
+    this.assertFreeName(source.name)
     const record: TunnelSource = { id: randomUUID().slice(0, 8), ...source, content: this.codec.encode(source.content), updatedAt: new Date().toISOString() }
     await this.replaceSources({ ...this.stored, sources: [...this.stored.sources, record] })
     return this.notify()
@@ -189,6 +218,7 @@ export class TunnelManager {
   async updateSource(id: string, input: { name?: unknown; kind?: unknown; content?: unknown }): Promise<TunnelStatus> {
     const previous = this.source(id)
     const value = validateTunnelSource(input)
+    this.assertFreeName(value.name, id)
     const record: TunnelSource = { id, ...value, content: this.codec.encode(value.content), updatedAt: new Date().toISOString() }
     const prefix = `${previous.name} · `
     const selected = this.stored.selected?.startsWith(prefix)
@@ -402,13 +432,14 @@ export class TunnelManager {
       this.mixedPort = await freePort()
       this.autoPort = await freePort()
       this.slotPorts = []
-      for (let index = 0; index < NODE_SLOT_COUNT; index++) this.slotPorts.push(await freePort())
+      for (let index = 0; index < this.slotCount; index++) this.slotPorts.push(await freePort())
       this.probePorts = []
       for (let index = 0; index < PROBE_SLOT_COUNT; index++) this.probePorts.push(await freePort())
       const controllerPort = await freePort()
       this.secret = randomBytes(16).toString('hex')
       this.controller = `http://127.0.0.1:${controllerPort}`
-      const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, probePorts: this.probePorts, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl })
+      const chainPort = this.options.chainPort ? await this.options.chainPort() : undefined
+      const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, probePorts: this.probePorts, controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl, chainPort })
       await writeFile(join(this.runtimeDir, 'config.yaml'), JSON.stringify(config, null, 2), { mode: 0o600 })
 
       let output = ''
@@ -468,8 +499,9 @@ export class TunnelManager {
     }
   }
 
-  private async groupNames(): Promise<string[]> {
-    const group = await this.api('GET', `/proxies/${encodeURIComponent(TUNNEL_GROUP)}`) as { all?: string[] }
+  /** The nodes a group can take: TUNNEL lists the nodes; a slot group also their copies through 网络加速. */
+  private async groupNames(name: string = TUNNEL_GROUP): Promise<string[]> {
+    const group = await this.api('GET', `/proxies/${encodeURIComponent(name)}`) as { all?: string[] }
     return (group.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP)
   }
 
@@ -488,7 +520,8 @@ export class TunnelManager {
         descriptions[proxy.name] = proxy
       }
     }
-    return (proxies[TUNNEL_GROUP]?.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP).map((name) => ({
+    // A node's copy through 网络加速 (CHAIN_MARK) is the same node: listed once.
+    return (proxies[TUNNEL_GROUP]?.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP && !name.includes(`${CHAIN_MARK} · `)).map((name) => ({
       name, type: descriptions[name]?.type ?? '', sourceId: owners.get(name),
       delay: descriptions[name]?.history?.at(-1)?.delay ?? this.delays.get(name),
       exitIp: this.stored.exitIps?.[name]?.ip
@@ -513,7 +546,9 @@ export class TunnelManager {
    */
   private saving: Promise<void> = Promise.resolve()
 
-  private async save(next: StoredTunnel): Promise<void> {
+  private async save(input: StoredTunnel): Promise<void> {
+    // The subscriptions' copy runs whenever it has sources (nothing to turn on).
+    const next = this.options.alwaysOn ? { ...input, enabled: input.sources.length > 0 } : input
     this.stored = next
     const write = this.saving.catch(() => undefined).then(async () => {
       await mkdir(this.vaultPath, { recursive: true })

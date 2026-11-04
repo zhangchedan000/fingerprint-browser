@@ -33,6 +33,27 @@ export function setLocalProxyResolver(resolver?: LocalProxyResolver): void {
   resolveLocalProxy = resolver
 }
 
+/** The local port a subscription node (订阅) runs on for a connection: chained when 网络加速 is on. */
+export type SubscriptionResolver = (node: { source: string; node: string }, chained: boolean) => Promise<LocalProxy>
+
+let resolveSubscription: SubscriptionResolver | undefined
+
+/** Set once by the main process (the subscriptions' node runner); tests set their own. */
+export function setSubscriptionResolver(resolver?: SubscriptionResolver): void {
+  resolveSubscription = resolver
+}
+
+/**
+ * A subscription node as a plain proxy for one connection: its local port (an HTTP proxy on this
+ * computer). Never a direct connection: without the node runner, an error.
+ */
+export async function subscriptionEndpoint(proxy: ProxyConfig): Promise<ProxyConfig> {
+  if (!proxy.subscription) return proxy
+  if (!resolveSubscription) throw new Error('订阅节点没有运行')
+  const local = await resolveSubscription(proxy.subscription, proxy.tunnel?.enabled === true)
+  return { protocol: 'http', host: local.host, port: local.port, username: '', password: '' }
+}
+
 /** First usable entry of a Chromium proxy rule such as "PROXY 127.0.0.1:7890; DIRECT". */
 export function parseProxyRule(rule: string): LocalProxy | undefined {
   for (const entry of rule.split(';')) {
@@ -185,8 +206,10 @@ export async function localProxyFor(proxy: ProxyConfig): Promise<LocalProxy | un
   return via
 }
 
-export async function openProxyBridge(proxy: ProxyConfig, observer: ProxyBridgeObserver = {}, options: { direct?: boolean } = {}): Promise<string | undefined> {
-  if (proxy.protocol === 'direct') return undefined
+export async function openProxyBridge(input: ProxyConfig, observer: ProxyBridgeObserver = {}, options: { direct?: boolean } = {}): Promise<string | undefined> {
+  if (input.protocol === 'direct') return undefined
+  // 订阅: the node's local port (already through 网络加速 when the window has it on).
+  const proxy = await subscriptionEndpoint(input)
   const via = options.direct ? undefined : await localProxyFor(proxy)
   const tunnel = via && proxy.port
     // 网络加速: a connection the tunnel cannot take fails rather than going out directly.

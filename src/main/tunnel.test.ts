@@ -262,3 +262,85 @@ describe('node sources travel with a window', () => {
     }
   })
 })
+
+describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
+  const servers: Server[] = []
+  const managers: TunnelManager[] = []
+  const vaults: string[] = []
+  const listen = (server: Server) => new Promise<number>((done) => {
+    servers.push(server)
+    server.listen(0, '127.0.0.1', () => done((server.address() as { port: number }).port))
+  })
+  /** A SOCKS5 node that records where it was asked to go. */
+  const socksNode = async (asked: string[]) => listen(createServer((client) => {
+    client.on('error', () => undefined)
+    client.once('data', () => {
+      client.write(Buffer.from([5, 0]))
+      client.once('data', (request) => {
+        const host = request[3] === 1 ? [...request.subarray(4, 8)].join('.') : request.subarray(5, 5 + request[4]).toString()
+        const port = request.readUInt16BE(request.length - 2)
+        asked.push(`${host}:${port}`)
+        const upstream = createConnection(port, host, () => {
+          client.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
+          client.pipe(upstream).pipe(client)
+        })
+        upstream.on('error', () => client.destroy())
+      })
+    })
+  }))
+  afterEach(async () => {
+    for (const manager of managers.splice(0)) await manager.stop()
+    for (const server of servers.splice(0)) server.close()
+    for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true })
+  })
+  const roundTrip = async (via: { type: 'http' | 'socks4' | 'socks5'; host: string; port: number }, echo: number, text: string) => {
+    const socket = await connectThrough(via, '127.0.0.1', echo)
+    const reply = new Promise<string>((done) => socket.once('data', (data) => done(data.toString())))
+    socket.resume()
+    socket.write(text)
+    const answer = await reply
+    socket.destroy()
+    return answer
+  }
+
+  it('goes out from the chosen node, directly or through 网络加速, and refuses a node that is gone', async () => {
+    const echo = await listen(createServer((socket) => socket.pipe(socket)))
+    const exitAsked: string[] = []
+    const accelAsked: string[] = []
+    const exitNode = await socksNode(exitAsked)
+    const accelNode = await socksNode(accelAsked)
+    for (let index = 0; index < 2; index++) vaults.push(await mkdtemp(join(tmpdir(), 'subscription-')))
+    // 网络加速 (its own core), and the relay a chained subscription node dials through.
+    const accel = new TunnelManager(vaults[0], identitySecretCodec, core)
+    managers.push(accel)
+    await accel.addSource({ name: 'Accel', kind: 'links', content: `proxies:\n  - {name: a1, type: socks5, server: 127.0.0.1, port: ${accelNode}, udp: false}\n` })
+    expect((await accel.setEnabled(true)).state).toBe('running')
+    const proxyChain = (await import('proxy-chain')).default
+    const relay = new proxyChain.Server({ host: '127.0.0.1', port: 0, prepareRequestFunction: async () => ({ upstreamProxyUrl: `http://127.0.0.1:${(await accel.routeProxy({ mode: 'auto' })).port}` }) })
+    await relay.listen()
+    servers.push({ close: () => void relay.close(true) } as unknown as Server)
+
+    const subscriptions = new TunnelManager(vaults[1], identitySecretCodec, core, undefined, undefined, undefined, undefined, { slotCount: 4, alwaysOn: true, chainPort: async () => relay.port })
+    managers.push(subscriptions)
+    const status = await subscriptions.addSource({ name: '机场', kind: 'links', content: `proxies:\n  - {name: 香港 01, type: socks5, server: 127.0.0.1, port: ${exitNode}, udp: false}\n` })
+    // Runs by itself (nothing to turn on); the node is listed once (not its copy through 网络加速).
+    expect(status.enabled).toBe(true)
+    await expect(subscriptions.addSource({ name: '机场', kind: 'links', content: 'proxies:\n  - {name: x, type: socks5, server: 127.0.0.1, port: 1, udp: false}\n' })).rejects.toThrow('同名')
+
+    const direct = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, false)
+    expect(await roundTrip(direct, echo, 'from the node')).toBe('from the node')
+    expect(exitAsked).toContain(`127.0.0.1:${echo}`)
+    // No speed test goes through 网络加速: the acceleration node has not been asked for the subscription node yet.
+    expect(accelAsked).not.toContain(`127.0.0.1:${exitNode}`)
+    expect((await subscriptions.status()).nodes.map((node) => node.name)).toEqual(['机场 · 香港 01'])
+
+    const chained = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, true)
+    expect(chained.port).not.toBe(direct.port)
+    expect(await roundTrip(chained, echo, 'through acceleration')).toBe('through acceleration')
+    // The acceleration node carried the connection to the subscription node, which went on to the site.
+    expect(accelAsked).toContain(`127.0.0.1:${exitNode}`)
+
+    await expect(subscriptions.nodeProxy({ source: '机场', node: '不存在' }, false)).rejects.toThrow('没有节点')
+    await expect(subscriptions.nodeProxy({ source: '别的订阅', node: '香港 01' }, false)).rejects.toThrow('已不存在')
+  }, 90_000)
+})

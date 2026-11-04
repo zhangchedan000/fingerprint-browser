@@ -74,7 +74,8 @@ import type {
 } from '../../../../shared/types'
 import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY, type DeviceMemoryGb } from '../../../../shared/types'
 import { proxyLabel } from '../../components/proxy'
-import { defaultTunnelRoute, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
+import { defaultTunnelRoute, DelayText, TunnelRouteField, useTunnelStatus } from '../../components/TunnelRouteField'
+import { nodeShortName, SubscriptionModal, subscriptionNodes, useSubscriptionStatus } from '../../components/subscriptions'
 import { ExitIpCard } from '../../components/ExitIpCard'
 import { useIpScore } from '../../components/useIpScore'
 import { DeepCheck } from './DeepCheck'
@@ -531,6 +532,12 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   const [pasted, setPasted] = useState<PastedProxy | null>(null)
   const [screenCustom, setScreenCustom] = useState(false)
   const [proxyMode, setProxyMode] = useState<ProxyMode>('direct')
+  // 订阅: the window is on a library entry that is a subscription node (picked by subscription, then node).
+  const [subscriptionPick, setSubscriptionPick] = useState(false)
+  const [subscriptionSource, setSubscriptionSource] = useState<string>()
+  const [subscriptionStatus, setSubscriptionStatus] = useSubscriptionStatus()
+  const [addingSubscription, setAddingSubscription] = useState(false)
+  const [pickingNode, setPickingNode] = useState(false)
   const [checking, setChecking] = useState(false)
   // 换一换 on a fingerprint value runs the check again once the new settings are in the form.
   const [recheck, setRecheck] = useState(false)
@@ -637,6 +644,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const openedMode: ProxyMode = profile?.apiProxy ? 'api' : profile?.proxyId && !profile.proxyMissing ? 'library' : profile?.proxy.protocol ?? 'direct'
     setProxyMode(openedMode)
     markChecked(openedMode)
+    const openedRecord = profile?.proxyId ? proxies.find((item) => item.id === profile.proxyId) : undefined
+    setSubscriptionPick(Boolean(openedRecord?.subscription))
+    setSubscriptionSource(openedRecord?.subscription?.source)
     const initial = values.fingerprint
     setScreenCustom(Boolean(initial.overrides?.includes('screen')
       && !isChoice(initial.screenWidth, initial.screenHeight)))
@@ -1713,6 +1723,124 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     </section>
   ) : null
 
+  // 订阅: the subscription, then one of its nodes (with its IP, delay and how many windows use it).
+  const pickedSubscription = subscriptionStatus?.sources.find((source) => source.name === (libraryProxy?.subscription?.source ?? subscriptionSource))
+  async function pickNode(node: string): Promise<void> {
+    if (!pickedSubscription) return
+    setPickingNode(true)
+    try {
+      const record = await window.browserApi.subscriptions.nodeProxy({ source: pickedSubscription.name, node })
+      await workspace.reloadLibraries()
+      form.setFieldValue('proxyId', record.id)
+      onFormChange({ proxyId: record.id })
+    } catch (error) {
+      workspace.fail(error)
+    } finally {
+      setPickingNode(false)
+    }
+  }
+  const nodeEntry = (node: string) => proxies.find((item) => item.subscription?.source === pickedSubscription?.name && item.subscription?.node === node)
+  const subscriptionRows = (
+    <>
+      <Row
+        label={t("选择订阅")}
+        required
+        hint={subscriptionStatus?.sources.length ? undefined : <span>{t("还没有订阅")} <Button type="link" size="small" onClick={() => setAddingSubscription(true)}>{t("添加订阅")}</Button></span>}
+      >
+        <Select
+          showSearch
+          className="fb-wide-select"
+          placeholder={t("搜索订阅名称")}
+          optionFilterProp="search"
+          value={pickedSubscription?.name}
+          onChange={(name: string) => {
+            setSubscriptionSource(name)
+            if (libraryProxy?.subscription && libraryProxy.subscription.source !== name) form.setFieldValue('proxyId', undefined)
+          }}
+          options={(subscriptionStatus?.sources ?? []).map((source) => {
+            const nodes = subscriptionNodes(subscriptionStatus, source)
+            const users = new Set(proxies.filter((item) => item.subscription?.source === source.name).flatMap((item) => item.profileIds)).size
+            return {
+              value: source.name,
+              search: source.name,
+              label: (
+                <span className="fb-proxy-option">
+                  <span>{source.name}</span>
+                  <small>{source.kind === 'subscription' ? t("订阅链接") : t("节点链接")} · {t("{0} 个节点", nodes.length)} · {users ? t("{0} 个窗口在用", users) : t("未绑定")}</small>
+                </span>
+              )
+            }
+          })}
+          dropdownRender={(menu) => (
+            <>
+              {menu}
+              <Button type="link" size="small" onClick={() => setAddingSubscription(true)}>{t("添加订阅")}</Button>
+            </>
+          )}
+        />
+      </Row>
+      {pickedSubscription && (
+        <Row label={t("选择节点")} required hint={subscriptionNodes(subscriptionStatus, pickedSubscription).length ? undefined : t("这个订阅还没有可用节点（刚添加时要等几秒，或到 代理 IP → 订阅 里刷新）")}>
+          <Form.Item name="proxyId" noStyle rules={[{ required: true, message: t("请选择一个节点") }]}>
+            <Select
+              showSearch
+              className="fb-wide-select"
+              placeholder={t("搜索节点名称或 IP")}
+              optionFilterProp="search"
+              loading={pickingNode}
+              value={libraryProxy?.subscription?.source === pickedSubscription.name ? libraryProxy.id : undefined}
+              onChange={(value: string) => {
+                // An entry already in the library (value = its id), or a node not used yet (value = node name).
+                const existing = proxies.find((item) => item.id === value)
+                if (existing) form.setFieldValue('proxyId', existing.id)
+                void pickNode(existing?.subscription?.node ?? value)
+              }}
+              options={subscriptionNodes(subscriptionStatus, pickedSubscription).map((node) => {
+                const short = nodeShortName(pickedSubscription, node)
+                const entry = nodeEntry(short)
+                const ip = entry?.check?.ip ?? node.exitIp
+                const users = entry?.profileIds.filter((id) => id !== profile?.id).length ?? 0
+                return {
+                  value: entry?.id ?? short,
+                  search: `${short} ${ip ?? ''} ${node.type}`,
+                  label: (
+                    <span className="fb-proxy-option">
+                      <span>{short} · {node.type}</span>
+                      <small>
+                        {[entry?.check?.countryCode, ip].filter(Boolean).join(' ') || t("IP 未知")}
+                        {entry?.check?.country ? ` · ${entry.check.country}` : ''}
+                        {' · '}<DelayText delay={node.delay} />
+                        {' · '}{users ? t("{0} 个窗口在用", users) : t("未绑定")}
+                      </small>
+                    </span>
+                  )
+                }
+              })}
+            />
+          </Form.Item>
+        </Row>
+      )}
+      <FieldError name="proxyId" />
+      {sharedWith > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          className="fb-editor-alert"
+          title={t("这个节点已被另外 {0} 个窗口使用，共用出口 IP 可能被判定为关联账号", sharedWith)}
+        />
+      )}
+      <SubscriptionModal
+        open={addingSubscription}
+        onClose={() => setAddingSubscription(false)}
+        onSaved={(status) => {
+          setSubscriptionStatus(status)
+          const added = status.sources.find((source) => !subscriptionStatus?.sources.some((known) => known.id === source.id))
+          if (added) setSubscriptionSource(added.name)
+        }}
+      />
+    </>
+  )
+
   const proxy = (
     <div className="fb-editor-section">
       <section className="fb-fp-card">
@@ -1728,19 +1856,33 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       >
         <Radio.Group
           optionType="button"
-          value={proxyMode}
-          onChange={(event) => chooseProxyMode(event.target.value as ProxyMode)}
+          value={proxyMode === 'library' && subscriptionPick ? 'subscription' : proxyMode}
+          onChange={(event) => {
+            const next = event.target.value as ProxyMode | 'subscription'
+            const onSubscription = Boolean(libraryProxy?.subscription)
+            if (next === 'subscription') {
+              // A subscription node is a library entry: picked by subscription and node instead of from the list.
+              if (!onSubscription) form.setFieldValue('proxyId', undefined)
+              setSubscriptionPick(true)
+              chooseProxyMode('library')
+              return
+            }
+            if (next === 'library' && onSubscription) form.setFieldValue('proxyId', undefined)
+            setSubscriptionPick(false)
+            chooseProxyMode(next)
+          }}
           options={[
             { value: 'direct', label: t("直连") },
             { value: 'http', label: 'HTTP' },
             { value: 'https', label: 'HTTPS' },
             { value: 'socks5', label: 'SOCKS5' },
             { value: 'api', label: t("API 提取") },
-            { value: 'library', label: t("从代理库选择") }
+            { value: 'library', label: t("从代理库选择") },
+            { value: 'subscription', label: t("订阅") }
           ]}
         />
       </Row>
-      {proxyMode !== 'api' && <Row
+      {proxyMode !== 'api' && !(proxyMode === 'library' && subscriptionPick) && <Row
         label={t("快速粘贴")}
         hint={pasteError
           ? <Typography.Text type="danger">{pasteError}</Typography.Text>
@@ -1756,7 +1898,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           onChange={(event) => applyPastedProxy(event.target.value)}
         />
       </Row>}
-      {proxyMode === 'library' && (
+      {proxyMode === 'library' && subscriptionPick && subscriptionRows}
+      {proxyMode === 'library' && !subscriptionPick && (
         <>
           <Row
             label={t("选择代理")}
@@ -1769,7 +1912,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
                 className="fb-wide-select"
                 placeholder={t("搜索地址或备注")}
                 optionFilterProp="search"
-                options={proxies.map((item) => ({
+                options={proxies.filter((item) => !item.subscription).map((item) => ({
                   value: item.id,
                   search: `${item.host}:${item.port} ${item.username} ${item.note} ${item.check?.ip ?? ''}`,
                   label: proxyLabel(item)
@@ -1833,7 +1976,10 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
         </>
       )}
       {proxyProtocol !== 'direct' && (
-        <Row label={t("网络加速")}>
+        <Row
+          label={t("网络加速")}
+          hint={libraryProxy?.subscription && route.enabled ? t("订阅节点经过网络加速时，自动走最快的加速节点；UDP 类节点（Hysteria、TUIC）不能再经过网络加速") : undefined}
+        >
           <TunnelRouteField
             value={route}
             status={tunnelStatus}

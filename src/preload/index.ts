@@ -164,6 +164,21 @@ const api: BrowserApi = {
       return () => ipcRenderer.removeListener('tunnel:changed', handler)
     }
   },
+  subscriptions: {
+    status: () => ipcRenderer.invoke('subscriptions:status'),
+    addSource: (input) => ipcRenderer.invoke('subscriptions:add-source', input),
+    source: (id) => ipcRenderer.invoke('subscriptions:source', id),
+    updateSource: (id, input) => ipcRenderer.invoke('subscriptions:update-source', id, input),
+    removeSource: (id) => ipcRenderer.invoke('subscriptions:remove-source', id),
+    test: () => ipcRenderer.invoke('subscriptions:test'),
+    refresh: () => ipcRenderer.invoke('subscriptions:refresh'),
+    nodeProxy: (ref) => ipcRenderer.invoke('proxy:subscription-node', ref),
+    onChanged: (listener: (status: TunnelStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: TunnelStatus): void => listener(status)
+      ipcRenderer.on('subscriptions:changed', handler)
+      return () => ipcRenderer.removeListener('subscriptions:changed', handler)
+    }
+  },
   proxy: {
     test: (config, profileId, proxyId, refresh, session) => ipcRenderer.invoke('proxy:test', config, profileId, proxyId, refresh, session),
     forgetDraft: (session: string) => ipcRenderer.invoke('proxy:forget-draft', session),

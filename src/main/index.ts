@@ -1,7 +1,8 @@
 import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
 import { t } from '../shared/i18n'
-import { parseProxyRule, setLocalProxyResolver } from './proxy-bridge'
+import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
+import proxyChain from 'proxy-chain'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
 import { adoptAppCacheKey, APP_CACHE_FOLDER, resolveVaultLocation, vaultPathSync } from './vault-location'
@@ -38,6 +39,7 @@ let launcher: BrowserLauncher | null = null
 let logger: AppLogger | null = null
 let appSession: AppSessionTracker | null = null
 let tunnel: TunnelManager | null = null
+let subscriptions: TunnelManager | null = null
 let team: TeamManager | null = null
 
 if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.desktop')
@@ -180,6 +182,36 @@ app.whenReady().then(async () => {
     (status) => mainWindow?.webContents.send('tunnel:changed', status))
   tunnel = activeTunnel
   registerTunnelIpc(activeTunnel)
+
+  // 订阅: the account's subscriptions run in their own copy of the core (nodes as window exits). A
+  // node reached through 网络加速 dials out through a local relay to the acceleration tunnel's fastest
+  // node; with the tunnel off that fails rather than going out from this computer's own IP.
+  let chainRelay: Promise<number> | undefined
+  const chainPort = () => chainRelay ??= (async () => {
+    const relay = new proxyChain.Server({
+      host: '127.0.0.1',
+      port: 0,
+      prepareRequestFunction: async () => ({ upstreamProxyUrl: `http://127.0.0.1:${(await activeTunnel.routeProxy({ mode: 'auto' })).port}` })
+    })
+    await relay.listen()
+    return relay.port
+  })()
+  const subscriptionNodes = new TunnelManager(join(vaultPath, 'subscriptions'), new ElectronSecretCodec(), tunnelBinary, logger,
+    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 32, alwaysOn: true, chainPort })
+  subscriptions = subscriptionNodes
+  registerTunnelIpc(subscriptionNodes, 'subscriptions', {
+    // Windows name their subscription: renamed, they follow (here and, through their configs, elsewhere).
+    renamed: async (from, to) => {
+      const windows = await profiles.renameSubscription(from, to)
+      await team?.pushConfigs(windows)
+      mainWindow?.webContents.send('proxy:changed')
+    }
+  })
+  void subscriptionNodes.initialize()
+  setSubscriptionResolver(async (node, chained) => {
+    if (chained) await activeTunnel.ensureRunning({ enabled: true, mode: 'auto' })
+    return subscriptionNodes.nodeProxy(node, chained)
+  })
   registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
   void activeTunnel.initialize()
 
@@ -312,18 +344,20 @@ app.whenReady().then(async () => {
     }
   }
   activeTeam.workspaceExport = async () => ({
-    proxies: profiles.listProxies().map(({ protocol, host, port, username, password, note, apiUrl, tunnel }) => ({ protocol, host, port, username, password, note, apiUrl, tunnel })),
+    proxies: profiles.listProxies().map(({ protocol, host, port, username, password, note, apiUrl, subscription, tunnel }) => ({ protocol, host, port, username, password, note, apiUrl, subscription, tunnel })),
     tunnelSources: activeTunnel.sourcesFor({ enabled: true, mode: 'auto' }),
+    subscriptions: subscriptionNodes.sourcesFor({ enabled: true, mode: 'auto' }),
     groups: profiles.listGroups().map(({ name, color, note }) => ({ name, color, note })),
     settings: accountSettings()
   })
   activeTeam.workspaceImport = async (data, mode) => {
-    const value = (data && typeof data === 'object' ? data : {}) as { proxies?: unknown; tunnelSources?: unknown; groups?: unknown; settings?: unknown }
+    const value = (data && typeof data === 'object' ? data : {}) as { proxies?: unknown; tunnelSources?: unknown; subscriptions?: unknown; groups?: unknown; settings?: unknown }
     if (mode === 'mirror') {
       // Each part only when the account's copy has it (an older version sent proxies and nodes only).
       if (Array.isArray(value.proxies)) await profiles.mirrorProxies(value.proxies)
       if (Array.isArray(value.groups)) await profiles.mirrorGroups(value.groups)
       if (Array.isArray(value.tunnelSources)) await activeTunnel.mirrorSources(value.tunnelSources)
+      if (Array.isArray(value.subscriptions)) await subscriptionNodes.mirrorSources(value.subscriptions)
       if (value.settings && typeof value.settings === 'object') {
         const wanted = value.settings as Partial<Record<keyof ReturnType<typeof accountSettings>, unknown>>
         const next = validPreferences({
@@ -356,6 +390,7 @@ app.whenReady().then(async () => {
         }
       }
       await activeTunnel.adoptSources(value.tunnelSources)
+      await subscriptionNodes.adoptSources(value.subscriptions)
     }
     mainWindow?.webContents.send('proxy:changed')
     mainWindow?.webContents.send('profiles:reload')
@@ -405,6 +440,7 @@ app.on('second-instance', () => {
 
 app.on('before-quit', (event) => {
   void tunnel?.stop()
+  void subscriptions?.stop()
   if (!launcher) return
   event.preventDefault()
   const current = launcher

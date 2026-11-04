@@ -44,6 +44,17 @@ export interface ProfileWindowConfig {
  * Unset (windows from before 0.5.9): the old rule — through the tunnel while it runs, unless the
  * proxy was checked to be in China.
  */
+/**
+ * A node of one of the account's subscriptions (代理 IP → 订阅), used as a window's proxy: the window
+ * goes out from that node. It runs on this computer (a local port) from the subscription's nodes.
+ */
+export interface SubscriptionNodeRef {
+  /** The subscription's name (unique among subscriptions). */
+  source: string
+  /** The node's name in that subscription. */
+  node: string
+}
+
 export interface TunnelRoute {
   enabled: boolean
   /** auto: the fastest node; manual: always `node`. */
@@ -111,6 +122,8 @@ export interface ProxyConfig {
    * is SOCKS5 or HTTP; protocol/host/port/username/password are the last one it gave.
    */
   apiUrl?: string
+  /** A subscription node (订阅): host and port are a local port, found at each use. */
+  subscription?: SubscriptionNodeRef
   /** How this proxy is reached: the window's 网络加速 setting (a library proxy's: its default). */
   tunnel?: TunnelRoute
 }
@@ -228,6 +241,8 @@ export interface ProxyRecord {
   ipSites?: import('./ip-sites').IpSiteRecord
   /** See ProxyConfig.apiUrl. */
   apiUrl?: string
+  /** See ProxyConfig.subscription: the node this library entry is (listed under 订阅, not with the proxies). */
+  subscription?: SubscriptionNodeRef
   /** 网络加速 used when this proxy is checked, and given to a window when the proxy is assigned to it. */
   tunnel?: TunnelRoute
 }
@@ -252,6 +267,8 @@ export interface ProxyDraft {
   note?: string
   /** See ProxyConfig.apiUrl; host and port are then filled in from the API. */
   apiUrl?: string
+  /** See ProxyConfig.subscription. */
+  subscription?: SubscriptionNodeRef
   /** See ProxyRecord.tunnel. */
   tunnel?: TunnelRoute
 }
@@ -910,6 +927,19 @@ export interface BrowserApi {
     autoSelect: () => Promise<TunnelStatus>
     test: () => Promise<TunnelStatus>
     refresh: () => Promise<TunnelStatus>
+    onChanged: (listener: (status: TunnelStatus) => void) => () => void
+  }
+  /** The account's subscriptions (代理 IP → 订阅): their nodes are window exits (代理方式 订阅). */
+  subscriptions: {
+    status: () => Promise<TunnelStatus>
+    addSource: (input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
+    source: (id: string) => Promise<TunnelSourceSummary & { content: string }>
+    updateSource: (id: string, input: { name: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelStatus>
+    removeSource: (id: string) => Promise<TunnelStatus>
+    test: () => Promise<TunnelStatus>
+    refresh: () => Promise<TunnelStatus>
+    /** The library entry of a node (added the first time): windows use it as their proxy. */
+    nodeProxy: (ref: SubscriptionNodeRef) => Promise<ProxyRecordView>
     onChanged: (listener: (status: TunnelStatus) => void) => () => void
   }
   /** The proxy library. Windows refer to these proxies by id. */

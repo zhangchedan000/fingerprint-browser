@@ -32,6 +32,13 @@ export const PROBE_SLOT_COUNT = 4
 export const probeGroup = (index: number) => `TUNNEL-PROBE-${index + 1}`
 export const DELAY_TEST_URL = 'https://www.gstatic.com/generate_204'
 
+/**
+ * Subscription nodes (订阅) a window reaches through 网络加速: a second copy of each source whose nodes
+ * dial out through CHAIN_PROXY (a local relay to the acceleration tunnel). Their names carry the mark.
+ */
+export const CHAIN_MARK = ' ⇢'
+export const CHAIN_PROXY = 'CHAIN'
+
 export function providerName(source: Pick<TunnelSource, 'id'>): string {
   return `source-${source.id}`
 }
@@ -71,6 +78,8 @@ export interface MihomoConfigInput {
   secret: string
   delayTestUrl?: string
   sources: Array<Pick<TunnelSource, 'id' | 'name' | 'kind' | 'content'>>
+  /** Local relay port to the acceleration tunnel: each source is also offered through it (CHAIN_MARK). */
+  chainPort?: number
 }
 
 /** mihomo reads YAML; JSON is valid YAML, so the config is written as JSON. */
@@ -83,8 +92,16 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     providers[providerName(source)] = source.kind === 'subscription'
       ? { type: 'http', url: source.content, path: `./providers/${source.id}.yaml`, interval: 86_400, 'health-check': healthCheck, override }
       : { type: 'file', path: `./providers/${source.id}.txt`, 'health-check': healthCheck, override }
+    if (input.chainPort) {
+      const via = { 'additional-prefix': `${source.name}${CHAIN_MARK} · `, 'dialer-proxy': CHAIN_PROXY }
+      providers[`${providerName(source)}-via`] = source.kind === 'subscription'
+        ? { type: 'http', url: source.content, path: `./providers/${source.id}-via.yaml`, interval: 86_400, override: via }
+        : { type: 'file', path: `./providers/${source.id}.txt`, override: via }
+    }
   }
   const listener = (name: string, port: number, proxy: string) => ({ name, type: 'mixed', listen: '127.0.0.1', port, udp: false, proxy })
+  // The copies through 网络加速 are only for windows' slots: no speed tests or probes through the tunnel.
+  const base = Object.keys(providers).filter((name) => !name.endsWith('-via'))
   return {
     'mixed-port': input.mixedPort,
     'bind-address': '127.0.0.1',
@@ -96,12 +113,13 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     'external-controller': `127.0.0.1:${input.controllerPort}`,
     secret: input.secret,
     profile: { 'store-selected': false, 'store-fake-ip': false },
+    ...(input.chainPort ? { proxies: [{ name: CHAIN_PROXY, type: 'http', server: '127.0.0.1', port: input.chainPort }] } : {}),
     'proxy-providers': providers,
     'proxy-groups': [
-      { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: Object.keys(providers), url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },
-      { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: Object.keys(providers) },
+      { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: base, url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },
+      { name: TUNNEL_GROUP, type: 'select', proxies: [AUTO_TUNNEL_GROUP], use: base },
       ...input.slotPorts.map((_, index) => ({ name: nodeSlotGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) })),
-      ...(input.probePorts ?? []).map((_, index) => ({ name: probeGroup(index), type: 'select', proxies: ['REJECT'], use: Object.keys(providers) }))
+      ...(input.probePorts ?? []).map((_, index) => ({ name: probeGroup(index), type: 'select', proxies: ['REJECT'], use: base }))
     ],
     listeners: [
       listener('auto', input.autoPort, AUTO_TUNNEL_GROUP),

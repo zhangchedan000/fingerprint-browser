@@ -477,7 +477,8 @@ export class ProfileStore {
         host: stored.host as string,
         port: stored.port,
         username: stored.username as string,
-        password: this.secrets.decode(stored.password)
+        password: this.secrets.decode(stored.password),
+        ...(stored.subscription ? { subscription: stored.subscription } : {})
       })
       if (config.protocol === 'direct') throw new Error('代理库包含无效记录')
       proxyIds.add(stored.id)
@@ -496,6 +497,7 @@ export class ProfileStore {
         ...(check ? { check } : {}),
         ...(ipSites ? { ipSites } : {}),
         ...(typeof stored.apiUrl === 'string' && stored.apiUrl ? { apiUrl: validProxyApiUrl(stored.apiUrl) } : {}),
+        ...(config.subscription ? { subscription: config.subscription } : {}),
         ...(safeTunnelRoute(stored.tunnel) ? { tunnel: safeTunnelRoute(stored.tunnel) } : {})
       })
     }
@@ -1180,6 +1182,17 @@ export class ProfileStore {
     this.notify(members.map((profile) => profile.id))
   }
 
+  /** A subscription was renamed: its nodes' entries (and so the windows on them) follow. Returns those windows. */
+  async renameSubscription(from: string, to: string): Promise<string[]> {
+    const records = this.library.listProxies().filter((proxy) => proxy.subscription?.source === from)
+    if (!records.length) return []
+    for (const record of records) record.subscription = { source: to, node: record.subscription!.node }
+    await this.persist()
+    const windows = this.list().filter((profile) => records.some((record) => record.id === profile.proxyId)).map((profile) => profile.id)
+    this.notify(windows)
+    return windows
+  }
+
   // ---- the account's libraries on every computer (team sync) -------------------------------
 
   /**
@@ -1192,8 +1205,10 @@ export class ProfileStore {
     if (!Array.isArray(inputs)) return false
     return this.withLibraryRollback(async () => {
       const now = new Date().toISOString()
-      const key = (proxy: { apiUrl?: string; protocol: string; host: string; port?: number; username: string; password: string }) =>
-        proxy.apiUrl ? `api ${proxy.apiUrl}` : `${proxy.protocol} ${proxy.host} ${proxy.port ?? ''} ${proxy.username} ${proxy.password}`
+      const key = (proxy: { apiUrl?: string; subscription?: { source: string; node: string }; protocol: string; host: string; port?: number; username: string; password: string }) =>
+        proxy.apiUrl ? `api ${proxy.apiUrl}`
+          : proxy.subscription ? `sub ${proxy.subscription.source} ${proxy.subscription.node}`
+            : `${proxy.protocol} ${proxy.host} ${proxy.port ?? ''} ${proxy.username} ${proxy.password}`
       const wanted = new Map<string, ProxyDraft>()
       for (const input of inputs) {
         try {

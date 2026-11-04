@@ -8,7 +8,7 @@ import { findKernelGpu, legacyBucketGpuKey } from './gpu-catalog'
 import { findCpu } from './cpu-catalog'
 import { DEVICE_NAME_PATTERN, MAC_ADDRESS_PATTERN } from './device-identity'
 import { DEVICE_MEMORY_CHOICES, SMALL_DEVICE_MEMORY } from './types'
-import type { FingerprintConfig, FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, TunnelRoute, WebRtcPolicy } from './types'
+import type { FingerprintConfig, FingerprintOverride, GroupDraft, HardwareProfileId, PlatformAccount, ProfileDraft, ProxyConfig, ProxyDraft, SubscriptionNodeRef, TunnelRoute, WebRtcPolicy } from './types'
 import { domainToASCII } from 'node:url'
 import { isIP } from 'node:net'
 
@@ -283,6 +283,14 @@ function validLocation(value: unknown): FingerprintConfig['location'] | undefine
 }
 
 /** A window's (or a library proxy's default) 网络加速 setting. */
+export function validSubscriptionNode(input: unknown): SubscriptionNodeRef {
+  const value = input as Partial<SubscriptionNodeRef> | null
+  const source = typeof value?.source === 'string' ? value.source.trim() : ''
+  const node = typeof value?.node === 'string' ? value.node.trim() : ''
+  if (!source || !node || source.length > 40 || node.length > 200) throw new Error('订阅节点无效，请重新选择订阅和节点')
+  return { source, node }
+}
+
 export function validTunnelRoute(input: unknown): TunnelRoute {
   const value = input as Partial<TunnelRoute> | null
   if (!value || typeof value !== 'object' || typeof value.enabled !== 'boolean' || (value.mode !== 'auto' && value.mode !== 'manual')) {
@@ -313,6 +321,12 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   if (input.passwordStored === true) proxy.passwordStored = true
   if (input.apiUrl !== undefined && input.apiUrl !== '') proxy.apiUrl = validProxyApiUrl(input.apiUrl)
   if (input.tunnel !== undefined) proxy.tunnel = validTunnelRoute(input.tunnel)
+  // 订阅: only which node; the local port it runs on is found at each use.
+  if (input.subscription !== undefined && proxy.protocol !== 'direct') {
+    // Through 网络加速 a subscription node always takes the fastest acceleration node (one relay for all).
+    const route: TunnelRoute | undefined = proxy.tunnel?.enabled ? { enabled: true, mode: 'auto' } : proxy.tunnel
+    return { protocol: 'http', host: '', username: '', password: '', subscription: validSubscriptionNode(input.subscription), ...(route ? { tunnel: route } : {}) }
+  }
   if (proxy.protocol === 'direct') {
     if (proxy.apiUrl) throw new Error('API 提取的代理类型无效')
     return { protocol: 'direct', host: '', username: '', password: '' }
@@ -354,6 +368,7 @@ export function validateProxyDraft(input: ProxyDraft): ProxyDraft & { port: numb
     password: proxy.password,
     ...(proxy.passwordStored ? { passwordStored: true } : {}),
     ...(proxy.apiUrl ? { apiUrl: proxy.apiUrl } : {}),
+    ...(proxy.subscription ? { subscription: proxy.subscription } : {}),
     ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {}),
     note
   }

@@ -31,11 +31,11 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
     <div className="fb-proxy-cell">
       <div>
         {check?.ok && check.countryCode && <span className="fb-cc">{check.countryCode}</span>}
-        <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxy.apiUrl && !proxy.host ? t("API 提取") : proxyAddress(proxy)}</span>
+        <span className="fb-mono">{check?.ok && check.ip ? check.ip : proxy.apiUrl && !proxy.host ? t("API 提取") : proxy.subscription ? proxy.subscription.node : proxyAddress(proxy)}</span>
       </div>
       <div className="fb-proxy-meta">
         <small className="fb-ellipsis" title={check?.ok ? [check.country, check.region, check.city].filter(Boolean).join(' · ') : undefined}>
-          {proxy.apiUrl ? t("API · 当前 IP") : proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
+          {proxy.apiUrl ? t("API · 当前 IP") : proxy.subscription ? t("订阅 · {0}", proxy.subscription.source) : proxy.protocol.toUpperCase()}{location ? ` · ${location}` : ''}
         </small>
         {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
         {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}
@@ -55,7 +55,9 @@ export function proxyLabel(proxy: ProxyRecordView, short = false) {
   ].filter(Boolean)
   return (
     <span className="fb-proxy-option">
-      <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname) : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username && !short ? ` · ${proxy.username}` : ''}`}</span>
+      <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname)
+        : proxy.subscription ? t("订阅 · {0} · {1}", proxy.subscription.source, proxy.subscription.node)
+          : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username && !short ? ` · ${proxy.username}` : ''}`}</span>
       <small>{details.join(' · ')}</small>
     </span>
   )

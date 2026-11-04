@@ -1051,6 +1051,12 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
       return null
     }
   })
+  // 订阅: the library entry of a subscription node (made the first time a window picks it).
+  ipcMain.handle('proxy:subscription-node', async (_event, ref: unknown) => {
+    const config = validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: ref as ProxyConfig['subscription'] })
+    const existing = profiles.findLibraryProxy(config)
+    return proxyView(existing ? existing.id : (await profiles.createProxy({ ...config, protocol: 'http', note: '' })).id)
+  })
   ipcMain.handle('proxy:create', async (_event, draft) => proxyView((await profiles.createProxy(await resolveDraft(draft as ProxyDraft))).id))
   ipcMain.handle('proxy:create-many', async (_event, drafts) => {
     const result = await profiles.createProxies(drafts)

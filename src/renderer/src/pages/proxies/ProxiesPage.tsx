@@ -1,5 +1,5 @@
 import { ApiOutlined, AppstoreAddOutlined, DeleteOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tooltip, type TableColumnsType } from 'antd'
+import { Alert, Button, Dropdown, Input, Modal, Select, Space, Tabs, Tooltip, type TableColumnsType } from 'antd'
 import { useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { ProxyDraft, ProxyRecordView } from '../../../../shared/types'
@@ -13,6 +13,8 @@ import { useWorkspace } from '../../data/workspace'
 import { AssignWindowsModal, type AssignMode } from './AssignWindowsModal'
 import { ProxyFormModal } from './ProxyFormModal'
 import { ProxyImportModal } from './ProxyImportModal'
+import { SubscriptionsSection } from './SubscriptionsSection'
+import { useSubscriptionStatus } from '../../components/subscriptions'
 
 type ProxyState = 'ok' | 'bad' | 'unknown'
 
@@ -31,7 +33,11 @@ export function ProxiesPage() {
   const ws = useWorkspace()
   const tunnelStatus = useTunnelStatus()
   const nodeIps = new Map((tunnelStatus?.nodes ?? []).flatMap((node) => node.exitIp ? [[node.name, node.exitIp] as const] : []))
-  const { proxies, profiles, notify, locale } = ws
+  const { profiles, notify, locale } = ws
+  // Subscription nodes picked by windows are library entries too: they are listed under 订阅.
+  const proxies = ws.proxies.filter((proxy) => !proxy.subscription)
+  const [section, setSection] = useState<'proxies' | 'subscriptions'>('proxies')
+  const [subscriptionStatus, setSubscriptionStatus] = useSubscriptionStatus()
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState(ALL)
   const [countryFilter, setCountryFilter] = useState(ALL)
@@ -301,8 +307,28 @@ export function ProxiesPage() {
   ]
 
   const selected = proxies.filter((proxy) => selectedIds.includes(proxy.id))
+  const sectionTabs = (
+    <Tabs
+      className="fb-tabs"
+      activeKey={section}
+      onChange={(key) => setSection(key as 'proxies' | 'subscriptions')}
+      items={[
+        { key: 'proxies', label: `${t("代理")} ${proxies.length}` },
+        { key: 'subscriptions', label: `${t("订阅")} ${subscriptionStatus?.sources.length ?? 0}` }
+      ]}
+    />
+  )
+  if (section === 'subscriptions') {
+    return (
+      <>
+        {sectionTabs}
+        <SubscriptionsSection status={subscriptionStatus} setStatus={setSubscriptionStatus} />
+      </>
+    )
+  }
   return (
     <>
+      {sectionTabs}
       <ListPage<ProxyRecordView>
         header={(
           <StatCards stats={[
