@@ -6,7 +6,7 @@ import { screenChoices, type ScreenSize } from './screen'
  * A GPU picked for a window brings a CPU, memory size and resolution. The card decides what can go
  * with it, as desktops are built (user, 2026-11-04: a high-end CPU never with a low-end card, nor the
  * other way round): a CPU of a class that suits the card's class and sold within two years of it, no
- * 8 GB beside a mid-range or better card, no 4K or ultrawide screen beside an entry card. Among what
+ * 8 GB beside a mid-range or better card, a monitor of the card's class (SCREEN_CLASSES). Among what
  * fits, how often each value comes up follows the Steam Hardware & Software Survey
  * (store.steampowered.com/hwsurvey, PC, October 2026); no public survey breaks these down by card,
  * so the classes are build practice, the shares are data. The editor applies the match as a default;
@@ -114,10 +114,20 @@ export function memoryWeights(gpuModel: string): Array<[DeviceMemoryGb, number]>
   return STEAM_DEVICE_MEMORY.filter(([gb]) => entry || gb !== 8).map(([gb, share]) => [gb, share])
 }
 
-/** Whether a desktop with this card has a screen of this size: an entry card no 4K or ultrawide. */
+/**
+ * The monitors (physical pixels) a desktop with each class of card goes with (user, 2026-11-04: the
+ * resolution matches the card too): an entry card a 1080p-class screen, a top card nothing below 1440p.
+ */
+export const SCREEN_CLASSES: Readonly<Record<GpuTier, readonly string[]>> = {
+  entry: ['1920x1080', '1920x1200'],
+  mid: ['1920x1080', '1920x1200', '2560x1080', '2560x1440'],
+  high: ['1920x1080', '2560x1440', '3440x1440', '3840x2160'],
+  top: ['2560x1440', '3440x1440', '3840x2160']
+}
+
+/** Whether a desktop with this card goes with a screen of this size (SCREEN_CLASSES). */
 export function screenSuitsGpu(gpuModel: string, physical: { width: number; height: number }): boolean {
-  if (gpuTier(gpuModel) !== 'entry') return true
-  return !(physical.height >= 2160 || physical.width / physical.height > 2.3)
+  return SCREEN_CLASSES[gpuTier(gpuModel)].includes(`${physical.width}x${physical.height}`)
 }
 
 /**

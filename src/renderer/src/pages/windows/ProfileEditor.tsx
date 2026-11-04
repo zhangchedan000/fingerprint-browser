@@ -41,7 +41,7 @@ import { gpuKey, gpuLabel, kernelGpuList } from '../../../../shared/gpu-catalog'
 import { CPU_MODELS, cpuFamilies, findCpu } from '../../../../shared/cpu-catalog'
 import { kernelChromiumVersion } from '../../../../shared/kernel-id'
 import { kernelTakesExplicitGpu, maxDeviceMemoryGb } from '../../../../shared/kernel-capabilities'
-import { matchedHardware, matchedScreen } from '../../../../shared/hardware-match'
+import { matchedHardware, matchedScreen, screenSuitsGpu } from '../../../../shared/hardware-match'
 import { voiceLocaleForLanguage, WINDOWS_VOICE_LOCALES } from '../../../../shared/windows-voices'
 import { KEYBOARD_LAYOUTS, keyboardLayoutFor, keyboardLayoutLocale, keyboardLayoutName } from '../../../../shared/keyboard-layouts'
 import { autoMediaDevices, MEDIA_LOCALES, MEDIA_PRESETS, MEDIA_SETUPS, mediaLocaleFor, type MediaSetup } from '../../../../shared/media-devices'
@@ -2006,7 +2006,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       .filter((choice) => choice.physical.width <= hostPhysical.width && choice.physical.height <= hostPhysical.height)
       .sort((x, y) => y.physical.width * y.physical.height - x.physical.width * x.physical.height)
     : []
-  const fittingScreen = usualScreenFor(fittingScreens) ?? fittingScreens[0]
+  const fittingScreen = (gpu?.model && !gpuReal ? fittingScreens.find((choice) => screenSuitsGpu(gpu.model, choice.physical)) : undefined) ?? usualScreenFor(fittingScreens) ?? fittingScreens[0]
   // None offered fits (a monitor smaller than every common size): this computer's own.
   const largerFix: QuickFix | undefined = !screenLarger ? undefined : fittingScreen
     ? { label: t("改成 {0}", `${fittingScreen.physical.width} × ${fittingScreen.physical.height}`), apply: () => chooseScreen(`${fittingScreen.width}x${fittingScreen.height}`) }
@@ -2334,9 +2334,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
               onShuffle={shuffleScreen}
               options={[
                 { value: 'host', label: t("本机真实") },
-                // The sizes most computers have (Steam survey, 5% and up) come first, marked 常见.
+                // The sizes that go with the chosen card come first, marked 常见 (without one: 5% and up in the Steam survey).
                 ...screenChoices(undefined, hostScale())
-                  .map(({ width, height, physical }) => ({ width, height, physical, usual: screenIsCommon(physical) }))
+                  .map(({ width, height, physical }) => ({ width, height, physical, usual: gpu?.model && !gpuReal ? screenSuitsGpu(gpu.model, physical) : screenIsCommon(physical) }))
                   .sort((a, b) => Number(b.usual) - Number(a.usual))
                   .map(({ width, height, physical, usual }) => ({
                     value: `${width}x${height}`,
