@@ -9,7 +9,7 @@ import { followingLocales, savedFingerprint } from '../shared/network-identity'
 import { PRISM21_CASES } from './__fixtures__/prism21-cases'
 
 const WINDOWS = { platform: 'windows' as const, hardwareProfileId: defaultHardwareProfileId('windows') }
-const MACOS = { platform: 'macos' as const, hardwareProfileId: defaultHardwareProfileId('macos') }
+const MACOS = { platform: 'macos' as const, platformVersion: '15.0.0', hardwareProfileId: defaultHardwareProfileId('macos') }
 
 function profile(fingerprint: Partial<BrowserProfile['fingerprint']> = {}): BrowserProfile {
   const draft = defaultProfileDraft()
