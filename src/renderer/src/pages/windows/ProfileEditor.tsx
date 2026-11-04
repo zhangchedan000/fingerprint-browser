@@ -2388,7 +2388,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Space>
         </Row>
       )}
-      <Row label={t("媒体设备")} hint={t("自动：音箱 + USB 耳麦，约十分之一的窗口另有摄像头，保存后固定；没授权的网站只看到有哪几类设备")}>
+      <Row label={t("媒体设备")} hint={t("自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备")}>
         <Select
           className="fb-fp-select"
           value={fp.mediaDevices ?? 'auto'}

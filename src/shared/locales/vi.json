@@ -2712,5 +2712,5 @@
   "GitHub 暂时拒绝访问：这台电脑一小时内的查询次数用完了，大约 {0} 分钟后再试": "GitHub tạm thời từ chối: máy tính này đã dùng hết lượt truy vấn trong giờ; thử lại sau khoảng {0} phút",
   "GitHub 暂时拒绝访问（HTTP {0}），请过几分钟再试": "GitHub tạm thời từ chối (HTTP {0}); thử lại sau vài phút",
   "内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新": "Một chương trình khác đang giữ thư mục nhân, nên hiện chưa cập nhật được. Thường là chương trình chạy nền của bộ gõ (như dịch vụ đám mây của Sogou): sau khi gõ bằng nó trong trình duyệt, nó vẫn giữ thư mục nhân. Hãy thoát chương trình đó hoặc khởi động lại máy tính, rồi bấm Cập nhật lần nữa",
-  "自动：音箱 + USB 耳麦，约十分之一的窗口另有摄像头，保存后固定；没授权的网站只看到有哪几类设备": "Tự động: loa + tai nghe USB, khoảng một trong mười cửa sổ có thêm webcam; cố định sau khi lưu. Trang web không được cấp quyền chỉ thấy có những loại thiết bị nào"
+  "自动：大多数是音箱 + USB 耳麦；入门显卡少数只有耳麦或只有音箱，高档显卡少数另有摄像头；保存后固定；没授权的网站只看到有哪几类设备": "Tự động: phần lớn là loa + tai nghe USB; một số card phổ thông chỉ có tai nghe hoặc chỉ có loa, một số card cao cấp có thêm webcam; cố định sau khi lưu. Trang web không được cấp quyền chỉ thấy có những loại thiết bị nào"
 }

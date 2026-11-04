@@ -1,4 +1,5 @@
 import { closestLocale } from './locale-match'
+import { gpuTier, type GpuTier } from './hardware-match'
 /**
  * The microphones, speakers and cameras a window lists (Prism patch 014). Pages without
  * permission only see which kinds exist; with permission they see names built from the Windows
@@ -64,21 +65,39 @@ function seededRandom(seed: number): () => number {
 /** The set a new window starts with: speakers and a USB headset (microphone + headphones). */
 export const DEFAULT_MEDIA_DEVICES = '1,2,0'
 
-/** The same with a webcam (its own microphone): speakers, a USB headset and a camera. */
+/** The same with a webcam, which brings its own microphone: speakers, a USB headset and a camera. */
 export const WEBCAM_MEDIA_DEVICES = '2,2,1'
 
-/** Share of windows whose 自动 set has a webcam (user, 2026-11-04: most desktops have none, keep it small). */
-export const WEBCAM_SHARE = 0.1
+/** Only a USB headset (its microphone and headphones), or only speakers (no microphone). */
+export const HEADSET_ONLY_MEDIA_DEVICES = '1,1,0'
+export const SPEAKERS_ONLY_MEDIA_DEVICES = '0,1,0'
 
 /**
- * The set 自动 stands for, fixed by the window's seed: speakers and a USB headset, the most usual
- * desktop (user, 2026-11-04); one window in ten also has a webcam. No public survey gives how many
- * desktops have one, so the share is the user's call, kept small. Saved windows keep the set they
- * were saved with (savedFingerprint writes it in).
+ * The sets 自动 picks from for each class of card, with how often (user, 2026-11-04): most desktops
+ * have speakers and a USB headset; a few entry ones only a headset or only speakers; a few high-end
+ * ones also a webcam. No public survey gives these shares; they are the user's call, kept small.
  */
-export function autoMediaDevices(seed: number, _gpuModel?: string): string {
-  const next = seededRandom((seed ^ 0x5eedca3) >>> 0)
-  return next() < WEBCAM_SHARE ? WEBCAM_MEDIA_DEVICES : DEFAULT_MEDIA_DEVICES
+export const AUTO_MEDIA_SETS: Readonly<Record<GpuTier, ReadonlyArray<[string, number]>>> = {
+  entry: [[DEFAULT_MEDIA_DEVICES, 0.8], [HEADSET_ONLY_MEDIA_DEVICES, 0.1], [SPEAKERS_ONLY_MEDIA_DEVICES, 0.1]],
+  mid: [[DEFAULT_MEDIA_DEVICES, 1]],
+  high: [[DEFAULT_MEDIA_DEVICES, 0.9], [WEBCAM_MEDIA_DEVICES, 0.1]],
+  top: [[DEFAULT_MEDIA_DEVICES, 0.9], [WEBCAM_MEDIA_DEVICES, 0.1]]
+}
+
+/**
+ * The set 自动 stands for, fixed by the window's seed and its card's class (AUTO_MEDIA_SETS). Saved
+ * windows keep the set they were saved with (savedFingerprint writes it in).
+ */
+export function autoMediaDevices(seed: number, gpuModel?: string): string {
+  // No card named (this computer's own GPU, or none picked yet): the usual set.
+  if (!gpuModel) return DEFAULT_MEDIA_DEVICES
+  const sets = AUTO_MEDIA_SETS[gpuTier(gpuModel)]
+  let roll = seededRandom((seed ^ 0x5eedca3) >>> 0)()
+  for (const [set, share] of sets) {
+    roll -= share
+    if (roll < 0) return set
+  }
+  return sets[0][0]
 }
 
 /**
