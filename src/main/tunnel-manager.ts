@@ -63,6 +63,9 @@ async function portFree(port: number): Promise<boolean> {
   })
 }
 
+/** How long a start waits for subscription links to download (a dead link must not hold the start forever). */
+const SUBSCRIPTION_WAIT_MS = 20_000
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** True once something accepts connections on this local port. */
@@ -244,7 +247,7 @@ export class TunnelManager {
     const source = validateTunnelSource(input)
     this.assertFreeName(source.name)
     const record: TunnelSource = { id: randomUUID().slice(0, 8), ...source, content: this.codec.encode(source.content), updatedAt: new Date().toISOString() }
-    await this.replaceSources({ ...this.stored, sources: [...this.stored.sources, record] })
+    await this.replaceSources({ ...this.stored, sources: [...this.stored.sources, record] }, record)
     return this.notify()
   }
 
@@ -263,17 +266,25 @@ export class TunnelManager {
     const prefix = `${previous.name} · `
     const selected = this.stored.selected?.startsWith(prefix)
       ? `${record.name} · ${this.stored.selected.slice(prefix.length)}` : this.stored.selected
-    await this.replaceSources({ ...this.stored, selected, sources: this.stored.sources.map((item) => item.id === id ? record : item) })
+    await this.replaceSources({ ...this.stored, selected, sources: this.stored.sources.map((item) => item.id === id ? record : item) }, record)
     return this.notify()
   }
 
   /** A bad edit must not replace a working saved configuration. */
-  private async replaceSources(next: StoredTunnel): Promise<void> {
+  private async replaceSources(next: StoredTunnel, checked?: TunnelSource): Promise<void> {
     const previous = this.stored
     await this.save(next)
-    if (!next.enabled) return
-    try { await this.restart() }
-    catch (error) {
+    // (After save: the subscriptions' copy is on whenever it has sources.)
+    if (!this.stored.enabled) return
+    try {
+      await this.restart()
+      // The source just added or edited has to give nodes (its link downloaded, its nodes understood).
+      if (checked && !(await this.providerNodes())[providerName(checked)]) {
+        throw new Error(checked.kind === 'subscription'
+          ? `没有从「${checked.name}」取到节点：订阅链接下载失败，或者里面没有能用的节点，请检查链接`
+          : `没有从「${checked.name}」取到节点：请检查节点链接`)
+      }
+    } catch (error) {
       await this.save(previous)
       await this.restart().catch(() => undefined)
       throw error
@@ -432,8 +443,13 @@ export class TunnelManager {
   /** Downloads every subscription again. */
   async refreshSubscriptions(): Promise<TunnelStatus> {
     if (this.state !== 'running') throw new Error('加速通道未运行')
+    const providers = Object.keys(await this.providerNodes())
     for (const source of this.stored.sources.filter((item) => item.kind === 'subscription')) {
       await this.api('PUT', `/providers/proxies/${encodeURIComponent(providerName(source))}`)
+      // Its copies through 网络加速 read the file just downloaded.
+      for (const copy of providers.filter((name) => name.startsWith(`${providerName(source)}-via`))) {
+        await this.api('PUT', `/providers/proxies/${encodeURIComponent(copy)}`)
+      }
     }
     return this.notify()
   }
@@ -552,8 +568,20 @@ export class TunnelManager {
         if (attempt > 100) throw new Error('加速通道启动超时')
         await delay(100)
       }
+      // A subscription link is downloaded after the core starts (the first time; later it starts from the
+      // saved copy): its nodes come a moment later.
+      const linked = this.stored.sources.filter((source) => source.kind === 'subscription')
+      for (let waited = 0; linked.length && waited < SUBSCRIPTION_WAIT_MS; waited += 250) {
+        const counts = await this.providerNodes()
+        if (linked.every((source) => counts[providerName(source)])) break
+        if (child.exitCode !== null) throw new Error(`加速通道启动失败：${lastLine(output) || `code=${child.exitCode}`}`)
+        await delay(250)
+      }
       const names = (await this.groupNames())
-      if (!names.length) throw new Error('没有可用节点：请检查节点链接或订阅是否正确')
+      if (!names.length) throw new Error(linked.length ? '没有取到节点：订阅链接下载失败或里面没有能用的节点，请检查链接' : '没有可用节点：请检查节点链接或订阅是否正确')
+      const counts = await this.providerNodes()
+      const empty = this.stored.sources.filter((source) => !counts[providerName(source)]).map((source) => source.name)
+      if (empty.length) this.logger?.error('有节点来源没有取到节点', { sources: empty })
       // The controller answers before the inbound ports listen; a window must not find them closed.
       for (const port of [this.mixedPort, this.autoPort, ...this.slotPorts]) {
         for (let attempt = 0; !await accepting(port); attempt++) {
@@ -586,6 +614,12 @@ export class TunnelManager {
   private async groupNames(name: string = TUNNEL_GROUP): Promise<string[]> {
     const group = await this.api('GET', `/proxies/${encodeURIComponent(name)}`) as { all?: string[] }
     return (group.all ?? []).filter((name) => name !== 'COMPATIBLE' && name !== AUTO_TUNNEL_GROUP)
+  }
+
+  /** How many nodes each provider has loaded (a subscription has 0 until downloaded). */
+  private async providerNodes(): Promise<Record<string, number>> {
+    const providers = (await this.api('GET', '/providers/proxies') as { providers?: Record<string, { proxies?: unknown[] }> }).providers ?? {}
+    return Object.fromEntries(Object.entries(providers).map(([name, provider]) => [name, provider.proxies?.length ?? 0]))
   }
 
   private async proxyState(): Promise<ProxyState> {

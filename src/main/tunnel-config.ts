@@ -97,9 +97,8 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
       : { type: 'file', path: `./providers/${source.id}.txt`, 'health-check': healthCheck, override }
     for (const chain of input.chains ?? []) {
       const via = { 'additional-prefix': `${chainPrefix(source.name, chain.index)} · `, 'dialer-proxy': chainProxy(chain.index) }
-      providers[`${providerName(source)}-via${chain.index}`] = source.kind === 'subscription'
-        ? { type: 'http', url: source.content, path: `./providers/${source.id}-via${chain.index}.yaml`, interval: 86_400, override: via }
-        : { type: 'file', path: `./providers/${source.id}.txt`, override: via }
+      // The copy reads the file the source itself keeps (a subscription is downloaded once, by the source).
+      providers[`${providerName(source)}-via${chain.index}`] = { type: 'file', path: `./providers/${source.id}.${source.kind === 'subscription' ? 'yaml' : 'txt'}`, override: via }
     }
   }
   // UDP on: a subscription node of a UDP protocol (Hysteria, TUIC) reaches its server through these ports.

@@ -1,6 +1,7 @@
 import { Alert, Input, Modal, Radio } from 'antd'
 import { useEffect, useState } from 'react'
 import { t } from '../../../shared/i18n'
+import { useWorkspace } from '../data/workspace'
 import type { TunnelNodeInfo, TunnelSourceSummary, TunnelStatus } from '../../../shared/types'
 import { humanError } from './format'
 
@@ -30,6 +31,19 @@ export function subscriptionNodes(status: TunnelStatus | undefined, source: Tunn
   return (status?.nodes ?? []).filter((node) => node.sourceId === source.id)
 }
 
+/** The source just added (the newest) or edited, and how many nodes it gave. */
+export function savedSource(status: TunnelStatus, editingId?: string): { name: string; nodes: number } | undefined {
+  const source = editingId
+    ? status.sources.find((item) => item.id === editingId)
+    : [...status.sources].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+  return source && { name: source.name, nodes: subscriptionNodes(status, source).length }
+}
+
+/** Shown while a source is saved: its nodes are fetched first (a subscription link is downloaded). */
+export function FetchingNodes() {
+  return <Alert type="info" showIcon title={t("正在获取节点…订阅链接要先下载，最多等 20 秒")} />
+}
+
 /** Adds a subscription (or edits one): a subscription link, or node links pasted one per line. */
 export function SubscriptionModal({ open, editing, onClose, onSaved }: {
   open: boolean
@@ -43,6 +57,7 @@ export function SubscriptionModal({ open, editing, onClose, onSaved }: {
   const [content, setContent] = useState('')
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const { notify } = useWorkspace()
 
   useEffect(() => {
     if (!open) return
@@ -64,10 +79,13 @@ export function SubscriptionModal({ open, editing, onClose, onSaved }: {
     setBusy(true)
     setError(undefined)
     try {
-      onSaved(await (editing
+      const status = await (editing
         ? window.browserApi.subscriptions.updateSource(editing.id, { name, kind, content })
-        : window.browserApi.subscriptions.addSource({ name, kind, content })))
+        : window.browserApi.subscriptions.addSource({ name, kind, content }))
+      onSaved(status)
       onClose()
+      const saved = savedSource(status, editing?.id)
+      if (saved) notify.success(t("「{0}」取到 {1} 个节点", saved.name, saved.nodes))
     } catch (reason) {
       setError(humanError(reason))
     } finally {
@@ -99,6 +117,7 @@ export function SubscriptionModal({ open, editing, onClose, onSaved }: {
           : <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="https://…" />}
         <span className="fb-muted">{t("窗口可以从订阅里的某个节点出去（代理方式选「订阅」）。订阅加密保存，跟着账号同步到其他电脑。")}</span>
         {editing && <span className="fb-muted">{t("改名后，用这个订阅的窗口会跟着改，不用重新选择。")}</span>}
+        {busy && <FetchingNodes />}
         {error && <Alert type="error" showIcon title={error} />}
       </div>
     </Modal>

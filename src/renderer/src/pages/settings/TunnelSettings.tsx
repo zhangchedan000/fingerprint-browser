@@ -6,6 +6,7 @@ import type { TunnelNodeInfo, TunnelStatus } from '../../../../shared/types'
 import { humanError } from '../../components/format'
 import { DelayText, TUNNEL_STATE_PILL as STATE_PILL } from '../../components/TunnelRouteField'
 import { useWorkspace } from '../../data/workspace'
+import { FetchingNodes, savedSource } from '../../components/subscriptions'
 
 
 /** Settings → 网络加速: the built-in tunnel that carries foreign window proxies out of the country. */
@@ -43,9 +44,13 @@ export function TunnelSettings() {
     setBusy('add')
     setAddError(undefined)
     try {
-      setStatus(await (editingId
+      const next = await (editingId
         ? window.browserApi.tunnel.updateSource(editingId, { name, kind, content })
-        : window.browserApi.tunnel.addSource({ name, kind, content })))
+        : window.browserApi.tunnel.addSource({ name, kind, content }))
+      setStatus(next)
+      // While 网络加速 is off nothing is fetched yet (its nodes come when it is turned on).
+      const saved = next.state === 'running' ? savedSource(next, editingId) : undefined
+      if (saved) ws.notify.success(t("「{0}」取到 {1} 个节点", saved.name, saved.nodes))
       setAdding(false)
       setEditingId(undefined)
       setName('')
@@ -198,6 +203,7 @@ export function TunnelSettings() {
               placeholder={t("每行一个：vless://、vmess://、trojan://、ss://、hysteria2:// 等，也可以粘贴 Clash 配置里的 proxies 部分")} />
             : <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="https://…" />}
           <span className="fb-muted">{t("可以用机场的订阅，也可以填自己服务器的节点。节点信息加密保存在本机。")}</span>
+          {busy === 'add' && status?.enabled && <FetchingNodes />}
           {addError && <Alert type="error" showIcon title={addError} />}
         </div>
       </Modal>

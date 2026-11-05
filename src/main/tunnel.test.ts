@@ -394,4 +394,46 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     await accel.stop()
     await expect(subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' })).rejects.toThrow()
   }, 120_000)
+
+  it('a subscription link: the first start waits for its download; a link that gives no nodes is not added', async () => {
+    const echo = await listen(createServer((socket) => socket.pipe(socket)))
+    const exitAsked: string[] = []
+    const accelA: string[] = []
+    const exitNode = await socksNode(exitAsked)
+    const accelNodeA = await socksNode(accelA)
+    // The subscription answers a moment later (a real one is downloaded first); the other one has nothing.
+    const subscription = httpServer((request, response) => {
+      if (request.url !== '/sub?token=t') return void response.writeHead(404).end('no')
+      setTimeout(() => response.writeHead(200, { 'content-type': 'text/plain' })
+        .end(`proxies:\n  - {name: 新加坡 01, type: socks5, server: 127.0.0.1, port: ${exitNode}, udp: false}\n`), 1500)
+    })
+    servers.push(subscription as unknown as Server)
+    const web = await new Promise<number>((done) => subscription.listen(0, '127.0.0.1', () => done((subscription.address() as { port: number }).port)))
+    for (let index = 0; index < 2; index++) vaults.push(await mkdtemp(join(tmpdir(), 'subscription-')))
+    const accel = new TunnelManager(vaults[0], identitySecretCodec, core)
+    managers.push(accel)
+    await accel.addSource({ name: 'Accel', kind: 'links', content: `proxies:\n  - {name: a1, type: socks5, server: 127.0.0.1, port: ${accelNodeA}, udp: true}\n` })
+    await accel.setEnabled(true)
+    const subscriptions = new TunnelManager(vaults[1], identitySecretCodec, core, undefined, undefined, undefined, undefined, {
+      slotCount: 4, alwaysOn: true, chainRoute: async (route) => (await accel.routeProxy(route)).port
+    })
+    managers.push(subscriptions)
+
+    const status = await subscriptions.addSource({ name: 'EM', kind: 'subscription', content: `http://127.0.0.1:${web}/sub?token=t` })
+    expect(status.state).toBe('running')
+    expect(status.nodes.map((node) => node.name)).toEqual(['EM · 新加坡 01'])
+    const direct = await subscriptions.nodeProxy({ source: 'EM', node: '新加坡 01' })
+    expect(await roundTrip(direct, echo, 'from the subscription')).toBe('from the subscription')
+    // Through 网络加速: the copy reads the downloaded subscription (no second download).
+    const viaA = await subscriptions.nodeProxy({ source: 'EM', node: '新加坡 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' })
+    expect(await roundTrip(viaA, echo, 'subscription through a1')).toBe('subscription through a1')
+    expect(accelA).toContain(`127.0.0.1:${exitNode}`)
+
+    // A link that gives no nodes: refused with the reason, the subscriptions as they were, still running.
+    await expect(subscriptions.addSource({ name: '坏的', kind: 'subscription', content: `http://127.0.0.1:${web}/wrong` })).rejects.toThrow('没有从「坏的」取到节点')
+    const after = await subscriptions.status()
+    expect(after.sources.map((source) => source.name)).toEqual(['EM'])
+    expect(after.state).toBe('running')
+    expect(await roundTrip(await subscriptions.nodeProxy({ source: 'EM', node: '新加坡 01' }), echo, 'still there')).toBe('still there')
+  }, 120_000)
 })
