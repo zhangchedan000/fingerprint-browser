@@ -2760,5 +2760,6 @@
   "取到 {0} 个节点": "{0} nœuds récupérés",
   "重新获取": "Récupérer à nouveau",
   "获取节点": "Récupérer les nœuds",
-  "先点「获取节点」，看到节点再添加": "Cliquez d’abord sur « Récupérer les nœuds », puis ajoutez une fois les nœuds affichés"
+  "先点「获取节点」，看到节点再添加": "Cliquez d’abord sur « Récupérer les nœuds », puis ajoutez une fois les nœuds affichés",
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Pas encore d’abonnement. Cliquez sur « Ajouter un abonnement » à droite : saisissez le lien, récupérez les nœuds, puis ajoutez une fois qu’ils s’affichent"
 }

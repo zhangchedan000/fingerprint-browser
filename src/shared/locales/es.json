@@ -2760,5 +2760,6 @@
   "取到 {0} 个节点": "{0} nodos obtenidos",
   "重新获取": "Volver a obtener",
   "获取节点": "Obtener nodos",
-  "先点「获取节点」，看到节点再添加": "Primero pulsa «Obtener nodos» y añade cuando veas los nodos"
+  "先点「获取节点」，看到节点再添加": "Primero pulsa «Obtener nodos» y añade cuando veas los nodos",
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Aún no hay suscripciones. Pulsa «Añadir suscripción» a la derecha: pon el enlace, obtén los nodos y añade cuando los veas"
 }

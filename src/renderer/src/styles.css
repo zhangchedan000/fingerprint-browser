@@ -238,6 +238,8 @@ button, input, textarea { font: inherit; }
 .fb-fp-card-head .fb-fp-group { margin: 0; }
 .fb-fp-card-sub { color: var(--fb-text-muted); font-size: 12px; }
 .fb-wide-select { width: 100%; max-width: 420px; }
+.fb-select-with-action { display: flex; gap: 8px; align-items: center; max-width: 560px; }
+.fb-select-with-action > .fb-wide-select { flex: 1; min-width: 0; }
 .fb-small-select { min-width: 130px; }
 .fb-small-input { width: 160px; }
 .fb-ua span { display: block; padding: 6px 10px; overflow: hidden; border: 1px solid var(--fb-line); border-radius: 6px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

@@ -2760,5 +2760,6 @@
   "取到 {0} 个节点": "{0} nós obtidos",
   "重新获取": "Obter novamente",
   "获取节点": "Obter nós",
-  "先点「获取节点」，看到节点再添加": "Clique primeiro em “Obter nós” e adicione depois de ver os nós"
+  "先点「获取节点」，看到节点再添加": "Clique primeiro em “Obter nós” e adicione depois de ver os nós",
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Ainda não há assinaturas. Clique em “Adicionar assinatura” à direita: informe o link, obtenha os nós e adicione depois de vê-los"
 }

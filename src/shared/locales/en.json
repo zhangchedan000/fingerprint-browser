@@ -2760,5 +2760,6 @@
   "取到 {0} 个节点": "{0} nodes fetched",
   "重新获取": "Fetch again",
   "获取节点": "Fetch nodes",
-  "先点「获取节点」，看到节点再添加": "Click “Fetch nodes” first, then add once you see the nodes"
+  "先点「获取节点」，看到节点再添加": "Click “Fetch nodes” first, then add once you see the nodes",
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "No subscriptions yet. Click “Add subscription” on the right: enter the link, fetch the nodes, then add once you see them"
 }

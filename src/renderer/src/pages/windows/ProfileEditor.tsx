@@ -24,7 +24,7 @@ import {
   Typography,
   Upload
 } from 'antd'
-import { ThunderboltOutlined } from '@ant-design/icons'
+import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_DEVICE_BINDING, defaultProfileDraft, randomSeed } from '../../../../shared/defaults'
@@ -1763,8 +1763,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <Row
         label={t("选择订阅")}
         required
-        hint={subscriptionStatus?.sources.length ? undefined : <span>{t("还没有订阅")} <Button type="link" size="small" onClick={() => setAddingSubscription(true)}>{t("添加订阅")}</Button></span>}
+        hint={subscriptionStatus?.sources.length ? undefined : t("还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加")}
       >
+        <div className="fb-select-with-action">
         <Select
           showSearch
           className="fb-wide-select"
@@ -1796,6 +1797,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
             </>
           )}
         />
+        <Button icon={<PlusOutlined />} onClick={() => setAddingSubscription(true)}>{t("添加订阅")}</Button>
+        </div>
       </Row>
       {pickedSubscription && (
         <Row label={t("选择节点")} required hint={subscriptionNodes(subscriptionStatus, pickedSubscription).length ? undefined : t("这个订阅还没有可用节点（刚添加时要等几秒，或到 代理 IP → 订阅 里刷新）")}>
