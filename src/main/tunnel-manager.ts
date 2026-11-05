@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createSocket } from 'node:dgram'
 import { connect, createServer, isIP } from 'node:net'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import type { LocalProxy } from './proxy-bridge'
 import { ProxyAgent, request } from 'undici'
 import type { SecretCodec } from './secret-codec'
 import {
-  AUTO_TUNNEL_GROUP, CHAIN_MARK, chainPrefix, DELAY_TEST_URL, NODE_SLOT_COUNT, PROBE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, probeGroup, providerName,
+  AUTO_TUNNEL_GROUP, CHAIN_MARK, chainPrefix, providerFile, DELAY_TEST_URL, NODE_SLOT_COUNT, PROBE_SLOT_COUNT, TUNNEL_GROUP, mihomoConfig, nodeSlotGroup, probeGroup, providerName,
   validateTunnelSource, type TunnelSource
 } from './tunnel-config'
 
@@ -351,8 +351,9 @@ export class TunnelManager {
       await this.restart()
       // The source just added or edited has to give nodes (its link downloaded, its nodes understood).
       if (checked && !(await this.providerNodes())[providerName(checked)]) {
+        const reason = this.downloadError(checked)
         throw new Error(checked.kind === 'subscription'
-          ? `没有从「${checked.name}」取到节点：订阅链接下载失败，或者里面没有能用的节点，请检查链接`
+          ? `没有从「${checked.name}」取到节点：订阅链接下载失败，或者里面没有能用的节点，请检查链接${reason ? `（服务器返回：${reason}）` : ''}`
           : `没有从「${checked.name}」取到节点：请检查节点链接`)
       }
     } catch (error) {
@@ -513,6 +514,11 @@ export class TunnelManager {
 
   /** Downloads every subscription again. */
   async refreshSubscriptions(): Promise<TunnelStatus> {
+    // Not running because a link could not be downloaded (or not started yet): 刷新 starts it again.
+    if (this.state !== 'running' && this.stored.enabled && this.stored.sources.length) {
+      await this.restart()
+      return this.notify()
+    }
     if (this.state !== 'running') throw new Error('加速通道未运行')
     const providers = Object.keys(await this.providerNodes())
     for (const source of this.stored.sources.filter((item) => item.kind === 'subscription')) {
@@ -545,6 +551,15 @@ export class TunnelManager {
   }
 
   private controllerPort = 0
+  /** What the running core printed last (warnings and errors), for the reason a download failed. */
+  private coreOutput = ''
+
+  /** Why the core could not download a subscription (e.g. "403 Forbidden"), without the link. */
+  private downloadError(source: TunnelSource): string | undefined {
+    const name = providerName(source)
+    return this.coreOutput.split(/\r?\n/).filter((line) => line.includes(`${name} pull error`) || line.includes(`provider ${name} error`)).pop()
+      ?.replace(/^.*error:\s*/i, '').replace(/"\s*$/, '').replace(/https?:\/\/\S+/g, '<链接>').slice(0, 120)
+  }
 
   /** The core's config from the current sources, ports and 网络加速 routes. */
   private async writeConfig(): Promise<void> {
@@ -589,11 +604,18 @@ export class TunnelManager {
     this.error = undefined
     void this.notify()
     try {
-      await rm(this.runtimeDir, { recursive: true, force: true })
-      await mkdir(join(this.runtimeDir, 'providers'), { recursive: true })
+      // A fresh folder each start, except subscription downloads still in use (see providerFile).
       const sources = this.stored.sources.map((source) => ({ ...source, content: this.codec.decode(source.content) }))
+      const kept = new Set(sources.filter((source) => source.kind === 'subscription').map((source) => providerFile(source).split('/')[1]))
+      await mkdir(join(this.runtimeDir, 'providers'), { recursive: true })
+      for (const name of await readdir(this.runtimeDir)) {
+        if (name !== 'providers') await rm(join(this.runtimeDir, name), { recursive: true, force: true })
+      }
+      for (const name of await readdir(join(this.runtimeDir, 'providers'))) {
+        if (!kept.has(name)) await rm(join(this.runtimeDir, 'providers', name), { recursive: true, force: true })
+      }
       for (const source of sources) {
-        if (source.kind === 'links') await writeFile(join(this.runtimeDir, 'providers', `${source.id}.txt`), source.content, { mode: 0o600 })
+        if (source.kind === 'links') await writeFile(join(this.runtimeDir, providerFile(source)), source.content, { mode: 0o600 })
       }
       // The ports of last time when still free (what points at them keeps working), else new ones.
       const last = this.stored.ports
@@ -619,7 +641,8 @@ export class TunnelManager {
       let output = ''
       const child = spawn(this.binary, ['-d', this.runtimeDir, '-f', join(this.runtimeDir, 'config.yaml')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
       this.child = child
-      const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(-4000) }
+      const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(-4000); this.coreOutput = output }
+      this.coreOutput = ''
       child.stdout?.on('data', collect)
       child.stderr?.on('data', collect)
       child.once('exit', (code) => {
@@ -645,12 +668,24 @@ export class TunnelManager {
       for (let waited = 0; linked.length && waited < SUBSCRIPTION_WAIT_MS; waited += 250) {
         const counts = await this.providerNodes()
         if (linked.every((source) => counts[providerName(source)])) break
+        // Every link the core could not download has said so: no need to wait out the time.
+        if (linked.every((source) => counts[providerName(source)] || new RegExp(`(provider ${providerName(source)} error|${providerName(source)} pull error)`, 'i').test(output))) break
         if (child.exitCode !== null) throw new Error(`加速通道启动失败：${lastLine(output) || `code=${child.exitCode}`}`)
         await delay(250)
       }
       const names = (await this.groupNames())
-      if (!names.length) throw new Error(linked.length ? '没有取到节点：订阅链接下载失败或里面没有能用的节点，请检查链接' : '没有可用节点：请检查节点链接或订阅是否正确')
+      if (!names.length) {
+        // The core's own reason (e.g. "403 Forbidden"), without the link.
+        const reason = linked.map((source) => this.downloadError(source)).find(Boolean)
+        throw new Error(linked.length
+          ? `没有取到节点：订阅链接下载失败或里面没有能用的节点，请检查链接${reason ? `（服务器返回：${reason}）` : ''}`
+          : '没有可用节点：请检查节点链接或订阅是否正确')
+      }
       const counts = await this.providerNodes()
+      // Copies through 网络加速 read the downloads: read them again now that they are there.
+      for (const copy of Object.keys(counts).filter((name) => /-via\d+$/.test(name) && !counts[name])) {
+        await this.api('PUT', `/providers/proxies/${encodeURIComponent(copy)}`).catch(() => undefined)
+      }
       const empty = this.stored.sources.filter((source) => !counts[providerName(source)]).map((source) => source.name)
       if (empty.length) this.logger?.error('有节点来源没有取到节点', { sources: empty })
       // The controller answers before the inbound ports listen; a window must not find them closed.

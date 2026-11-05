@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 /**
  * The built-in tunnel: a mihomo (Clash core) process that carries connections to foreign window
  * proxies out of the country encrypted, through a node the user configures — the way 紫鸟/稳卖
@@ -69,6 +70,17 @@ export function validateTunnelSource(input: { name?: unknown; kind?: unknown; co
   return { name, kind, content }
 }
 
+/**
+ * Where a source's nodes are kept in the core's folder. A subscription's download is kept across starts
+ * (the core starts from it when the link is briefly refused); the link's hash in the name makes an edited
+ * link download afresh.
+ */
+export function providerFile(source: { id: string; kind: TunnelSourceKind; content: string }): string {
+  return source.kind === 'subscription'
+    ? `providers/${source.id}-${createHash('sha256').update(source.content).digest('hex').slice(0, 10)}.yaml`
+    : `providers/${source.id}.txt`
+}
+
 export interface MihomoConfigInput {
   mixedPort: number
   /** Local port that always uses the fastest node (a window set to 自动选择最低延迟). */
@@ -93,12 +105,12 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     // Names of different sources may repeat; the prefix keeps every node addressable.
     const override = { 'additional-prefix': `${source.name} · ` }
     providers[providerName(source)] = source.kind === 'subscription'
-      ? { type: 'http', url: source.content, path: `./providers/${source.id}.yaml`, interval: 86_400, 'health-check': healthCheck, override }
-      : { type: 'file', path: `./providers/${source.id}.txt`, 'health-check': healthCheck, override }
+      ? { type: 'http', url: source.content, path: `./${providerFile(source)}`, interval: 86_400, 'health-check': healthCheck, override }
+      : { type: 'file', path: `./${providerFile(source)}`, 'health-check': healthCheck, override }
     for (const chain of input.chains ?? []) {
       const via = { 'additional-prefix': `${chainPrefix(source.name, chain.index)} · `, 'dialer-proxy': chainProxy(chain.index) }
       // The copy reads the file the source itself keeps (a subscription is downloaded once, by the source).
-      providers[`${providerName(source)}-via${chain.index}`] = { type: 'file', path: `./providers/${source.id}.${source.kind === 'subscription' ? 'yaml' : 'txt'}`, override: via }
+      providers[`${providerName(source)}-via${chain.index}`] = { type: 'file', path: `./${providerFile(source)}`, override: via }
     }
   }
   // UDP on: a subscription node of a UDP protocol (Hysteria, TUIC) reaches its server through these ports.

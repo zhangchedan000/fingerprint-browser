@@ -402,7 +402,9 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     const exitNode = await socksNode(exitAsked)
     const accelNodeA = await socksNode(accelA)
     // The subscription answers a moment later (a real one is downloaded first); the other one has nothing.
+    let refused = false
     const subscription = httpServer((request, response) => {
+      if (refused) return void response.writeHead(403).end('Forbidden')
       if (request.url !== '/sub?token=t') return void response.writeHead(404).end('no')
       setTimeout(() => response.writeHead(200, { 'content-type': 'text/plain' })
         .end(`proxies:\n  - {name: 新加坡 01, type: socks5, server: 127.0.0.1, port: ${exitNode}, udp: false}\n`), 1500)
@@ -440,8 +442,26 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     expect(await roundTrip(viaA, echo, 'subscription through a1')).toBe('subscription through a1')
     expect(accelA).toContain(`127.0.0.1:${exitNode}`)
 
+    // 刷新 while running downloads again; a stopped core (a link that failed) is started again by it.
+    expect((await subscriptions.refreshSubscriptions()).state).toBe('running')
+    await subscriptions.stop()
+    expect((await subscriptions.refreshSubscriptions()).state).toBe('running')
+    // The airport refuses the link for a while (403): the core starts from the last download, windows keep their node,
+    // also through 网络加速.
+    refused = true
+    await subscriptions.stop()
+    const cached = await subscriptions.refreshSubscriptions()
+    expect(cached.state).toBe('running')
+    expect(cached.nodes.map((node) => node.name)).toEqual(['EM · 新加坡 01'])
+    expect(await roundTrip(await subscriptions.nodeProxy({ source: 'EM', node: '新加坡 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' }), echo, 'cached through a1')).toBe('cached through a1')
+    refused = false
+
     // A link that gives no nodes: refused with the reason, the subscriptions as they were, still running.
-    await expect(subscriptions.addSource({ name: '坏的', kind: 'subscription', content: `http://127.0.0.1:${web}/wrong` })).rejects.toThrow('没有从「坏的」取到节点')
+    const refusedAt = Date.now()
+    await expect(subscriptions.addSource({ name: '坏的', kind: 'subscription', content: `http://127.0.0.1:${web}/wrong` })).rejects.toThrow('取到节点')
+    // (The core said the download failed: no waiting out the 20 seconds; the reason is in the message.)
+    expect(Date.now() - refusedAt).toBeLessThan(12_000)
+    await expect(subscriptions.addSource({ name: '坏的', kind: 'subscription', content: `http://127.0.0.1:${web}/wrong` })).rejects.toThrow('404')
     const after = await subscriptions.status()
     expect(after.sources.map((source) => source.name)).toEqual(['EM'])
     expect(after.state).toBe('running')
