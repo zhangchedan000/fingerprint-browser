@@ -264,9 +264,10 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     // The window's 网络加速, as a launch would use it.
     const route = validated.tunnel ?? (existing && (!draft.proxyId || draft.proxyId === existing.proxyId) ? existing.tunnel : undefined)
     if (draft.proxyId) {
-      const { protocol, host, port, username, password, apiUrl } = profiles.getProxy(draft.proxyId)
-      // An API proxy is checked with a fresh one, as a launch would get.
-      proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password }
+      const { protocol, host, port, username, password, apiUrl, subscription } = profiles.getProxy(draft.proxyId)
+      // An API proxy is checked with a fresh one, as a launch would get; a subscription node (订阅) has no address
+      // of its own: it is reached through its local port, found when connecting (it must stay marked as one).
+      proxy = apiUrl ? { ...await resolveApiProxy(apiUrl, route) } : { protocol, host, port, username, password, ...(subscription ? { subscription } : {}) }
     } else if (draft.proxy?.apiUrl) {
       const link = validProxyApiUrl(draft.proxy.apiUrl)
       // A saved API window is checked on the proxy it keeps, a new link on the one 检测 took; else one is taken.
