@@ -76,6 +76,10 @@ async function freePort(): Promise<number> {
 /** How long a start waits for subscription links to download (a dead link must not hold the start forever). */
 const SUBSCRIPTION_WAIT_MS = 20_000
 
+async function pathExists(path: string): Promise<boolean> {
+  return access(path).then(() => true, () => false)
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** True once something accepts connections on this local port. */
@@ -229,7 +233,14 @@ export class TunnelManager {
       for (let waited = 0; waited < SUBSCRIPTION_WAIT_MS; waited += 250) {
         if (started.exitCode !== null) break
         const nodes = await read().catch(() => undefined)
-        if (nodes?.length) return { name: source.name, nodes: nodes.map((node) => ({ name: node.name, type: node.type ?? '', udp: node.udp })) }
+        if (nodes?.length) {
+          // What was downloaded is what 添加 then starts from: one download per subscription added.
+          if (source.kind === 'subscription') {
+            const downloaded = await readFile(join(dir, 'providers', 'preview.yaml')).catch(() => undefined)
+            if (downloaded) this.previewed = { link: source.content, content: downloaded, at: Date.now() }
+          }
+          return { name: source.name, nodes: nodes.map((node) => ({ name: node.name, type: node.type ?? '', udp: node.udp })) }
+        }
         if (nodes && source.kind === 'links') break
         // The download failed (the core says so): no need to wait out the time.
         if (/\[Provider\] preview .*error/i.test(output)) break
@@ -551,6 +562,8 @@ export class TunnelManager {
   }
 
   private controllerPort = 0
+  /** The last subscription 获取节点 downloaded (a few minutes): 添加 starts from it instead of downloading again. */
+  private previewed?: { link: string; content: Buffer; at: number }
   /** What the running core printed last (warnings and errors), for the reason a download failed. */
   private coreOutput = ''
 
@@ -616,6 +629,15 @@ export class TunnelManager {
       }
       for (const source of sources) {
         if (source.kind === 'links') await writeFile(join(this.runtimeDir, providerFile(source)), source.content, { mode: 0o600 })
+      }
+      // A subscription just fetched by 获取节点: its download is used (the core takes a fresh file as it is).
+      const previewed = this.previewed
+      const fetched = previewed && Date.now() - previewed.at < 10 * 60_000
+        ? sources.find((source) => source.kind === 'subscription' && source.content === previewed.link) : undefined
+      if (previewed && fetched) {
+        const target = join(this.runtimeDir, providerFile(fetched))
+        if (!await pathExists(target)) await writeFile(target, previewed.content, { mode: 0o600 })
+        this.previewed = undefined
       }
       // The ports of last time when still free (what points at them keeps working), else new ones.
       const last = this.stored.ports

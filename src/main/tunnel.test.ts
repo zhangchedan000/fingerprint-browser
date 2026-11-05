@@ -403,7 +403,9 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     const accelNodeA = await socksNode(accelA)
     // The subscription answers a moment later (a real one is downloaded first); the other one has nothing.
     let refused = false
+    let downloads = 0
     const subscription = httpServer((request, response) => {
+      if (request.url === '/sub?token=t') downloads += 1
       if (refused) return void response.writeHead(403).end('Forbidden')
       if (request.url !== '/sub?token=t') return void response.writeHead(404).end('no')
       setTimeout(() => response.writeHead(200, { 'content-type': 'text/plain' })
@@ -432,7 +434,11 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     const { readdir } = await import('node:fs/promises')
     expect((await readdir(vaults[1]).catch(() => [])).filter((name) => name.startsWith('preview-'))).toEqual([])
 
+    const before = downloads
+    await subscriptions.previewSource({ name: 'EM', kind: 'subscription', content: `http://127.0.0.1:${web}/sub?token=t` })
     const status = await subscriptions.addSource({ name: 'EM', kind: 'subscription', content: `http://127.0.0.1:${web}/sub?token=t` })
+    // 获取节点 then 添加: the airport is asked once (some limit how often a subscription is downloaded).
+    expect(downloads - before).toBe(1)
     expect(status.state).toBe('running')
     expect(status.nodes.map((node) => node.name)).toEqual(['EM · 新加坡 01'])
     const direct = await subscriptions.nodeProxy({ source: 'EM', node: '新加坡 01' })
