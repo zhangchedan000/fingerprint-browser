@@ -158,6 +158,7 @@ const api: BrowserApi = {
     autoSelect: () => ipcRenderer.invoke('tunnel:auto-select'),
     test: () => ipcRenderer.invoke('tunnel:test'),
     refresh: () => ipcRenderer.invoke('tunnel:refresh'),
+    previewSource: (input) => ipcRenderer.invoke('tunnel:preview-source', input),
     onChanged: (listener: (status: TunnelStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: TunnelStatus): void => listener(status)
       ipcRenderer.on('tunnel:changed', handler)
@@ -172,6 +173,7 @@ const api: BrowserApi = {
     removeSource: (id) => ipcRenderer.invoke('subscriptions:remove-source', id),
     test: () => ipcRenderer.invoke('subscriptions:test'),
     refresh: () => ipcRenderer.invoke('subscriptions:refresh'),
+    previewSource: (input) => ipcRenderer.invoke('subscriptions:preview-source', input),
     nodeProxy: (ref) => ipcRenderer.invoke('proxy:subscription-node', ref),
     onChanged: (listener: (status: TunnelStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: TunnelStatus): void => listener(status)

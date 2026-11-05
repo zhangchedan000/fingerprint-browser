@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { createSocket } from 'node:dgram'
 import { connect, createServer, isIP } from 'node:net'
 import { join } from 'node:path'
-import type { TunnelNodeInfo, TunnelRoute, TunnelStatus } from '../shared/types'
+import type { TunnelNodeInfo, TunnelRoute, TunnelSourcePreview, TunnelStatus } from '../shared/types'
 import type { LocalProxy } from './proxy-bridge'
 import { ProxyAgent, request } from 'undici'
 import type { SecretCodec } from './secret-codec'
@@ -43,24 +44,33 @@ interface StoredTunnel {
 
 const EMPTY: StoredTunnel = { schemaVersion: 1, enabled: false, sources: [] }
 
-async function freePort(): Promise<number> {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => resolve())
-  })
-  const port = (server.address() as { port: number }).port
-  await new Promise((resolve) => server.close(resolve))
-  return port
-}
-
-/** Whether this local port can be listened on now. */
+/** Whether this local port can be listened on now, for TCP and for UDP (the listeners take both). */
 async function portFree(port: number): Promise<boolean> {
-  const server = createServer()
-  return new Promise((resolve) => {
+  const tcp = await new Promise<boolean>((resolve) => {
+    const server = createServer()
     server.once('error', () => resolve(false))
     server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)))
   })
+  if (!tcp) return false
+  return new Promise<boolean>((resolve) => {
+    const socket = createSocket('udp4')
+    socket.once('error', () => { socket.close(); resolve(false) })
+    socket.bind(port, '127.0.0.1', () => socket.close(() => resolve(true)))
+  })
+}
+
+/** A local port free for TCP and UDP alike. */
+async function freePort(): Promise<number> {
+  for (let attempt = 0; ; attempt++) {
+    const server = createServer()
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => resolve())
+    })
+    const port = (server.address() as { port: number }).port
+    await new Promise((resolve) => server.close(resolve))
+    if (attempt >= 20 || await portFree(port)) return port
+  }
 }
 
 /** How long a start waits for subscription links to download (a dead link must not hold the start forever). */
@@ -178,6 +188,67 @@ export class TunnelManager {
 
   async available(): Promise<boolean> {
     return access(this.binary).then(() => true, () => false)
+  }
+
+  /**
+   * 获取节点: the nodes a source gives (a subscription link downloaded, pasted links understood), shown
+   * before it is added. A core of its own, run just for this; nothing is saved.
+   */
+  async previewSource(input: { name?: unknown; kind?: unknown; content?: unknown }): Promise<TunnelSourcePreview> {
+    const source = validateTunnelSource(input)
+    if (!await this.available()) throw new Error('当前版本没有附带加速通道组件，请安装最新版指纹浏览器')
+    const dir = join(this.vaultPath, `preview-${randomBytes(4).toString('hex')}`)
+    let child: ChildProcess | undefined
+    let output = ''
+    try {
+      await mkdir(join(dir, 'providers'), { recursive: true })
+      if (source.kind === 'links') await writeFile(join(dir, 'providers', 'preview.txt'), source.content, { mode: 0o600 })
+      const port = await freePort()
+      const secret = randomBytes(16).toString('hex')
+      const config = {
+        'log-level': 'warning', mode: 'rule', 'external-controller': `127.0.0.1:${port}`, secret,
+        'proxy-providers': {
+          preview: source.kind === 'subscription'
+            ? { type: 'http', url: source.content, path: './providers/preview.yaml', interval: 86_400 }
+            : { type: 'file', path: './providers/preview.txt' }
+        },
+        'proxy-groups': [{ name: 'PREVIEW', type: 'select', use: ['preview'] }],
+        rules: ['MATCH,DIRECT']
+      }
+      await writeFile(join(dir, 'config.yaml'), JSON.stringify(config), { mode: 0o600 })
+      const started = spawn(this.binary, ['-d', dir, '-f', join(dir, 'config.yaml')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      child = started
+      const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(-4000) }
+      started.stdout?.on('data', collect)
+      started.stderr?.on('data', collect)
+      const read = async () => {
+        const response = await fetch(`http://127.0.0.1:${port}/providers/proxies/preview`, { headers: { authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(3000) })
+        if (!response.ok) return undefined
+        return ((await response.json()) as { proxies?: Array<{ name: string; type?: string; udp?: boolean }> }).proxies ?? []
+      }
+      for (let waited = 0; waited < SUBSCRIPTION_WAIT_MS; waited += 250) {
+        if (started.exitCode !== null) break
+        const nodes = await read().catch(() => undefined)
+        if (nodes?.length) return { name: source.name, nodes: nodes.map((node) => ({ name: node.name, type: node.type ?? '', udp: node.udp })) }
+        if (nodes && source.kind === 'links') break
+        // The download failed (the core says so): no need to wait out the time.
+        if (/\[Provider\] preview .*error/i.test(output)) break
+        await delay(250)
+      }
+      // The core's own words, without the link (it carries the subscription's key).
+      const reason = output.split(/\r?\n/).filter((line) => /level=(error|warning|fatal)/.test(line)).pop()
+        ?.replace(/^.*msg="?/, '').replace(/"$/, '').replace(/https?:\/\/\S+/g, '<链接>').slice(0, 200)
+      throw new Error(source.kind === 'subscription'
+        ? `没有取到节点：订阅链接下载失败，或者里面没有能用的节点，请检查链接${reason ? `（${reason}）` : ''}`
+        : `没有取到节点：没有识别出能用的节点，请检查节点链接${reason ? `（${reason}）` : ''}`)
+    } finally {
+      if (child && child.exitCode === null) {
+        const exited = new Promise((resolve) => child!.once('exit', resolve))
+        child.kill()
+        await Promise.race([exited, delay(3000)])
+      }
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    }
   }
 
   /** The local port that carries a connection out through the tunnel, while it runs. */
@@ -586,7 +657,7 @@ export class TunnelManager {
       for (const port of [this.mixedPort, this.autoPort, ...this.slotPorts]) {
         for (let attempt = 0; !await accepting(port); attempt++) {
           if (child.exitCode !== null) throw new Error(`加速通道启动失败：${lastLine(output) || `code=${child.exitCode}`}`)
-          if (attempt > 50) throw new Error('加速通道的本地端口没有打开')
+          if (attempt > 100) throw new Error(`加速通道的本地端口没有打开${lastLine(output) ? `：${lastLine(output).replace(/https?:\/\/\S+/g, '<链接>')}` : ''}`)
           await delay(100)
         }
       }

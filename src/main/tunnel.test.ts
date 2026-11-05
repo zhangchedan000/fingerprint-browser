@@ -419,6 +419,17 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     })
     managers.push(subscriptions)
 
+    // 获取节点 first: what the link gives, nothing saved, nothing left behind.
+    const preview = await subscriptions.previewSource({ name: 'EM', kind: 'subscription', content: `http://127.0.0.1:${web}/sub?token=t` })
+    expect(preview).toEqual({ name: 'EM', nodes: [{ name: '新加坡 01', type: 'Socks5', udp: false }] })
+    expect((await subscriptions.previewSource({ kind: 'links', content: `proxies:\n  - {name: x1, type: socks5, server: 127.0.0.1, port: 1, udp: true}\n` })).nodes.map((node) => node.name)).toEqual(['x1'])
+    const failedAt = Date.now()
+    await expect(subscriptions.previewSource({ name: '坏的', kind: 'subscription', content: `http://127.0.0.1:${web}/wrong` })).rejects.toThrow('没有取到节点')
+    expect(Date.now() - failedAt).toBeLessThan(8000)
+    expect((await subscriptions.status()).sources).toEqual([])
+    const { readdir } = await import('node:fs/promises')
+    expect((await readdir(vaults[1]).catch(() => [])).filter((name) => name.startsWith('preview-'))).toEqual([])
+
     const status = await subscriptions.addSource({ name: 'EM', kind: 'subscription', content: `http://127.0.0.1:${web}/sub?token=t` })
     expect(status.state).toBe('running')
     expect(status.nodes.map((node) => node.name)).toEqual(['EM · 新加坡 01'])

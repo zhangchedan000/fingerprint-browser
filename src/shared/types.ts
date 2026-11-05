@@ -927,6 +927,7 @@ export interface BrowserApi {
     autoSelect: () => Promise<TunnelStatus>
     test: () => Promise<TunnelStatus>
     refresh: () => Promise<TunnelStatus>
+    previewSource: (input: { name?: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelSourcePreview>
     onChanged: (listener: (status: TunnelStatus) => void) => () => void
   }
   /** The account's subscriptions (代理 IP → 订阅): their nodes are window exits (代理方式 订阅). */
@@ -938,6 +939,7 @@ export interface BrowserApi {
     removeSource: (id: string) => Promise<TunnelStatus>
     test: () => Promise<TunnelStatus>
     refresh: () => Promise<TunnelStatus>
+    previewSource: (input: { name?: string; kind: 'links' | 'subscription'; content: string }) => Promise<TunnelSourcePreview>
     /** The library entry of a node (added the first time): windows use it as their proxy. */
     nodeProxy: (ref: SubscriptionNodeRef) => Promise<ProxyRecordView>
     onChanged: (listener: (status: TunnelStatus) => void) => () => void
@@ -1066,6 +1068,13 @@ export interface TunnelNodeInfo {
   exitIp?: string
   /** Whether the node forwards UDP (as the core reports it); a Hysteria / TUIC node chained through it needs this. */
   udp?: boolean
+}
+
+/** 获取节点: what a source gives, before it is added (node names without the source's prefix). */
+export interface TunnelSourcePreview {
+  /** The name it will get (the link's host when none was typed). */
+  name: string
+  nodes: Array<{ name: string; type: string; udp?: boolean }>
 }
 
 export interface TunnelSourceSummary {

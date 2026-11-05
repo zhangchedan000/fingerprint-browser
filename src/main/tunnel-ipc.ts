@@ -19,4 +19,5 @@ export function registerTunnelIpc(tunnel: TunnelManager, channel: 'tunnel' | 'su
   ipcMain.handle(`${channel}:auto-select`, () => tunnel.autoSelect())
   ipcMain.handle(`${channel}:test`, () => tunnel.testDelays())
   ipcMain.handle(`${channel}:refresh`, () => tunnel.refreshSubscriptions())
+  ipcMain.handle(`${channel}:preview-source`, (_event, input: { name?: string; kind?: string; content?: string }) => tunnel.previewSource(input ?? {}))
 }

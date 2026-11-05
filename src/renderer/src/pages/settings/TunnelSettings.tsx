@@ -1,12 +1,11 @@
 import { CheckOutlined, CloseOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { Alert, Button, Input, Modal, Radio, Space, Switch, Table, Typography, type TableColumnsType } from 'antd'
+import { Alert, Button, Modal, Space, Switch, Table, Typography, type TableColumnsType } from 'antd'
 import { useEffect, useState } from 'react'
 import { t, translateMessage as mt } from '../../../../shared/i18n'
 import type { TunnelNodeInfo, TunnelStatus } from '../../../../shared/types'
-import { humanError } from '../../components/format'
 import { DelayText, TUNNEL_STATE_PILL as STATE_PILL } from '../../components/TunnelRouteField'
 import { useWorkspace } from '../../data/workspace'
-import { FetchingNodes, savedSource } from '../../components/subscriptions'
+import { SourceModal } from '../../components/subscriptions'
 
 
 /** Settings → 网络加速: the built-in tunnel that carries foreign window proxies out of the country. */
@@ -16,10 +15,6 @@ export function TunnelSettings() {
   const [busy, setBusy] = useState<string>()
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string>()
-  const [kind, setKind] = useState<'links' | 'subscription'>('links')
-  const [name, setName] = useState('')
-  const [content, setContent] = useState('')
-  const [addError, setAddError] = useState<string>()
 
   useEffect(() => {
     void window.browserApi.tunnel.status().then(setStatus).catch(ws.fail)
@@ -40,48 +35,14 @@ export function TunnelSettings() {
     }
   }
 
-  async function add(): Promise<void> {
-    setBusy('add')
-    setAddError(undefined)
-    try {
-      const next = await (editingId
-        ? window.browserApi.tunnel.updateSource(editingId, { name, kind, content })
-        : window.browserApi.tunnel.addSource({ name, kind, content }))
-      setStatus(next)
-      // While 网络加速 is off nothing is fetched yet (its nodes come when it is turned on).
-      const saved = next.state === 'running' ? savedSource(next, editingId) : undefined
-      if (saved) ws.notify.success(t("「{0}」取到 {1} 个节点", saved.name, saved.nodes))
-      setAdding(false)
-      setEditingId(undefined)
-      setName('')
-      setContent('')
-    } catch (error) {
-      setAddError(humanError(error))
-    } finally {
-      setBusy(undefined)
-    }
-  }
-
   function closeEditor(): void {
     setAdding(false)
     setEditingId(undefined)
-    setName('')
-    setContent('')
-    setAddError(undefined)
   }
 
-  async function edit(id: string): Promise<void> {
-    setBusy('edit')
-    try {
-      const source = await window.browserApi.tunnel.source(id)
-      setEditingId(id)
-      setName(source.name)
-      setKind(source.kind)
-      setContent(source.content)
-      setAddError(undefined)
-      setAdding(true)
-    } catch (error) { ws.fail(error) }
-    finally { setBusy(undefined) }
+  function edit(id: string): void {
+    setEditingId(id)
+    setAdding(true)
   }
 
   function remove(id: string, sourceName: string): void {
@@ -114,7 +75,7 @@ export function TunnelSettings() {
       render: (_, node) => <Space size={4}>
         {node.name === status?.selected && <span className="fb-tunnel-pill is-on"><CheckOutlined />{t("使用中")}</span>}
         {(node.name !== status?.selected || status.selectionMode === 'auto') && <Button size="small" type="link" autoInsertSpace={false} disabled={Boolean(busy)} onClick={() => void run('select', () => window.browserApi.tunnel.select(node.name))}>{t("固定使用")}</Button>}
-        <Button size="small" type="link" autoInsertSpace={false} disabled={Boolean(busy) || !node.sourceId} onClick={() => node.sourceId && void edit(node.sourceId)}>{t("编辑")}</Button>
+        <Button size="small" type="link" autoInsertSpace={false} disabled={Boolean(busy) || !node.sourceId} onClick={() => node.sourceId && edit(node.sourceId)}>{t("编辑")}</Button>
       </Space>
     }
   ]
@@ -148,11 +109,11 @@ export function TunnelSettings() {
               <span key={source.id} className="fb-tunnel-source">
                 <span className={`fb-tunnel-source-kind${source.kind === 'subscription' ? ' is-sub' : ''}`}>{source.kind === 'subscription' ? t("订阅") : t("手动")}</span>
                 <span className="fb-tunnel-source-name" title={source.name}>{source.name}</span>
-                <Button type="text" size="small" icon={<EditOutlined />} title={t("编辑")} disabled={Boolean(busy)} onClick={() => void edit(source.id)} />
+                <Button type="text" size="small" icon={<EditOutlined />} title={t("编辑")} disabled={Boolean(busy)} onClick={() => edit(source.id)} />
                 <Button type="text" size="small" icon={<CloseOutlined />} title={t("删除")} disabled={Boolean(busy)} onClick={() => remove(source.id, source.name)} />
               </span>
             ))}
-            <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => { closeEditor(); setKind('links'); setAdding(true) }} disabled={!status?.available || Boolean(busy)}>{t("添加节点")}</Button>
+            <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => { setEditingId(undefined); setAdding(true) }} disabled={!status?.available || Boolean(busy)}>{t("添加节点")}</Button>
           </div>
           <span className="fb-settings-label">{t("节点选择")}</span>
           <div className="fb-settings-control">
@@ -180,33 +141,21 @@ export function TunnelSettings() {
         </section>
       )}
 
-      <Modal
+      <SourceModal
+        api="tunnel"
         open={adding}
-        title={editingId ? t("编辑节点来源") : t("添加节点")}
-        okText={editingId ? t("保存修改") : t("添加")}
-        cancelText={t("取消")}
-        confirmLoading={busy === 'add'}
-        cancelButtonProps={{ disabled: busy === 'add' }}
-        closable={busy !== 'add'}
-        maskClosable={false}
-        keyboard={false}
-        onOk={() => void add()}
-        onCancel={closeEditor}
-      >
-        <div className="fb-stack">
-          {editingId && <Alert type="info" showIcon title={t("编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。")} />}
-          <Radio.Group optionType="button" value={kind} onChange={(event) => setKind(event.target.value)}
-            options={[{ value: 'links', label: t("粘贴节点链接") }, { value: 'subscription', label: t("订阅链接") }]} />
-          <Input placeholder={t("名称（可选）")} value={name} maxLength={40} onChange={(event) => setName(event.target.value)} />
-          {kind === 'links'
-            ? <Input.TextArea rows={6} value={content} onChange={(event) => setContent(event.target.value)}
-              placeholder={t("每行一个：vless://、vmess://、trojan://、ss://、hysteria2:// 等，也可以粘贴 Clash 配置里的 proxies 部分")} />
-            : <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="https://…" />}
-          <span className="fb-muted">{t("可以用机场的订阅，也可以填自己服务器的节点。节点信息加密保存在本机。")}</span>
-          {busy === 'add' && status?.enabled && <FetchingNodes />}
-          {addError && <Alert type="error" showIcon title={addError} />}
-        </div>
-      </Modal>
+        editingId={editingId}
+        onClose={closeEditor}
+        onSaved={setStatus}
+        kinds={['links', 'subscription']}
+        texts={{
+          addTitle: t("添加节点"),
+          editTitle: t("编辑节点来源"),
+          namePlaceholder: t("名称（可选）"),
+          hint: t("可以用机场的订阅，也可以填自己服务器的节点。节点信息加密保存在本机。"),
+          editHint: t("编辑此来源的名称、节点链接或订阅地址；保存后重新连接加速通道。订阅中的节点由订阅内容管理。")
+        }}
+      />
     </>
   )
 }
