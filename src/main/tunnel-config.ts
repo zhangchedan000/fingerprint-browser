@@ -81,8 +81,18 @@ export function providerFile(source: { id: string; kind: TunnelSourceKind; conte
     : `providers/${source.id}.txt`
 }
 
+/**
+ * Public DNS over HTTPS (AliDNS, DNSPod, Cloudflare; by IP, nothing to look up first) the subscriptions' core
+ * resolves node servers with. The computer's own DNS can answer with a router's fake-ip (198.18.0.0/15), which
+ * only that router understands: a Hysteria / TUIC node reached through 网络加速 then sends its packets abroad
+ * to an address that does not exist there (seen on a user's network). The core asks all three at once.
+ */
+export const NODE_SERVER_DNS = ['https://223.5.5.5/dns-query', 'https://1.12.12.12/dns-query', 'https://1.1.1.1/dns-query']
+
 export interface MihomoConfigInput {
   mixedPort: number
+  /** Resolve node servers with these (DNS over HTTPS) instead of the computer's DNS. */
+  serverDns?: string[]
   /** Local port that always uses the fastest node (a window set to 自动选择最低延迟). */
   autoPort: number
   /** One local port per node slot (nodeSlotGroup). */
@@ -128,6 +138,7 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     'external-controller': `127.0.0.1:${input.controllerPort}`,
     secret: input.secret,
     profile: { 'store-selected': false, 'store-fake-ip': false },
+    ...(input.serverDns?.length ? { dns: { enable: true, ipv6: true, 'enhanced-mode': 'normal', nameserver: input.serverDns, 'proxy-server-nameserver': input.serverDns } } : {}),
     ...(input.chains?.length ? { proxies: input.chains.map((chain) => ({ name: chainProxy(chain.index), type: 'socks5', server: '127.0.0.1', port: chain.port, udp: true })) } : {}),
     'proxy-providers': providers,
     'proxy-groups': [

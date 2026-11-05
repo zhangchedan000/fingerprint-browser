@@ -4,7 +4,7 @@ import { createConnection, createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AUTO_TUNNEL_GROUP, mihomoConfig, validateTunnelSource } from './tunnel-config'
+import { AUTO_TUNNEL_GROUP, mihomoConfig, NODE_SERVER_DNS, validateTunnelSource } from './tunnel-config'
 import { TunnelManager } from './tunnel-manager'
 import { connectThrough } from './proxy-bridge'
 import { identitySecretCodec } from './secret-codec'
@@ -263,6 +263,17 @@ describe('node sources travel with a window', () => {
   })
 })
 
+describe('node servers resolved by DNS over HTTPS (订阅)', () => {
+  it('the subscriptions\' core resolves node servers with public DoH, the acceleration core keeps the computer\'s DNS', () => {
+    const base = { mixedPort: 1, autoPort: 2, slotPorts: [3], probePorts: [4], controllerPort: 5, secret: 's', sources: [] }
+    expect(mihomoConfig({ ...base, serverDns: NODE_SERVER_DNS }).dns).toEqual({
+      enable: true, ipv6: true, 'enhanced-mode': 'normal', nameserver: NODE_SERVER_DNS, 'proxy-server-nameserver': NODE_SERVER_DNS
+    })
+    expect(NODE_SERVER_DNS.every((server) => /^https:\/\/\d+\.\d+\.\d+\.\d+\/dns-query$/.test(server))).toBe(true)
+    expect(mihomoConfig(base).dns).toBeUndefined()
+  })
+})
+
 describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
   const servers: Server[] = []
   const managers: TunnelManager[] = []
@@ -337,7 +348,7 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     // Whether each acceleration node forwards UDP, as the core reports it (the editor warns about c1 for a UDP node).
     expect(Object.fromEntries((await accel.status()).nodes.map((node) => [node.name, node.udp]))).toEqual({ 'Accel · a1': true, 'Accel · b1': true, 'Accel · c1': false })
     const subscriptions = new TunnelManager(vaults[1], identitySecretCodec, core, undefined, undefined, undefined, undefined, {
-      slotCount: 8, alwaysOn: true, chainRoute: async (route) => (await accel.routeProxy(route)).port
+      slotCount: 8, alwaysOn: true, chainRoute: async (route) => (await accel.routeProxy(route)).port, serverDns: NODE_SERVER_DNS
     })
     managers.push(subscriptions)
     const status = await subscriptions.addSource({ name: '机场', kind: 'links', content: [

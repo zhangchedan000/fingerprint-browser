@@ -2,6 +2,7 @@ import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
 import { t } from '../shared/i18n'
 import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
+import { NODE_SERVER_DNS } from './tunnel-config'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
 import { adoptAppCacheKey, APP_CACHE_FOLDER, resolveVaultLocation, vaultPathSync } from './vault-location'
@@ -191,7 +192,7 @@ app.whenReady().then(async () => {
     return (await activeTunnel.routeProxy(route)).port
   }
   const subscriptionNodes = new TunnelManager(join(vaultPath, 'subscriptions'), new ElectronSecretCodec(), tunnelBinary, logger,
-    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 64, alwaysOn: true, chainRoute })
+    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 64, alwaysOn: true, chainRoute, serverDns: NODE_SERVER_DNS })
   subscriptions = subscriptionNodes
   registerTunnelIpc(subscriptionNodes, 'subscriptions', {
     // Windows name their subscription: renamed, they follow (here and, through their configs, elsewhere).

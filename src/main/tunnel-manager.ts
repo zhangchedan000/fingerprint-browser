@@ -126,7 +126,7 @@ export class TunnelManager {
      * it has sources; chainRoute gives the acceleration core's local port of a 网络加速 route (自动, or a
      * fixed acceleration node), which a window's node is reached through when the window has 网络加速 on.
      */
-    private readonly options: { slotCount?: number; alwaysOn?: boolean; chainRoute?: (route: TunnelRoute) => Promise<number> } = {}
+    private readonly options: { slotCount?: number; alwaysOn?: boolean; chainRoute?: (route: TunnelRoute) => Promise<number>; serverDns?: string[] } = {}
   ) {}
 
   /** 网络加速 routes subscription nodes are reached through (route key → number in the node names, local port). */
@@ -578,7 +578,7 @@ export class TunnelManager {
   private async writeConfig(): Promise<void> {
     const sources = this.stored.sources.map((source) => ({ ...source, content: this.codec.decode(source.content) }))
     const chains = [...this.chains.values()]
-    const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, probePorts: this.probePorts, controllerPort: this.controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl, chains })
+    const config = mihomoConfig({ mixedPort: this.mixedPort, autoPort: this.autoPort, slotPorts: this.slotPorts, probePorts: this.probePorts, controllerPort: this.controllerPort, secret: this.secret, sources, delayTestUrl: this.delayTestUrl, chains, serverDns: this.options.serverDns })
     await writeFile(join(this.runtimeDir, 'config.yaml'), JSON.stringify(config, null, 2), { mode: 0o600 })
   }
 
