@@ -1997,7 +1997,8 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           </Row>
         </>
       )}
-      {proxyProtocol !== 'direct' && (
+      {/* 订阅: the switch is there from the start (before the node is picked), like for any other proxy. */}
+      {(proxyProtocol !== 'direct' || (proxyMode === 'library' && subscriptionPick)) && (
         <Row
           label={t("网络加速")}
           hint={subscriptionTunnelHint}
