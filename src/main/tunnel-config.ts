@@ -33,11 +33,14 @@ export const probeGroup = (index: number) => `TUNNEL-PROBE-${index + 1}`
 export const DELAY_TEST_URL = 'https://www.gstatic.com/generate_204'
 
 /**
- * Subscription nodes (订阅) a window reaches through 网络加速: a second copy of each source whose nodes
- * dial out through CHAIN_PROXY (a local relay to the acceleration tunnel). Their names carry the mark.
+ * Subscription nodes (订阅) a window reaches through 网络加速: one more copy of each source per
+ * acceleration route in use (自动, or a fixed acceleration node), whose nodes dial out through that
+ * route's local port on the acceleration core (SOCKS5 with UDP, so Hysteria / TUIC nodes go too).
+ * Their names carry the mark and the route's number: "机场 ⇢2 · 香港 01".
  */
 export const CHAIN_MARK = ' ⇢'
-export const CHAIN_PROXY = 'CHAIN'
+export const chainProxy = (index: number) => `ACCEL-${index}`
+export const chainPrefix = (source: string, index: number) => `${source}${CHAIN_MARK}${index}`
 
 export function providerName(source: Pick<TunnelSource, 'id'>): string {
   return `source-${source.id}`
@@ -78,8 +81,8 @@ export interface MihomoConfigInput {
   secret: string
   delayTestUrl?: string
   sources: Array<Pick<TunnelSource, 'id' | 'name' | 'kind' | 'content'>>
-  /** Local relay port to the acceleration tunnel: each source is also offered through it (CHAIN_MARK). */
-  chainPort?: number
+  /** Acceleration routes in use (their local port on the acceleration core): each source is also offered through each. */
+  chains?: Array<{ index: number; port: number }>
 }
 
 /** mihomo reads YAML; JSON is valid YAML, so the config is written as JSON. */
@@ -92,16 +95,17 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     providers[providerName(source)] = source.kind === 'subscription'
       ? { type: 'http', url: source.content, path: `./providers/${source.id}.yaml`, interval: 86_400, 'health-check': healthCheck, override }
       : { type: 'file', path: `./providers/${source.id}.txt`, 'health-check': healthCheck, override }
-    if (input.chainPort) {
-      const via = { 'additional-prefix': `${source.name}${CHAIN_MARK} · `, 'dialer-proxy': CHAIN_PROXY }
-      providers[`${providerName(source)}-via`] = source.kind === 'subscription'
-        ? { type: 'http', url: source.content, path: `./providers/${source.id}-via.yaml`, interval: 86_400, override: via }
+    for (const chain of input.chains ?? []) {
+      const via = { 'additional-prefix': `${chainPrefix(source.name, chain.index)} · `, 'dialer-proxy': chainProxy(chain.index) }
+      providers[`${providerName(source)}-via${chain.index}`] = source.kind === 'subscription'
+        ? { type: 'http', url: source.content, path: `./providers/${source.id}-via${chain.index}.yaml`, interval: 86_400, override: via }
         : { type: 'file', path: `./providers/${source.id}.txt`, override: via }
     }
   }
-  const listener = (name: string, port: number, proxy: string) => ({ name, type: 'mixed', listen: '127.0.0.1', port, udp: false, proxy })
+  // UDP on: a subscription node of a UDP protocol (Hysteria, TUIC) reaches its server through these ports.
+  const listener = (name: string, port: number, proxy: string) => ({ name, type: 'mixed', listen: '127.0.0.1', port, udp: true, proxy })
   // The copies through 网络加速 are only for windows' slots: no speed tests or probes through the tunnel.
-  const base = Object.keys(providers).filter((name) => !name.endsWith('-via'))
+  const base = Object.keys(providers).filter((name) => !/-via\d+$/.test(name))
   return {
     'mixed-port': input.mixedPort,
     'bind-address': '127.0.0.1',
@@ -113,7 +117,7 @@ export function mihomoConfig(input: MihomoConfigInput): Record<string, unknown> 
     'external-controller': `127.0.0.1:${input.controllerPort}`,
     secret: input.secret,
     profile: { 'store-selected': false, 'store-fake-ip': false },
-    ...(input.chainPort ? { proxies: [{ name: CHAIN_PROXY, type: 'http', server: '127.0.0.1', port: input.chainPort }] } : {}),
+    ...(input.chains?.length ? { proxies: input.chains.map((chain) => ({ name: chainProxy(chain.index), type: 'socks5', server: '127.0.0.1', port: chain.port, udp: true })) } : {}),
     'proxy-providers': providers,
     'proxy-groups': [
       { name: AUTO_TUNNEL_GROUP, type: 'url-test', use: base, url: input.delayTestUrl ?? DELAY_TEST_URL, interval: 300, tolerance: 50, lazy: false },

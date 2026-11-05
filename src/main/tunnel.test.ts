@@ -36,9 +36,9 @@ describe('tunnel sources', () => {
     // Per-window ports: the fastest node, and node slots that reject until pointed at a node.
     expect(config['proxy-groups'][2]).toMatchObject({ name: 'TUNNEL-NODE-1', type: 'select', proxies: ['REJECT'], use: ['source-a', 'source-b'] })
     expect(config.listeners).toEqual([
-      { name: 'auto', type: 'mixed', listen: '127.0.0.1', port: 1002, udp: false, proxy: AUTO_TUNNEL_GROUP },
-      { name: 'node-1', type: 'mixed', listen: '127.0.0.1', port: 1003, udp: false, proxy: 'TUNNEL-NODE-1' },
-      { name: 'node-2', type: 'mixed', listen: '127.0.0.1', port: 1004, udp: false, proxy: 'TUNNEL-NODE-2' }
+      { name: 'auto', type: 'mixed', listen: '127.0.0.1', port: 1002, udp: true, proxy: AUTO_TUNNEL_GROUP },
+      { name: 'node-1', type: 'mixed', listen: '127.0.0.1', port: 1003, udp: true, proxy: 'TUNNEL-NODE-1' },
+      { name: 'node-2', type: 'mixed', listen: '127.0.0.1', port: 1004, udp: true, proxy: 'TUNNEL-NODE-2' }
     ])
   })
 })
@@ -294,53 +294,104 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true })
   })
   const roundTrip = async (via: { type: 'http' | 'socks4' | 'socks5'; host: string; port: number }, echo: number, text: string) => {
-    const socket = await connectThrough(via, '127.0.0.1', echo)
-    const reply = new Promise<string>((done) => socket.once('data', (data) => done(data.toString())))
-    socket.resume()
-    socket.write(text)
-    const answer = await reply
-    socket.destroy()
-    return answer
+    const attempt = (async () => {
+      const socket = await connectThrough(via, '127.0.0.1', echo)
+      const reply = new Promise<string>((done) => socket.once('data', (data) => done(data.toString())))
+      socket.resume()
+      socket.write(text)
+      const answer = await reply
+      socket.destroy()
+      return answer
+    })()
+    return Promise.race([attempt, new Promise<string>((_, fail) => setTimeout(() => fail(new Error(`no answer: ${text}`)), 15_000))])
   }
 
-  it('goes out from the chosen node, directly or through 网络加速, and refuses a node that is gone', async () => {
+  it('goes out from the chosen node: directly, through 网络加速 自动 or a fixed acceleration node, UDP nodes too; never a node that is gone', async () => {
     const echo = await listen(createServer((socket) => socket.pipe(socket)))
     const exitAsked: string[] = []
-    const accelAsked: string[] = []
+    const accelA: string[] = []
+    const accelB: string[] = []
     const exitNode = await socksNode(exitAsked)
-    const accelNode = await socksNode(accelAsked)
-    for (let index = 0; index < 2; index++) vaults.push(await mkdtemp(join(tmpdir(), 'subscription-')))
-    // 网络加速 (its own core), and the relay a chained subscription node dials through.
+    const accelNodeA = await socksNode(accelA)
+    const accelNodeB = await socksNode(accelB)
+    for (let index = 0; index < 3; index++) vaults.push(await mkdtemp(join(tmpdir(), 'subscription-')))
+    // A Hysteria2 node (QUIC over UDP): a third core serving it on this computer, self-signed.
+    const { execFileSync, spawn } = await import('node:child_process')
+    const { writeFile } = await import('node:fs/promises')
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-days', '1', '-subj', '/CN=hy2.test',
+      '-keyout', join(vaults[2], 'key.pem'), '-out', join(vaults[2], 'cert.pem')], { stdio: 'ignore' })
+    const hy2Port = await new Promise<number>((done) => { const probe = createServer().listen(0, '127.0.0.1', () => { const port = (probe.address() as { port: number }).port; probe.close(() => done(port)) }) })
+    await writeFile(join(vaults[2], 'config.yaml'), JSON.stringify({
+      'log-level': 'warning', mode: 'rule', rules: ['MATCH,DIRECT'],
+      listeners: [{ name: 'hy2-in', type: 'hysteria2', listen: '127.0.0.1', port: hy2Port, users: { tester: 'secret-pass' }, certificate: join(vaults[2], 'cert.pem'), 'private-key': join(vaults[2], 'key.pem') }]
+    }))
+    const hy2 = spawn(core, ['-d', vaults[2], '-f', join(vaults[2], 'config.yaml')], { stdio: 'ignore' })
+    servers.push({ close: () => hy2.kill() } as unknown as Server)
+    await new Promise((done) => setTimeout(done, 1500))
+
+    // 网络加速 (its own core) with two acceleration nodes; a window's route is 自动 or one of them.
     const accel = new TunnelManager(vaults[0], identitySecretCodec, core)
     managers.push(accel)
-    await accel.addSource({ name: 'Accel', kind: 'links', content: `proxies:\n  - {name: a1, type: socks5, server: 127.0.0.1, port: ${accelNode}, udp: false}\n` })
+    await accel.addSource({ name: 'Accel', kind: 'links', content: `proxies:\n  - {name: a1, type: socks5, server: 127.0.0.1, port: ${accelNodeA}, udp: true}\n  - {name: b1, type: direct, udp: true}\n  - {name: c1, type: socks5, server: 127.0.0.1, port: ${accelNodeA}}\n` })
     expect((await accel.setEnabled(true)).state).toBe('running')
-    const proxyChain = (await import('proxy-chain')).default
-    const relay = new proxyChain.Server({ host: '127.0.0.1', port: 0, prepareRequestFunction: async () => ({ upstreamProxyUrl: `http://127.0.0.1:${(await accel.routeProxy({ mode: 'auto' })).port}` }) })
-    await relay.listen()
-    servers.push({ close: () => void relay.close(true) } as unknown as Server)
-
-    const subscriptions = new TunnelManager(vaults[1], identitySecretCodec, core, undefined, undefined, undefined, undefined, { slotCount: 4, alwaysOn: true, chainPort: async () => relay.port })
+    // Whether each acceleration node forwards UDP, as the core reports it (the editor warns about c1 for a UDP node).
+    expect(Object.fromEntries((await accel.status()).nodes.map((node) => [node.name, node.udp]))).toEqual({ 'Accel · a1': true, 'Accel · b1': true, 'Accel · c1': false })
+    const subscriptions = new TunnelManager(vaults[1], identitySecretCodec, core, undefined, undefined, undefined, undefined, {
+      slotCount: 8, alwaysOn: true, chainRoute: async (route) => (await accel.routeProxy(route)).port
+    })
     managers.push(subscriptions)
-    const status = await subscriptions.addSource({ name: '机场', kind: 'links', content: `proxies:\n  - {name: 香港 01, type: socks5, server: 127.0.0.1, port: ${exitNode}, udp: false}\n` })
-    // Runs by itself (nothing to turn on); the node is listed once (not its copy through 网络加速).
+    const status = await subscriptions.addSource({ name: '机场', kind: 'links', content: [
+      'proxies:',
+      `  - {name: 香港 01, type: socks5, server: 127.0.0.1, port: ${exitNode}, udp: false}`,
+      `  - {name: 日本 HY2, type: hysteria2, server: 127.0.0.1, port: ${hy2Port}, password: secret-pass, sni: hy2.test, skip-cert-verify: true}`,
+      ''
+    ].join('\n') })
     expect(status.enabled).toBe(true)
     await expect(subscriptions.addSource({ name: '机场', kind: 'links', content: 'proxies:\n  - {name: x, type: socks5, server: 127.0.0.1, port: 1, udp: false}\n' })).rejects.toThrow('同名')
 
-    const direct = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, false)
+    // Directly from the node.
+    const direct = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' })
     expect(await roundTrip(direct, echo, 'from the node')).toBe('from the node')
     expect(exitAsked).toContain(`127.0.0.1:${echo}`)
-    // No speed test goes through 网络加速: the acceleration node has not been asked for the subscription node yet.
-    expect(accelAsked).not.toContain(`127.0.0.1:${exitNode}`)
-    expect((await subscriptions.status()).nodes.map((node) => node.name)).toEqual(['机场 · 香港 01'])
+    expect((await subscriptions.status()).nodes.map((node) => node.name)).toEqual(['机场 · 香港 01', '机场 · 日本 HY2'])
+    // No speed test goes through 网络加速: the acceleration nodes have not been asked for the subscription node.
+    expect(accelA).not.toContain(`127.0.0.1:${exitNode}`)
 
-    const chained = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, true)
-    expect(chained.port).not.toBe(direct.port)
-    expect(await roundTrip(chained, echo, 'through acceleration')).toBe('through acceleration')
-    // The acceleration node carried the connection to the subscription node, which went on to the site.
-    expect(accelAsked).toContain(`127.0.0.1:${exitNode}`)
+    // Through 网络加速 fixed to a1: the acceleration node a1 carries the connection to the subscription node.
+    const viaA = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' })
+    expect(viaA.port).not.toBe(direct.port)
+    expect(await roundTrip(viaA, echo, 'through a1')).toBe('through a1')
+    expect(accelA).toContain(`127.0.0.1:${exitNode}`)
+    // The window already on the node directly keeps working after the route was added (the core was reloaded, not replaced).
+    expect(await roundTrip(direct, echo, 'still direct')).toBe('still direct')
 
-    await expect(subscriptions.nodeProxy({ source: '机场', node: '不存在' }, false)).rejects.toThrow('没有节点')
-    await expect(subscriptions.nodeProxy({ source: '别的订阅', node: '香港 01' }, false)).rejects.toThrow('已不存在')
-  }, 90_000)
+    // Through 网络加速 自动, and fixed to b1 (another route, another port).
+    const viaAuto = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'auto' })
+    expect(await roundTrip(viaAuto, echo, 'through auto')).toBe('through auto')
+    const asked = accelA.length
+    const viaB = await subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · b1' })
+    expect(new Set([direct.port, viaA.port, viaAuto.port, viaB.port]).size).toBe(4)
+    expect(await roundTrip(viaB, echo, 'through b1')).toBe('through b1')
+    expect(accelA.slice(asked)).not.toContain(`127.0.0.1:${exitNode}`)
+
+    // A Hysteria2 node (UDP): directly, and through 网络加速 fixed to b1 (UDP through the acceleration core).
+    const hyDirect = await subscriptions.nodeProxy({ source: '机场', node: '日本 HY2' })
+    expect(await roundTrip(hyDirect, echo, 'hy2 direct')).toBe('hy2 direct')
+    const hyViaB = await subscriptions.nodeProxy({ source: '机场', node: '日本 HY2' }, { enabled: true, mode: 'manual', node: 'Accel · b1' })
+    expect(await roundTrip(hyViaB, echo, 'hy2 through acceleration')).toBe('hy2 through acceleration')
+    // Through an acceleration node without UDP the Hysteria2 node cannot connect: it fails, it does not go around 网络加速.
+    // (Two windows opening on the same new route at once: both get their node once the route is added.)
+    const [hyViaC, hkViaC] = await Promise.all([
+      subscriptions.nodeProxy({ source: '机场', node: '日本 HY2' }, { enabled: true, mode: 'manual', node: 'Accel · c1' }),
+      subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · c1' })
+    ])
+    await expect(roundTrip(hyViaC, echo, 'hy2 through c1')).rejects.toThrow()
+    expect(await roundTrip(hkViaC, echo, 'tcp through c1')).toBe('tcp through c1')
+
+    await expect(subscriptions.nodeProxy({ source: '机场', node: '不存在' })).rejects.toThrow('没有节点')
+    await expect(subscriptions.nodeProxy({ source: '别的订阅', node: '香港 01' })).rejects.toThrow('已不存在')
+    // Through 网络加速 when it cannot run: an error, never a direct connection.
+    await accel.stop()
+    await expect(subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' })).rejects.toThrow()
+  }, 120_000)
 })

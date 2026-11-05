@@ -33,8 +33,8 @@ export function setLocalProxyResolver(resolver?: LocalProxyResolver): void {
   resolveLocalProxy = resolver
 }
 
-/** The local port a subscription node (订阅) runs on for a connection: chained when 网络加速 is on. */
-export type SubscriptionResolver = (node: { source: string; node: string }, chained: boolean) => Promise<LocalProxy>
+/** The local port a subscription node (订阅) runs on for a connection: through the window's 网络加速 route when it has one on. */
+export type SubscriptionResolver = (node: { source: string; node: string }, route?: TunnelRoute) => Promise<LocalProxy>
 
 let resolveSubscription: SubscriptionResolver | undefined
 
@@ -50,7 +50,7 @@ export function setSubscriptionResolver(resolver?: SubscriptionResolver): void {
 export async function subscriptionEndpoint(proxy: ProxyConfig): Promise<ProxyConfig> {
   if (!proxy.subscription) return proxy
   if (!resolveSubscription) throw new Error('订阅节点没有运行')
-  const local = await resolveSubscription(proxy.subscription, proxy.tunnel?.enabled === true)
+  const local = await resolveSubscription(proxy.subscription, proxy.tunnel?.enabled ? proxy.tunnel : undefined)
   return { protocol: 'http', host: local.host, port: local.port, username: '', password: '' }
 }
 

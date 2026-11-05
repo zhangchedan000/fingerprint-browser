@@ -323,9 +323,7 @@ export function validateProxyConfig(input: ProxyConfig): ProxyConfig {
   if (input.tunnel !== undefined) proxy.tunnel = validTunnelRoute(input.tunnel)
   // 订阅: only which node; the local port it runs on is found at each use.
   if (input.subscription !== undefined && proxy.protocol !== 'direct') {
-    // Through 网络加速 a subscription node always takes the fastest acceleration node (one relay for all).
-    const route: TunnelRoute | undefined = proxy.tunnel?.enabled ? { enabled: true, mode: 'auto' } : proxy.tunnel
-    return { protocol: 'http', host: '', username: '', password: '', subscription: validSubscriptionNode(input.subscription), ...(route ? { tunnel: route } : {}) }
+    return { protocol: 'http', host: '', username: '', password: '', subscription: validSubscriptionNode(input.subscription), ...(proxy.tunnel ? { tunnel: proxy.tunnel } : {}) }
   }
   if (proxy.protocol === 'direct') {
     if (proxy.apiUrl) throw new Error('API 提取的代理类型无效')

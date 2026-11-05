@@ -2,7 +2,6 @@ import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
 import { t } from '../shared/i18n'
 import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
-import proxyChain from 'proxy-chain'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
 import { adoptAppCacheKey, APP_CACHE_FOLDER, resolveVaultLocation, vaultPathSync } from './vault-location'
@@ -30,7 +29,7 @@ import { installKernelFontPack } from './language-fonts'
 import { ensureKernelFonts, KERNEL_FONT_PROGRESS } from './kernel-fonts'
 import { TeamManager } from './team/team-manager'
 import { TEAM_FEATURE_ENABLED } from '../shared/team'
-import type { AppPreferences, ProxyDraft } from '../shared/types'
+import type { AppPreferences, ProxyDraft, TunnelRoute } from '../shared/types'
 import { registerTeamIpc } from './team/team-ipc'
 import { readWindowState, windowPlacement, writeWindowState } from './window-state'
 
@@ -184,20 +183,15 @@ app.whenReady().then(async () => {
   registerTunnelIpc(activeTunnel)
 
   // 订阅: the account's subscriptions run in their own copy of the core (nodes as window exits). A
-  // node reached through 网络加速 dials out through a local relay to the acceleration tunnel's fastest
-  // node; with the tunnel off that fails rather than going out from this computer's own IP.
-  let chainRelay: Promise<number> | undefined
-  const chainPort = () => chainRelay ??= (async () => {
-    const relay = new proxyChain.Server({
-      host: '127.0.0.1',
-      port: 0,
-      prepareRequestFunction: async () => ({ upstreamProxyUrl: `http://127.0.0.1:${(await activeTunnel.routeProxy({ mode: 'auto' })).port}` })
-    })
-    await relay.listen()
-    return relay.port
-  })()
+  // window with 网络加速 on reaches its node through its own route on the acceleration core (自动, or
+  // the acceleration node it is fixed to), over SOCKS5 with UDP so Hysteria / TUIC nodes go too; with
+  // the tunnel unable to start that fails rather than going out from this computer's own IP.
+  const chainRoute = async (route: TunnelRoute) => {
+    await activeTunnel.ensureRunning(route)
+    return (await activeTunnel.routeProxy(route)).port
+  }
   const subscriptionNodes = new TunnelManager(join(vaultPath, 'subscriptions'), new ElectronSecretCodec(), tunnelBinary, logger,
-    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 32, alwaysOn: true, chainPort })
+    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 64, alwaysOn: true, chainRoute })
   subscriptions = subscriptionNodes
   registerTunnelIpc(subscriptionNodes, 'subscriptions', {
     // Windows name their subscription: renamed, they follow (here and, through their configs, elsewhere).
@@ -208,10 +202,7 @@ app.whenReady().then(async () => {
     }
   })
   void subscriptionNodes.initialize()
-  setSubscriptionResolver(async (node, chained) => {
-    if (chained) await activeTunnel.ensureRunning({ enabled: true, mode: 'auto' })
-    return subscriptionNodes.nodeProxy(node, chained)
-  })
+  setSubscriptionResolver((node, route) => subscriptionNodes.nodeProxy(node, route))
   registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
   void activeTunnel.initialize()
 

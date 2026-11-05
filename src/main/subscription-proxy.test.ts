@@ -15,11 +15,11 @@ afterEach(async () => {
 })
 
 describe('subscription nodes (订阅) as window proxies', () => {
-  it('keeps only which node; through 网络加速 always the fastest acceleration node', () => {
+  it('keeps only which node, and the window’s 网络加速 route as it is (自动 or a fixed acceleration node)', () => {
     expect(validateProxyConfig({ protocol: 'socks5', host: 'x', port: 1, username: 'u', password: 'p', subscription: { source: ' 机场 ', node: '香港 01' } }))
       .toEqual({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: '香港 01' } })
     expect(validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: 'n' }, tunnel: { enabled: true, mode: 'manual', node: 'US · v' } }).tunnel)
-      .toEqual({ enabled: true, mode: 'auto' })
+      .toEqual({ enabled: true, mode: 'manual', node: 'US · v' })
     expect(() => validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '', node: 'n' } })).toThrow('订阅节点无效')
   })
 
@@ -48,15 +48,16 @@ describe('subscription nodes (订阅) as window proxies', () => {
     expect(reopened.get(window.id).proxy.subscription).toEqual({ source: '机场A', node: '香港 01' })
   })
 
-  it('becomes the node’s local port for each connection, chained when 网络加速 is on, never direct', async () => {
-    const config = validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: 'n' }, tunnel: { enabled: true, mode: 'auto' } })
+  it('becomes the node’s local port for each connection, through the window’s 网络加速 route, never direct', async () => {
+    const config = validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: 'n' }, tunnel: { enabled: true, mode: 'manual', node: 'JP · a' } })
     await expect(subscriptionEndpoint(config)).rejects.toThrow('订阅节点没有运行')
-    const asked: Array<[string, boolean]> = []
-    setSubscriptionResolver(async (ref, chained) => {
-      asked.push([`${ref.source}/${ref.node}`, chained])
+    const asked: Array<[string, unknown]> = []
+    setSubscriptionResolver(async (ref, route) => {
+      asked.push([`${ref.source}/${ref.node}`, route])
       return { type: 'http', host: '127.0.0.1', port: 7001 }
     })
     expect(await subscriptionEndpoint(config)).toEqual({ protocol: 'http', host: '127.0.0.1', port: 7001, username: '', password: '' })
-    expect(asked).toEqual([['机场/n', true]])
+    await subscriptionEndpoint({ ...config, tunnel: { enabled: false, mode: 'auto' } })
+    expect(asked).toEqual([['机场/n', { enabled: true, mode: 'manual', node: 'JP · a' }], ['机场/n', undefined]])
   })
 })

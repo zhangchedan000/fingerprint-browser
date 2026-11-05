@@ -308,6 +308,9 @@ function CheckResults({ items, stale, fixOf, buttons, note }: { items: Fingerpri
   )
 }
 
+/** Subscription node types that run over UDP (QUIC / WireGuard), as the core names them, lower-cased. */
+const UDP_NODE_TYPES = new Set(['hysteria', 'hysteria2', 'tuic', 'wireguard'])
+
 /** A yellow note under a row that does not fit the rest, naming the change its 一键修正 makes. */
 function RowWarning({ children, fix }: { children: ReactNode; fix?: QuickFix }) {
   return (
@@ -1739,6 +1742,21 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       setPickingNode(false)
     }
   }
+  // A Hysteria / TUIC subscription node runs over UDP: through 网络加速 the acceleration node has to forward UDP.
+  const chosenSubscriptionNode = pickedSubscription && libraryProxy?.subscription
+    ? subscriptionNodes(subscriptionStatus, pickedSubscription).find((node) => nodeShortName(pickedSubscription, node) === libraryProxy.subscription?.node)
+    : undefined
+  const udpNodeType = chosenSubscriptionNode && UDP_NODE_TYPES.has(chosenSubscriptionNode.type.toLowerCase()) ? chosenSubscriptionNode.type : undefined
+  const accelWithoutUdp = (tunnelStatus?.nodes ?? []).filter((node) => node.udp === false)
+  const subscriptionTunnelHint = !udpNodeType || !route.enabled
+    ? undefined
+    : route.mode === 'manual'
+      ? accelWithoutUdp.some((node) => node.name === route.node)
+        ? <RowWarning>{t("这个加速节点不转发 UDP，{0} 节点经过它会连不上；请换一个加速节点，或关闭网络加速", udpNodeType)}</RowWarning>
+        : undefined
+      : accelWithoutUdp.length
+        ? <RowWarning>{t("{0} 节点走 UDP：自动选到不转发 UDP 的加速节点时会连不上，建议手动固定一个转发 UDP 的加速节点", udpNodeType)}</RowWarning>
+        : undefined
   const nodeEntry = (node: string) => proxies.find((item) => item.subscription?.source === pickedSubscription?.name && item.subscription?.node === node)
   const subscriptionRows = (
     <>
@@ -1979,7 +1997,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       {proxyProtocol !== 'direct' && (
         <Row
           label={t("网络加速")}
-          hint={libraryProxy?.subscription && route.enabled ? t("订阅节点经过网络加速时，自动走最快的加速节点；UDP 类节点（Hysteria、TUIC）不能再经过网络加速") : undefined}
+          hint={subscriptionTunnelHint}
         >
           <TunnelRouteField
             value={route}

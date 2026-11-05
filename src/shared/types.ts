@@ -1064,6 +1064,8 @@ export interface TunnelNodeInfo {
   delay?: number
   /** The IP websites (and proxy whitelists) see through this node; unset until looked up. */
   exitIp?: string
+  /** Whether the node forwards UDP (as the core reports it); a Hysteria / TUIC node chained through it needs this. */
+  udp?: boolean
 }
 
 export interface TunnelSourceSummary {

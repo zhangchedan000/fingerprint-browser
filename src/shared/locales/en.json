@@ -2745,7 +2745,6 @@
   "订阅名称": "Subscription",
   "订阅名称（不填就用链接的域名）": "Subscription name (blank: the link’s domain)",
   "订阅总数": "Subscriptions",
-  "订阅节点经过网络加速时，自动走最快的加速节点；UDP 类节点（Hysteria、TUIC）不能再经过网络加速": "Through Acceleration a subscription node always takes the fastest acceleration node; UDP-based nodes (Hysteria, TUIC) cannot go through Acceleration",
   "请选择一个节点": "Pick a node",
   "还没有订阅": "No subscriptions yet",
   "还没有订阅，可以添加多个，每个订阅里的节点都能给窗口用": "No subscriptions yet. Add as many as you like; every node in them can be a window’s exit",
@@ -2753,5 +2752,7 @@
   "这个订阅还没有可用节点（刚添加时要等几秒，或到 代理 IP → 订阅 里刷新）": "This subscription has no nodes yet (wait a few seconds after adding it, or refresh in Proxy IP → Subscriptions)",
   "这个订阅还没有可用节点（刚添加时要等几秒，或点「全部刷新」）": "This subscription has no nodes yet (wait a few seconds after adding it, or click “Refresh all”)",
   "选择节点": "Node",
-  "选择订阅": "Subscription"
+  "选择订阅": "Subscription",
+  "这个加速节点不转发 UDP，{0} 节点经过它会连不上；请换一个加速节点，或关闭网络加速": "This tunnel node does not forward UDP, so a {0} node cannot connect through it. Pick another tunnel node or turn the network tunnel off",
+  "{0} 节点走 UDP：自动选到不转发 UDP 的加速节点时会连不上，建议手动固定一个转发 UDP 的加速节点": "A {0} node runs over UDP: if Auto picks a tunnel node that does not forward UDP it cannot connect. Better pin a tunnel node that forwards UDP"
 }
