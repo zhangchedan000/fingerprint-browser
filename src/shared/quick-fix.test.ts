@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localeForCountry } from './network-identity'
-import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneBackers, zoneInCountry } from './quick-fix'
+import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
 import { screenChoices, screenIsCommon } from './screen'
 import { COUNTRY_ZONES } from './windows-time-zones-data'
 import { countryWindowsZones, windowsCountries } from './windows-time-zones'
@@ -108,14 +108,11 @@ describe('time zone against the IP in the same country', () => {
     }
   })
 
-  it('does not call a zone at least two IP databases give a mismatch', () => {
+  it('points out every zone but the one most IP databases give, however the votes split', () => {
     const check = { ok: true, countryCode: 'US', timezone: 'America/New_York', geoConfidence: 'consensus',
-      timezoneVotes: [{ timezone: 'America/New_York', sources: ['ipwho.is', 'ipapi.co', 'ipapi.is'] }, { timezone: 'America/Chicago', sources: ['geojs.io', 'ip.sb'] }, { timezone: 'America/Los_Angeles', sources: ['ipinfo.io'] }] }
+      timezoneVotes: [{ timezone: 'America/New_York', sources: ['ipwho.is', 'ipapi.co'] }, { timezone: 'America/Chicago', sources: ['geojs.io', 'ip.sb'] }, { timezone: 'America/Los_Angeles', sources: ['ipinfo.io'] }] }
     expect(ipZoneMismatch('America/New_York', 'US', check, 'windows')).toBeUndefined()
-    expect(ipZoneMismatch('America/Chicago', 'US', check, 'windows')).toBeUndefined()
-    expect(zoneBackers('America/Chicago', 'US', check, 'windows')).toBe(2)
-    // Only one database says Los Angeles: still pointed out.
+    expect(ipZoneMismatch('America/Chicago', 'US', check, 'windows')).toBe('America/New_York')
     expect(ipZoneMismatch('America/Los_Angeles', 'US', check, 'windows')).toBe('America/New_York')
-    expect(ipZoneMismatch('America/Denver', 'US', check, 'windows')).toBe('America/New_York')
   })
 })

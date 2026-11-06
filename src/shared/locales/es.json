@@ -2763,8 +2763,6 @@
   "先点「获取节点」，看到节点再添加": "Primero pulsa «Obtener nodos» y añade cuando veas los nodos",
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Aún no hay suscripciones. Pulsa «Añadir suscripción» a la derecha: pon el enlace, obtén los nodos y añade cuando los veas",
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Solo se borra de este equipo. Las ventanas en la nube del equipo se conservan; vuelve a añadirlas desde «Equipo → Ventanas en la nube» cuando lo necesites.",
-  "时区 {0}：各家 IP 数据库判断不一，{1} 家给的是这个时区": "Zona horaria {0}: las bases de datos de IP no coinciden; {1} dan esta zona",
-  "各家 IP 数据库判断的时区不一：{0}；现在的时区有 {1} 家支持，打开窗口时不提醒": "Las bases de datos de IP no coinciden en la zona horaria: {0}. {1} dan la zona actual, así que al abrir la ventana no se pregunta",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: la zona horaria no coincide con la IP del proxy",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Entendido, no volver a preguntar para esta IP (se pregunta de nuevo si cambia la IP)"
 }

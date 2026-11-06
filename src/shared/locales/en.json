@@ -2763,8 +2763,6 @@
   "先点「获取节点」，看到节点再添加": "Click “Fetch nodes” first, then add once you see the nodes",
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "No subscriptions yet. Click “Add subscription” on the right: enter the link, fetch the nodes, then add once you see them",
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Deletes it from this computer only. Team cloud windows are kept; add one back from “Team → Cloud windows” when needed.",
-  "时区 {0}：各家 IP 数据库判断不一，{1} 家给的是这个时区": "Time zone {0}: the IP databases disagree; {1} of them give this zone",
-  "各家 IP 数据库判断的时区不一：{0}；现在的时区有 {1} 家支持，打开窗口时不提醒": "The IP databases disagree on the time zone: {0}. {1} of them give the current zone, so opening the window does not ask",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: time zone does not match the proxy IP",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Got it, don’t ask again for this IP (asks again if the IP changes)"
 }
