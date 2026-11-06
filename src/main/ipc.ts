@@ -717,16 +717,16 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await profiles.remove(id)
     await team.forget(id)
   })
-  ipcMain.handle('profiles:launch', async (_event, id: string, options?: { allowGeoConflict?: unknown }) => {
+  ipcMain.handle('profiles:launch', async (_event, id: string, options?: { allowGeoConflict?: unknown; muteZoneNotice?: unknown }) => {
     // The editor reads a window's cookies when it opens (a few seconds): a launch waits for that.
     for (let waited = 0; cookies.isBusy(id) && waited < 30_000; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250))
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
-    return launcher.launch(id, { allowGeoConflict: options?.allowGeoConflict === true }).then(publicProfile)
+    return launcher.launch(id, { allowGeoConflict: options?.allowGeoConflict === true, muteZoneNotice: options?.muteZoneNotice === true }).then(publicProfile)
   })
-  ipcMain.handle('profiles:open-url', (_event, id: string, url: string, options?: { allowGeoConflict?: unknown }) => {
+  ipcMain.handle('profiles:open-url', (_event, id: string, url: string, options?: { allowGeoConflict?: unknown; muteZoneNotice?: unknown }) => {
     if (typeof url !== 'string') throw new Error('网址无效')
     if (cookies.isBusy(id)) throw new Error('该环境正在执行 Cookie 操作')
-    return launcher.openUrl(id, url, { allowGeoConflict: options?.allowGeoConflict === true }).then(publicProfile)
+    return launcher.openUrl(id, url, { allowGeoConflict: options?.allowGeoConflict === true, muteZoneNotice: options?.muteZoneNotice === true }).then(publicProfile)
   })
   ipcMain.handle('profiles:close', (_event, id: string) => launcher.close(id).then(publicProfile))
   ipcMain.handle('profiles:close-all', () => launcher.closeAll())

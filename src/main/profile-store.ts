@@ -3,6 +3,7 @@ import { PROFILE_NAME_MAX_LENGTH, suffixedProfileName } from '../shared/profile-
 import { randomUUID } from 'node:crypto'
 import { copyFile, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { isIP } from 'node:net'
 import type {
   ApiCheckRecord, ApiIpRecord, BrowserProfile, DeletedProfileSummary, GroupDraft, GroupRecord, ProfileBatchClassification, ProfileDraft, ProfileStoreHealth,
   FingerprintConfig, ProxyCheckSummary, ProxyConfig, ProxyDraft, ProxyRecord, ServerPlace, TunnelRoute, WebRtcPolicy, WindowApiProxy
@@ -433,6 +434,7 @@ export class ProfileStore {
         ...this.loadApiPassword(stored),
         favorite: stored.favorite === true,
         ...(stored.testMode === true ? { testMode: true } : {}),
+        ...(typeof stored.zoneNoticeOffIp === 'string' && isIP(stored.zoneNoticeOffIp) ? { zoneNoticeOffIp: stored.zoneNoticeOffIp } : {}),
         status: 'closed',
         lastError: undefined
       })
@@ -1671,6 +1673,16 @@ export class ProfileStore {
       if (value === undefined) delete (fingerprint as unknown as Record<string, unknown>)[key]
     }
     const profile: StoredProfile = { ...current, fingerprint, updatedAt: new Date().toISOString() }
+    this.profiles.set(id, profile)
+    await this.persist()
+    return this.resolve(profile)
+  }
+
+  /** 「这个 IP 不再提醒」 for the time-zone notice (see BrowserProfile.zoneNoticeOffIp); undefined asks again. */
+  async setZoneNoticeOff(id: string, ip: string | undefined): Promise<BrowserProfile> {
+    if (ip !== undefined && !isIP(ip)) throw new Error('出口 IP 无效')
+    const { zoneNoticeOffIp: _old, ...current } = this.stored(id)
+    const profile: StoredProfile = ip ? { ...current, zoneNoticeOffIp: ip } : current
     this.profiles.set(id, profile)
     await this.persist()
     return this.resolve(profile)

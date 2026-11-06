@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { classifyProxyFailure, GEO_SOURCES, geoAnswers, mergeGeoLookups, parseGeoLookup, parseSecondaryGeoLookup } from './proxy-tester'
+import { classifyProxyFailure, GEO_SOURCES, geoAnswers, mergeGeoLookups, parseGeoLookup, parseSecondaryGeoLookup, rememberIpZone, sameIpZone } from './proxy-tester'
 
 describe('proxy geolocation result', () => {
   it('maps location, network and security fields', () => {
@@ -132,6 +132,40 @@ describe('proxy geolocation result', () => {
       { timezone: 'America/Los_Angeles', sources: ['ipinfo.io'] }
     ])
     expect(merged.geoSources).toHaveLength(7)
+  })
+
+  it('decides a tie by the city most services name, then by the services\' order, never by which answered first', () => {
+    const answer = (source: string, city: string, timezone: string) =>
+      ({ source, result: parseSecondaryGeoLookup({ ip: '203.0.113.7', country_code: 'US', city, timezone }, 10) })
+    // 11-06 (the same Frankfort KY IP): two services New York, two Chicago, one Los Angeles; a check came out Chicago.
+    const answers = [
+      answer('geojs.io', '', 'America/Chicago'), answer('ipapi.co', 'Frankfort', 'America/New_York'),
+      answer('ipwho.is', 'Frankfort', 'America/New_York'), answer('ip.sb', 'Frankfort', 'America/Chicago'),
+      answer('ipinfo.io', 'Los Angeles', 'America/Los_Angeles')
+    ]
+    for (const order of [answers, [...answers].reverse(), [answers[3], answers[0], answers[4], answers[2], answers[1]]]) {
+      const merged = mergeGeoLookups(order[0], order[1], order.slice(2))
+      expect(merged.timezone).toBe('America/New_York')
+      expect(merged.city).toBe('Frankfort')
+      expect(merged.timezoneVotes?.map((vote) => [vote.timezone, vote.sources.length])).toEqual([
+        ['America/New_York', 2], ['America/Chicago', 2], ['America/Los_Angeles', 1]
+      ])
+    }
+  })
+
+  it('keeps the zone an IP was given by more services when a later check heard from fewer', () => {
+    const now = Date.parse('2026-11-06T12:00:00Z')
+    const full = { ok: true, latencyMs: 1, ip: '203.0.113.99', timezone: 'America/New_York', geoSources: ['a', 'b', 'c', 'd', 'e'],
+      timezoneVotes: [{ timezone: 'America/New_York', sources: ['a', 'b', 'c'] }, { timezone: 'America/Chicago', sources: ['d', 'e'] }] }
+    expect(sameIpZone(full, now)).toMatchObject({ timezone: 'America/New_York' })
+    // Two services only this time, both Chicago: the earlier, larger vote stands.
+    expect(sameIpZone({ ok: true, latencyMs: 1, ip: '203.0.113.99', timezone: 'America/Chicago', geoSources: ['d', 'e'] }, now + 60_000))
+      .toEqual({ timezone: 'America/New_York', timezoneVotes: full.timezoneVotes })
+    // Another IP: its own answer.
+    expect(sameIpZone({ ok: true, latencyMs: 1, ip: '203.0.113.100', timezone: 'America/Chicago', geoSources: ['d', 'e'] }, now)).toEqual({ timezone: 'America/Chicago' })
+    // Remembered from a saved check (after a restart) the same way.
+    rememberIpZone({ ok: true, ip: '203.0.113.101', timezone: 'America/Denver', geoSources: ['a', 'b', 'c', 'd'], checkedAt: new Date(now).toISOString() })
+    expect(sameIpZone({ ok: true, latencyMs: 1, ip: '203.0.113.101', timezone: 'America/Phoenix', geoSources: ['a', 'b'] }, now)).toEqual({ timezone: 'America/Denver' })
   })
 
   it('leaves the votes out when the services agree', () => {

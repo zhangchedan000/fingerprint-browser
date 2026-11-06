@@ -1,29 +1,43 @@
-import { Button, Modal, Space } from 'antd'
+import { Button, Checkbox, Modal, Space } from 'antd'
 import { DEFAULT_DEVICE_BINDING } from '../../../shared/defaults'
 import { t, translateMessage as mt } from '../../../shared/i18n'
-import { geoConflictConfirmationMessage } from '../../../shared/network-identity'
+import { geoConflictConfirmationMessage, zoneNoticeConfirmation } from '../../../shared/network-identity'
 import type { BrowserProfileView } from '../../../shared/types'
 import { humanError, isEditable } from '../components/format'
 import { orderBatchLaunchProfiles, waitForBatchLaunchGap } from '../pages/windows/batch-launch-order'
 import { useWorkspace } from './workspace'
 
-function confirmGeoConflict(profile: BrowserProfileView, warning: string): Promise<boolean> {
+/**
+ * Asks before opening a window whose proxy region or time zone does not fit. The time-zone notice
+ * also offers 「这个 IP 不再提醒」 (mute: it is not asked again until the exit IP changes).
+ * undefined = cancelled.
+ */
+function confirmGeoConflict(profile: BrowserProfileView, warning: string): Promise<{ mute: boolean } | undefined> {
+  const { text, zoneNotice } = zoneNoticeConfirmation(warning)
   return new Promise((resolve) => {
     let settled = false
-    const settle = (value: boolean): void => {
+    let mute = false
+    const settle = (value: { mute: boolean } | undefined): void => {
       if (settled) return
       settled = true
       resolve(value)
     }
     Modal.confirm({
-      title: t("#{0} {1} 的代理地区存在冲突", profile.serialNumber, profile.name),
-      content: mt(warning),
+      title: zoneNotice ? t("#{0} {1} 的时区和代理 IP 对不上", profile.serialNumber, profile.name) : t("#{0} {1} 的代理地区存在冲突", profile.serialNumber, profile.name),
+      content: zoneNotice
+        ? (
+            <div>
+              <div>{mt(text)}</div>
+              <Checkbox style={{ marginTop: 12 }} onChange={(event) => { mute = event.target.checked }}>{t("知道了，这个 IP 不再提醒（IP 变了会再提醒）")}</Checkbox>
+            </div>
+          )
+        : mt(text),
       okText: t("了解风险，继续打开"),
       cancelText: t("取消"),
       okButtonProps: { danger: true },
-      onOk: () => settle(true),
-      onCancel: () => settle(false),
-      afterClose: () => settle(false)
+      onOk: () => settle({ mute }),
+      onCancel: () => settle(undefined),
+      afterClose: () => settle(undefined)
     })
   })
 }
@@ -103,8 +117,9 @@ export function useWindowLauncher() {
     } catch (error) {
       const warning = geoConflictConfirmationMessage(humanError(error))
       if (!warning) throw error
-      if (!await confirmGeoConflict(profile, warning)) return undefined
-      return window.browserApi.profiles.launch(profile.id, { allowGeoConflict: true })
+      const answer = await confirmGeoConflict(profile, warning)
+      if (!answer) return undefined
+      return window.browserApi.profiles.launch(profile.id, { allowGeoConflict: true, muteZoneNotice: answer.mute })
     }
   }
 
@@ -117,8 +132,9 @@ export function useWindowLauncher() {
     } catch (error) {
       const warning = geoConflictConfirmationMessage(humanError(error))
       if (!warning) throw error
-      if (!await confirmGeoConflict(profile, warning)) return undefined
-      return window.browserApi.profiles.openUrl(profile.id, url, { allowGeoConflict: true })
+      const answer = await confirmGeoConflict(profile, warning)
+      if (!answer) return undefined
+      return window.browserApi.profiles.openUrl(profile.id, url, { allowGeoConflict: true, muteZoneNotice: answer.mute })
     }
   }
 

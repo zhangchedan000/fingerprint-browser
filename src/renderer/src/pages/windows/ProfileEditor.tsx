@@ -2,7 +2,7 @@ import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenIsCommon, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
-import { fittingCountryZone, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
+import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneBackers } from '../../../../shared/quick-fix'
 import {
   Alert,
   AutoComplete,
@@ -841,6 +841,16 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     : undefined
   // The IP's own country but another clock (a new IP elsewhere in it): pointed out, its fix sets the zone and position.
   const ipZone = proxyProtocol !== 'direct' && !regionMismatch ? ipZoneMismatch(fp.timezone, fp.region, lastCheck, fp.platform) : undefined
+  // The IP databases disagree and the window has one of their zones (not the most common one): how they split.
+  const zoneSplit = useMemo(() => {
+    const votes = proxyProtocol !== 'direct' && !regionMismatch ? lastCheck?.timezoneVotes : undefined
+    if (!votes || !fp.timezone || !fp.region || !lastCheck?.ok || !lastCheck.timezone) return undefined
+    if (ipZoneOnComputer(lastCheck.timezone, lastCheck.countryCode, fp.platform) === ipZoneOnComputer(fp.timezone, fp.region, fp.platform)) return undefined
+    const backers = zoneBackers(fp.timezone, fp.region, lastCheck, fp.platform)
+    if (backers < 2) return undefined
+    const text = votes.map((vote) => `${windowsZoneLabel(vote.timezone, getLocale(), fp.region)} ${vote.sources.length}`).join(' / ')
+    return { text, backers }
+  }, [proxyProtocol, regionMismatch, lastCheck, fp.timezone, fp.region, fp.platform])
   // Windows only has its own zones: the picked country's first, then the rest as Windows lists them.
   const timezoneOptions = useMemo(() => {
     const locale = getLocale()
@@ -2306,6 +2316,11 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           <RowWarning fix={ipZoneFixLink}>
             {t("代理 IP 的时区是 {0}，窗口是 {1}，网站能看出时间和 IP 所在地对不上", windowsZoneLabel(ipZone, getLocale(), fp.region), windowsZoneLabel(fp.timezone!, getLocale(), fp.region))}
           </RowWarning>
+        )}
+        {!timezoneMismatch && !ipZone && zoneSplit && (
+          <span className="fb-row-note fb-muted">
+            {t("各家 IP 数据库判断的时区不一：{0}；现在的时区有 {1} 家支持，打开窗口时不提醒", zoneSplit.text, zoneSplit.backers)}
+          </span>
         )}
       </Row>
       <Row label={t("系统语言")} hint={t("Windows 和 Chrome 菜单的语言；字体、语音、设备名跟着它")}>

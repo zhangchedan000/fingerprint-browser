@@ -1,5 +1,16 @@
 import type { ProxyCheckSummary } from '../shared/types'
 
+/** Each IP database's time zone for the IP (only kept when they disagree). */
+function safeTimezoneVotes(value: unknown): ProxyCheckSummary['timezoneVotes'] {
+  if (!Array.isArray(value)) return undefined
+  const votes = value
+    .filter((vote): vote is { timezone: string; sources: string[] } => Boolean(vote) && typeof vote.timezone === 'string' && Array.isArray(vote.sources))
+    .slice(0, 10)
+    .map((vote) => ({ timezone: vote.timezone.slice(0, 64), sources: vote.sources.filter((source): source is string => typeof source === 'string').slice(0, 10).map((source) => source.slice(0, 40)) }))
+    .filter((vote) => vote.sources.length > 0)
+  return votes.length > 1 ? votes : undefined
+}
+
 /** Accepts only a well-formed check result; anything else is dropped. */
 export function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {
   if (!value || typeof value !== 'object') return undefined
@@ -36,6 +47,7 @@ export function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {
       ? check.geoSources.filter((source): source is string => typeof source === 'string').slice(0, 5)
       : undefined,
     geoConflict: typeof check.geoConflict === 'string' ? check.geoConflict.slice(0, 500) : undefined,
+    timezoneVotes: safeTimezoneVotes(check.timezoneVotes),
     rotating: check.rotating === true ? true : undefined,
     failureKind: ['authentication', 'timeout', 'connection', 'unknown'].includes(check.failureKind ?? '') ? check.failureKind : undefined,
     retried: check.retried === true,

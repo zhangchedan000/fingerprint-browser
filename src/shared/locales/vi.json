@@ -2762,5 +2762,9 @@
   "获取节点": "Lấy nút",
   "先点「获取节点」，看到节点再添加": "Bấm “Lấy nút” trước, thấy các nút rồi mới thêm",
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Chưa có đăng ký. Bấm “Thêm đăng ký” bên phải: nhập liên kết, lấy nút, thấy nút rồi mới thêm",
-  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Chỉ xóa trên máy này. Cửa sổ đám mây của nhóm vẫn được giữ; khi cần, thêm lại từ “Nhóm → Cửa sổ đám mây”."
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Chỉ xóa trên máy này. Cửa sổ đám mây của nhóm vẫn được giữ; khi cần, thêm lại từ “Nhóm → Cửa sổ đám mây”.",
+  "时区 {0}：各家 IP 数据库判断不一，{1} 家给的是这个时区": "Múi giờ {0}: các cơ sở dữ liệu IP không thống nhất; {1} nguồn cho múi giờ này",
+  "各家 IP 数据库判断的时区不一：{0}；现在的时区有 {1} 家支持，打开窗口时不提醒": "Các cơ sở dữ liệu IP không thống nhất về múi giờ: {0}. {1} nguồn cho múi giờ hiện tại nên khi mở cửa sổ sẽ không hỏi",
+  "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: múi giờ không khớp với IP proxy",
+  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Đã hiểu, không hỏi lại với IP này (sẽ hỏi lại nếu IP thay đổi)"
 }

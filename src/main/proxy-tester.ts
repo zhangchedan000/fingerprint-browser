@@ -10,6 +10,8 @@ const IP_CHECK_URL = 'https://api.ipify.org?format=json'
 /** A check gives up after this long: a proxy that does not answer is reported, not waited for. */
 export const PROXY_CHECK_DEADLINE_MS = 15_000
 const LOOKUP_TIMEOUT_MS = 8_000
+/** All IP services are asked together; once three have answered, the rest get this much longer. */
+const GEO_GRACE_MS = 2_500
 
 interface GeoLookupResponse {
   success?: boolean
@@ -216,7 +218,7 @@ export const GEO_SOURCES: ReadonlyArray<{ name: string; url: string; parse: (dat
 ]
 
 /** The same services asked about a given IP instead of the asker's own. */
-const PLACE_URLS: Record<string, (ip: string) => string> = {
+export const PLACE_URLS: Record<string, (ip: string) => string> = {
   'ipwho.is': (ip) => `https://ipwho.is/${ip}`,
   'ipapi.co': (ip) => `https://ipapi.co/${ip}/json/`,
   'ipinfo.io': (ip) => `https://ipinfo.io/${ip}/json`,
@@ -264,17 +266,67 @@ export interface GeoAnswer {
  * Angeles for one), so the zone is the majority's, as most sites' databases would place it.
  */
 export function timezoneVotes(answers: GeoAnswer[]): Array<{ timezone: string; sources: string[] }> {
-  const groups = new Map<string, { timezone: string; sources: string[]; first: number }>()
-  answers.forEach(({ source, result }, index) => {
+  // A tie goes to the zone the services naming the most common city give (11-06: Frankfort KY, two
+  // services New York and two Chicago), then to the service listed first in GEO_SOURCES: never chance.
+  const city = majorityCity(answers)
+  const priority = (name: string) => {
+    const index = GEO_SOURCES.findIndex((source) => source.name === name)
+    return index < 0 ? GEO_SOURCES.length : index
+  }
+  const groups = new Map<string, { timezone: string; sources: string[]; cityVotes: number; best: number }>()
+  answers.forEach(({ source, result }) => {
     if (!result.timezone) return
     const key = windowsReportedZone(result.timezone, result.countryCode) ?? result.timezone
-    const group = groups.get(key) ?? { timezone: result.timezone, sources: [], first: index }
+    const group = groups.get(key) ?? { timezone: result.timezone, sources: [], cityVotes: 0, best: Number.MAX_SAFE_INTEGER }
     group.sources.push(source)
+    if (city && result.city?.trim().toLowerCase() === city) group.cityVotes += 1
+    group.best = Math.min(group.best, priority(source))
     groups.set(key, group)
   })
   return [...groups.values()]
-    .sort((x, y) => y.sources.length - x.sources.length || x.first - y.first)
+    .sort((x, y) => y.sources.length - x.sources.length || y.cityVotes - x.cityVotes || x.best - y.best)
     .map(({ timezone, sources }) => ({ timezone, sources }))
+}
+
+/** The city most services name (lower case), when at least two agree. */
+function majorityCity(answers: GeoAnswer[]): string | undefined {
+  const counts = new Map<string, number>()
+  for (const { result } of answers) {
+    const city = result.city?.trim().toLowerCase()
+    if (city) counts.set(city, (counts.get(city) ?? 0) + 1)
+  }
+  const [best] = [...counts.entries()].sort((x, y) => y[1] - x[1])
+  return best && best[1] >= 2 ? best[0] : undefined
+}
+
+/**
+ * The time zone decided for an exit IP is remembered (for IP_ZONE_MEMORY_MS): checking the same IP
+ * again gives the same zone even when a service did not answer this time.
+ */
+const IP_ZONE_MEMORY_MS = 30 * 24 * 60 * 60_000
+const decidedZones = new Map<string, { timezone: string; timezoneVotes?: ProxyTestResult['timezoneVotes']; voters: number; at: number }>()
+
+/** The zone this IP was given before when that came from at least as many services; records this one otherwise. */
+export function sameIpZone(result: ProxyTestResult, now = Date.now()): Pick<ProxyTestResult, 'timezone' | 'timezoneVotes'> {
+  if (!result.ok || !result.ip || !result.timezone || result.rotating) return {}
+  const voters = result.timezoneVotes ? result.timezoneVotes.reduce((sum, vote) => sum + vote.sources.length, 0) : (result.geoSources?.length ?? 0)
+  const known = decidedZones.get(result.ip)
+  if (known && now - known.at < IP_ZONE_MEMORY_MS && known.voters > voters) {
+    return { timezone: known.timezone, ...(known.timezoneVotes ? { timezoneVotes: known.timezoneVotes } : {}) }
+  }
+  decidedZones.set(result.ip, { timezone: result.timezone, ...(result.timezoneVotes ? { timezoneVotes: result.timezoneVotes } : {}), voters, at: now })
+  return { timezone: result.timezone, ...(result.timezoneVotes ? { timezoneVotes: result.timezoneVotes } : {}) }
+}
+
+/** Remembered zones from earlier checks (kept with the windows), so a restart keeps them too. */
+export function rememberIpZone(check: Pick<ProxyTestResult, 'ok' | 'ip' | 'timezone' | 'timezoneVotes' | 'geoSources' | 'rotating'> & { checkedAt?: string }): void {
+  if (!check.ok || !check.ip || !check.timezone || check.rotating) return
+  const at = check.checkedAt ? Date.parse(check.checkedAt) : Date.now()
+  if (Number.isNaN(at)) return
+  const voters = check.timezoneVotes ? check.timezoneVotes.reduce((sum, vote) => sum + vote.sources.length, 0) : (check.geoSources?.length ?? 0)
+  const known = decidedZones.get(check.ip)
+  if (known && (known.voters > voters || (known.voters === voters && known.at >= at))) return
+  decidedZones.set(check.ip, { timezone: check.timezone, ...(check.timezoneVotes ? { timezoneVotes: check.timezoneVotes } : {}), voters, at })
 }
 
 /**
@@ -310,6 +362,9 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
       geoConflict
     }
   }
+  const all = [first, second, ...more]
+  const city = more.length ? majorityCity(all) : undefined
+  const cityAnswer = city ? all.find((answer) => answer.result.city?.trim().toLowerCase() === city)?.result : undefined
   const sameCity = Boolean(a.city && b.city && a.city.toLowerCase() === b.city.toLowerCase())
   // The time zone most databases give (the same country's answers only), not the first one's.
   const votes = timezoneVotes([first, second, ...more].filter((answer) => !answer.result.countryCode || !a.countryCode
@@ -321,7 +376,7 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
     timezone: votes[0]?.timezone ?? a.timezone ?? b.timezone,
     ...(votes.length > 1 ? { timezoneVotes: votes } : {}),
     networkRisk: a.networkRisk ?? b.networkRisk,
-    ...(sameCity ? {} : { city: undefined, region: undefined }),
+    ...(cityAnswer ? { city: cityAnswer.city, region: cityAnswer.region } : sameCity ? {} : { city: undefined, region: undefined }),
     geoConfidence: 'consensus',
     geoSources
   }
@@ -419,9 +474,23 @@ export async function geoAnswers(dispatcher: ProxyAgent | undefined, signal: Abo
       }
     }
   }
-  await Promise.all([worker(), worker()])
+  const workers = Promise.all(Array.from({ length: Math.max(2, Math.min(want, order.length)) }, () => worker()))
+  if (want > 3) {
+    // Every service asked at once: a slow one waits at most GEO_GRACE_MS once three have answered.
+    await new Promise<void>((resolve) => {
+      void workers.then(() => resolve())
+      const poll = setInterval(() => {
+        if (answers.length < 3) return
+        clearInterval(poll)
+        setTimeout(resolve, GEO_GRACE_MS).unref?.()
+      }, 50)
+      void workers.then(() => clearInterval(poll))
+    })
+  } else {
+    await workers
+  }
   if (fatal !== undefined && !answers.length) throw fatal
-  return { answers, failures }
+  return { answers: [...answers], failures: [...failures] }
 }
 
 async function testProxyOnce(config: ProxyConfig, direct: boolean, signal: AbortSignal): Promise<ProxyTestResult> {
@@ -431,19 +500,15 @@ async function testProxyOnce(config: ProxyConfig, direct: boolean, signal: Abort
   try {
     localProxy = await openProxyBridge(config, {}, { direct })
     dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
-    const { answers, failures } = await geoAnswers(dispatcher, signal, startedAt)
+    // Every service at once: the databases often disagree on the time zone (US IPs especially), and
+    // the answer must not depend on which two were picked (11-06: one IP came out LA, New York or Chicago).
+    const found = await geoAnswers(dispatcher, signal, startedAt, GEO_SOURCES, GEO_SOURCES.length)
+    const failures = found.failures
+    const priority = (name: string) => GEO_SOURCES.findIndex((source) => source.name === name)
+    const answers = [...found.answers].sort((x, y) => priority(x.source) - priority(y.source))
     if (answers.length >= 2) {
-      // The two disagree on the time zone (same country, same IP): ask the other services and go by the majority.
-      const [a, b] = answers.map((answer) => answer.result)
-      const zone = (result: ProxyTestResult) => result.timezone && (windowsReportedZone(result.timezone, result.countryCode) ?? result.timezone)
-      let more: GeoAnswer[] = []
-      if (a.ip === b.ip && a.countryCode === b.countryCode && zone(a) && zone(b) && zone(a) !== zone(b) && !signal.aborted) {
-        const asked = new Set(answers.map((answer) => answer.source))
-        const rest = GEO_SOURCES.filter((source) => !asked.has(source.name))
-        more = (await geoAnswers(dispatcher, signal, startedAt, rest, rest.length).catch(() => ({ answers: [] as GeoAnswer[] }))).answers
-          .filter((answer) => !answer.result.ip || answer.result.ip === a.ip)
-      }
-      return { ...mergeGeoLookups(answers[0], answers[1], more), latencyMs: answers[0].result.latencyMs }
+      const merged = mergeGeoLookups(answers[0], answers[1], answers.slice(2).filter((answer) => !answer.result.ip || answer.result.ip === answers[0].result.ip))
+      return { ...merged, ...sameIpZone(merged), latencyMs: Math.min(...answers.map((answer) => answer.result.latencyMs)) }
     }
     if (answers.length === 1) {
       return {

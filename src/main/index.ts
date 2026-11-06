@@ -1,6 +1,7 @@
 import { initializeUiLanguage } from './ui-language'
 import { app, BrowserWindow, dialog, ipcMain, net, screen, session, shell } from 'electron'
 import { instrumentIpc, watchMainStalls } from './timing'
+import { rememberIpZone } from './proxy-tester'
 import { t } from '../shared/i18n'
 import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
 import { NODE_SERVER_DNS } from './tunnel-config'
@@ -170,6 +171,10 @@ app.whenReady().then(async () => {
       previousVersion: kernelMigration.previousVersion,
       bundledVersion: kernelMigration.bundledVersion
     })
+  }
+  // The time zones decided for exit IPs before: the same IP keeps its zone (proxy-tester sameIpZone).
+  for (const check of [...profiles.list().map((profile) => profile.proxyCheck), ...profiles.listProxies().map((proxy) => proxy.check)]) {
+    if (check) rememberIpZone(check)
   }
   const purgedTrash = await profiles.purgeTrashOlderThan(settings.get().recycleRetentionDays)
   if (purgedTrash.length) logger.info('已按保留策略自动清理环境回收站', { count: purgedTrash.length })

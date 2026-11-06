@@ -185,6 +185,16 @@ export function followingLocales(fingerprint: FingerprintConfig, gpuModel?: stri
   return next
 }
 
+/** Marks the confirmation that is only a time-zone notice (it offers 「这个 IP 不再提醒」). */
+export const ZONE_NOTICE_MARKER = '[PRISM_ZONE_NOTICE]'
+
+/** The confirmation text without its marker, and whether it is the time-zone notice. */
+export function zoneNoticeConfirmation(warning: string): { text: string; zoneNotice: boolean } {
+  return warning.startsWith(ZONE_NOTICE_MARKER)
+    ? { text: warning.slice(ZONE_NOTICE_MARKER.length).trimStart(), zoneNotice: true }
+    : { text: warning, zoneNotice: false }
+}
+
 export function geoConflictConfirmationMessage(errorText: string): string | undefined {
   const marker = errorText.indexOf(GEOIP_CONFLICT_CONFIRMATION_PREFIX)
   if (marker < 0) return undefined

@@ -34,13 +34,28 @@ export function ipZoneFix(ipZone: string, country: string | undefined, platform:
 export function ipZoneMismatch(
   windowZone: string | undefined,
   region: string | undefined,
-  check: { ok: boolean; timezone?: string; countryCode?: string; geoConfidence?: string } | null | undefined,
+  check: { ok: boolean; timezone?: string; countryCode?: string; geoConfidence?: string; timezoneVotes?: Array<{ timezone: string; sources: string[] }> } | null | undefined,
   platform: string
 ): string | undefined {
   if (!windowZone || !region || !check?.ok || !check.timezone || !check.countryCode || check.geoConfidence === 'conflict') return undefined
   if (check.countryCode.toUpperCase() !== region.toUpperCase()) return undefined
   const ipZone = ipZoneOnComputer(check.timezone, check.countryCode, platform)
-  return ipZone !== ipZoneOnComputer(windowZone, region, platform) ? ipZone : undefined
+  if (ipZone === ipZoneOnComputer(windowZone, region, platform)) return undefined
+  // The IP databases disagree and at least two give the window's zone: not called a mismatch (the
+  // editor shows how they split, zoneVoteSplit).
+  return zoneBackers(windowZone, region, check, platform) >= 2 ? undefined : ipZone
+}
+
+/** How many IP databases give this zone for the IP (only known when they disagree; 0 otherwise). */
+export function zoneBackers(
+  zone: string,
+  region: string,
+  check: { countryCode?: string; timezoneVotes?: Array<{ timezone: string; sources: string[] }> } | null | undefined,
+  platform: string
+): number {
+  const wanted = ipZoneOnComputer(zone, region, platform)
+  const vote = check?.timezoneVotes?.find((item) => ipZoneOnComputer(item.timezone, check.countryCode ?? region, platform) === wanted)
+  return vote?.sources.length ?? 0
 }
 
 /** Whether a Windows computer in this country can have this zone. */

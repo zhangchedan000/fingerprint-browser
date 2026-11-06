@@ -26,6 +26,8 @@ export type ProxyExitPolicy = 'warn' | 'block'
 export type ProfileStatus = 'closed' | 'starting' | 'running' | 'stopping' | 'orphaned' | 'error'
 export interface ProfileLaunchOptions {
   allowGeoConflict?: boolean
+  /** The time-zone notice answered with 「这个 IP 不再提醒」: not asked again until the exit IP changes. */
+  muteZoneNotice?: boolean
   /** A page to open as an extra tab (openUrl on a closed window). */
   openUrl?: string
 }
@@ -316,6 +318,11 @@ export interface BrowserProfile {
    * closing keeps it on this computer only. Local to this computer; never goes to the cloud.
    */
   testMode?: boolean
+  /**
+   * 「知道了，这个 IP 不再提醒」: the exit IP whose time-zone notice was turned off when opening this
+   * window. Another IP asks again. Local to this computer.
+   */
+  zoneNoticeOffIp?: string
   /** Reference into the proxy library; '' means direct connection. */
   proxyId: string
   /** The referenced proxy, filled in when the window is read; never stored on the window. */

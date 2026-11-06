@@ -22,7 +22,7 @@ import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWi
 import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, locateServer, quickExitIp, testProxy } from './proxy-tester'
-import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
+import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError, ZONE_NOTICE_MARKER } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { sameProxyIdentity } from './profile-secrets'
@@ -364,7 +364,7 @@ export class BrowserLauncher {
     const hostHardware = hostHardwareSnapshot()
     if (profile.apiProxy) {
       // API 提取: the proxy it has while it works; a new one from the link otherwise (checked already).
-      profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true)
+      profile = await this.apiProxyForLaunch(profile, options.allowGeoConflict === true, options.muteZoneNotice === true)
     } else {
       if (profile.proxy.apiUrl) {
         // A library proxy with an API link (from before they moved into the windows): a fresh proxy.
@@ -373,7 +373,7 @@ export class BrowserLauncher {
         profile = this.profiles.get(id)
         this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
       }
-      if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
+      if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true, options.muteZoneNotice === true)
     }
     // The login state came down meanwhile (team windows): the profile data is complete from here on.
     if (loginState) {
@@ -1075,7 +1075,7 @@ export class BrowserLauncher {
    * this IP; elsewhere or rotating, asked first); up to 3 new ones from the link when it stopped
    * working (or there is none: 取消勾选 dropped it). A new one still elsewhere: asked first.
    */
-  private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+  private async apiProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean, muteZoneNotice = false): Promise<BrowserProfile> {
     const region = profile.fingerprint.region?.toUpperCase()
     const outcome = await apiProxyFor(this.profiles, profile.id, this.proxyTester, {
       region: allowGeoConflict ? undefined : region,
@@ -1116,8 +1116,12 @@ export class BrowserLauncher {
       throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} 从 API 换了 ${outcome.fetched} 次 IP 还是不对：${where}；窗口的时区和语言不会自动改，网站可能发现对不上。是否仍要启动？`)
     }
     // The IP's country but another clock (a new IP elsewhere in the country): asked first, never followed.
-    const zone = allowGeoConflict ? undefined : zoneMismatchText(outcome.profile.fingerprint, check)
-    if (zone) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+    const zone = zoneMismatchText(outcome.profile.fingerprint, check)
+    if (zone) {
+      const muted = await this.zoneNoticeMuted(outcome.profile, check.ip, allowGeoConflict && muteZoneNotice)
+      if (!allowGeoConflict && !muted) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX}${ZONE_NOTICE_MARKER} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+      return this.profiles.get(profile.id)
+    }
     return outcome.profile
   }
 
@@ -1145,7 +1149,21 @@ export class BrowserLauncher {
     return result
   }
 
-  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+  /**
+   * 「这个 IP 不再提醒」: true when the window's time-zone notice is off for this exit IP. mute: the user
+   * just ticked it, so it is recorded for this IP (another IP asks again).
+   */
+  private async zoneNoticeMuted(profile: BrowserProfile, ip: string | undefined, mute: boolean): Promise<boolean> {
+    if (!ip) return false
+    if (mute && profile.zoneNoticeOffIp !== ip) {
+      this.onChanged(await this.profiles.setZoneNoticeOff(profile.id, ip))
+      this.logger?.info('时区提醒：用户选了这个 IP 不再提醒', { profileId: profile.id })
+      return true
+    }
+    return profile.zoneNoticeOffIp === ip
+  }
+
+  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean, muteZoneNotice = false): Promise<BrowserProfile> {
     const result = await this.launchProxyCheck(profile)
     const current = this.profiles.get(profile.id)
     if (!sameProxyIdentity(profile.proxy, current.proxy) || profile.proxy.password !== current.proxy.password) {
@@ -1183,7 +1201,8 @@ export class BrowserLauncher {
     }
     const zone = zoneMismatchText(fp, updated.proxyCheck)
     if (zone) {
-      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${zone}；${ZONE_MISMATCH_ADVICE}`)
+      const muted = await this.zoneNoticeMuted(updated, updated.proxyCheck?.ip, allowGeoConflict && muteZoneNotice)
+      if (fp.proxyExitPolicy === 'block' && !allowGeoConflict && !muted) throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX}${ZONE_NOTICE_MARKER} ${zone}；${ZONE_MISMATCH_ADVICE}`)
       this.logger?.error('代理 IP 的时区和窗口的时区不一致', { profileId: profile.id, ipZone: updated.proxyCheck?.timezone, timezone: fp.timezone })
     }
     return updated

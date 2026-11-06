@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { GEOIP_CONFLICT_CONFIRMATION_PREFIX, ZONE_NOTICE_MARKER } from '../shared/network-identity'
 import { defaultProfileDraft as newWindowDraft } from '../shared/defaults'
 
 /** A window whose device-bound sign-in choice is made (new windows ask before their first opening). */
@@ -756,5 +757,48 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await expect(launcher.launch(ids[0])).rejects.toThrow('下载的登录态校验失败')
     expect(order).toEqual(['checked', 'state', 'failed'])
     expect(controller.children.length).toBe(1)
+  })
+
+  it('stops asking about the time zone for an IP the user muted, and asks again when the IP changes', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await useTestKernel(settings, vault)
+    const draft = defaultProfileDraft()
+    draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
+    Object.assign(draft.fingerprint, {
+      networkIdentityMode: 'manual', region: 'US', regionSource: 'ip', timezone: 'America/Los_Angeles', language: 'en-US',
+      acceptLanguages: 'en-US,en', proxyExitPolicy: 'block'
+    })
+    const profile = await profiles.create(draft)
+    let exit = { ip: '47.6.202.29', countryCode: 'US', timezone: 'America/New_York', geoConfidence: 'consensus' as const }
+    const controller = new FakeSpawnController()
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]),
+      async () => ({ ok: true, latencyMs: 1, ...exit }), 3, controller.spawn, 5 * 60_000, async () => undefined)
+    const open = async (count: number, options = {}) => {
+      const started = launcher.launch(profile.id, options)
+      await waitUntil(() => controller.children.length === count)
+      controller.startPending()
+      await started
+      await launcher.close(profile.id)
+    }
+
+    // Asked, marked as the time-zone notice (the dialog offers 「这个 IP 不再提醒」).
+    await expect(launcher.launch(profile.id)).rejects.toThrow(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX}${ZONE_NOTICE_MARKER}`)
+    // Opened anyway without ticking it: asked again next time.
+    await open(1, { allowGeoConflict: true })
+    await expect(launcher.launch(profile.id)).rejects.toThrow('窗口的时区是 America/Los_Angeles')
+    // Ticked: this IP is not asked about again; the window keeps its own time zone.
+    await open(2, { allowGeoConflict: true, muteZoneNotice: true })
+    expect(profiles.get(profile.id).zoneNoticeOffIp).toBe('47.6.202.29')
+    await open(3)
+    expect(controller.arguments[2]).toContain('--timezone=America/Los_Angeles')
+    // Another exit IP (checked again, so not stopped by 出口变化): asked again.
+    exit = { ...exit, ip: '47.6.202.30' }
+    await profiles.setProxyCheck(profile.id, { ok: true, latencyMs: 1, checkedAt: new Date().toISOString(), ...exit })
+    await expect(launcher.launch(profile.id)).rejects.toThrow('代理 IP（47.6.202.30）的时区是 America/New_York')
   })
 })

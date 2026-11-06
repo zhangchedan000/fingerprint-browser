@@ -2762,5 +2762,9 @@
   "获取节点": "Récupérer les nœuds",
   "先点「获取节点」，看到节点再添加": "Cliquez d’abord sur « Récupérer les nœuds », puis ajoutez une fois les nœuds affichés",
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Pas encore d’abonnement. Cliquez sur « Ajouter un abonnement » à droite : saisissez le lien, récupérez les nœuds, puis ajoutez une fois qu’ils s’affichent",
-  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Supprimé de cet ordinateur uniquement. Les fenêtres cloud de l’équipe sont conservées ; rajoutez-les depuis « Équipe → Fenêtres cloud » si besoin."
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Supprimé de cet ordinateur uniquement. Les fenêtres cloud de l’équipe sont conservées ; rajoutez-les depuis « Équipe → Fenêtres cloud » si besoin.",
+  "时区 {0}：各家 IP 数据库判断不一，{1} 家给的是这个时区": "Fuseau horaire {0} : les bases de données IP ne concordent pas ; {1} donnent ce fuseau",
+  "各家 IP 数据库判断的时区不一：{0}；现在的时区有 {1} 家支持，打开窗口时不提醒": "Les bases de données IP ne concordent pas sur le fuseau : {0}. {1} donnent le fuseau actuel, l’ouverture de la fenêtre ne demande donc rien",
+  "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1} : le fuseau horaire ne correspond pas à l’IP du proxy",
+  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Compris, ne plus demander pour cette IP (redemande si l’IP change)"
 }
