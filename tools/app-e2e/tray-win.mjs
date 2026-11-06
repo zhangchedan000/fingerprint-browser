@@ -1,9 +1,10 @@
 // Windows, a test launcher on empty test data folders (nothing of the user's is read or changed):
-//   1. Default: closing the main window hides it (the app keeps running, the page is hidden) and notes the
-//      one-time tray tip; closing again still hides; quitting ends the app.
+//   1. Default: closing the main window (WM_CLOSE, what its X sends) hides it (the app keeps running, the page
+//      is hidden) and notes the one-time tray tip; starting the app again shows it; closing again still
+//      hides, the tip not again; quitting ends the app.
 //   2. 「关闭主界面时」 = 退出: closing the main window (no browser windows open) quits the app.
 // node tray-win.mjs <launcher exe> <test folder>   Output: <test folder>\tray.log
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
@@ -32,7 +33,12 @@ async function start(name) {
   const send = (method, params = {}) => new Promise((resolve) => { const id = ++seq; pend.set(id, (m) => resolve(m.result)); s.send(JSON.stringify({ id, method, params })) })
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r?.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'error'); return r?.result?.value }
   for (let i = 0; i < 120; i++) { if (await evaluate('!!(window.browserApi && document.readyState === "complete")').catch(() => false)) break; await delay(500) }
-  return { userData, child, evaluate, exited: () => exited }
+  return { userData, child, port, evaluate, exited: () => exited }
+}
+
+// WM_CLOSE to the app's visible top-level window: the same as clicking its X (renderer window.close() is not).
+function closeMain(pid) {
+  return execFileSync('powershell', ['-NoProfile', '-Command', `(Get-Process -Id ${pid}).CloseMainWindow()`], { encoding: 'utf8' }).trim()
 }
 
 async function waitExit(app, ms) {
@@ -46,13 +52,18 @@ async function waitExit(app, ms) {
   const hint = join(app.userData, 'tray-hint-shown')
   log('1 default closeAction =', JSON.stringify(await app.evaluate('window.browserApi.app.preferences().then((p) => p.closeAction)')))
   log('1 visible before close =', await app.evaluate('document.visibilityState'), 'hint file =', existsSync(hint))
-  await app.evaluate('setTimeout(() => window.close(), 50), true').catch(() => undefined)
+  log('1 X (WM_CLOSE) sent =', closeMain(app.child.pid))
   await delay(2500)
-  log('1 after close: app running =', !app.exited(), 'page =', await app.evaluate('document.visibilityState').catch((e) => 'error ' + e.message), 'hint file =', existsSync(hint))
+  log('1 after X: app running =', !app.exited(), 'page =', await app.evaluate('document.visibilityState').catch((e) => 'error ' + e.message), 'hint file =', existsSync(hint))
   const firstHint = existsSync(hint) ? statSync(hint).mtimeMs : 0
-  await app.evaluate('setTimeout(() => window.close(), 50), true').catch(() => undefined)
+  // Started again (a second copy, as from the desktop icon): the hidden window comes back.
+  const again = spawn(exe, [], { stdio: 'ignore', env: { ...process.env, PRISM_E2E: '1', PRISM_E2E_USER_DATA: app.userData } })
+  await new Promise((r) => again.on('exit', r))
+  await delay(1500)
+  log('1 started again: page =', await app.evaluate('document.visibilityState').catch((e) => 'error ' + e.message))
+  log('1 X again sent =', closeMain(app.child.pid))
   await delay(2000)
-  log('1 after second close: app running =', !app.exited(), 'hint shown once =', existsSync(hint) && statSync(hint).mtimeMs === firstHint)
+  log('1 after X again: app running =', !app.exited(), 'page =', await app.evaluate('document.visibilityState').catch((e) => 'error ' + e.message), 'tip only once =', existsSync(hint) && statSync(hint).mtimeMs === firstHint)
   await app.evaluate('window.browserApi.diagnostics.e2eQuit()').catch(() => undefined)
   log('1 quit: app exited =', await waitExit(app, 30000))
 }
@@ -61,8 +72,8 @@ async function waitExit(app, ms) {
 {
   const app = await start('tray-b')
   log('2 set =', JSON.stringify(await app.evaluate("window.browserApi.app.setPreferences({ closeAction: 'quit' }).then((p) => p.closeAction)")))
-  await app.evaluate('setTimeout(() => window.close(), 50), true').catch(() => undefined)
-  log('2 after close: app exited =', await waitExit(app, 30000))
+  log('2 X (WM_CLOSE) sent =', closeMain(app.child.pid))
+  log('2 after X: app exited =', await waitExit(app, 30000))
   if (!app.exited()) { await app.evaluate('window.browserApi.diagnostics.e2eQuit()').catch(() => undefined); await waitExit(app, 20000) }
 }
 log('DONE')
