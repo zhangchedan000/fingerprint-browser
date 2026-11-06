@@ -243,6 +243,13 @@ async function computer(server: ReturnType<typeof fakeServer>, existingVault?: s
 
 const cookie = (value: string) => ({ name: 'sid', value, domain: '.example.com', path: '/' }) as PortableCookie
 
+
+/** beforeLaunch and the login state it brings (the launcher waits for both before the browser starts). */
+async function opened(team: { beforeLaunch(id: string): Promise<void | { loginState?: Promise<void> }> }, id: string): Promise<void> {
+  const prepared = await team.beforeLaunch(id)
+  if (prepared) await prepared.loginState
+}
+
 describe('TeamManager', () => {
   it('hands a window and its login state from the owner to a member and back', async () => {
     const server = fakeServer()
@@ -281,13 +288,13 @@ describe('TeamManager', () => {
     expect(member.team.links()).toEqual([{ profileId: copyId, teamId: shared.id, readOnly: true, pendingUpload: false }])
     expect(() => member.team.assertEditable(copyId)).toThrow('只有主账号可以修改或导出')
 
-    await member.team.beforeLaunch(copyId)
+    await opened(member.team, copyId)
     expect(await readFile(join(member.profiles.profileDataPath(copyId), 'Default', 'Preferences'), 'utf8')).toBe('from owner')
     expect(member.jars.get(copyId)).toEqual([cookie('owner-session')])
     expect(server.locks.get(shared.id)?.holder).toBe('member1')
 
     // While the member has it, the owner cannot open it.
-    await expect(owner.team.beforeLaunch(local.id)).rejects.toThrow('小A」正在使用')
+    await expect(opened(owner.team, local.id)).rejects.toThrow('小A」正在使用')
 
     // The member's session changes the state; closing uploads it and frees the window.
     await writeFile(join(member.profiles.profileDataPath(copyId), 'Default', 'Preferences'), 'from member')
@@ -298,7 +305,7 @@ describe('TeamManager', () => {
     expect(member.events.map((event) => event.phase)).toEqual(['pulling', 'done', 'pushing', 'done'])
 
     // The owner opens it next and continues from the member's state.
-    await owner.team.beforeLaunch(local.id)
+    await opened(owner.team, local.id)
     expect(await readFile(join(owner.profiles.profileDataPath(local.id), 'Default', 'Preferences'), 'utf8')).toBe('from member')
     expect(owner.jars.get(local.id)).toEqual([cookie('member-session')])
     await owner.team.afterExit(local.id)
@@ -321,21 +328,21 @@ describe('TeamManager', () => {
     const onB = b.team.links()[0].profileId
 
     // A uses it and closes: one login state in the cloud, nothing per computer.
-    await a.team.beforeLaunch(local.id)
+    await opened(a.team, local.id)
     a.jars.set(local.id, [cookie('a-2')])
     await a.team.afterExit(local.id)
     expect(server.records.get(teamId)?.data_rev).toBe(2)
     expect(server.deviceStates.size).toBe(0)
 
     // B (the same account on another computer) opens A's latest, and its close goes over it.
-    await b.team.beforeLaunch(onB)
+    await opened(b.team, onB)
     expect(b.jars.get(onB)).toEqual([cookie('a-2')])
     b.jars.set(onB, [cookie('b-1')])
     await b.team.afterExit(onB)
     expect(server.records.get(teamId)?.data_rev).toBe(3)
 
     // Back on A: B's latest.
-    await a.team.beforeLaunch(local.id)
+    await opened(a.team, local.id)
     expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
     await a.team.launchFailed(local.id)
 
@@ -344,13 +351,13 @@ describe('TeamManager', () => {
     const links = (a.team as unknown as { file: { links: Record<string, { deviceRev?: number; dataRev: number }> } }).file.links
     a.jars.set(local.id, [cookie('a-own-old')])
     links[local.id].deviceRev = 1
-    await a.team.beforeLaunch(local.id)
+    await opened(a.team, local.id)
     expect(a.jars.get(local.id)).toEqual([cookie('b-1')])
     expect(links[local.id].deviceRev).toBeUndefined()
     await a.team.launchFailed(local.id)
     // Already the latest: nothing comes down again.
     a.jars.set(local.id, [cookie('kept-here')])
-    await a.team.beforeLaunch(local.id)
+    await opened(a.team, local.id)
     expect(a.jars.get(local.id)).toEqual([cookie('kept-here')])
     await a.team.launchFailed(local.id)
 
@@ -358,19 +365,19 @@ describe('TeamManager', () => {
     await a.team.share([teamId], ['member1'])
     await member.team.sync()
     const onMember = member.team.links()[0].profileId
-    await member.team.beforeLaunch(onMember)
+    await opened(member.team, onMember)
     expect(member.jars.get(onMember)).toEqual([cookie('b-1')])
     await member.team.launchFailed(onMember)
     expect(server.locks.has(teamId)).toBe(false)
 
     // 测试模式 on B: closing uploads nothing and the next open keeps what is here.
     await b.team.setTestMode(onB, true)
-    await b.team.beforeLaunch(onB)
+    await opened(b.team, onB)
     b.jars.set(onB, [cookie('b-test')])
     await b.team.afterExit(onB)
     expect(server.records.get(teamId)?.data_rev).toBe(3)
     expect(server.locks.has(teamId)).toBe(false)
-    await b.team.beforeLaunch(onB)
+    await opened(b.team, onB)
     expect(b.jars.get(onB)).toEqual([cookie('b-test')])
     await b.team.launchFailed(onB)
     // Cookies edited in 测试模式 stay here too.
@@ -395,7 +402,7 @@ describe('TeamManager', () => {
 
     await owner.profiles.update(local.id, { ...owner.profiles.get(local.id), name: '新名字', startUrls: ['https://example.com/'] })
     await owner.team.afterLocalEdit(local.id)
-    await member.team.beforeLaunch(copyId)
+    await opened(member.team, copyId)
     expect(member.profiles.get(copyId)).toMatchObject({ name: '新名字', startUrls: ['https://example.com/'] })
     await member.team.launchFailed(copyId)
     expect(server.locks.has(shared.id)).toBe(false)
@@ -411,7 +418,7 @@ describe('TeamManager', () => {
     await a.team.sync()
     await b.team.sync()
     const copyId = b.team.links()[0].profileId
-    await b.team.beforeLaunch(copyId)
+    await opened(b.team, copyId)
     // Edited on A while B has it open.
     await a.profiles.update(local.id, { ...a.profiles.get(local.id), name: 'A 改的名字' })
     await a.team.afterLocalEdit(local.id)
@@ -421,7 +428,7 @@ describe('TeamManager', () => {
     expect((record.config as { name: string }).name).toBe('A 改的名字')
     expect(record.data_rev).toBeGreaterThan(0)
     // B takes A's change at its next open.
-    await b.team.beforeLaunch(copyId)
+    await opened(b.team, copyId)
     expect(b.profiles.get(copyId).name).toBe('A 改的名字')
     await b.team.launchFailed(copyId)
   })
@@ -430,11 +437,11 @@ describe('TeamManager', () => {
     const server = fakeServer()
     const owner = await computer(server)
     const local = await owner.profiles.create(defaultProfileDraft())
-    await expect(owner.team.beforeLaunch(local.id)).rejects.toThrow('请先登录')
+    await expect(opened(owner.team, local.id)).rejects.toThrow('请先登录')
     expect(await owner.team.status()).toMatchObject({ server: 'https://temu.orenge.ccwu.cc', user: undefined })
 
     await owner.team.login('http://team.test', 'boss', 'ownerpass')
-    await owner.team.beforeLaunch(local.id)
+    await opened(owner.team, local.id)
 
     // Next start: the saved sign-in cannot be checked, so the app stays on the sign-in page.
     let tries = 0
@@ -778,7 +785,7 @@ describe('TeamManager', () => {
     await owner.team.login('http://team.test', 'boss', 'ownerpass')
     const local = await owner.profiles.create(defaultProfileDraft())
     await owner.team.sync()
-    await owner.team.beforeLaunch(local.id)
+    await opened(owner.team, local.id)
 
     const original = server.fetcher
     const failing = async (input: string | URL | Request, init?: RequestInit) => {
@@ -791,7 +798,7 @@ describe('TeamManager', () => {
     expect(owner.events.at(-1)).toMatchObject({ phase: 'error' })
 
     ;(owner.team as unknown as { api: { fetcher: typeof fetch } }).api.fetcher = original
-    await owner.team.beforeLaunch(local.id)
+    await opened(owner.team, local.id)
     expect(owner.team.links()[0].pendingUpload).toBe(false)
     expect([...server.records.values()][0].data_rev).toBe(2)
     expect(existsSync(join(owner.vault, 'team.json'))).toBe(true)
@@ -822,7 +829,7 @@ describe('TeamManager', () => {
     await owner.team.share([teamId], ['member1'])
     await member.team.sync()
     const copyId = member.team.links()[0].profileId
-    await member.team.beforeLaunch(copyId)
+    await opened(member.team, copyId)
 
     const copyData = member.profiles.profileDataPath(copyId)
     const [installed] = member.extensions.list()
@@ -836,7 +843,7 @@ describe('TeamManager', () => {
     expect(await fingerprintCheckStore(join(member.vault, 'fingerprint-checks.json')).get(copyId)).toEqual({ checkedAt: '2026-10-29T08:00:00.000Z' })
     await member.team.afterExit(copyId)
     // Coming back, the owner's own copy of the extension is used.
-    await owner.team.beforeLaunch(local.id)
+    await opened(owner.team, local.id)
     expect(owner.extensions.list()).toHaveLength(1)
     expect(owner.profiles.get(local.id).extensionIds).toEqual([wallet.id])
   })
@@ -922,7 +929,7 @@ describe('TeamManager with a standby server', () => {
     pair.state[pair.A] = 'down'
     pair.state[pair.B] = 'active'
     ;(pc.team as unknown as { verifiedAt: number }).verifiedAt = 0
-    await pc.team.beforeLaunch(local.id)
+    await opened(pc.team, local.id)
     expect((await pc.team.status()).server).toBe(pair.B)
     await pc.team.launchFailed(local.id)
 

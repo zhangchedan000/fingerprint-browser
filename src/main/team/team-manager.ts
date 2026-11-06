@@ -1492,7 +1492,12 @@ export class TeamManager {
   // ---- open and close ------------------------------------------------------------------
 
   /** Before a linked window starts: take the lock, then bring config and login state up to date. */
-  async beforeLaunch(id: string): Promise<void> {
+  /**
+   * Before a window opens: the lock and the latest config now; the latest login state comes down
+   * meanwhile (loginState), so the launcher checks the proxy at the same time and waits for it only
+   * before the browser starts.
+   */
+  async beforeLaunch(id: string): Promise<void | { loginState: Promise<void> }> {
     if (!this.enabled) return
     if (this.file.localMode) return this.touch(id)
     await this.verifySession()
@@ -1503,8 +1508,13 @@ export class TeamManager {
     const api = this.requireApi()
     await api.lock(link.teamId, hostname())
     this.locked.add(id)
+    const failed = async (error: unknown): Promise<never> => {
+      this.onSync({ profileId: id, phase: 'error', message: error instanceof Error ? error.message : String(error) })
+      await this.release(id)
+      throw error
+    }
+    let record: RemoteProfile
     try {
-      let record: RemoteProfile
       try {
         record = await api.getProfile(link.teamId)
       } catch (error) {
@@ -1530,25 +1540,27 @@ export class TeamManager {
         await this.applyCloudExtras(id, record.config)
         link.configRev = record.config_rev
       }
-      // Every computer opens the latest login state (whoever closed the window last). 0.5.55–0.5.57 kept
-      // a copy per computer and could open this computer's own older copy (deviceRev set): then the
-      // latest from another computer is brought once even at the same revision.
-      const ownCopyHere = link.deviceRev !== undefined && Boolean(record.data_device) && record.data_device !== this.device.id
-      if ((record.data_rev > link.dataRev || ownCopyHere) && record.data) {
-        this.logger?.info('[登录态] 打开窗口：拉云端最新的登录状态', { profileId: id, rev: record.data_rev, localRev: link.dataRev, from: record.data_device_name || undefined, uploadedAt: record.updated })
-        await this.pullState(id, record)
-        link.dataRev = record.data_rev
+    } catch (error) {
+      return failed(error)
+    }
+    // Every computer opens the latest login state (whoever closed the window last). 0.5.55–0.5.57 kept
+    // a copy per computer and could open this computer's own older copy (deviceRev set): then the
+    // latest from another computer is brought once even at the same revision.
+    const latest = record
+    const loginState = (async () => {
+      const ownCopyHere = link.deviceRev !== undefined && Boolean(latest.data_device) && latest.data_device !== this.device.id
+      if ((latest.data_rev > link.dataRev || ownCopyHere) && latest.data) {
+        this.logger?.info('[登录态] 打开窗口：拉云端最新的登录状态', { profileId: id, rev: latest.data_rev, localRev: link.dataRev, from: latest.data_device_name || undefined, uploadedAt: latest.updated })
+        await this.pullState(id, latest)
+        link.dataRev = latest.data_rev
       } else {
-        this.logger?.info('[登录态] 打开窗口：本机已是云端最新，不用下载', { profileId: id, rev: record.data_rev })
+        this.logger?.info('[登录态] 打开窗口：本机已是云端最新，不用下载', { profileId: id, rev: latest.data_rev })
       }
       link.deviceRev = undefined
       await this.save()
       this.startHeartbeat(id, link.teamId)
-    } catch (error) {
-      this.onSync({ profileId: id, phase: 'error', message: error instanceof Error ? error.message : String(error) })
-      await this.release(id)
-      throw error
-    }
+    })().catch(failed)
+    return { loginState }
   }
 
   /**

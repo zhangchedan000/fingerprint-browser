@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultProfileDraft as newWindowDraft } from '../shared/defaults'
 
 /** A window whose device-bound sign-in choice is made (new windows ask before their first opening). */
@@ -680,5 +680,81 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     await warned
     await launcher.close(profile.id)
 
+  })
+
+  it('opens with one exit-IP request when the IP is the last check\'s, and checks fully when it changed', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
+    temporaryPaths.push(vault)
+    const profiles = new ProfileStore(vault)
+    const settings = new SettingsStore(vault)
+    const extensions = new ExtensionStore(vault)
+    await Promise.all([profiles.initialize(), settings.initialize(), extensions.initialize()])
+    await useTestKernel(settings, vault)
+    const draft = defaultProfileDraft()
+    draft.proxy = { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' }
+    Object.assign(draft.fingerprint, { networkIdentityMode: 'manual', region: 'US', regionSource: 'ip', timezone: 'America/Chicago', language: 'en-US', acceptLanguages: 'en-US,en', proxyExitPolicy: 'warn' })
+    const profile = await profiles.create(draft)
+    const exit = { ip: '47.6.202.29', countryCode: 'US', timezone: 'America/Chicago', latitude: 32.7, longitude: -97.3, geoConfidence: 'consensus' as const }
+    const full = vi.fn(async () => ({ ok: true, latencyMs: 900, ...exit }))
+    let quickIp = exit.ip
+    const quick = vi.fn(async () => ({ ip: quickIp, latencyMs: 300 }))
+    const controller = new FakeSpawnController()
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, extensions, undefined, new FakeProcessInspector([]),
+      full, 3, controller.spawn, 5 * 60_000, quick)
+    const open = async (count: number) => {
+      const started = launcher.launch(profile.id)
+      await waitUntil(() => controller.children.length === count)
+      controller.startPending()
+      await started
+      await launcher.close(profile.id)
+    }
+
+    // No check yet: the full one.
+    await open(1)
+    expect([quick.mock.calls.length, full.mock.calls.length]).toEqual([0, 1])
+    // Same IP: the one request only; the place and time zone of the full check stay.
+    await open(2)
+    expect([quick.mock.calls.length, full.mock.calls.length]).toEqual([1, 1])
+    expect(profiles.get(profile.id).proxyCheck).toMatchObject({ ok: true, ip: exit.ip, timezone: 'America/Chicago', latencyMs: 300, exitChanged: false })
+    // Another IP (or no answer): the full check again.
+    quickIp = '47.6.202.30'
+    await open(3)
+    expect([quick.mock.calls.length, full.mock.calls.length]).toEqual([2, 2])
+    quick.mockResolvedValueOnce(undefined as never)
+    await open(4)
+    expect([quick.mock.calls.length, full.mock.calls.length]).toEqual([3, 3])
+  })
+
+  it('checks the proxy while the login state comes down, and starts the browser only once it is in', async () => {
+    const { profiles, launcher, controller, ids } = await launchFixture(1)
+    await profiles.update(ids[0], { ...profiles.get(ids[0]), proxy: { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' } })
+    let finishState!: () => void
+    const order: string[] = []
+    launcher.setLaunchHooks({
+      beforeLaunch: async () => ({ loginState: new Promise<void>((resolve) => { finishState = () => { order.push('state'); resolve() } }) }),
+      launchFailed: async () => { order.push('failed') },
+      afterExit: async () => undefined
+    })
+    const started = launcher.launch(ids[0])
+    await waitUntil(() => profiles.get(ids[0]).proxyCheck !== undefined)
+    order.push('checked')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(controller.children.length).toBe(0)
+    finishState()
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await started
+    expect(order).toEqual(['checked', 'state'])
+    await launcher.close(ids[0])
+
+    // A login state that fails cancels the launch (and the window is released).
+    launcher.setLaunchHooks({
+      beforeLaunch: async () => ({ loginState: Promise.reject(new Error('下载的登录态校验失败，请重试')) }),
+      launchFailed: async () => { order.push('failed') },
+      afterExit: async () => undefined
+    })
+    await expect(launcher.launch(ids[0])).rejects.toThrow('下载的登录态校验失败')
+    expect(order).toEqual(['checked', 'state', 'failed'])
+    expect(controller.children.length).toBe(1)
   })
 })

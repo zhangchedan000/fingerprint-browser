@@ -496,6 +496,29 @@ async function testProxyOnce(config: ProxyConfig, direct: boolean, signal: Abort
 }
 
 /**
+ * Only the exit IP, with one request (opening a window: when it is the IP of the last full check,
+ * that check's place and time zone still hold). Undefined when it did not answer: a full check
+ * then says why.
+ */
+export async function quickExitIp(config: ProxyConfig, deadlineMs = LOOKUP_TIMEOUT_MS): Promise<{ ip: string; latencyMs: number } | undefined> {
+  const signal = AbortSignal.timeout(deadlineMs)
+  const startedAt = Date.now()
+  let localProxy: string | undefined
+  let dispatcher: ProxyAgent | undefined
+  try {
+    localProxy = await openProxyBridge(config)
+    dispatcher = localProxy ? new ProxyAgent(localProxy) : undefined
+    const data = await lookupJson<{ ip?: string }>(IP_CHECK_URL, dispatcher, signal)
+    return data.ip && isIP(data.ip) ? { ip: data.ip, latencyMs: Date.now() - startedAt } : undefined
+  } catch {
+    return undefined
+  } finally {
+    await dispatcher?.destroy().catch(() => undefined)
+    await closeProxyBridge(localProxy)
+  }
+}
+
+/**
  * One check, finished within PROXY_CHECK_DEADLINE_MS: a proxy that does not work is reported
  * quickly, and the user checks again when they want to (no automatic re-runs).
  */

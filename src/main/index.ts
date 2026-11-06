@@ -1,5 +1,6 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, net, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, screen, session, shell } from 'electron'
+import { instrumentIpc, watchMainStalls } from './timing'
 import { t } from '../shared/i18n'
 import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
 import { NODE_SERVER_DNS } from './tunnel-config'
@@ -154,6 +155,9 @@ app.whenReady().then(async () => {
   const settings = new SettingsStore(vaultPath)
   const extensions = new ExtensionStore(vaultPath, logger)
   await logger.initialize()
+  // [计时] slow actions and main-process stalls go to the log (finding what makes the app feel slow).
+  instrumentIpc(ipcMain, logger)
+  watchMainStalls(logger)
   if (vaultLocation.missing) logger.error('设置的数据目录不存在，已改用默认位置', { missing: vaultLocation.missing })
   const appSessionSnapshot = await appSession.begin(app.getVersion())
   if (appSessionSnapshot.previousUnclean) {
@@ -211,22 +215,31 @@ app.whenReady().then(async () => {
   // Windows from before that setting existed keep the old rule: a proxy abroad through the tunnel
   // when it runs, otherwise through the computer's own system proxy (Clash, v2rayN…) when that is
   // on; domestic proxies direct. A window with 网络加速 off connects like the latter.
+  // Every browser connection asks: each route is logged once (not a line per connection).
+  const loggedRoutes = new Set<string>()
+  const logRoute = (message: string, details: Record<string, unknown>) => {
+    const key = `${message}|${JSON.stringify(details)}`
+    if (loggedRoutes.has(key)) return
+    if (loggedRoutes.size > 500) loggedRoutes.clear()
+    loggedRoutes.add(key)
+    logger?.info(message, details)
+  }
   setLocalProxyResolver(async (host, port, route) => {
     if (route?.enabled) {
       const via = await activeTunnel.routeProxy(route)
-      logger?.info('代理经网络加速连接', { proxy: `${host}:${port}`, node: route.mode === 'manual' ? route.node : '自动' })
+      logRoute('代理经网络加速连接', { proxy: `${host}:${port}`, node: route.mode === 'manual' ? route.node : '自动' })
       return via
     }
     const tunnelVia = route ? undefined : activeTunnel.localProxy()
     if (tunnelVia) {
       const record = profiles.listProxies().find((item) => item.host.toLowerCase() === host.toLowerCase() && item.port === port)
       if (record?.check?.countryCode === 'CN') return undefined
-      logger?.info('代理经加速通道连接', { proxy: `${host}:${port}` })
+      logRoute('代理经加速通道连接', { proxy: `${host}:${port}` })
       return tunnelVia
     }
     const target = `https://${host.includes(':') ? `[${host}]` : host}:${port}/`
     const via = parseProxyRule(await session.defaultSession.resolveProxy(target))
-    if (via) logger?.info('代理经本机代理连接', { via: `${via.type} ${via.host}:${via.port}` })
+    if (via) logRoute('代理经本机代理连接', { via: `${via.type} ${via.host}:${via.port}` })
     return via
   })
 

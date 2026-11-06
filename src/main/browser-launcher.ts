@@ -21,7 +21,7 @@ import { safeErrorText } from './redaction'
 import { effectivePlatformVersion, hardwareProfile, hardwareProfileSummary, isWindows11PlatformVersion } from '../shared/hardware-profiles'
 import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-preferences'
 import { hostHardwareSnapshot } from './host-hardware'
-import { classifyProxyFailure, locateServer, testProxy } from './proxy-tester'
+import { classifyProxyFailure, locateServer, quickExitIp, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError } from '../shared/network-identity'
 import { ipZoneMismatch } from '../shared/quick-fix'
 import { windowsFontScript } from '../shared/windows-font-packs'
@@ -36,6 +36,10 @@ import { UNSUPPORTED_KERNEL } from './kernel-features'
 import { kernelFontsReady } from './kernel-fonts'
 
 type ProxyTester = (config: ProxyConfig) => Promise<ProxyTestResult>
+type QuickIpTester = (config: ProxyConfig) => Promise<{ ip: string; latencyMs: number } | undefined>
+
+/** A full check this recent, with the same exit IP now, is reused when a window opens. */
+const REUSE_CHECK_MS = 7 * 24 * 60 * 60_000
 
 /** What a fixed window's clock and its IP in the same country disagree on, for the confirmation; none when they agree. */
 function zoneMismatchText(fp: FingerprintConfig, check: ProxyTestResult | undefined): string | undefined {
@@ -121,8 +125,11 @@ export interface LaunchPrerequisites {
 }
 
 export interface LaunchHooks {
-  /** Before the browser starts, while the window is still closed. Throwing cancels the launch. */
-  beforeLaunch(id: string): Promise<void>
+  /**
+   * Before the browser starts, while the window is still closed. Throwing cancels the launch.
+   * loginState: still coming down; the browser starts only once it is in (the proxy is checked meanwhile).
+   */
+  beforeLaunch(id: string): Promise<void | { loginState?: Promise<void> }>
   /** The launch failed after beforeLaunch succeeded. */
   launchFailed(id: string): Promise<void>
   /** After the browser exited and the window is closed again. */
@@ -130,6 +137,7 @@ export interface LaunchHooks {
 }
 
 export class BrowserLauncher {
+  private readonly quickIpTester?: QuickIpTester
   private hooks?: LaunchHooks
   private readonly processes = new Map<string, RunningBrowser>()
   private readonly orphanProcesses = new Map<string, number>()
@@ -149,8 +157,11 @@ export class BrowserLauncher {
     private readonly proxyTester: ProxyTester = testProxy,
     private readonly maxConcurrentLaunches = 3,
     private readonly browserSpawner: typeof spawn = spawn,
-    private readonly proxyMonitorIntervalMs = 5 * 60_000
+    private readonly proxyMonitorIntervalMs = 5 * 60_000,
+    quickIpTester?: QuickIpTester
   ) {
+    // With the real checker, opening a window asks only for the exit IP when the last check still holds.
+    this.quickIpTester = quickIpTester ?? (proxyTester === testProxy ? quickExitIp : undefined)
     if (!Number.isInteger(maxConcurrentLaunches) || maxConcurrentLaunches < 1 || maxConcurrentLaunches > 20) {
       throw new Error('浏览器并发启动数必须在 1 到 20 之间')
     }
@@ -310,10 +321,15 @@ export class BrowserLauncher {
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
     await this.guardProfileAvailable(id)
     // Hooks may bring a newer config, so the window is read after them.
-    await this.hooks?.beforeLaunch(id)
+    const prepared = await this.hooks?.beforeLaunch(id)
+    const loginState = prepared ? prepared.loginState : undefined
+    // Handled below (startProfile waits for it, or the catch does); never an unhandled rejection meanwhile.
+    loginState?.catch(() => undefined)
     try {
-      return await this.startProfile(id, options)
+      return await this.startProfile(id, options, loginState)
     } catch (error) {
+      // A login state still coming down finishes (or fails) before the window is released.
+      await loginState?.catch(() => undefined)
       await this.hooks?.launchFailed(id).catch((hookError) => {
         this.logger?.error('启动失败后的清理出错', { profileId: id, error: hookError instanceof Error ? hookError.message : String(hookError) })
       })
@@ -321,7 +337,7 @@ export class BrowserLauncher {
     }
   }
 
-  private async startProfile(id: string, options: ProfileLaunchOptions): Promise<BrowserProfile> {
+  private async startProfile(id: string, options: ProfileLaunchOptions, loginState?: Promise<void>): Promise<BrowserProfile> {
     let profile = this.profiles.get(id)
     // Never fall back to the real network when the chosen proxy is gone.
     if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
@@ -358,6 +374,13 @@ export class BrowserLauncher {
         this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
       }
       if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true)
+    }
+    // The login state came down meanwhile (team windows): the profile data is complete from here on.
+    if (loginState) {
+      const waitedAt = Date.now()
+      await loginState
+      const waited = Date.now() - waitedAt
+      if (waited > 300) this.logger?.info('[计时] 等登录态下载完', { profileId: id, ms: waited })
     }
     profile = await this.lockOnLaunch(profile, options.allowGeoConflict === true)
     const selectedHardware = hardwareProfile(profile.fingerprint.hardwareProfileId)
@@ -1098,8 +1121,32 @@ export class BrowserLauncher {
     return outcome.profile
   }
 
-  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+  /**
+   * The proxy check before a window opens. One request for the exit IP first: the same IP as the last
+   * full check (within REUSE_CHECK_MS) keeps that check's country, place and time zone; another IP, no
+   * answer, or no usable last check: the full check (two or three IP services).
+   */
+  private async launchProxyCheck(profile: BrowserProfile): Promise<ProxyTestResult> {
+    const startedAt = Date.now()
+    const last = profile.proxyCheck
+    const reusable = last?.ok && last.ip && last.countryCode && last.timezone && !last.rotating
+      && Date.now() - Date.parse(last.checkedAt) < REUSE_CHECK_MS
+    if (reusable && this.quickIpTester) {
+      const quick = await this.quickIpTester(profile.proxy)
+      if (quick && quick.ip === last.ip) {
+        this.logger?.info('[计时] 启动前出口检测：IP 和上次一样，沿用上次的地区和时区', { profileId: profile.id, ms: Date.now() - startedAt })
+        const { exitChanged: _changed, previousIp: _previous, checkedAt: _at, error: _error, failureKind: _kind, ...kept } = last
+        return { ...kept, ok: true, latencyMs: quick.latencyMs, retried: false }
+      }
+      this.logger?.info('[计时] 启动前出口检测：IP 和上次不同或没回应，完整检测', { profileId: profile.id, ms: Date.now() - startedAt, changed: Boolean(quick) })
+    }
     const result = await this.proxyTester(profile.proxy)
+    this.logger?.info('[计时] 启动前出口检测：完整检测', { profileId: profile.id, ms: Date.now() - startedAt })
+    return result
+  }
+
+  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean): Promise<BrowserProfile> {
+    const result = await this.launchProxyCheck(profile)
     const current = this.profiles.get(profile.id)
     if (!sameProxyIdentity(profile.proxy, current.proxy) || profile.proxy.password !== current.proxy.password) {
       throw new Error('启动检测期间代理配置已变更，请重新启动环境')
