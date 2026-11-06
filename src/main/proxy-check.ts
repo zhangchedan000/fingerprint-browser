@@ -48,6 +48,7 @@ export function safeProxyCheck(value: unknown): ProxyCheckSummary | undefined {
       : undefined,
     geoConflict: typeof check.geoConflict === 'string' ? check.geoConflict.slice(0, 500) : undefined,
     timezoneVotes: safeTimezoneVotes(check.timezoneVotes),
+    timezoneBy: typeof check.timezoneBy === 'string' && check.timezoneBy.length <= 40 ? check.timezoneBy : undefined,
     rotating: check.rotating === true ? true : undefined,
     failureKind: ['authentication', 'timeout', 'connection', 'unknown'].includes(check.failureKind ?? '') ? check.failureKind : undefined,
     retried: check.retried === true,

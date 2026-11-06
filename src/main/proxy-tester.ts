@@ -301,32 +301,46 @@ function majorityCity(answers: GeoAnswer[]): string | undefined {
 
 /**
  * The time zone decided for an exit IP is remembered (for IP_ZONE_MEMORY_MS): checking the same IP
- * again gives the same zone even when a service did not answer this time.
+ * again gives the same zone even when a service did not answer this time. A decision by the measuring
+ * service outranks a count; between two of the same kind, the one from more services stands.
  */
 const IP_ZONE_MEMORY_MS = 30 * 24 * 60 * 60_000
-const decidedZones = new Map<string, { timezone: string; timezoneVotes?: ProxyTestResult['timezoneVotes']; voters: number; at: number }>()
+type ZoneDecision = Pick<ProxyTestResult, 'timezone' | 'timezoneVotes' | 'timezoneBy'>
+const decidedZones = new Map<string, { decision: ZoneDecision; rank: number; at: number }>()
 
-/** The zone this IP was given before when that came from at least as many services; records this one otherwise. */
-export function sameIpZone(result: ProxyTestResult, now = Date.now()): Pick<ProxyTestResult, 'timezone' | 'timezoneVotes'> {
-  if (!result.ok || !result.ip || !result.timezone || result.rotating) return {}
+function zoneRank(result: Pick<ProxyTestResult, 'timezoneVotes' | 'timezoneBy' | 'geoSources'>): number {
   const voters = result.timezoneVotes ? result.timezoneVotes.reduce((sum, vote) => sum + vote.sources.length, 0) : (result.geoSources?.length ?? 0)
-  const known = decidedZones.get(result.ip)
-  if (known && now - known.at < IP_ZONE_MEMORY_MS && known.voters > voters) {
-    return { timezone: known.timezone, ...(known.timezoneVotes ? { timezoneVotes: known.timezoneVotes } : {}) }
+  return (result.timezoneBy ? 100 : 0) + voters
+}
+
+function zoneDecision(result: ZoneDecision): ZoneDecision {
+  return {
+    timezone: result.timezone,
+    ...(result.timezoneVotes ? { timezoneVotes: result.timezoneVotes } : {}),
+    ...(result.timezoneBy ? { timezoneBy: result.timezoneBy } : {})
   }
-  decidedZones.set(result.ip, { timezone: result.timezone, ...(result.timezoneVotes ? { timezoneVotes: result.timezoneVotes } : {}), voters, at: now })
-  return { timezone: result.timezone, ...(result.timezoneVotes ? { timezoneVotes: result.timezoneVotes } : {}) }
+}
+
+/** The zone this IP was given before when that decision outranks this one; records this one otherwise. */
+export function sameIpZone(result: ProxyTestResult, now = Date.now()): ZoneDecision {
+  if (!result.ok || !result.ip || !result.timezone || result.rotating) return {}
+  const rank = zoneRank(result)
+  const known = decidedZones.get(result.ip)
+  if (known && now - known.at < IP_ZONE_MEMORY_MS && known.rank > rank) return known.decision
+  const decision = zoneDecision(result)
+  decidedZones.set(result.ip, { decision, rank, at: now })
+  return decision
 }
 
 /** Remembered zones from earlier checks (kept with the windows), so a restart keeps them too. */
-export function rememberIpZone(check: Pick<ProxyTestResult, 'ok' | 'ip' | 'timezone' | 'timezoneVotes' | 'geoSources' | 'rotating'> & { checkedAt?: string }): void {
+export function rememberIpZone(check: Pick<ProxyTestResult, 'ok' | 'ip' | 'timezone' | 'timezoneVotes' | 'timezoneBy' | 'geoSources' | 'rotating'> & { checkedAt?: string }): void {
   if (!check.ok || !check.ip || !check.timezone || check.rotating) return
   const at = check.checkedAt ? Date.parse(check.checkedAt) : Date.now()
   if (Number.isNaN(at)) return
-  const voters = check.timezoneVotes ? check.timezoneVotes.reduce((sum, vote) => sum + vote.sources.length, 0) : (check.geoSources?.length ?? 0)
+  const rank = zoneRank(check)
   const known = decidedZones.get(check.ip)
-  if (known && (known.voters > voters || (known.voters === voters && known.at >= at))) return
-  decidedZones.set(check.ip, { timezone: check.timezone, ...(check.timezoneVotes ? { timezoneVotes: check.timezoneVotes } : {}), voters, at })
+  if (known && (known.rank > rank || (known.rank === rank && known.at >= at))) return
+  decidedZones.set(check.ip, { decision: zoneDecision(check), rank, at })
 }
 
 /**
@@ -369,6 +383,29 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
   // The time zone most databases give (the same country's answers only), not the first one's.
   const votes = timezoneVotes([first, second, ...more].filter((answer) => !answer.result.countryCode || !a.countryCode
     || answer.result.countryCode.toUpperCase() === a.countryCode.toUpperCase()))
+  // The databases disagree on the zone: the measuring one decides (11-06: most databases put an IP at
+  // its block's registered address in Kentucky; ipinfo.io and the route both say Los Angeles).
+  const measured = votes.length > 1
+    ? all.find((answer) => answer.source === MEASURING_SOURCE && answer.result.timezone && (!answer.result.countryCode || !a.countryCode || answer.result.countryCode.toUpperCase() === a.countryCode.toUpperCase()))?.result
+    : undefined
+  if (measured) {
+    return {
+      ...a,
+      countryCode: a.countryCode ?? b.countryCode,
+      country: a.country ?? b.country,
+      timezone: measured.timezone,
+      timezoneVotes: votes,
+      timezoneBy: MEASURING_SOURCE,
+      city: measured.city,
+      region: measured.region,
+      latitude: measured.latitude,
+      longitude: measured.longitude,
+      accuracyMeters: measured.accuracyMeters,
+      networkRisk: a.networkRisk ?? b.networkRisk,
+      geoConfidence: 'consensus',
+      geoSources
+    }
+  }
   return {
     ...a,
     countryCode: a.countryCode ?? b.countryCode,
@@ -381,6 +418,12 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
     geoSources
   }
 }
+
+/**
+ * The service that places an IP by measuring it (network latency), not by where its block is
+ * registered: when the services disagree on the time zone, its answer is taken.
+ */
+export const MEASURING_SOURCE = 'ipinfo.io'
 
 function errorText(error: unknown): string {
   if (!(error instanceof Error)) return String(error ?? '')

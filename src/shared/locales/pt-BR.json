@@ -2764,5 +2764,6 @@
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Ainda não há assinaturas. Clique em “Adicionar assinatura” à direita: informe o link, obtenha os nós e adicione depois de vê-los",
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Exclui apenas deste computador. As janelas na nuvem da equipe são mantidas; adicione de volta em “Equipe → Janelas na nuvem” quando precisar.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: o fuso horário não corresponde ao IP do proxy",
-  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Entendi, não perguntar de novo para este IP (pergunta de novo se o IP mudar)"
+  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Entendi, não perguntar de novo para este IP (pergunta de novo se o IP mudar)",
+  "以实测定位（{0}）为准": "pela localização medida ({0})"
 }

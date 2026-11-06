@@ -539,6 +539,8 @@ export interface ProxyTestResult {
    * first; `timezone` is the winning group's. Only set when the databases disagree.
    */
   timezoneVotes?: Array<{ timezone: string; sources: string[] }>
+  /** The databases disagreed and this service's measured place decided the zone (ipinfo.io). */
+  timezoneBy?: string
   /** The two lookups saw different exit IPs: the proxy gives a new one for every connection. */
   rotating?: boolean
   /** API 提取 checked in the editor: the address the link gave, and where that server is (not kept with the check). */

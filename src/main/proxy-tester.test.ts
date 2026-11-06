@@ -125,32 +125,41 @@ describe('proxy geolocation result', () => {
       answer('ipapi.is', 'Frankfort', 'America/New_York'), answer('ip.sb', 'Frankfort', 'America/Chicago'),
       answer('ip-api', 'Frankfort', 'America/Detroit')
     ])
-    expect(merged.timezone).toBe('America/New_York')
+    // 11-06: the route shows the IP is in Los Angeles; the measuring service (ipinfo.io) decides, with its place.
+    expect(merged).toMatchObject({ timezone: 'America/Los_Angeles', timezoneBy: 'ipinfo.io', city: 'Los Angeles' })
     expect(merged.timezoneVotes).toEqual([
       { timezone: 'America/New_York', sources: ['ipwho.is', 'ipapi.co', 'ipapi.is', 'ip-api'] },
       { timezone: 'America/Chicago', sources: ['geojs.io', 'ip.sb'] },
       { timezone: 'America/Los_Angeles', sources: ['ipinfo.io'] }
     ])
     expect(merged.geoSources).toHaveLength(7)
+    // Without it (it did not answer): the most votes.
+    const others = [answer('geojs.io', '', 'America/Chicago'), answer('ipwho.is', 'Frankfort', 'America/New_York'), answer('ipapi.co', 'Frankfort', 'America/New_York'),
+      answer('ipapi.is', 'Frankfort', 'America/New_York'), answer('ip.sb', 'Frankfort', 'America/Chicago')]
+    expect(mergeGeoLookups(others[0], others[1], others.slice(2))).toMatchObject({ timezone: 'America/New_York', city: 'Frankfort' })
+    expect(mergeGeoLookups(others[0], others[1], others.slice(2)).timezoneBy).toBeUndefined()
   })
 
-  it('decides a tie by the city most services name, then by the services\' order, never by which answered first', () => {
+  it('without the measuring service, decides a tie by the city most services name, then by the services\' order, never by which answered first', () => {
     const answer = (source: string, city: string, timezone: string) =>
       ({ source, result: parseSecondaryGeoLookup({ ip: '203.0.113.7', country_code: 'US', city, timezone }, 10) })
     // 11-06 (the same Frankfort KY IP): two services New York, two Chicago, one Los Angeles; a check came out Chicago.
     const answers = [
       answer('geojs.io', '', 'America/Chicago'), answer('ipapi.co', 'Frankfort', 'America/New_York'),
       answer('ipwho.is', 'Frankfort', 'America/New_York'), answer('ip.sb', 'Frankfort', 'America/Chicago'),
-      answer('ipinfo.io', 'Los Angeles', 'America/Los_Angeles')
+      answer('ipapi.is', 'Denver', 'America/Denver')
     ]
+    // (ipinfo.io did not answer: with it, its zone decides.)
     for (const order of [answers, [...answers].reverse(), [answers[3], answers[0], answers[4], answers[2], answers[1]]]) {
       const merged = mergeGeoLookups(order[0], order[1], order.slice(2))
       expect(merged.timezone).toBe('America/New_York')
       expect(merged.city).toBe('Frankfort')
       expect(merged.timezoneVotes?.map((vote) => [vote.timezone, vote.sources.length])).toEqual([
-        ['America/New_York', 2], ['America/Chicago', 2], ['America/Los_Angeles', 1]
+        ['America/New_York', 2], ['America/Chicago', 2], ['America/Denver', 1]
       ])
     }
+    const withMeasured = [...answers, answer('ipinfo.io', 'Los Angeles', 'America/Los_Angeles')].reverse()
+    expect(mergeGeoLookups(withMeasured[0], withMeasured[1], withMeasured.slice(2))).toMatchObject({ timezone: 'America/Los_Angeles', timezoneBy: 'ipinfo.io' })
   })
 
   it('keeps the zone an IP was given by more services when a later check heard from fewer', () => {
@@ -166,6 +175,10 @@ describe('proxy geolocation result', () => {
     // Remembered from a saved check (after a restart) the same way.
     rememberIpZone({ ok: true, ip: '203.0.113.101', timezone: 'America/Denver', geoSources: ['a', 'b', 'c', 'd'], checkedAt: new Date(now).toISOString() })
     expect(sameIpZone({ ok: true, latencyMs: 1, ip: '203.0.113.101', timezone: 'America/Phoenix', geoSources: ['a', 'b'] }, now)).toEqual({ timezone: 'America/Denver' })
+    // A decision by the measuring service outranks any count, and is not undone by one.
+    const measured = { ok: true, latencyMs: 1, ip: '203.0.113.99', timezone: 'America/Los_Angeles', timezoneBy: 'ipinfo.io', timezoneVotes: full.timezoneVotes }
+    expect(sameIpZone(measured, now + 120_000)).toMatchObject({ timezone: 'America/Los_Angeles', timezoneBy: 'ipinfo.io' })
+    expect(sameIpZone({ ...full, timezoneVotes: [...full.timezoneVotes, { timezone: 'America/Denver', sources: ['f', 'g'] }] }, now + 180_000)).toMatchObject({ timezone: 'America/Los_Angeles' })
   })
 
   it('leaves the votes out when the services agree', () => {

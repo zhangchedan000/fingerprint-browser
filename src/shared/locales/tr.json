@@ -2764,5 +2764,6 @@
   "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Henüz abonelik yok. Sağdaki “Abonelik ekle”ye tıklayın: bağlantıyı girin, düğümleri alın, gördükten sonra ekleyin",
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Yalnızca bu bilgisayardan silinir. Ekibin bulut pencereleri korunur; gerektiğinde “Ekip → Bulut pencereleri” bölümünden geri ekleyin.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: saat dilimi proxy IP’siyle uyuşmuyor",
-  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Anladım, bu IP için bir daha sorma (IP değişirse yine sorar)"
+  "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Anladım, bu IP için bir daha sorma (IP değişirse yine sorar)",
+  "以实测定位（{0}）为准": "ölçülen konuma göre ({0})"
 }

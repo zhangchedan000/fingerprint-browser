@@ -56,8 +56,8 @@ export function ExitIpCard({ result, stale, notes, typeHint, risk, chosen, aside
   const rows: Array<[string, ReactNode]> = [
     [t("位置"), place],
     [t("时区"), result.timezoneVotes?.length
-      // The databases disagreed: the majority's zone, and how they split.
-      ? `${result.timezone} · ${t("各数据库判断不一：{0}", result.timezoneVotes.map((vote) => `${vote.timezone} ${vote.sources.length}`).join(' / '))}`
+      // The databases disagreed: the decided zone (the measuring service's, or the majority's), and how they split.
+      ? `${result.timezone} · ${t("各数据库判断不一：{0}", result.timezoneVotes.map((vote) => `${vote.timezone} ${vote.sources.length}`).join(' / '))}${result.timezoneBy ? ` · ${t("以实测定位（{0}）为准", result.timezoneBy)}` : ''}`
       : result.timezone],
     [t("坐标"), coordinates],
     [t("网络"), network],
