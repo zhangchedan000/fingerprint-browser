@@ -2761,5 +2761,6 @@
   "重新获取": "Fetch again",
   "获取节点": "Fetch nodes",
   "先点「获取节点」，看到节点再添加": "Click “Fetch nodes” first, then add once you see the nodes",
-  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "No subscriptions yet. Click “Add subscription” on the right: enter the link, fetch the nodes, then add once you see them"
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "No subscriptions yet. Click “Add subscription” on the right: enter the link, fetch the nodes, then add once you see them",
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Deletes it from this computer only. Team cloud windows are kept; add one back from “Team → Cloud windows” when needed."
 }

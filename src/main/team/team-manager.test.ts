@@ -593,7 +593,8 @@ describe('TeamManager', () => {
     expect(a.profiles.list().map((profile) => profile.id)).toContain(window2.id)
     expect(await a.profiles.listTrash()).toEqual([])
 
-    // Deleted again on B and deleted for good from B's recycle bin: gone from every computer and the cloud.
+    // Deleted again on B and deleted for good from B's recycle bin: only B's copy goes; the cloud keeps
+    // it (marked deleted), A's recycle bin keeps its copy, and B does not get it back at the next sync.
     const window2OnB = onB('窗口二')!
     await b.profiles.remove(window2OnB.id)
     await b.team.forget(window2OnB.id)
@@ -601,10 +602,83 @@ describe('TeamManager', () => {
     expect((await a.profiles.listTrash()).map((item) => item.profileId)).toEqual([window2.id])
     const trashId = (await b.profiles.listTrash())[0].trashId
     await b.team.purged([await b.profiles.purgeTrash(trashId)])
-    expect([...server.records.values()].map((record) => record.name)).toEqual(['窗口一改'])
+    expect([...server.records.values()].map((record) => record.name).sort()).toEqual(['窗口一改', '窗口二'])
     await a.team.sync()
-    expect(await a.profiles.listTrash()).toEqual([])
+    await b.team.sync()
+    expect((await a.profiles.listTrash()).map((item) => item.profileId)).toEqual([window2.id])
+    expect(await b.profiles.listTrash()).toEqual([])
+    expect(onB('窗口二')).toBeUndefined()
+    const teamId2 = (await b.team.listProfiles()).find((item) => item.name === '窗口二')!
+    expect(teamId2).toMatchObject({ deletedAt: expect.any(String), localId: undefined })
 
+    // Emptying the recycle bin on A too: still in the cloud.
+    await a.team.purged(await a.profiles.emptyTrash())
+    await a.team.sync()
+    expect(server.records.has(teamId2.id)).toBe(true)
+    expect(a.profiles.list().map((profile) => profile.name)).toEqual(['窗口一改'])
+
+    // Added back from the Team page on B: a window again on every computer (from the cloud: no copy left).
+    await b.team.restoreToComputer(teamId2.id)
+    await a.team.sync()
+    expect(onB('窗口二')).toBeDefined()
+    expect(a.profiles.list().map((profile) => profile.name).sort()).toEqual(['窗口一改', '窗口二'])
+
+    // Deleted for good only by hand on the Team page: gone from the cloud and every computer's list.
+    await b.team.unshare(teamId2.id)
+    await a.team.sync()
+    expect([...server.records.values()].map((record) => record.name)).toEqual(['窗口一改'])
+    expect(a.profiles.list().map((profile) => profile.name)).toEqual(['窗口一改'])
+  })
+
+  it('keeps one recycle-bin copy per window, however often it was deleted and restored, and restores that copy', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    const window = await a.profiles.create({ ...defaultProfileDraft(), name: '窗口' })
+    await a.team.sync()
+    await b.team.sync()
+    const teamId = (await a.team.listProfiles())[0].id
+
+    // Deleted on A, restored on B, deleted on B again, restored again, deleted again: one copy on A.
+    for (let round = 0; round < 3; round += 1) {
+      const onA = a.profiles.list().find((profile) => profile.name === '窗口')
+      if (onA) {
+        await a.profiles.remove(onA.id)
+        await a.team.forget(onA.id)
+      }
+      await b.team.sync()
+      await b.team.restoreToComputer(teamId)
+      await a.team.sync()
+      const onB = b.profiles.list().find((profile) => profile.name === '窗口')!
+      await b.profiles.remove(onB.id)
+      await b.team.forget(onB.id)
+      await a.team.sync()
+      await a.team.restoreToComputer(teamId)
+    }
+    const onA = a.profiles.list().find((profile) => profile.name === '窗口')!
+    expect(onA.id).toBe(window.id)
+    await a.profiles.remove(onA.id)
+    await a.team.forget(onA.id)
+    await b.team.sync()
+    expect((await a.profiles.listTrash()).map((item) => item.profileId)).toEqual([window.id])
+    expect((await b.profiles.listTrash()).length).toBe(1)
+
+    // A local window deleted and restored again and again: one copy as well.
+    const local = await b.profiles.create({ ...defaultProfileDraft(), name: '本机' })
+    for (let round = 0; round < 2; round += 1) {
+      await b.profiles.remove(local.id)
+      await b.profiles.restore((await b.profiles.listTrash()).find((item) => item.profileId === local.id)!.trashId)
+    }
+    await b.profiles.remove(local.id)
+    expect((await b.profiles.listTrash()).filter((item) => item.profileId === local.id).length).toBe(1)
+
+    // Back from the Team page: this computer's recycle-bin copy (same window), not a new one.
+    const trashedOnB = (await b.profiles.listTrash()).find((item) => item.name === '窗口')!
+    const backOnB = await b.team.restoreToComputer(teamId)
+    expect(backOnB).toBe(trashedOnB.profileId)
+    expect((await b.profiles.listTrash()).map((item) => item.name)).toEqual(['本机'])
   })
 
   it('keeps one proxy library and one group list for the account: added, changed and removed anywhere', async () => {

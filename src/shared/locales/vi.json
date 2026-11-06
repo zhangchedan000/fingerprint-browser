@@ -2761,5 +2761,6 @@
   "重新获取": "Lấy lại",
   "获取节点": "Lấy nút",
   "先点「获取节点」，看到节点再添加": "Bấm “Lấy nút” trước, thấy các nút rồi mới thêm",
-  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Chưa có đăng ký. Bấm “Thêm đăng ký” bên phải: nhập liên kết, lấy nút, thấy nút rồi mới thêm"
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Chưa có đăng ký. Bấm “Thêm đăng ký” bên phải: nhập liên kết, lấy nút, thấy nút rồi mới thêm",
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Chỉ xóa trên máy này. Cửa sổ đám mây của nhóm vẫn được giữ; khi cần, thêm lại từ “Nhóm → Cửa sổ đám mây”."
 }

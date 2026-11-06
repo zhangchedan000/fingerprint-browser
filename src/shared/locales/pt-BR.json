@@ -2761,5 +2761,6 @@
   "重新获取": "Obter novamente",
   "获取节点": "Obter nós",
   "先点「获取节点」，看到节点再添加": "Clique primeiro em “Obter nós” e adicione depois de ver os nós",
-  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Ainda não há assinaturas. Clique em “Adicionar assinatura” à direita: informe o link, obtenha os nós e adicione depois de vê-los"
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Ainda não há assinaturas. Clique em “Adicionar assinatura” à direita: informe o link, obtenha os nós e adicione depois de vê-los",
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Exclui apenas deste computador. As janelas na nuvem da equipe são mantidas; adicione de volta em “Equipe → Janelas na nuvem” quando precisar."
 }

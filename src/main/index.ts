@@ -395,9 +395,9 @@ app.whenReady().then(async () => {
   // A new window's seed is none the team's cloud windows use (the seed decides Canvas and AudioContext).
   profiles.setSeedsInUse(() => activeTeam.seedsInUse())
   await activeTeam.initialize()
-  // Windows past the recycle-bin retention: deleted for the account too, once signed in.
+  // Windows past the recycle-bin retention: deleted here only (the cloud keeps them), noted once signed in.
   if (purgedTrash.length) void activeTeam.whenOnline().then(() => activeTeam.purged(purgedTrash)).catch((error: unknown) => {
-    logger?.error('回收站自动清理的团队窗口没能在云端删除', { error: error instanceof Error ? error.message : String(error) })
+    logger?.error('回收站自动清理的团队窗口没能记下', { error: error instanceof Error ? error.message : String(error) })
   })
   launcher.setLaunchHooks(activeTeam)
   registerTeamIpc(activeTeam)

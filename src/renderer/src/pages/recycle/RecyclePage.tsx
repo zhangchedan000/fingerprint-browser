@@ -57,7 +57,7 @@ export function RecyclePage() {
   function confirmPurge(item: DeletedProfileSummary): void {
     Modal.confirm({
       title: t("彻底删除“{0}”？", item.name),
-      content: t("窗口的 Cookie、缓存和浏览数据会一起删除，无法恢复。"),
+      content: <><p>{t("窗口的 Cookie、缓存和浏览数据会一起删除，无法恢复。")}</p><p className="fb-muted">{t("只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。")}</p></>,
       okText: t("彻底删除"),
       okButtonProps: { danger: true },
       cancelText: t("取消"),
@@ -77,7 +77,7 @@ export function RecyclePage() {
   function confirmEmpty(): void {
     Modal.confirm({
       title: t("清空回收站？"),
-      content: t("{0} 个窗口及其浏览数据会被永久删除，无法恢复。", items.length),
+      content: <><p>{t("{0} 个窗口及其浏览数据会被永久删除，无法恢复。", items.length)}</p><p className="fb-muted">{t("只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。")}</p></>,
       okText: t("清空"),
       okButtonProps: { danger: true },
       cancelText: t("取消"),

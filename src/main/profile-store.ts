@@ -1325,6 +1325,16 @@ export class ProfileStore {
       await rm(marker, { force: true })
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
+    // One recycle-bin copy per window: an older copy of the same window is dropped.
+    for (const entry of await readdir(recycle, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === trashId || !entry.name.startsWith(`${id}-`)) continue
+      try {
+        const old = JSON.parse(await readFile(join(recycle, entry.name, 'deleted-profile.json'), 'utf8')) as DeletedProfileRecord
+        if (old.schemaVersion === 1 && old.profile?.id === id) await rm(join(recycle, entry.name), { recursive: true, force: true })
+      } catch {
+        // Incomplete entries are deliberately preserved for manual inspection.
+      }
+    }
     this.profiles.delete(id)
     await this.persist()
   }

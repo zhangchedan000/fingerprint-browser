@@ -2761,5 +2761,6 @@
   "重新获取": "Volver a obtener",
   "获取节点": "Obtener nodos",
   "先点「获取节点」，看到节点再添加": "Primero pulsa «Obtener nodos» y añade cuando veas los nodos",
-  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Aún no hay suscripciones. Pulsa «Añadir suscripción» a la derecha: pon el enlace, obtén los nodos y añade cuando los veas"
+  "还没有订阅，点右边「添加订阅」：填订阅链接，先获取节点，看到节点再添加": "Aún no hay suscripciones. Pulsa «Añadir suscripción» a la derecha: pon el enlace, obtén los nodos y añade cuando los veas",
+  "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Solo se borra de este equipo. Las ventanas en la nube del equipo se conservan; vuelve a añadirlas desde «Equipo → Ventanas en la nube» cuando lo necesites."
 }
