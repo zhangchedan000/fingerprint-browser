@@ -66,6 +66,11 @@ onRecordUpdateRequest((e) => {
     if (!lock || lock.getString("holder") !== e.auth.id || lock.getInt("expires") <= Date.now()) {
       throw new ApiError(409, "没有占用这个窗口，不能上传登录态", {})
     }
+    // Held by this account on another computer (a lock with a computer id): that computer's state wins.
+    const holderDevice = lock.getString("device_id")
+    if (holderDevice && holderDevice !== String(body.data_device || "")) {
+      throw new ApiError(409, "这个窗口正在另一台电脑上使用，不能上传登录态", {})
+    }
     const expected = original.getInt("data_rev") + 1
     if (Number(body.data_rev) !== expected) {
       throw new ApiError(409, "登录态已被别人更新过，请重新打开窗口", {})
@@ -104,6 +109,13 @@ onRecordUpdateRequest((e) => {
 onRecordDeleteRequest((e) => {
   const t = require(`${__hooks}/team_utils.js`)
   const name = e.record.getString("name")
+  // A cloud window's backup goes only after the window was deleted in the window list (it is in the
+  // recycle bins, config.deletedAt) and nobody has it open (the user, 2026-11-07).
+  let config = {}
+  try { config = JSON.parse(e.record.getString("config") || "{}") || {} } catch (_) { config = {} }
+  if (!config.deletedAt) throw new BadRequestError("先在窗口列表里删除（移到回收站），才能删除云端备份")
+  const lock = t.findOrNull($app, "team_locks", "profile = {:p}", { p: e.record.id })
+  if (lock && lock.getInt("expires") > Date.now()) throw new BadRequestError("这个窗口正在使用，关闭后才能删除云端备份")
   e.next()
   t.log($app, e, "unshare", null, {}, { profileName: name })
 }, "team_profiles")

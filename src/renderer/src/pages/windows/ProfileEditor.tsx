@@ -740,12 +740,15 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }
   const checkFor = (...rows: FingerprintCheckRow[]) => {
     const items = checkReport?.items.filter((item) => rows.includes(item.row) && !(NOISE_ROWS.has(item.row) && item.status === 'ok'))
+    const stale = rowsStale(rows)
+    const ipNote = checkIpChanged && !checkStale && rows.some((row) => IP_ROWS.has(row)) ? t("检测时的出口 IP 是 {0}，现在是 {1}，请重新检测", checkReport!.exitIp!, lastCheck!.ip!) : undefined
     return items?.length
       ? <CheckResults
           items={items}
-          stale={rowsStale(rows)}
+          stale={stale}
           fixOf={fixOf}
-          note={checkIpChanged && !checkStale && rows.some((row) => IP_ROWS.has(row)) ? t("检测时的出口 IP 是 {0}，现在是 {1}，请重新检测", checkReport!.exitIp!, lastCheck!.ip!) : undefined}
+          // A result from before a settings change (the time zone just fixed, say) is grey, not red.
+          note={ipNote ?? (stale ? t("设置改了，重新检测后才准") : undefined)}
         />
       : undefined
   }
@@ -2116,7 +2119,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   ]
   const cpuSelectOptions = [
     { value: 'none', label: t("不指定") },
-    ...cpuFamilies().map(({ family, cpus }) => ({
+    ...cpuFamilies(fp.cpu).map(({ family, cpus }) => ({
       label: family,
       options: cpus.map((cpu) => ({ value: cpu.model, label: `${cpu.model} · ${t("{0} 核 {1} 线程", cpu.cores, cpu.threads)}` }))
     }))

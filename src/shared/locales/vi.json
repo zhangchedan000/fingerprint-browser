@@ -2765,5 +2765,21 @@
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Chỉ xóa trên máy này. Cửa sổ đám mây của nhóm vẫn được giữ; khi cần, thêm lại từ “Nhóm → Cửa sổ đám mây”.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: múi giờ không khớp với IP proxy",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Đã hiểu, không hỏi lại với IP này (sẽ hỏi lại nếu IP thay đổi)",
-  "以实测定位（{0}）为准": "theo vị trí đo thực tế ({0})"
+  "以实测定位（{0}）为准": "theo vị trí đo thực tế ({0})",
+  "退出": "Thoát",
+  "打开主界面": "Mở cửa sổ chính",
+  "还有 {0} 个窗口在运行，退出会把它们全部关闭": "Vẫn còn {0} cửa sổ đang chạy. Thoát sẽ đóng tất cả",
+  "团队窗口会先上传登录状态再退出。": "Cửa sổ nhóm sẽ tải lên trạng thái đăng nhập trước khi thoát.",
+  "指纹浏览器还在运行": "Fingerprint Browser vẫn đang chạy",
+  "主界面缩小到了托盘图标，打开的窗口照常运行。点图标打开主界面，右键可以退出；在「设置 → 常规 → 关闭主界面时」可以改成直接退出。": "Cửa sổ chính đã thu về biểu tượng ở khay hệ thống, các cửa sổ đang mở vẫn chạy bình thường. Nhấp biểu tượng để mở, nhấp chuột phải để thoát. Muốn thoát khi đóng, vào Cài đặt → Chung → Khi đóng cửa sổ chính.",
+  "缩小到托盘图标（窗口照常运行）": "Thu nhỏ xuống khay hệ thống (cửa sổ vẫn chạy)",
+  "云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。": "Bản sao lưu trên đám mây (cấu hình và trạng thái đăng nhập) sẽ bị xóa vĩnh viễn: không ai mở được và không thể khôi phục từ “Nhóm → Cửa sổ đám mây” nữa. Cửa sổ vẫn nằm trong thùng rác của từng máy; khôi phục từ thùng rác sẽ tải lên lại như một cửa sổ mới.",
+  "{0} 个窗口还不能删除云端备份": "Chưa thể xóa bản sao lưu trên đám mây của {0} cửa sổ",
+  "还不能删除云端备份": "Chưa thể xóa bản sao lưu trên đám mây",
+  "先在窗口列表里删除（移到回收站），才能删除云端备份": "Hãy xóa cửa sổ trong danh sách cửa sổ trước (chuyển vào thùng rác), sau đó mới xóa được bản sao lưu trên đám mây.",
+  "知道了": "Đã hiểu",
+  "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "Còn {0} cửa sổ khác chưa được xóa trong danh sách cửa sổ (không ở thùng rác); lần này bỏ qua và giữ bản sao lưu trên đám mây.",
+  "设置改了，重新检测后才准": "Cài đặt đã thay đổi; hãy kiểm tra lại để có kết quả chính xác",
+  "定位不一致": "Vị trí không thống nhất",
+  "按多数定为 {0}": "theo đa số: {0}"
 }

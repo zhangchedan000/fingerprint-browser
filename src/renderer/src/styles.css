@@ -432,6 +432,10 @@ button, input, textarea { font: inherit; }
 /* Fingerprint check: results under each row, summary at the bottom of the fingerprint tab. */
 .fb-check-results { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .fb-check-results.is-stale { opacity: .55; }
+/* A result from before the settings changed: grey, not red or yellow, until checked again. */
+.fb-check-results.is-stale .fb-check-item .fb-check-dot { background: var(--fb-text-faint); }
+.fb-check-results.is-stale .fb-check-item .fb-check-message { color: var(--fb-text-secondary); }
+.fb-check-results.is-stale > .fb-check-stale { color: var(--fb-text-secondary); }
 .fb-check-item { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; color: var(--fb-text-secondary); }
 .fb-check-item .ant-btn { height: 20px; padding: 0 4px; font-size: 12px; }
 .fb-check-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--fb-success-dot); }
@@ -646,3 +650,6 @@ th.fb-col-drop-after { box-shadow: inset -3px 0 0 var(--fb-accent); }
 .fb-login-fallback { display: grid; gap: 8px; margin-bottom: 16px; }
 .fb-team-standby { display: grid; gap: 12px; margin-top: 16px; }
 .fb-team-standby-form { row-gap: 8px; }
+
+/* 「定位不一致」: the IP databases disagree on this exit IP's time zone (information only, grey). */
+.fb-zone-split { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; font-size: 11px; line-height: 16px; color: var(--fb-text-secondary); background: var(--fb-surface-muted); white-space: nowrap; }

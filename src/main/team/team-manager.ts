@@ -75,6 +75,8 @@ function cloudDeletedAt(config: unknown): string | undefined {
   return typeof value === 'string' && value ? value : undefined
 }
 
+export const CLOUD_DELETE_NEEDS_TRASH = '先在窗口列表里删除（移到回收站），才能删除云端备份'
+
 function withoutDeletedAt(config: unknown): Record<string, unknown> {
   const { deletedAt: _deletedAt, ...rest } = (config && typeof config === 'object' ? config : {}) as Record<string, unknown>
   return rest
@@ -1404,6 +1406,9 @@ export class TeamManager {
     const api = await this.requireOwner()
     const localId = this.localIdOf(teamId)
     if (localId && !this.isClosed(localId)) throw new Error('请先关闭这个窗口')
+    // Only a window already deleted in the window list (in the recycle bins) loses its cloud backup;
+    // the server checks this too.
+    if (!cloudDeletedAt((await api.getProfile(teamId)).config)) throw new Error(CLOUD_DELETE_NEEDS_TRASH)
     await api.removeProfile(teamId)
     if (localId) {
       delete this.file.links[localId]
@@ -1506,7 +1511,8 @@ export class TeamManager {
     const pending = this.pushes.get(id)
     if (pending) await pending
     const api = this.requireApi()
-    await api.lock(link.teamId, hostname())
+    const here = await this.lockDevice()
+    await api.lock(link.teamId, here.name, here.id)
     this.locked.add(id)
     const failed = async (error: unknown): Promise<never> => {
       this.onSync({ profileId: id, phase: 'error', message: error instanceof Error ? error.message : String(error) })
@@ -1610,6 +1616,14 @@ export class TeamManager {
     return { id: this.file.deviceId, name: hostname() }
   }
 
+  /** This computer for a lock: its id is saved first, so a restart still counts as the same computer. */
+  private async lockDevice(): Promise<UploadDevice> {
+    const fresh = !this.file.deviceId
+    const device = this.device
+    if (fresh) await this.save()
+    return device
+  }
+
   /** The launch failed after beforeLaunch: give the lock back without uploading. */
   async launchFailed(id: string): Promise<void> {
     if (!this.online) return
@@ -1629,7 +1643,8 @@ export class TeamManager {
     if (!this.enabled || !link || !this.api) return
     const pending = this.pushes.get(id)
     if (pending) await pending
-    await this.api.lock(link.teamId, hostname())
+    const here = await this.lockDevice()
+    await this.api.lock(link.teamId, here.name, here.id)
     this.locked.add(id)
     try {
       await this.upload(id, link)
@@ -1697,7 +1712,7 @@ export class TeamManager {
     this.stopHeartbeat(id)
     const link = this.file.links[id]
     if (!this.locked.delete(id) || !link || !this.api) return
-    await this.api.unlock(link.teamId).catch((error) => {
+    await this.api.unlock(link.teamId, false, this.device.id).catch((error) => {
       this.logger?.error('释放团队窗口占用失败', { profileId: id, error: error instanceof Error ? error.message : String(error) })
     })
   }
@@ -1705,7 +1720,7 @@ export class TeamManager {
   private startHeartbeat(id: string, teamId: string): void {
     this.stopHeartbeat(id)
     this.heartbeats.set(id, setInterval(() => {
-      void this.api?.heartbeat(teamId).catch((error) => {
+      void this.api?.heartbeat(teamId, this.device.id).catch((error) => {
         // Network trouble is retried by the next beat; a lost lock is reported once.
         if (error instanceof TeamApiError && error.status === 409) {
           this.stopHeartbeat(id)

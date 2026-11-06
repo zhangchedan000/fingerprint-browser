@@ -174,7 +174,15 @@ export function SettingsPage({ params }: Partial<PageProps> = {}) {
                 </div>
               </Item>
               <Item label={t("关闭主界面时")}>
-                <NotYet><Select disabled value="quit" className="fb-wide-select" options={[{ value: 'quit', label: t("退出并关闭所有窗口") }]} /></NotYet>
+                <Select
+                  value={preferences.closeAction ?? 'tray'}
+                  className="fb-wide-select"
+                  onChange={(value) => void save({ closeAction: value })}
+                  options={[
+                    { value: 'tray', label: t("缩小到托盘图标（窗口照常运行）") },
+                    { value: 'quit', label: t("退出并关闭所有窗口") }
+                  ]}
+                />
               </Item>
             </div>
           </>

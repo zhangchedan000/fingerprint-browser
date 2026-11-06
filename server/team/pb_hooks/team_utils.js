@@ -96,7 +96,11 @@ function userNames(app, ids) {
   return app.findRecordsByIds("users", ids).map(displayName)
 }
 
-/** lock / heartbeat / unlock of one shared window by the signed-in user. */
+/**
+ * lock / heartbeat / unlock of one shared window by the signed-in user on one computer: the lock is
+ * the account's and the computer's (body.deviceId, the app's fixed id per computer), so the same
+ * account on another computer cannot open it while it is open here. The owner can still force it free.
+ */
 function lockRoute(e, mode) {
   const auth = e.auth
   const id = e.request.pathValue("id")
@@ -108,6 +112,7 @@ function lockRoute(e, mode) {
   }
   if (!canSee(profile, auth)) throw new NotFoundError("窗口不存在或没有分配给你")
   const body = e.requestInfo().body || {}
+  const deviceId = String(body.deviceId || "").slice(0, 100)
   const now = Date.now()
   let result = null
   let logged = null
@@ -115,7 +120,10 @@ function lockRoute(e, mode) {
   $app.runInTransaction((tx) => {
     let lock = findOrNull(tx, "team_locks", "profile = {:p}", { p: id })
     const live = !!lock && lock.getInt("expires") > now
-    const mine = !!lock && lock.getString("holder") === auth.id
+    const sameAccount = !!lock && lock.getString("holder") === auth.id
+    const mine = sameAccount && lock.getString("device_id") === deviceId
+    // The same account on another computer: say which one, so the user knows where to close it.
+    const elsewhere = () => new ApiError(409, "这个窗口正在另一台电脑「" + (lock.getString("device") || "未知") + "」上使用，请先在那台电脑上关闭", {})
 
     if (mode === "unlock") {
       if (!lock) {
@@ -123,7 +131,10 @@ function lockRoute(e, mode) {
         return
       }
       const force = !mine && live
-      if (force && !(isOwner(auth) && body.force)) throw new ForbiddenError("这个窗口正在被别人使用")
+      if (force && !(isOwner(auth) && body.force)) {
+        if (sameAccount) throw elsewhere()
+        throw new ForbiddenError("这个窗口正在被别人使用")
+      }
       tx.delete(lock)
       result = { released: true }
       if (force) {
@@ -136,6 +147,7 @@ function lockRoute(e, mode) {
     }
 
     if (live && !mine) {
+      if (sameAccount) throw elsewhere()
       const holder = findOrNull(tx, "users", "id = {:id}", { id: lock.getString("holder") })
       // ApiError data is reserved for field errors, so the holder only goes in the message.
       throw new ApiError(409, "「" + displayName(holder) + "」正在使用这个窗口", {})
@@ -145,7 +157,10 @@ function lockRoute(e, mode) {
     if (!lock) lock = new Record(tx.findCollectionByNameOrId("team_locks"))
     lock.set("profile", id)
     lock.set("holder", auth.id)
-    if (mode === "lock") lock.set("device", String(body.device || "").slice(0, 200))
+    if (mode === "lock") {
+      lock.set("device", String(body.device || "").slice(0, 200))
+      lock.set("device_id", deviceId)
+    }
     lock.set("expires", now + LOCK_MS)
     tx.save(lock)
     result = { expires: now + LOCK_MS, lockMs: LOCK_MS }

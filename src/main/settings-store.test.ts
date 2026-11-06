@@ -32,7 +32,15 @@ describe('interface preferences', () => {
   it('keeps valid theme and batch gap values and falls back otherwise', async () => {
     const { validPreferences, DEFAULT_PREFERENCES } = await import('./settings-store')
     expect(validPreferences({})).toEqual(DEFAULT_PREFERENCES)
-    expect(validPreferences({ theme: 'dark', batchLaunchGapSeconds: 3.04 })).toEqual({ theme: 'dark', batchLaunchGapSeconds: 3 })
+    expect(validPreferences({ theme: 'dark', batchLaunchGapSeconds: 3.04 })).toEqual({ theme: 'dark', batchLaunchGapSeconds: 3, closeAction: 'tray' })
     expect(validPreferences({ theme: 'neon' as never, batchLaunchGapSeconds: 99 })).toEqual(DEFAULT_PREFERENCES)
+  })
+
+  it('closing the main window hides it to the tray unless set to quit', async () => {
+    const { validPreferences } = await import('./settings-store')
+    expect(validPreferences({}).closeAction).toBe('tray')
+    expect(validPreferences({ closeAction: 'quit' }).closeAction).toBe('quit')
+    expect(validPreferences({ closeAction: 'bogus' as never }).closeAction).toBe('tray')
+    expect(validPreferences({ theme: 'dark' }, { theme: 'light', batchLaunchGapSeconds: 1.5, closeAction: 'quit' }).closeAction).toBe('quit')
   })
 })

@@ -6,7 +6,7 @@ import { DEFAULT_KERNEL_SOURCES, validKernelSources, withOfficialKernelSource } 
 import { validDeepCheckSites } from '../shared/deep-check'
 import { validIpCheckSites } from '../shared/ip-sites'
 
-export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5 }
+export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5, closeAction: 'tray' }
 
 /** Keeps only valid preference values; anything else falls back to the default. */
 export function validPreferences(input: Partial<AppPreferences>, base: AppPreferences = DEFAULT_PREFERENCES): AppPreferences {
@@ -20,6 +20,8 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const folder = 'downloadFolder' in input ? input.downloadFolder : base.downloadFolder
   const downloadFolder = typeof folder === 'string' && isAbsolute(folder.trim()) && folder.trim().length <= 260 ? folder.trim() : undefined
   const downloadPerWindow = 'downloadPerWindow' in input ? input.downloadPerWindow === true : base.downloadPerWindow === true
+  const close = 'closeAction' in input ? input.closeAction : base.closeAction
+  const closeAction = close === 'quit' ? 'quit' : 'tray'
   return {
     theme,
     batchLaunchGapSeconds,
@@ -27,7 +29,8 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
     ...(ipCheckSites ? { ipCheckSites } : {}),
     ...(ipCheckBaseline ? { ipCheckBaseline } : {}),
     ...(downloadFolder ? { downloadFolder } : {}),
-    ...(downloadFolder && downloadPerWindow ? { downloadPerWindow: true } : {})
+    ...(downloadFolder && downloadPerWindow ? { downloadPerWindow: true } : {}),
+    closeAction
   }
 }
 

@@ -136,6 +136,12 @@ export interface LaunchHooks {
   afterExit(id: string): Promise<void>
 }
 
+/** A launch proxy check already under way, and the proxy it checks. */
+interface EarlyProxyCheck {
+  proxy: BrowserProfile['proxy']
+  result: Promise<ProxyTestResult>
+}
+
 export class BrowserLauncher {
   private readonly quickIpTester?: QuickIpTester
   private hooks?: LaunchHooks
@@ -320,13 +326,16 @@ export class BrowserLauncher {
     if (this.processes.has(id)) return this.profiles.get(id)
     if (this.orphanProcesses.has(id)) throw new Error('该环境仍有异常遗留进程，请先点击“结束遗留”')
     await this.guardProfileAvailable(id)
+    // The proxy check starts now, while the hooks talk to the team server; it is used only if the
+    // proxy is still the same after them (they may bring a newer config).
+    const earlyCheck = this.earlyProxyCheck(this.profiles.get(id))
     // Hooks may bring a newer config, so the window is read after them.
     const prepared = await this.hooks?.beforeLaunch(id)
     const loginState = prepared ? prepared.loginState : undefined
     // Handled below (startProfile waits for it, or the catch does); never an unhandled rejection meanwhile.
     loginState?.catch(() => undefined)
     try {
-      return await this.startProfile(id, options, loginState)
+      return await this.startProfile(id, options, loginState, earlyCheck)
     } catch (error) {
       // A login state still coming down finishes (or fails) before the window is released.
       await loginState?.catch(() => undefined)
@@ -337,7 +346,19 @@ export class BrowserLauncher {
     }
   }
 
-  private async startProfile(id: string, options: ProfileLaunchOptions, loginState?: Promise<void>): Promise<BrowserProfile> {
+  /**
+   * The launch proxy check started before the team server round trips (lock, newest config), for a
+   * plain proxy; undefined where the check needs something first (an API link, the 网络加速 tunnel).
+   */
+  private earlyProxyCheck(profile: BrowserProfile): EarlyProxyCheck | undefined {
+    if (!this.hooks || profile.apiProxy || profile.proxyMissing || profile.proxy.apiUrl || profile.proxy.protocol === 'direct' || profile.proxy.tunnel?.enabled) return undefined
+    const result = this.launchProxyCheck(profile)
+    // Awaited only when used; never an unhandled rejection otherwise.
+    result.catch(() => undefined)
+    return { proxy: { ...profile.proxy }, result }
+  }
+
+  private async startProfile(id: string, options: ProfileLaunchOptions, loginState?: Promise<void>, earlyCheck?: EarlyProxyCheck): Promise<BrowserProfile> {
     let profile = this.profiles.get(id)
     // Never fall back to the real network when the chosen proxy is gone.
     if (profile.proxyMissing) throw new Error('这个窗口使用的代理已不在代理库中，请重新选择代理')
@@ -373,7 +394,10 @@ export class BrowserLauncher {
         profile = this.profiles.get(id)
         this.logger?.info('从代理 API 取得代理', { profileId: id, protocol: endpoint.protocol, host: endpoint.host, port: endpoint.port })
       }
-      if (profile.proxy.protocol !== 'direct') profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true, options.muteZoneNotice === true)
+      if (profile.proxy.protocol !== 'direct') {
+        const early = earlyCheck && sameProxyIdentity(earlyCheck.proxy, profile.proxy) && earlyCheck.proxy.password === profile.proxy.password ? earlyCheck.result : undefined
+        profile = await this.refreshProxyForLaunch(profile, options.allowGeoConflict === true, options.muteZoneNotice === true, early)
+      }
     }
     // The login state came down meanwhile (team windows): the profile data is complete from here on.
     if (loginState) {
@@ -795,6 +819,11 @@ export class BrowserLauncher {
       || this.launchOperations.has(id) || this.closeOperations.has(id)
   }
 
+  /** Windows open, opening or closing right now (each counted once). */
+  runningCount(): number {
+    return new Set([...this.processes.keys(), ...this.orphanProcesses.keys(), ...this.launchOperations.keys(), ...this.closeOperations.keys()]).size
+  }
+
   hasRunning(): boolean {
     return this.processes.size > 0 || this.orphanProcesses.size > 0
       || this.launchOperations.size > 0 || this.closeOperations.size > 0
@@ -1163,8 +1192,8 @@ export class BrowserLauncher {
     return profile.zoneNoticeOffIp === ip
   }
 
-  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean, muteZoneNotice = false): Promise<BrowserProfile> {
-    const result = await this.launchProxyCheck(profile)
+  private async refreshProxyForLaunch(profile: BrowserProfile, allowGeoConflict: boolean, muteZoneNotice = false, early?: Promise<ProxyTestResult>): Promise<BrowserProfile> {
+    const result = await (early ?? this.launchProxyCheck(profile))
     const current = this.profiles.get(profile.id)
     if (!sameProxyIdentity(profile.proxy, current.proxy) || profile.proxy.password !== current.proxy.password) {
       throw new Error('启动检测期间代理配置已变更，请重新启动环境')

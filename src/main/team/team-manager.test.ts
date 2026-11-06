@@ -54,7 +54,8 @@ interface FakeDeviceState {
 
 /**
  * The parts of the team server (server/team) the app uses, with the same rules: members see
- * assigned windows only, one holder at a time, uploads need the lock and the next revision.
+ * assigned windows only, one holder (account and computer) at a time, uploads need the lock and the
+ * next revision, a cloud window is deleted only once it is in the recycle bins.
  */
 function fakeServer() {
   const users = [
@@ -63,7 +64,7 @@ function fakeServer() {
   ]
   const records = new Map<string, FakeRecord>()
   const files = new Map<string, Buffer>()
-  const locks = new Map<string, { holder: string; expires: number; device: string }>()
+  const locks = new Map<string, { holder: string; expires: number; device: string; device_id: string }>()
   const deviceStates = new Map<string, FakeDeviceState>()
   // team_workspaces: one per account; updated is a new time on every write.
   const workspaces = new Map<string, { id: string; user: string; data: unknown; updated: string }>()
@@ -117,13 +118,23 @@ function fakeServer() {
       if (!record || !visible(record, user)) return json(404, {})
       const lock = locks.get(id)
       const live = lock && lock.expires > Date.now()
+      const body = await request.json().catch(() => ({})) as { deviceId?: string; device?: string; force?: boolean }
+      const deviceId = String(body.deviceId ?? '')
+      const sameAccount = lock?.holder === user.id
+      const mine = sameAccount && lock!.device_id === deviceId
       if (mode === 'unlock') {
-        if (lock && (lock.holder === user.id || !live)) locks.delete(id)
+        if (lock && live && !mine && !(user.role === 'owner' && body.force)) {
+          return json(sameAccount ? 409 : 403, { message: sameAccount ? `这个窗口正在另一台电脑「${lock.device}」上使用，请先在那台电脑上关闭.` : '这个窗口正在被别人使用.' })
+        }
+        if (lock) locks.delete(id)
         return json(200, { released: true })
       }
-      if (live && lock.holder !== user.id) return json(409, { message: `「${users.find((item) => item.id === lock.holder)!.name}」正在使用这个窗口.` })
-      if (mode === 'heartbeat' && !lock) return json(409, { message: '占用已失效.' })
-      locks.set(id, { holder: user.id, expires: Date.now() + 90_000, device: 'test' })
+      if (live && !mine) {
+        if (sameAccount) return json(409, { message: `这个窗口正在另一台电脑「${lock.device}」上使用，请先在那台电脑上关闭.` })
+        return json(409, { message: `「${users.find((item) => item.id === lock.holder)!.name}」正在使用这个窗口.` })
+      }
+      if (mode === 'heartbeat' && !mine) return json(409, { message: '占用已失效.' })
+      locks.set(id, { holder: user.id, expires: Date.now() + 90_000, device: mode === 'lock' ? String(body.device ?? '') : lock!.device, device_id: deviceId })
       return json(200, { expires: Date.now() + 90_000, lockMs: 90_000 })
     }
     // Per-computer copies (1761600008_device_states.js): own ones (the owner: all), writes need the lock.
@@ -177,6 +188,7 @@ function fakeServer() {
       if (request.method === 'GET') return json(200, existing)
       if (request.method === 'DELETE') {
         if (user.role !== 'owner') return json(404, {})
+        if (!(existing!.config as { deletedAt?: string } | undefined)?.deletedAt) return json(400, { message: '先在窗口列表里删除（移到回收站），才能删除云端备份.' })
         records.delete(id!)
         return new Response(null, { status: 204 })
       }
@@ -387,6 +399,36 @@ describe('TeamManager', () => {
     expect((await b.team.setTestMode(onB, false)).testMode).toBeUndefined()
     expect(server.records.get(teamId)).toMatchObject({ data_rev: 4 })
     expect(server.deviceStates.size).toBe(0)
+  })
+
+  it('lets one computer at a time open a window, even for the same account; the owner can force it free', async () => {
+    const server = fakeServer()
+    const a = await computer(server)
+    const b = await computer(server)
+    await a.team.login('http://team.test', 'boss', 'ownerpass')
+    await b.team.login('http://team.test', 'boss', 'ownerpass')
+    const local = await a.profiles.create({ ...defaultProfileDraft(), name: '店铺' })
+    await a.team.sync()
+    const teamId = a.team.links()[0].teamId
+    await b.team.sync()
+    const onB = b.team.links()[0].profileId
+
+    // Open on A: the same account on B cannot open it, and A's lock is untouched.
+    await opened(a.team, local.id)
+    await expect(opened(b.team, onB)).rejects.toThrow(/另一台电脑/)
+    expect(server.locks.get(teamId)?.holder).toBe('owner1')
+    // A opens it again later (same computer, after a restart of the app): still its own.
+    await expect(opened(a.team, local.id)).resolves.toBeUndefined()
+
+    // Closed on A: B can open it now.
+    await a.team.afterExit(local.id)
+    await opened(b.team, onB)
+    await b.team.launchFailed(onB)
+
+    // The owner's 强制释放 still frees a window held on another computer.
+    await opened(a.team, local.id)
+    await b.team.forceUnlock(teamId)
+    expect(server.locks.has(teamId)).toBe(false)
   })
 
   it('applies the owner’s config changes on the member’s next open', async () => {
@@ -630,7 +672,16 @@ describe('TeamManager', () => {
     expect(onB('窗口二')).toBeDefined()
     expect(a.profiles.list().map((profile) => profile.name).sort()).toEqual(['窗口一改', '窗口二'])
 
-    // Deleted for good only by hand on the Team page: gone from the cloud and every computer's list.
+    // Its cloud backup cannot go while the window is in the window list (user, 2026-11-07).
+    await expect(b.team.unshare(teamId2.id)).rejects.toThrow('先在窗口列表里删除（移到回收站），才能删除云端备份')
+    expect(server.records.has(teamId2.id)).toBe(true)
+
+    // Deleted in the window list first (recycle bins), then deleted for good by hand on the Team page:
+    // gone from the cloud; the recycle-bin copies stay.
+    const onBId = onB('窗口二')!.id
+    await b.profiles.remove(onBId)
+    await b.team.forget(onBId)
+    await a.team.sync()
     await b.team.unshare(teamId2.id)
     await a.team.sync()
     expect([...server.records.values()].map((record) => record.name)).toEqual(['窗口一改'])

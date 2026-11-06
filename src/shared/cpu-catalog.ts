@@ -13,17 +13,32 @@ export interface CpuModel {
   cores: number
   threads: number
   source: string
+  /**
+   * No longer offered (uncommon AMD models, user 2026-11-07: 「冷门u 不要」): new windows never get it
+   * and the picker does not list it, but a window that already has it keeps it.
+   */
+  retired?: boolean
 }
 
-export const CPU_MODELS: readonly CpuModel[] = (catalog as { cpus: CpuModel[] }).cpus
+/** Every known CPU, retired ones included (what a saved window may name). */
+export const ALL_CPU_MODELS: readonly CpuModel[] = (catalog as { cpus: CpuModel[] }).cpus
+
+/** The CPUs offered for windows: picked at random, listed in the picker. */
+export const CPU_MODELS: readonly CpuModel[] = ALL_CPU_MODELS.filter((cpu) => !cpu.retired)
 
 export function findCpu(model: string | undefined): CpuModel | undefined {
-  return model ? CPU_MODELS.find((cpu) => cpu.model === model) : undefined
+  return model ? ALL_CPU_MODELS.find((cpu) => cpu.model === model) : undefined
 }
 
-/** CPUs grouped by family, in catalog order (oldest generation first per vendor). */
-export function cpuFamilies(): Array<{ family: string; cpus: CpuModel[] }> {
+/**
+ * Offered CPUs grouped by family, in catalog order (oldest generation first per vendor); a retired
+ * one is listed too when it is the window's own (keep).
+ */
+export function cpuFamilies(keep?: string): Array<{ family: string; cpus: CpuModel[] }> {
   const groups = new Map<string, CpuModel[]>()
-  for (const cpu of CPU_MODELS) groups.set(cpu.family, [...(groups.get(cpu.family) ?? []), cpu])
+  for (const cpu of ALL_CPU_MODELS) {
+    if (cpu.retired && cpu.model !== keep) continue
+    groups.set(cpu.family, [...(groups.get(cpu.family) ?? []), cpu])
+  }
   return [...groups].map(([family, cpus]) => ({ family, cpus }))
 }

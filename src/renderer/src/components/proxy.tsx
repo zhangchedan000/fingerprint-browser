@@ -8,6 +8,22 @@ export function proxyAddress(proxy: Pick<ProxyConfig, 'host' | 'port'>): string 
   return `${host}:${proxy.port ?? ''}`
 }
 
+/**
+ * 「定位不一致」: the IP databases put this exit IP in different time zones (the check stored how they
+ * split); the tooltip says how, and which one the app goes by. Nothing is asked again for it.
+ */
+export function ZoneSplitTag({ check }: { check?: Pick<ProxyCheckSummary, 'ok' | 'timezone' | 'timezoneVotes' | 'timezoneBy'> }) {
+  const votes = check?.ok ? check.timezoneVotes : undefined
+  if (!votes || votes.length < 2) return null
+  const split = t("各数据库判断不一：{0}", votes.map((vote) => `${vote.timezone} ${vote.sources.length}`).join(' / '))
+  const decided = check!.timezoneBy ? t("以实测定位（{0}）为准", check!.timezoneBy) : t("按多数定为 {0}", check!.timezone ?? '')
+  return (
+    <Tooltip title={`${split} · ${decided}`}>
+      <small className="fb-zone-split">{t("定位不一致")}</small>
+    </Tooltip>
+  )
+}
+
 /** Country badge + exit IP (or address) + protocol and city: the proxy cell used in every list. */
 export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check?: ProxyCheckSummary; missing?: boolean }) {
   if (missing) {
@@ -40,6 +56,7 @@ export function ProxyCell({ proxy, check, missing }: { proxy: ProxyConfig; check
         {check && !check.ok && <Tooltip title={mt(check.error ?? t("连接失败"))}><small className="fb-proxy-bad">{t("检测失败")}</small></Tooltip>}
         {!check && <small className="fb-proxy-unknown">{t("未检测")}</small>}
         {check?.exitChanged && <Tooltip title={t("出口 IP 与上次不同")}><small className="fb-proxy-warn">{t("出口变化")}</small></Tooltip>}
+        <ZoneSplitTag check={check} />
       </div>
     </div>
   )
@@ -58,7 +75,7 @@ export function proxyLabel(proxy: ProxyRecordView, short = false) {
       <span className="fb-mono">{proxy.apiUrl ? t("API 提取 · {0}", new URL(proxy.apiUrl).hostname)
         : proxy.subscription ? t("订阅 · {0} · {1}", proxy.subscription.source, proxy.subscription.node)
           : `${proxy.protocol.toUpperCase()} · ${proxyAddress(proxy)}${proxy.username && !short ? ` · ${proxy.username}` : ''}`}</span>
-      <small>{details.join(' · ')}</small>
+      <small>{details.join(' · ')} <ZoneSplitTag check={proxy.check} /></small>
     </span>
   )
 }

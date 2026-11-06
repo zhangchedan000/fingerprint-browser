@@ -417,6 +417,8 @@ export interface AppPreferences {
   downloadFolder?: string
   /** Each window downloads into its own subfolder of downloadFolder ("18 环境 1"). */
   downloadPerWindow?: boolean
+  /** The main window's X: 'tray' hides it to the tray icon (windows keep running), 'quit' quits. Unset = 'tray'. */
+  closeAction?: 'tray' | 'quit'
 }
 
 export interface AppInfo {

@@ -2765,5 +2765,21 @@
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Deletes it from this computer only. Team cloud windows are kept; add one back from “Team → Cloud windows” when needed.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: time zone does not match the proxy IP",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Got it, don’t ask again for this IP (asks again if the IP changes)",
-  "以实测定位（{0}）为准": "going by measured location ({0})"
+  "以实测定位（{0}）为准": "going by measured location ({0})",
+  "退出": "Quit",
+  "打开主界面": "Open main window",
+  "还有 {0} 个窗口在运行，退出会把它们全部关闭": "{0} windows are still running. Quitting closes all of them",
+  "团队窗口会先上传登录状态再退出。": "Team windows upload their sign-in state before the app quits.",
+  "指纹浏览器还在运行": "Fingerprint Browser is still running",
+  "主界面缩小到了托盘图标，打开的窗口照常运行。点图标打开主界面，右键可以退出；在「设置 → 常规 → 关闭主界面时」可以改成直接退出。": "The main window went to the tray icon and open windows keep running. Click the icon to open it, right-click to quit. To quit on close instead, go to Settings → General → When the main window closes.",
+  "缩小到托盘图标（窗口照常运行）": "Minimize to the tray icon (windows keep running)",
+  "云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。": "The cloud backup (settings and sign-in state) is deleted for good: nobody can open it and it can no longer be restored from “Team → Cloud windows”. The window stays in each computer’s recycle bin; restoring it from there uploads it again as a new window.",
+  "{0} 个窗口还不能删除云端备份": "{0} windows can’t have their cloud backup deleted yet",
+  "还不能删除云端备份": "Can’t delete the cloud backup yet",
+  "先在窗口列表里删除（移到回收站），才能删除云端备份": "Delete the window in the window list first (it moves to the recycle bin); then its cloud backup can be deleted.",
+  "知道了": "OK",
+  "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "{0} other windows weren’t deleted in the window list (not in the recycle bin); they are skipped and their cloud backups kept.",
+  "设置改了，重新检测后才准": "Settings changed; check again for an accurate result",
+  "定位不一致": "Location varies",
+  "按多数定为 {0}": "going by the majority: {0}"
 }

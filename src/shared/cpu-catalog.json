@@ -1,5 +1,5 @@
 {
- "about": "Desktop CPUs for profiles: Intel 9th-14th gen and Core Ultra 200S, AMD Ryzen 3000-9000. Cores/threads copied from the source of each row; models whose counts no source stated are left out. Web pages cannot read the model; the threads are what navigator.hardwareConcurrency reports.",
+ "about": "Desktop CPUs for profiles: Intel 9th-14th gen and Core Ultra 200S, AMD Ryzen 3000-9000. AMD rows marked retired (uncommon models, not among PassMark's 200 most-used CPUs of 2026-11-07) are no longer offered for new windows; windows that already use one keep it. Cores/threads copied from the source of each row; models whose counts no source stated are left out. Web pages cannot read the model; the threads are what navigator.hardwareConcurrency reports.",
  "cpus": [
   {
    "vendor": "Intel",
@@ -972,6 +972,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 9 3950X",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 16,
    "threads": 32,
@@ -980,6 +981,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 9 3900XT",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 12,
    "threads": 24,
@@ -996,6 +998,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 7 3800XT",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 8,
    "threads": 16,
@@ -1004,6 +1007,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 7 3800X",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 8,
    "threads": 16,
@@ -1020,6 +1024,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 3600XT",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 6,
    "threads": 12,
@@ -1044,6 +1049,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 3500X",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 6,
    "threads": 6,
@@ -1052,6 +1058,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 3 3300X",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 4,
    "threads": 8,
@@ -1060,6 +1067,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 3 3100",
+   "retired": true,
    "family": "Matisse (Ryzen 3000)",
    "cores": 4,
    "threads": 8,
@@ -1132,6 +1140,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 5600X3D",
+   "retired": true,
    "family": "Vermeer (Ryzen 5000)",
    "cores": 6,
    "threads": 12,
@@ -1140,6 +1149,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 5600XT",
+   "retired": true,
    "family": "Vermeer (Ryzen 5000)",
    "cores": 6,
    "threads": 12,
@@ -1156,6 +1166,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 5600T",
+   "retired": true,
    "family": "Vermeer (Ryzen 5000)",
    "cores": 6,
    "threads": 12,
@@ -1172,6 +1183,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 5500X3D",
+   "retired": true,
    "family": "Vermeer (Ryzen 5000)",
    "cores": 6,
    "threads": 12,
@@ -1212,6 +1224,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 5500GT",
+   "retired": true,
    "family": "Cezanne (Ryzen 5000G)",
    "cores": 6,
    "threads": 12,
@@ -1228,6 +1241,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 3 5300G",
+   "retired": true,
    "family": "Cezanne (Ryzen 5000G)",
    "cores": 4,
    "threads": 8,
@@ -1252,6 +1266,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 9 7900X3D",
+   "retired": true,
    "family": "Raphael (Ryzen 7000)",
    "cores": 12,
    "threads": 24,
@@ -1268,6 +1283,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 9 7900",
+   "retired": true,
    "family": "Raphael (Ryzen 7000)",
    "cores": 12,
    "threads": 24,
@@ -1300,6 +1316,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 7600X3D",
+   "retired": true,
    "family": "Raphael (Ryzen 7000)",
    "cores": 6,
    "threads": 12,
@@ -1332,6 +1349,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 7400F",
+   "retired": true,
    "family": "Raphael (Ryzen 7000)",
    "cores": 6,
    "threads": 12,
@@ -1356,6 +1374,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 8600G",
+   "retired": true,
    "family": "Phoenix (Ryzen 8000G)",
    "cores": 6,
    "threads": 12,
@@ -1364,6 +1383,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 8500G",
+   "retired": true,
    "family": "Phoenix (Ryzen 8000G)",
    "cores": 6,
    "threads": 12,
@@ -1372,6 +1392,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 8400F",
+   "retired": true,
    "family": "Phoenix (Ryzen 8000G)",
    "cores": 6,
    "threads": 12,
@@ -1380,6 +1401,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 3 8300G",
+   "retired": true,
    "family": "Phoenix (Ryzen 8000G)",
    "cores": 4,
    "threads": 8,
@@ -1404,6 +1426,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 9 9900X3D",
+   "retired": true,
    "family": "Granite Ridge (Ryzen 9000)",
    "cores": 12,
    "threads": 24,
@@ -1444,6 +1467,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 7 9700F",
+   "retired": true,
    "family": "Granite Ridge (Ryzen 9000)",
    "cores": 8,
    "threads": 16,
@@ -1460,6 +1484,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 9600",
+   "retired": true,
    "family": "Granite Ridge (Ryzen 9000)",
    "cores": 6,
    "threads": 12,
@@ -1468,6 +1493,7 @@
   {
    "vendor": "AMD",
    "model": "AMD Ryzen 5 9500F",
+   "retired": true,
    "family": "Granite Ridge (Ryzen 9000)",
    "cores": 6,
    "threads": 12,

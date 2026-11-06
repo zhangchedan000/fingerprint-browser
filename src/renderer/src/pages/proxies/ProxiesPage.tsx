@@ -6,7 +6,7 @@ import type { ProxyDraft, ProxyRecordView } from '../../../../shared/types'
 import { AssignModal } from '../../components/AssignModal'
 import { humanError, relativeTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
-import { proxyAddress, proxyLabel } from '../../components/proxy'
+import { proxyAddress, proxyLabel, ZoneSplitTag } from '../../components/proxy'
 import { StatCards } from '../../components/StatCards'
 import { useTunnelStatus } from '../../components/TunnelRouteField'
 import { useWorkspace } from '../../data/workspace'
@@ -227,7 +227,7 @@ export function ProxiesPage() {
                   {proxy.check.countryCode && <span className="fb-cc">{proxy.check.countryCode}</span>}
                   <span className="fb-mono">{proxy.check.ip}</span>
                 </div>
-                <small className="fb-ellipsis">{[proxy.check.country, proxy.check.city].filter(Boolean).join(' · ') || '—'}</small>
+                <small className="fb-ellipsis">{[proxy.check.country, proxy.check.city].filter(Boolean).join(' · ') || '—'} <ZoneSplitTag check={proxy.check} /></small>
               </div>
             )
           : <span className="fb-muted">—</span>

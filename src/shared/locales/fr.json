@@ -2765,5 +2765,21 @@
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Supprimé de cet ordinateur uniquement. Les fenêtres cloud de l’équipe sont conservées ; rajoutez-les depuis « Équipe → Fenêtres cloud » si besoin.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1} : le fuseau horaire ne correspond pas à l’IP du proxy",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Compris, ne plus demander pour cette IP (redemande si l’IP change)",
-  "以实测定位（{0}）为准": "d’après la position mesurée ({0})"
+  "以实测定位（{0}）为准": "d’après la position mesurée ({0})",
+  "退出": "Quitter",
+  "打开主界面": "Ouvrir la fenêtre principale",
+  "还有 {0} 个窗口在运行，退出会把它们全部关闭": "{0} fenêtres sont encore ouvertes. Quitter les fermera toutes",
+  "团队窗口会先上传登录状态再退出。": "Les fenêtres d’équipe envoient leur état de connexion avant de quitter.",
+  "指纹浏览器还在运行": "Fingerprint Browser est toujours ouvert",
+  "主界面缩小到了托盘图标，打开的窗口照常运行。点图标打开主界面，右键可以退出；在「设置 → 常规 → 关闭主界面时」可以改成直接退出。": "La fenêtre principale est réduite dans l’icône de la zone de notification et les fenêtres ouvertes continuent de fonctionner. Cliquez sur l’icône pour l’ouvrir, clic droit pour quitter. Pour quitter à la fermeture, allez dans Paramètres → Général → À la fermeture de la fenêtre principale.",
+  "缩小到托盘图标（窗口照常运行）": "Réduire dans la zone de notification (les fenêtres restent ouvertes)",
+  "云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。": "La sauvegarde cloud (paramètres et état de connexion) est supprimée définitivement. Plus personne ne peut l’ouvrir ni la restaurer depuis « Équipe → Fenêtres cloud ». La fenêtre reste dans la corbeille de chaque ordinateur et, restaurée depuis la corbeille, elle est renvoyée comme une nouvelle fenêtre.",
+  "{0} 个窗口还不能删除云端备份": "La sauvegarde cloud de {0} fenêtres ne peut pas encore être supprimée",
+  "还不能删除云端备份": "La sauvegarde cloud ne peut pas encore être supprimée",
+  "先在窗口列表里删除（移到回收站），才能删除云端备份": "Supprimez d’abord la fenêtre dans la liste des fenêtres (elle passe dans la corbeille). Sa sauvegarde cloud pourra ensuite être supprimée.",
+  "知道了": "Compris",
+  "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "{0} autres fenêtres n’ont pas été supprimées dans la liste des fenêtres (pas dans la corbeille). Elles sont ignorées et leur sauvegarde cloud est conservée.",
+  "设置改了，重新检测后才准": "Paramètres modifiés. Relancez la vérification pour un résultat exact",
+  "定位不一致": "Localisation divergente",
+  "按多数定为 {0}": "selon la majorité ({0})"
 }

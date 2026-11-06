@@ -1,5 +1,5 @@
 import { initializeUiLanguage } from './ui-language'
-import { app, BrowserWindow, dialog, ipcMain, net, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, screen, session, shell, Tray } from 'electron'
 import { instrumentIpc, watchMainStalls } from './timing'
 import { rememberIpZone } from './proxy-tester'
 import { t } from '../shared/i18n'
@@ -35,6 +35,7 @@ import { TEAM_FEATURE_ENABLED } from '../shared/team'
 import type { AppPreferences, ProxyDraft, TunnelRoute } from '../shared/types'
 import { registerTeamIpc } from './team/team-ipc'
 import { readWindowState, windowPlacement, writeWindowState } from './window-state'
+import { AppTray } from './tray'
 
 let mainWindow: BrowserWindow | null = null
 let launcher: BrowserLauncher | null = null
@@ -43,6 +44,7 @@ let appSession: AppSessionTracker | null = null
 let tunnel: TunnelManager | null = null
 let subscriptions: TunnelManager | null = null
 let team: TeamManager | null = null
+let appTray: AppTray | null = null
 
 if (process.platform === 'win32') app.setAppUserModelId('com.fingerprintbrowser.desktop')
 
@@ -115,10 +117,15 @@ function createWindow(): BrowserWindow {
   window.on('move', saveSoon)
   window.on('maximize', saveSoon)
   window.on('unmaximize', saveSoon)
-  window.on('close', () => {
+  window.on('close', (event) => {
     clearTimeout(saveTimer)
     saveState()
+    // X hides to the tray (or asks, then quits) unless the app is already quitting.
+    appTray?.onClose(event)
   })
+  // Windows signing out or shutting down: closes are real, nothing may hold them up.
+  window.on('query-session-end', () => appTray?.markQuitting())
+  window.on('session-end', () => appTray?.markQuitting())
   window.webContents.on('console-message', (event) => {
     if (event.level === 'error') logger?.error('Renderer console error', event.message)
   })
@@ -428,6 +435,7 @@ app.whenReady().then(async () => {
     (input, init) => net.fetch(input as string, init)
   ), profiles, async () => { await team?.flush() })
   mainWindow = createWindow()
+  appTray = createTray(settings, logger)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
@@ -444,11 +452,42 @@ app.whenReady().then(async () => {
 
 app.on('second-instance', () => {
   if (!mainWindow) return
+  if (appTray) return appTray.show()
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.focus()
 })
 
+/** The tray icon (Windows): X hides the main window there; right-click 打开主界面 / 退出. */
+function createTray(settings: SettingsStore, log: AppLogger | null): AppTray | null {
+  if (process.platform !== 'win32') return null
+  try {
+    const iconPath = app.isPackaged ? join(process.resourcesPath, 'tray-icon.ico') : join(app.getAppPath(), 'build', 'icon.ico')
+    const tray = new Tray(nativeImage.createFromPath(iconPath))
+    return new AppTray({
+      tray,
+      setMenu: (items) => tray.setContextMenu(Menu.buildFromTemplate(items)),
+      window: () => mainWindow,
+      closeAction: () => settings.get().closeAction,
+      running: () => launcher?.runningCount() ?? 0,
+      confirm: async (options) => {
+        const { response } = mainWindow && !mainWindow.isDestroyed() ? await dialog.showMessageBox(mainWindow, options) : await dialog.showMessageBox(options)
+        return response === 0
+      },
+      quit: () => {
+        log?.info('从托盘或关闭按钮退出')
+        app.quit()
+      },
+      hintFile: join(app.getPath('userData'), 'tray-hint-shown')
+    })
+  } catch (error) {
+    // No tray: X quits as before.
+    log?.error('托盘图标创建失败', error)
+    return null
+  }
+}
+
 app.on('before-quit', (event) => {
+  appTray?.markQuitting()
   void tunnel?.stop()
   void subscriptions?.stop()
   if (!launcher) return

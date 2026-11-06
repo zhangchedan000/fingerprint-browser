@@ -2765,5 +2765,21 @@
   "只删本机。团队里的云端窗口会保留，需要时在「团队 → 云端窗口」加回本机。": "Solo se borra de este equipo. Las ventanas en la nube del equipo se conservan; vuelve a añadirlas desde «Equipo → Ventanas en la nube» cuando lo necesites.",
   "#{0} {1} 的时区和代理 IP 对不上": "#{0} {1}: la zona horaria no coincide con la IP del proxy",
   "知道了，这个 IP 不再提醒（IP 变了会再提醒）": "Entendido, no volver a preguntar para esta IP (se pregunta de nuevo si cambia la IP)",
-  "以实测定位（{0}）为准": "según la ubicación medida ({0})"
+  "以实测定位（{0}）为准": "según la ubicación medida ({0})",
+  "退出": "Salir",
+  "打开主界面": "Abrir ventana principal",
+  "还有 {0} 个窗口在运行，退出会把它们全部关闭": "Aún hay {0} ventanas abiertas. Al salir se cerrarán todas",
+  "团队窗口会先上传登录状态再退出。": "Las ventanas de equipo suben su estado de sesión antes de salir.",
+  "指纹浏览器还在运行": "Fingerprint Browser sigue en ejecución",
+  "主界面缩小到了托盘图标，打开的窗口照常运行。点图标打开主界面，右键可以退出；在「设置 → 常规 → 关闭主界面时」可以改成直接退出。": "La ventana principal pasó al icono de la bandeja y las ventanas abiertas siguen funcionando. Haz clic en el icono para abrirla y clic derecho para salir. Para salir al cerrar, ve a Ajustes → General → Al cerrar la ventana principal.",
+  "缩小到托盘图标（窗口照常运行）": "Minimizar al icono de la bandeja (las ventanas siguen abiertas)",
+  "云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。": "La copia en la nube (configuración y estado de sesión) se elimina para siempre: nadie podrá abrirla ni restaurarla desde «Equipo → Ventanas en la nube». La ventana sigue en la papelera de cada equipo; al restaurarla desde ahí se vuelve a subir como una ventana nueva.",
+  "{0} 个窗口还不能删除云端备份": "Aún no se puede eliminar la copia en la nube de {0} ventanas",
+  "还不能删除云端备份": "Aún no se puede eliminar la copia en la nube",
+  "先在窗口列表里删除（移到回收站），才能删除云端备份": "Primero elimina la ventana en la lista de ventanas (pasa a la papelera); después podrás eliminar su copia en la nube.",
+  "知道了": "Entendido",
+  "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "Otras {0} ventanas no se eliminaron en la lista de ventanas (no están en la papelera); se omiten y se conserva su copia en la nube.",
+  "设置改了，重新检测后才准": "La configuración cambió; vuelve a comprobar para un resultado exacto",
+  "定位不一致": "Ubicación dispar",
+  "按多数定为 {0}": "según la mayoría: {0}"
 }

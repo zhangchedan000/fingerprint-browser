@@ -532,10 +532,20 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
     }
   }
 
+  /** A cloud backup goes only once the window was deleted in the window list (in the recycle bins). */
+  function needsTrashFirst(count?: number): void {
+    Modal.info({
+      title: count ? t("{0} 个窗口还不能删除云端备份", count) : t("还不能删除云端备份"),
+      content: t("先在窗口列表里删除（移到回收站），才能删除云端备份"),
+      okText: t("知道了")
+    })
+  }
+
   function removeFromCloud(profile: TeamProfileView): void {
+    if (!profile.deletedAt) return needsTrashFirst()
     Modal.confirm({
       title: t("删除云端窗口“{0}”？", profile.name),
-      content: t("云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。"),
+      content: t("云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。"),
       okText: t("删除"),
       okButtonProps: { danger: true },
       cancelText: t("取消"),
@@ -585,13 +595,16 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   }
 
   function removeManyFromCloud(): void {
-    const rows = selected
+    const rows = selected.filter((profile) => profile.deletedAt)
+    const skipped = selected.length - rows.length
+    if (!rows.length) return needsTrashFirst(skipped)
     const names = rows.slice(0, 8).map((profile) => profile.name).join('、') + (rows.length > 8 ? t(" 等 {0} 个", rows.length) : '')
     Modal.confirm({
       title: t("删除 {0} 个云端窗口？", rows.length),
       content: <>
         <p>{names}</p>
-        <p>{t("云端的配置和登录状态会被永久删除，所有人都打不开它；各台电脑上的副本都移到回收站（从回收站恢复时会作为新窗口重新上传）。只想删除、以后还能恢复的，请在窗口列表里删除。")}</p>
+        {skipped > 0 && <p>{t("另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。", skipped)}</p>}
+        <p>{t("云端备份（配置和登录状态）会被永久删除，所有人都打不开它，不能再从「团队 → 云端窗口」恢复。各台电脑回收站里的这个窗口还在，从回收站恢复时会作为新窗口重新上传。")}</p>
       </>,
       okText: t("删除"),
       okButtonProps: { danger: true },

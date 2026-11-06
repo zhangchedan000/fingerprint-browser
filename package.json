@@ -75,6 +75,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "tray-icon.ico"
       }
     ],
     "mac": {

@@ -759,6 +759,51 @@ describe('BrowserLauncher concurrent lifecycle', () => {
     expect(controller.children.length).toBe(1)
   })
 
+  it('checks the proxy while the team server is asked (lock, newest config); a proxy changed by the config is checked again', async () => {
+    const { profiles, controller, ids } = await launchFixture(1)
+    await profiles.update(ids[0], { ...profiles.get(ids[0]), proxy: { protocol: 'http', host: '127.0.0.1', port: 9, username: '', password: '' } })
+    const order: string[] = []
+    const tester = vi.fn(async (proxy: { port: number }) => {
+      order.push(`check ${proxy.port}`)
+      return { ok: true, latencyMs: 1, checkedAt: new Date().toISOString() }
+    })
+    const settings = new SettingsStore(profiles.vaultPath)
+    await settings.initialize()
+    const launcher = new BrowserLauncher(profiles, settings, () => undefined, new ExtensionStore(profiles.vaultPath), undefined,
+      new FakeProcessInspector([]), tester as never, 3, controller.spawn)
+    let answer!: () => void
+    launcher.setLaunchHooks({
+      beforeLaunch: () => new Promise<void>((resolve) => { answer = () => { order.push('server'); resolve() } }),
+      launchFailed: async () => undefined,
+      afterExit: async () => undefined
+    })
+    const started = launcher.launch(ids[0])
+    // The check runs before the team server has answered.
+    await waitUntil(() => tester.mock.calls.length === 1)
+    answer()
+    await waitUntil(() => controller.children.length === 1)
+    controller.startPending()
+    await started
+    expect(order).toEqual(['check 9', 'server'])
+    await launcher.close(ids[0])
+
+    // The team server brings a different proxy: the early check is not used, the new proxy is checked.
+    launcher.setLaunchHooks({
+      beforeLaunch: async () => {
+        order.push('server')
+        await profiles.update(ids[0], { ...profiles.get(ids[0]), proxyId: undefined, proxy: { protocol: 'http', host: '127.0.0.1', port: 10, username: '', password: '' } })
+      },
+      launchFailed: async () => undefined,
+      afterExit: async () => undefined
+    })
+    const again = launcher.launch(ids[0])
+    await waitUntil(() => controller.children.length === 2)
+    controller.startPending()
+    await again
+    expect(order.slice(2)).toEqual(['check 9', 'server', 'check 10'])
+    await launcher.close(ids[0])
+  })
+
   it('stops asking about the time zone for an IP the user muted, and asks again when the IP changes', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'prism-launcher-'))
     temporaryPaths.push(vault)

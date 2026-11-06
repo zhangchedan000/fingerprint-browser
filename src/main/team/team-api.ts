@@ -436,16 +436,17 @@ export class TeamApi {
     await this.request('DELETE', `/api/collections/team_profiles/records/${encodeURIComponent(id)}`)
   }
 
-  lock(id: string, device: string): Promise<{ expires: number; lockMs: number }> {
-    return this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/lock`, { device })
+  /** Holds the window for this account on this computer (device: its name; deviceId: the app's fixed id). */
+  lock(id: string, device: string, deviceId?: string): Promise<{ expires: number; lockMs: number }> {
+    return this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/lock`, { device, deviceId })
   }
 
-  heartbeat(id: string): Promise<{ expires: number }> {
-    return this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/heartbeat`)
+  heartbeat(id: string, deviceId?: string): Promise<{ expires: number }> {
+    return this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/heartbeat`, { deviceId })
   }
 
-  async unlock(id: string, force = false): Promise<void> {
-    await this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/unlock`, { force })
+  async unlock(id: string, force = false, deviceId?: string): Promise<void> {
+    await this.request('POST', `/api/team/profiles/${encodeURIComponent(id)}/unlock`, { force, deviceId })
   }
 
   /** Saves the window's login state archive to `target`. */
