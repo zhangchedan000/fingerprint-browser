@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { formatList, t } from '../../../../shared/i18n'
 import { DEFAULT_DEEP_CHECK_SITES, DEEP_SITES, knownDeepSite, type DeepCheckSite } from '../../../../shared/deep-check'
 import { useWorkspace } from '../../data/workspace'
+import { useListDrag } from '../../components/list-drag'
 
 /** The deep check's site list (shared by every window): switch, add, delete, back to the default list. */
 export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -15,6 +16,8 @@ export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () =
   const missing = DEFAULT_DEEP_CHECK_SITES.filter((site) => !sites.some((item) => knownDeepSite(item.url)?.site === knownDeepSite(site.url)?.site))
 
   const save = (next: DeepCheckSite[] | undefined) => ws.setPreferences({ deepCheckSites: next }).catch((reason) => ws.fail(reason))
+  // The deep check opens the sites, and shows their results, in this order.
+  const drag = useListDrag(sites, (next) => void save(next))
 
   function add(): void {
     let address: URL
@@ -39,7 +42,8 @@ export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () =
     <Modal open={open} onCancel={onClose} footer={null} title={t("深度检测网站")} width={620}>
       <div className="fb-deep-sites">
         {sites.map((site) => (
-          <div key={site.id} className="fb-deep-sites-row">
+          <div key={site.id} {...drag.rowProps(site.id)} className={`fb-deep-sites-row ${drag.rowProps(site.id).className ?? ''}`}>
+            {drag.handle(site.id)}
             <Switch
               size="small"
               checked={site.enabled}

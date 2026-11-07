@@ -1,27 +1,40 @@
-import { HolderOutlined, SettingOutlined } from '@ant-design/icons'
-import { Button, Checkbox, Popover, Tooltip, type TableColumnsType } from 'antd'
-import { useMemo, useState, type DragEvent, type MouseEvent, type ReactNode, type ThHTMLAttributes } from 'react'
+import { DeleteOutlined, EditOutlined, HolderOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { Button, Checkbox, Input, Popconfirm, Popover, Space, Tooltip, type TableColumnsType, type TableProps } from 'antd'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type HTMLAttributes, type MouseEvent, type ReactNode, type ThHTMLAttributes } from 'react'
 import { t } from '../../../shared/i18n'
+import { arrangeRows, CUSTOM_COLUMN_PREFIX, movedRows, type CustomColumn, type TableUiPrefs } from '../../../shared/ui-prefs'
+import { useWorkspace } from '../data/workspace'
 
 /**
- * Columns the user arranges, per table and per computer: drag a header edge to change one
- * column's width (the others keep theirs), drag a header to move it, and hide columns in the
- * column settings. The checkbox column and pinned columns (fixed: left/right, e.g. 操作) stay put.
+ * Columns and rows the user arranges, per table: drag a header edge to change one column's width
+ * (the others keep theirs), drag a header to move it; in the column settings hide, reorder, rename,
+ * add their own columns (each row can be written in, and sorted by them) and delete those; drag rows
+ * by their handle to put them in their own order. The checkbox column and pinned columns
+ * (fixed: left/right, e.g. 操作) stay put. All of it follows the account (user 11-07), see ui-prefs.ts.
+ * Every list or table of the launcher has these (rule of 11-07 in CLAUDE.md).
  */
 
 const MIN_WIDTH = 56
 const STORE_PREFIX = 'fb.columns.'
 const OLD_WIDTHS_PREFIX = 'fb.columnWidths.'
 const FILL_KEY = '__fill'
+const DRAG_KEY = '__drag'
 const FALLBACK_WIDTH = 140
+const CUSTOM_WIDTH = 160
+/** Typing in a cell or dragging a width saves once it has been still this long. */
+const SAVE_DELAY_MS = 600
 
 interface Layout {
   widths: Record<string, number>
   order: string[]
   hidden: string[]
+  titles: Record<string, string>
+  custom: CustomColumn[]
+  values: Record<string, Record<string, string>>
+  rows: string[]
 }
 
-const EMPTY: Layout = { widths: {}, order: [], hidden: [] }
+const EMPTY: Layout = { widths: {}, order: [], hidden: [], titles: {}, custom: [], values: {}, rows: [] }
 
 type Column<T> = TableColumnsType<T>[number]
 
@@ -40,29 +53,46 @@ function isRequired(column: Column<never>): boolean {
   return ('dataIndex' in column && column.dataIndex === 'name') || column.key === 'name'
 }
 
-function load(key: string): Layout {
+function fromPrefs(table: TableUiPrefs | undefined): Layout {
+  return {
+    widths: table?.widths ?? {}, order: table?.order ?? [], hidden: table?.hidden ?? [], titles: table?.titles ?? {},
+    custom: table?.custom ?? [], values: table?.values ?? {}, rows: table?.rows ?? []
+  }
+}
+
+function toPrefs(layout: Layout): TableUiPrefs | undefined {
+  const table: TableUiPrefs = {
+    ...(Object.keys(layout.widths).length ? { widths: layout.widths } : {}),
+    ...(layout.order.length ? { order: layout.order } : {}),
+    ...(layout.hidden.length ? { hidden: layout.hidden } : {}),
+    ...(Object.keys(layout.titles).length ? { titles: layout.titles } : {}),
+    ...(layout.custom.length ? { custom: layout.custom } : {}),
+    ...(Object.keys(layout.values).length ? { values: layout.values } : {}),
+    ...(layout.rows.length ? { rows: layout.rows } : {})
+  }
+  return Object.keys(table).length ? table : undefined
+}
+
+/** What 0.5.78 and earlier kept on this computer only; moved to the account the first time it is used. */
+function loadLocal(key: string): Layout | undefined {
   try {
     const value = JSON.parse(localStorage.getItem(STORE_PREFIX + key) || 'null') as Partial<Layout> | null
-    if (value && typeof value === 'object') {
-      return { widths: value.widths ?? {}, order: value.order ?? [], hidden: value.hidden ?? [] }
-    }
+    if (value && typeof value === 'object') return { ...EMPTY, widths: value.widths ?? {}, order: value.order ?? [], hidden: value.hidden ?? [] }
     // Widths saved by 0.5.8 – 0.5.11.
     const widths = JSON.parse(localStorage.getItem(OLD_WIDTHS_PREFIX + key) || 'null') as Record<string, number> | null
     if (widths && typeof widths === 'object') return { ...EMPTY, widths }
   } catch {
     // Unreadable: the default layout.
   }
-  return EMPTY
+  return undefined
 }
 
-function store(key: string, layout: Layout): void {
+function forgetLocal(key: string): void {
   try {
-    const empty = !Object.keys(layout.widths).length && !layout.order.length && !layout.hidden.length
-    if (empty) localStorage.removeItem(STORE_PREFIX + key)
-    else localStorage.setItem(STORE_PREFIX + key, JSON.stringify(layout))
+    localStorage.removeItem(STORE_PREFIX + key)
     localStorage.removeItem(OLD_WIDTHS_PREFIX + key)
   } catch {
-    // A convenience; without storage the layout lasts until the page is left.
+    // Nothing kept here to forget.
   }
 }
 
@@ -148,6 +178,13 @@ function HeaderCell({ onResizeStart, onResizeWidth, onResizeEnd, onResizeReset, 
 
 export const tableHeaderComponents = { header: { cell: HeaderCell } }
 
+const ROW_DRAG_TYPE = 'application/x-fb-row'
+
+/** A row that rows dragged by their handle can be dropped on (above or below it). */
+function DropRow({ className, ...props }: HTMLAttributes<HTMLTableRowElement> & { 'data-row-key'?: string }) {
+  return <tr className={className} {...props} />
+}
+
 export interface TableColumnsResult<T> {
   columns: TableColumnsType<T>
   scrollX?: number
@@ -155,28 +192,108 @@ export interface TableColumnsResult<T> {
   tableLayout?: 'fixed'
   /** The 列设置 button. */
   settings: ReactNode
+  /** The rows in the user's order (the page's own order for rows not dragged yet). */
+  arrange: <R extends T & { id: string }>(rows: R[]) => R[]
+  /** For the table's onRow: rows take dragged rows; merge with the page's own handlers. */
+  rowProps: (row: T & { id: string }, shown: Array<T & { id: string }>) => HTMLAttributes<HTMLTableRowElement>
+  /** For the table's rowClassName: where a dragged row would land. */
+  rowClass: (row: T & { id: string }) => string
+  /** For the table's onChange: while a header sort is on, rows cannot be dragged. */
+  onChange: TableProps<T>['onChange']
+  /** Header and row components for the table. */
+  components: TableProps<T>['components']
+}
+
+export interface TableColumnsOptions {
+  /** A title for the column settings when a page has two tables (订阅 / 节点). */
+  settingsTitle?: string
+  /** Rows can be dragged into the user's own order (needs rows with an id). */
+  rowDrag?: boolean
 }
 
 /** Each table is keyed by its column set, so pages need no names of their own. */
-export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: number, settingsTitle?: string): TableColumnsResult<T> {
+export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: number, options: TableColumnsOptions | string = {}): TableColumnsResult<T> {
+  const { settingsTitle, rowDrag } = typeof options === 'string' ? { settingsTitle: options, rowDrag: false } : options
+  const ws = useWorkspace()
   const ids = columns.map((column, index) => columnId(column as never, index))
   const key = ids.join('|')
-  const [saved, setSaved] = useState<{ key: string; layout: Layout }>(() => ({ key, layout: load(key) }))
-  const layout = saved.key === key ? saved.layout : load(key)
+  const accountTable = ws.preferences.uiPrefs?.tables?.[key]
+  // This computer's layout from before (0.5.78 and earlier), until the account has one for the table.
+  const local = useMemo(() => accountTable ? undefined : loadLocal(key), [key, accountTable])
+  const fromAccount = useMemo(() => fromPrefs(accountTable), [accountTable])
+  const [draft, setDraft] = useState<{ key: string; layout: Layout }>()
+  const layout = draft?.key === key ? draft.layout : local ?? fromAccount
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [sorted, setSorted] = useState(false)
+  const [dragging, setDragging] = useState<string>()
+  const [over, setOver] = useState<{ id: string; before: boolean }>()
 
-  function update(change: (current: Layout) => Layout, persist = true): void {
-    setSaved((current) => {
-      const next = change(current.key === key ? current.layout : load(key))
-      if (persist) store(key, next)
+  // The earlier layout goes to the account once, so other computers of the account get it too.
+  useEffect(() => {
+    if (!local) return
+    void ws.setTablePrefs(key, toPrefs(local)).then(() => forgetLocal(key)).catch(() => undefined)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once per table key
+  }, [key, Boolean(local)])
+
+  // The account's copy changed (another computer, a reset): shown once nothing is waiting to be saved.
+  useEffect(() => {
+    if (!saveTimer.current) setDraft(undefined)
+  }, [accountTable])
+
+  function persist(next: Layout, delay: number): void {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = undefined
+      void ws.setTablePrefs(key, toPrefs(next)).catch((reason) => ws.fail(reason))
+    }, delay)
+  }
+
+  // Several changes in a row (a width drag) each build on the one before, not on what was rendered.
+  const base = local ?? fromAccount
+  function update(change: (current: Layout) => Layout, save: boolean | 'later' = true): void {
+    setDraft((previous) => {
+      const next = change(previous?.key === key ? previous.layout : base)
+      if (save) persist(next, save === 'later' ? SAVE_DELAY_MS : 0)
       return { key, layout: next }
     })
   }
 
   return useMemo(() => {
-    const byId = new Map(columns.map((column, index) => [ids[index], column]))
+    const customIds = layout.custom.map((column) => column.id)
+    const allIds = [...ids, ...customIds]
+    const customById = new Map(layout.custom.map((column) => [column.id, column]))
+    const byId = new Map<string, Column<T>>(columns.map((column, index) => [ids[index], column]))
+    // The user's own columns: a cell to write in, sorted by what is written.
+    for (const custom of layout.custom) {
+      byId.set(custom.id, {
+        key: custom.id,
+        title: custom.title,
+        width: CUSTOM_WIDTH,
+        sorter: (first: unknown, second: unknown) => (layout.values[(first as { id: string }).id]?.[custom.id] ?? '')
+          .localeCompare(layout.values[(second as { id: string }).id]?.[custom.id] ?? '', undefined, { numeric: true }),
+        render: (_value: unknown, row: unknown) => {
+          const rowId = (row as { id?: string }).id
+          if (!rowId) return null
+          return (
+            <CustomCell
+              value={layout.values[rowId]?.[custom.id] ?? ''}
+              onSave={(text) => update((current) => {
+                const cells = { ...(current.values[rowId] ?? {}) }
+                if (text.trim()) cells[custom.id] = text.trim()
+                else delete cells[custom.id]
+                const values = { ...current.values }
+                if (Object.keys(cells).length) values[rowId] = cells
+                else delete values[rowId]
+                return { ...current, values }
+              })}
+            />
+          )
+        }
+      } as Column<T>)
+    }
     const pinnedLeft = ids.filter((id) => byId.get(id)!.fixed === 'left' || byId.get(id)!.fixed === true)
     const pinnedRight = ids.filter((id) => byId.get(id)!.fixed === 'right')
-    const movable = ids.filter((id) => !isPinned(byId.get(id) as never))
+    const movable = allIds.filter((id) => !isPinned(byId.get(id) as never))
     // Saved order first; columns added since keep their default place among the rest.
     const ordered = [...layout.order.filter((id) => movable.includes(id))]
     movable.forEach((id, index) => {
@@ -186,6 +303,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
     })
     const hidden = new Set(layout.hidden.filter((id) => movable.includes(id) && !isRequired(byId.get(id) as never)))
     const sized = Object.keys(layout.widths).length > 0
+    const titleOf = (id: string): ReactNode => customById.get(id)?.title ?? layout.titles[id] ?? byId.get(id)!.title as ReactNode
 
     function move(from: string, to: string, before: boolean): void {
       update((current) => {
@@ -209,6 +327,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
       if (ownWidth) return { ...column, width } as Column<T>
       return {
         ...column,
+        title: titleOf(id),
         width,
         onHeaderCell: (cell: unknown) => ({
           ...(column.onHeaderCell?.(cell as never) ?? {}),
@@ -225,45 +344,184 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
       } as Column<T>
     }
 
+    // The drag handle: first, pinned left; off while a header sort decides the order.
+    const handle: Column<T> = {
+      key: DRAG_KEY,
+      title: '',
+      width: 34,
+      fixed: 'left',
+      className: 'fb-row-drag-cell',
+      render: (_value: unknown, row: unknown) => {
+        const rowId = (row as { id?: string }).id
+        if (!rowId) return null
+        return (
+          <Tooltip title={sorted ? t("点表头取消排序后，可以拖动调整顺序") : t("按住拖动，调整顺序")} mouseEnterDelay={0.6}>
+            <span
+              className={sorted ? 'fb-row-handle is-off' : 'fb-row-handle'}
+              draggable={!sorted}
+              onClick={(event) => event.stopPropagation()}
+              onDragStart={(event) => {
+                event.stopPropagation()
+                event.dataTransfer.setData(ROW_DRAG_TYPE, rowId)
+                event.dataTransfer.effectAllowed = 'move'
+                const tr = (event.currentTarget as HTMLElement).closest('tr')
+                if (tr) event.dataTransfer.setDragImage(tr, 16, 16)
+                setDragging(rowId)
+              }}
+              onDragEnd={() => { setDragging(undefined); setOver(undefined) }}
+            >
+              <HolderOutlined />
+            </span>
+          </Tooltip>
+        )
+      }
+    } as Column<T>
+
     const visible = ordered.filter((id) => !hidden.has(id))
-    const next: Column<T>[] = [...pinnedLeft.map(build), ...visible.map(build)]
+    const next: Column<T>[] = [...(rowDrag ? [handle] : []), ...pinnedLeft.map(build), ...visible.map(build)]
     // Once widths are fixed, space the columns leave takes this blank column, before 操作.
     if (sized) next.push({ key: FILL_KEY, title: '', render: () => null, className: 'fb-col-fill' } as Column<T>)
     next.push(...pinnedRight.map(build))
 
     const settings = (
       <ColumnSettings
-        items={ordered.map((id) => ({ id, title: byId.get(id)!.title as ReactNode, hidden: hidden.has(id), required: isRequired(byId.get(id) as never) }))}
+        items={ordered.map((id) => ({
+          id,
+          title: titleOf(id),
+          defaultTitle: customById.has(id) ? undefined : byId.get(id)!.title as ReactNode,
+          renamed: Boolean(layout.titles[id]),
+          custom: customById.has(id),
+          hidden: hidden.has(id),
+          required: isRequired(byId.get(id) as never)
+        }))}
         onToggle={(id, show) => update((current) => ({ ...current, hidden: show ? current.hidden.filter((item) => item !== id) : [...current.hidden.filter((item) => item !== id), id] }))}
         onMove={(from, to, before) => move(from, to, before)}
-        onReset={() => update(() => EMPTY)}
-        changed={sized || layout.order.length > 0 || hidden.size > 0}
+        onRename={(id, title) => update((current) => {
+          const clean = title.trim().slice(0, 40)
+          if (customById.has(id)) return clean ? { ...current, custom: current.custom.map((column) => column.id === id ? { ...column, title: clean } : column) } : current
+          const titles = { ...current.titles }
+          if (clean) titles[id] = clean
+          else delete titles[id]
+          return { ...current, titles }
+        })}
+        onAdd={(title) => update((current) => current.custom.length >= 20 ? current : ({
+          ...current,
+          custom: [...current.custom, { id: `${CUSTOM_COLUMN_PREFIX}${Date.now().toString(36)}`, title: title.trim().slice(0, 40) }]
+        }))}
+        onDelete={(id) => update((current) => ({
+          ...current,
+          custom: current.custom.filter((column) => column.id !== id),
+          order: current.order.filter((item) => item !== id),
+          hidden: current.hidden.filter((item) => item !== id),
+          values: Object.fromEntries(Object.entries(current.values)
+            .map(([row, cells]) => [row, Object.fromEntries(Object.entries(cells).filter(([column]) => column !== id))] as const)
+            .filter(([, cells]) => Object.keys(cells).length > 0))
+        }))}
+        canAdd={layout.custom.length < 20}
+        // Back to the page's own columns; the user's own columns, what is written in them and the row order stay.
+        onReset={() => update((current) => ({ ...EMPTY, custom: current.custom, values: current.values, rows: current.rows }))}
+        changed={sized || layout.order.length > 0 || hidden.size > 0 || Object.keys(layout.titles).length > 0}
         title={settingsTitle}
       />
     )
 
     return {
       columns: next as TableColumnsType<T>,
-      scrollX: sized ? Math.max(minScrollX ?? 0, total + 48) : minScrollX,
+      scrollX: sized ? Math.max(minScrollX ?? 0, total + 48 + (rowDrag ? 34 : 0)) : minScrollX,
       tableLayout: sized ? 'fixed' : undefined,
-      settings
+      settings,
+      arrange: (rows) => rowDrag ? arrangeRows(rows, layout.rows) : rows,
+      rowProps: (row, shown) => !rowDrag ? {} : {
+        onDragOver: (event: DragEvent<HTMLTableRowElement>) => {
+          if (!event.dataTransfer.types.includes(ROW_DRAG_TYPE)) return
+          event.preventDefault()
+          const box = event.currentTarget.getBoundingClientRect()
+          const before = event.clientY < box.top + box.height / 2
+          if (over?.id !== row.id || over.before !== before) setOver({ id: row.id, before })
+        },
+        onDrop: (event: DragEvent<HTMLTableRowElement>) => {
+          if (!event.dataTransfer.types.includes(ROW_DRAG_TYPE)) return
+          event.preventDefault()
+          const from = event.dataTransfer.getData(ROW_DRAG_TYPE)
+          const box = event.currentTarget.getBoundingClientRect()
+          const before = event.clientY < box.top + box.height / 2
+          setDragging(undefined)
+          setOver(undefined)
+          if (!from || from === row.id) return
+          update((current) => ({ ...current, rows: movedRows(current.rows, shown.map((item) => item.id), from, row.id, before) }))
+        }
+      },
+      rowClass: (row) => !rowDrag ? '' : [
+        dragging === row.id ? 'fb-row-dragging' : '',
+        over?.id === row.id && dragging !== row.id ? (over.before ? 'fb-row-drop-before' : 'fb-row-drop-after') : ''
+      ].filter(Boolean).join(' '),
+      onChange: (_pagination, _filters, sorter) => {
+        const sorts = Array.isArray(sorter) ? sorter : [sorter]
+        setSorted(sorts.some((item) => Boolean(item?.order)))
+      },
+      components: { ...tableHeaderComponents, body: { row: DropRow } }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ids follow columns and key
-  }, [columns, layout, key, minScrollX, settingsTitle])
+  }, [columns, layout, key, minScrollX, settingsTitle, rowDrag, sorted, dragging, over])
+}
+
+/** A cell of a column the user added: the text, and a box to write in when clicked. */
+function CustomCell({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(value)
+  if (!editing) {
+    return (
+      <span
+        className={value ? 'fb-custom-cell' : 'fb-custom-cell is-empty'}
+        role="button"
+        tabIndex={0}
+        title={t("点击填写")}
+        onClick={(event) => { event.stopPropagation(); setText(value); setEditing(true) }}
+        onKeyDown={(event) => { if (event.key === 'Enter') { setText(value); setEditing(true) } }}
+      >
+        {value || t("点击填写")}
+      </span>
+    )
+  }
+  const done = () => {
+    setEditing(false)
+    if (text.trim() !== value) onSave(text)
+  }
+  return (
+    <Input
+      size="small"
+      autoFocus
+      maxLength={500}
+      value={text}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={done}
+      onPressEnter={done}
+      onKeyDown={(event) => { if (event.key === 'Escape') { setText(value); setEditing(false) } }}
+    />
+  )
 }
 
 interface SettingsItem {
   id: string
   title: ReactNode
+  /** The page's own title (for a column the user renamed). */
+  defaultTitle?: ReactNode
+  renamed: boolean
+  custom: boolean
   hidden: boolean
   required: boolean
 }
 
-/** 列设置: drag rows to reorder, tick to show, and go back to the default layout. */
-function ColumnSettings({ items, onToggle, onMove, onReset, changed, title }: {
+/** 列设置: drag rows to reorder, tick to show, rename, add and delete the user's own columns, back to the default layout. */
+function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, canAdd, onReset, changed, title }: {
   items: SettingsItem[]
   onToggle: (id: string, show: boolean) => void
   onMove: (from: string, to: string, before: boolean) => void
+  onRename: (id: string, title: string) => void
+  onAdd: (title: string) => void
+  onDelete: (id: string) => void
+  canAdd: boolean
   onReset: () => void
   changed: boolean
   /** A page with two tables names which one (订阅 / 节点). */
@@ -271,14 +529,25 @@ function ColumnSettings({ items, onToggle, onMove, onReset, changed, title }: {
 }) {
   const [dragging, setDragging] = useState<string>()
   const [over, setOver] = useState<{ id: string; before: boolean }>()
+  const [renaming, setRenaming] = useState<{ id: string; text: string }>()
+  const [adding, setAdding] = useState('')
   const shown = items.filter((item) => !item.hidden).length
+  const finishRename = () => {
+    if (renaming) onRename(renaming.id, renaming.text)
+    setRenaming(undefined)
+  }
+  const add = () => {
+    if (!adding.trim()) return
+    onAdd(adding)
+    setAdding('')
+  }
   const panel = (
     <div className="fb-colset">
       <ul>
         {items.map((item) => (
           <li
             key={item.id}
-            draggable
+            draggable={renaming?.id !== item.id}
             className={[dragging === item.id ? 'is-dragging' : '', over?.id === item.id ? (over.before ? 'drop-before' : 'drop-after') : ''].filter(Boolean).join(' ')}
             onDragStart={(event) => { setDragging(item.id); event.dataTransfer.effectAllowed = 'move' }}
             onDragEnd={() => { setDragging(undefined); setOver(undefined) }}
@@ -296,16 +565,50 @@ function ColumnSettings({ items, onToggle, onMove, onReset, changed, title }: {
             }}
           >
             <HolderOutlined className="fb-colset-handle" />
-            <Checkbox
-              checked={!item.hidden}
-              disabled={item.required || (!item.hidden && shown <= 1)}
-              onChange={(event) => onToggle(item.id, event.target.checked)}
-            >
-              {item.title || <span className="fb-muted">{t("（无标题）")}</span>}
-            </Checkbox>
+            {renaming?.id === item.id ? (
+              <Input
+                size="small"
+                autoFocus
+                maxLength={40}
+                value={renaming.text}
+                placeholder={typeof item.defaultTitle === 'string' ? item.defaultTitle : t("列名")}
+                onChange={(event) => setRenaming({ id: item.id, text: event.target.value })}
+                onBlur={finishRename}
+                onPressEnter={finishRename}
+                onKeyDown={(event) => { if (event.key === 'Escape') setRenaming(undefined) }}
+              />
+            ) : (
+              <Checkbox
+                className="fb-colset-check"
+                checked={!item.hidden}
+                disabled={item.required || (!item.hidden && shown <= 1)}
+                onChange={(event) => onToggle(item.id, event.target.checked)}
+              >
+                {item.title || <span className="fb-muted">{t("（无标题）")}</span>}
+                {item.custom && <span className="fb-colset-tag">{t("自定义")}</span>}
+              </Checkbox>
+            )}
+            {renaming?.id !== item.id && (
+              <span className="fb-colset-tools">
+                <Tooltip title={item.renamed ? t("改名（清空恢复原名）") : t("改名")}>
+                  <Button type="text" size="small" icon={<EditOutlined />} aria-label={t("改名")}
+                    onClick={() => setRenaming({ id: item.id, text: typeof item.title === 'string' ? item.title : '' })} />
+                </Tooltip>
+                {item.custom && (
+                  <Popconfirm title={t("删除这一列？已填写的内容也会删掉")} okText={t("删除")} cancelText={t("取消")} okButtonProps={{ danger: true }} onConfirm={() => onDelete(item.id)}>
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={t("删除")} />
+                  </Popconfirm>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>
+      <Space.Compact className="fb-colset-add">
+        <Input size="small" maxLength={40} placeholder={t("新建列的名称")} value={adding} disabled={!canAdd} onChange={(event) => setAdding(event.target.value)} onPressEnter={add} />
+        <Button size="small" icon={<PlusOutlined />} disabled={!canAdd || !adding.trim()} onClick={add}>{t("新建列")}</Button>
+      </Space.Compact>
+      {!canAdd && <div className="fb-muted fb-colset-limit">{t("最多 20 个自定义列")}</div>}
       <div className="fb-colset-foot">
         <span className="fb-muted">{t("拖动调整顺序")}</span>
         <Button size="small" type="link" disabled={!changed} onClick={onReset}>{t("恢复默认")}</Button>
@@ -314,7 +617,7 @@ function ColumnSettings({ items, onToggle, onMove, onReset, changed, title }: {
   )
   return (
     <Popover trigger="click" placement="bottomRight" title={title ?? t("列设置")} content={panel} arrow={false}>
-      <Tooltip title={title ? t("{0}：顺序、显示和宽度", title) : t("列设置：顺序、显示和宽度")}>
+      <Tooltip title={title ? t("{0}：顺序、显示、宽度、列名和自定义列", title) : t("列设置：顺序、显示、宽度、列名和自定义列")}>
         <Button icon={<SettingOutlined />} aria-label={title ?? t("列设置")} className={changed ? 'fb-colset-button is-changed' : 'fb-colset-button'}>{title ? title : null}</Button>
       </Tooltip>
     </Popover>

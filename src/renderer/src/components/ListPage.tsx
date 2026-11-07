@@ -3,7 +3,7 @@ import { Button, Dropdown, Empty, Spin, Table, Tabs, Tooltip, type TableColumnsT
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { t } from '../../../shared/i18n'
-import { tableHeaderComponents, useTableColumns } from './table-columns'
+import { useTableColumns } from './table-columns'
 
 export interface ListTab {
   key: string
@@ -75,7 +75,9 @@ export function ListPage<T extends { id: string }>({
   onRowClick, activeRowId, footnote, paginate = true
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
-  const table = useTableColumns(columns, scrollX === 'content' ? undefined : scrollX)
+  // Every list's rows can be dragged into the user's own order (user 11-07); header sorts still work.
+  const table = useTableColumns(columns, scrollX === 'content' ? undefined : scrollX, { rowDrag: true })
+  const arranged = table.arrange(rows)
   const selected = new Set(selection?.ids ?? [])
   return (
     <>
@@ -104,14 +106,16 @@ export function ListPage<T extends { id: string }>({
             rowKey="id"
             size="middle"
             columns={table.columns}
-            components={tableHeaderComponents}
+            components={table.components}
             tableLayout={table.tableLayout}
-            dataSource={rows}
+            dataSource={arranged}
+            onChange={table.onChange}
             rowClassName={(row) => [
               selected.has(row.id) || row.id === activeRowId ? 'fb-row-selected' : '',
-              onRowClick ? 'fb-row-clickable' : ''
+              onRowClick ? 'fb-row-clickable' : '',
+              table.rowClass(row)
             ].filter(Boolean).join(' ')}
-            onRow={onRowClick && ((row) => ({ onClick: () => onRowClick(row) }))}
+            onRow={(row) => ({ ...table.rowProps(row, arranged), ...(onRowClick ? { onClick: () => onRowClick(row) } : {}) })}
             rowSelection={selection && {
               selectedRowKeys: selection.ids,
               preserveSelectedRowKeys: true,

@@ -2816,5 +2816,17 @@
   "加入": "Adicionar",
   "IP 数据库对这个 IP 在哪个国家说法不一：{0}；已按 {1} 配": "As bases de IP discordam sobre o país deste IP: {0}; configurado para {1}",
   "{0}（{1} 家）": "{0} ({1})",
-  "按 {0} 配（{1}）": "Usar {0} ({1})"
+  "按 {0} 配（{1}）": "Usar {0} ({1})",
+  "{0}：顺序、显示、宽度、列名和自定义列": "{0}: ordem, exibição, largura, nomes e colunas próprias",
+  "列名": "Nome da coluna",
+  "列设置：顺序、显示、宽度、列名和自定义列": "Colunas: ordem, exibição, largura, nomes e colunas próprias",
+  "删除这一列？已填写的内容也会删掉": "Excluir esta coluna? O que foi escrito nela também será excluído",
+  "按住拖动，调整顺序": "Arraste para mudar a ordem",
+  "改名": "Renomear",
+  "改名（清空恢复原名）": "Renomear (vazio volta ao nome original)",
+  "新建列": "Nova coluna",
+  "新建列的名称": "Nome da nova coluna",
+  "最多 20 个自定义列": "No máximo 20 colunas próprias",
+  "点击填写": "Clique para preencher",
+  "点表头取消排序后，可以拖动调整顺序": "Desative a ordenação pelo cabeçalho para arrastar as linhas"
 }

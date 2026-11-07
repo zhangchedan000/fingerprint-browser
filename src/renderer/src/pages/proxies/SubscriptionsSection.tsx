@@ -1,5 +1,5 @@
 import { ApiOutlined, ClearOutlined, DeleteOutlined, EditOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Dropdown, Input, Modal, Space, Table, Tag, Tooltip, type TableColumnsType } from 'antd'
+import { Alert, Button, Dropdown, Input, Modal, Space, Table, Tag, Tooltip, type TableColumnsType, type TableProps } from 'antd'
 import { useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { ProxyRecordView, TunnelNodeInfo, TunnelSourceSummary, TunnelStatus } from '../../../../shared/types'
@@ -7,7 +7,7 @@ import { humanError, relativeTime } from '../../components/format'
 import { StatCards } from '../../components/StatCards'
 import { nodeShortName, SubscriptionModal, subscriptionNodes } from '../../components/subscriptions'
 import { DelayText } from '../../components/TunnelRouteField'
-import { tableHeaderComponents, useTableColumns } from '../../components/table-columns'
+import { useTableColumns } from '../../components/table-columns'
 import { useWorkspace } from '../../data/workspace'
 
 interface NodeRow {
@@ -226,8 +226,11 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
     }
   ]
 
-  const sourceTable = useTableColumns(columns, undefined, t("订阅列"))
-  const nodeTable = useTableColumns(nodeColumns, undefined, t("节点列"))
+  const sourceTable = useTableColumns(columns, undefined, { settingsTitle: t("订阅列"), rowDrag: true })
+  const nodeTable = useTableColumns(nodeColumns, undefined, { settingsTitle: t("节点列"), rowDrag: true })
+  const shownSources = sourceTable.arrange(visibleSources)
+  // Node rows are known by their key; the table's own order and columns go by an id.
+  const nodesOf = (source: TunnelSourceSummary) => nodeTable.arrange(rowsOf(source).filter(matches).map((row) => ({ ...row, id: row.key })))
 
   return (
     <div className="fb-stack">
@@ -260,22 +263,28 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
           rowKey="id"
           size="middle"
           columns={sourceTable.columns}
-          components={tableHeaderComponents}
+          components={sourceTable.components}
           tableLayout={sourceTable.tableLayout}
           scroll={sourceTable.scrollX ? { x: sourceTable.scrollX } : undefined}
-          dataSource={visibleSources}
+          dataSource={shownSources}
+          onChange={sourceTable.onChange}
+          onRow={(row) => sourceTable.rowProps(row, shownSources)}
+          rowClassName={(row) => sourceTable.rowClass(row)}
           pagination={false}
           locale={{ emptyText: sources.length ? t("没有符合条件的订阅") : t("还没有订阅，可以添加多个，每个订阅里的节点都能给窗口用") }}
           expandable={{
             expandedRowRender: (source) => (
-              <Table<NodeRow>
+              <Table<NodeRow & { id: string }>
                 rowKey="key"
                 size="small"
-                columns={nodeTable.columns}
-                components={tableHeaderComponents}
+                columns={nodeTable.columns as TableColumnsType<NodeRow & { id: string }>}
+                components={nodeTable.components as TableProps<NodeRow & { id: string }>['components']}
                 tableLayout={nodeTable.tableLayout}
                 scroll={nodeTable.scrollX ? { x: nodeTable.scrollX } : undefined}
-                dataSource={rowsOf(source).filter(matches)}
+                dataSource={nodesOf(source)}
+                onChange={nodeTable.onChange as TableProps<NodeRow & { id: string }>['onChange']}
+                onRow={(row) => nodeTable.rowProps(row, nodesOf(source))}
+                rowClassName={(row) => nodeTable.rowClass(row)}
                 pagination={rowsOf(source).length > 50 ? { pageSize: 50 } : false}
                 locale={{ emptyText: t("这个订阅还没有可用节点（刚添加时要等几秒，或点「全部刷新」）") }}
               />

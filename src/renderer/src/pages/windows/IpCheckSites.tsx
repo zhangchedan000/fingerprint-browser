@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import { DEFAULT_IP_CHECK_SITES, ipBaseline, knownIpSite, type IpCheckSite } from '../../../../shared/ip-sites'
 import { useWorkspace } from '../../data/workspace'
+import { useListDrag } from '../../components/list-drag'
 
 /**
  * The IP check sites (shared by every window): switch, add, delete, pick the baseline (whose score,
@@ -17,6 +18,8 @@ export function IpCheckSites({ open, onClose }: { open: boolean; onClose: () => 
   const [error, setError] = useState('')
 
   const save = (patch: { ipCheckSites?: IpCheckSite[]; ipCheckBaseline?: string }) => ws.setPreferences(patch).catch((reason) => ws.fail(reason))
+  // The order the results are shown in, and the others are taken in turn.
+  const drag = useListDrag(sites, (next) => void save({ ipCheckSites: next }))
 
   function add(): void {
     let address: URL
@@ -46,7 +49,8 @@ export function IpCheckSites({ open, onClose }: { open: boolean; onClose: () => 
           const readable = Boolean(knownIpSite(site.url))
           const isBaseline = site.id === baseline?.id
           return (
-            <div key={site.id} className="fb-deep-sites-row">
+            <div key={site.id} {...drag.rowProps(site.id)} className={`fb-deep-sites-row ${drag.rowProps(site.id).className ?? ''}`}>
+              {drag.handle(site.id)}
               <Switch
                 size="small"
                 checked={site.enabled}
