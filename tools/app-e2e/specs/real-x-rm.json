@@ -1,0 +1,234 @@
+[
+ {
+  "source": "w01",
+  "name": "XAon",
+  "note": "绑定开",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900301,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XAoff",
+  "note": "绑定关",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900302,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XBon",
+  "note": "绑定开",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900303,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XBoff",
+  "note": "绑定关",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900304,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XCon",
+  "note": "绑定开",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900305,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XCoff",
+  "note": "绑定关",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900306,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XDon",
+  "note": "绑定开",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900307,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XDoff",
+  "note": "绑定关",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900308,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XAnr",
+  "note": "绑定开 + 尺寸位置也用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900309,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XCnr",
+  "note": "绑定关 + 尺寸位置也用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900310,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ }
+]
