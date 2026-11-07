@@ -543,7 +543,11 @@ if (phase === 'deep') {
     window.browserApi.profiles.list().then((list) => {
       const profile = list.find((p) => p.id === ${J(target.id)})
       return window.browserApi.profiles.deepCheck(profile, profile.id)
-    }).then((results) => { window.__deepDone = results.map((r) => ({ site: r.site, status: r.status, score: r.score, findings: r.findings, error: r.error, shotKb: r.screenshot ? Math.round(r.screenshot.length * 3 / 4 / 1024) : 0 })) },
+    }).then(async (results) => {
+      // The screenshot's size in pixels (a whole page is taller than the window).
+      const size = (src) => src ? new Promise((done) => { const img = new Image(); img.onload = () => done(img.naturalWidth + 'x' + img.naturalHeight); img.onerror = () => done('?'); img.src = src }) : ''
+      window.__deepDone = await Promise.all(results.map(async (r) => ({ site: r.site, status: r.status, score: r.score, findings: r.findings, error: r.error, shotKb: r.screenshot ? Math.round(r.screenshot.length * 3 / 4 / 1024) : 0, shotPx: await size(r.screenshot) })))
+    },
       (error) => { window.__deepDone = [{ site: 'all', status: 'error', findings: [], error: error.message }] })
     return true
   })()`)
@@ -554,7 +558,7 @@ if (phase === 'deep') {
   }
   if (!results) throw new Error('deep check did not finish in 15 minutes')
   const mask = (text) => String(text ?? '').replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, 'x.x.x.x').replace(/\b[0-9a-f]{1,4}(:[0-9a-f]{0,4}){2,7}\b/gi, 'x:x::x')
-  for (const r of results) log(r.site, r.status, mask(r.score), mask(r.findings.join(' ; ')), mask(r.error), `shot ${r.shotKb} KB`)
+  for (const r of results) log(r.site, r.status, mask(r.score), mask(r.findings.join(' ; ')), mask(r.error), `shot ${r.shotKb} KB ${r.shotPx ?? ''}`)
   await writeFile(join(out, `${round}-deep-${arg5}.json`), mask(J(results, null, 2)))
 }
 
