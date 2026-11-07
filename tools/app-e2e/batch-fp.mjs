@@ -177,6 +177,19 @@ if (phase === 'create') {
   await run(`window.browserApi.uiLanguage.set('zh-CN').then(() => true)`)
   await run('location.reload(), true')
   await delay(3000)
+  // RESET=1: the round's windows made before go first (to the recycle bin, then emptied).
+  if (process.env.RESET === '1') {
+    for (const w of (await windows()).filter((item) => item.name.startsWith(`${round}-`))) await run(`window.browserApi.profiles.remove(${J(w.id)}).then(() => true)`)
+    await run(`window.browserApi.profiles.emptyTrash().then(() => true, () => false)`)
+  }
+  // The proxy is checked first, as in a user's library: 新建窗口 then takes the country, time zone and
+  // language from its IP.
+  const proxies = await run(`window.browserApi.proxy.list().then((list) => list.map((p) => ({ id: p.id, host: p.host })))`)
+  const target = proxies.find((p) => p.host === proxyHost)
+  if (!target) throw new Error(`no proxy ${proxyHost} in the test library`)
+  const checked = await run(`window.browserApi.proxy.check(${J(target.id)}).then((p) => p.check, (e) => ({ ok: false, error: e.message }))`)
+  log('proxy check', proxyHost, J({ ok: checked?.ok, ip: checked?.ip, country: checked?.countryCode, city: checked?.city, tz: checked?.timezone, error: checked?.error }))
+  if (!checked?.ok) throw new Error('proxy check failed')
   const existing = new Set((await windows()).map((w) => w.name))
   const made = []
   // LIMIT=1: only the first window (to try the screen out before making all).
