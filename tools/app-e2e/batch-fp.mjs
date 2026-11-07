@@ -467,9 +467,10 @@ if (phase === 'renode') {
       await window.browserApi.profiles.assignMany([profile.id], { proxyId: entry.id })
       const fresh = (await window.browserApi.profiles.list()).find((p) => p.id === profile.id)
       const geo = ${J(geo)}
-      const fingerprint = geo ? { ...fresh.fingerprint, ...geo } : fresh.fingerprint
+      // spec.fingerprint: one setting changed on purpose (seed, gpu …) for a control test.
+      const fingerprint = { ...fresh.fingerprint, ...(geo ?? {}), ...${J(spec.fingerprint ?? {})} }
       const saved = await window.browserApi.profiles.update(profile.id, { ...fresh, fingerprint, tunnel: { enabled: false, mode: 'auto' } })
-      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window ' + saved.fingerprint.region + ' ' + saved.fingerprint.timezone + ' ' + saved.fingerprint.language + ' seed ' + saved.fingerprint.seed + ' gpu ' + saved.fingerprint.gpu
+      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window ' + saved.fingerprint.region + ' ' + saved.fingerprint.timezone + ' ' + saved.fingerprint.language + ' seed ' + saved.fingerprint.seed + ' gpu ' + saved.fingerprint.gpu + ' hc ' + saved.fingerprint.hardwareConcurrency + ' mem ' + saved.fingerprint.deviceMemory + ' screen ' + saved.fingerprint.screenWidth + 'x' + saved.fingerprint.screenHeight
     })().catch((e) => 'error: ' + e.message)`)
     log('renode', name, done)
   }
