@@ -589,6 +589,21 @@ if (phase === 'deep') {
   await writeFile(join(out, `${round}-deep-${arg5}.json`), mask(J(results, null, 2)))
 }
 
+// patch <spec.json>: [{ window: "H0", fingerprint: { disabledSpoofing: ["canvas"] } }]: changes those fingerprint fields
+// of an existing window of the round in place (same seed, same hardware), for one-switch-at-a-time tests.
+if (phase === 'patch') {
+  const specs = JSON.parse(await readFile(arg5, 'utf8'))
+  for (const spec of specs) {
+    const done = await run(`(async () => {
+      const profile = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(`${round}-${spec.window}`)})
+      if (!profile) return 'no window'
+      const updated = await window.browserApi.profiles.update(profile.id, { ...profile, fingerprint: { ...profile.fingerprint, ...${J(spec.fingerprint ?? {})} } })
+      return JSON.stringify({ seed: updated.fingerprint.seed, gpu: updated.fingerprint.gpu, off: updated.fingerprint.disabledSpoofing })
+    })().catch((e) => 'error: ' + e.message)`)
+    log('patch', spec.window, done)
+  }
+}
+
 if (phase === 'run' || phase === 'reopen') {
   const all = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   const only = phase === 'reopen' ? arg5 : arg6

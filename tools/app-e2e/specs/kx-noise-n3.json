@@ -1,0 +1,32 @@
+[
+ {
+  "window": "H0",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "window": "p02k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "window": "p05k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ }
+]

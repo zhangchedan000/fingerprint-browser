@@ -1,0 +1,26 @@
+[
+ {
+  "window": "H0",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "window": "p02k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "window": "p05k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "clientrects"
+   ]
+  }
+ }
+]

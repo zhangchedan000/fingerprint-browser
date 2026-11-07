@@ -1,0 +1,26 @@
+[
+ {
+  "window": "H0",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "audio"
+   ]
+  }
+ },
+ {
+  "window": "p02k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "audio"
+   ]
+  }
+ },
+ {
+  "window": "p05k156",
+  "fingerprint": {
+   "disabledSpoofing": [
+    "audio"
+   ]
+  }
+ }
+]
