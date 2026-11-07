@@ -9,6 +9,8 @@
  *   node tools/app-e2e/batch-fp.mjs create <userData> <out> <round> <proxyHost>
  *   node tools/app-e2e/batch-fp.mjs run    <userData> <out> <round> [concurrency=5] [only=w01,w02]
  *   node tools/app-e2e/batch-fp.mjs reopen <userData> <out> <round> w01,w02,w03
+ *   NODES=nodes.json (node names): create's windows each on a subscription node, picked in 新建窗口
+ *   SITES_ONLY=fpcom,creepjs: run visits only these sites
  *
  * round: a name (mx, hk). The windows of a round are named "<round>-w01" … "<round>-w20".
  */
@@ -113,11 +115,24 @@ async function createOne(spec, proxyHost) {
   await delay(1200)
   await clickText('代理设置', drawer)
   await delay(400)
-  if (!await clickText('从代理库选择', drawer)) throw new Error('从代理库选择 not found')
-  await delay(400)
-  const proxy = await choose('选择代理', `(text) => text.includes(${J(proxyHost)})`)
-  if (proxy !== true) throw new Error(`proxy: ${proxy}`)
-  await delay(2500)
+  if (spec.node) {
+    // 代理方式「订阅」: the subscription, then the node by its name (checked before, so the window takes
+    // its country, time zone and language from the node's exit IP).
+    if (!await clickText('订阅', drawer)) throw new Error('订阅 mode not found')
+    await delay(500)
+    const source = await choose('选择订阅', `(text) => text.startsWith('订阅')`)
+    if (source !== true) throw new Error(`subscription: ${source}`)
+    await delay(600)
+    const node = await choose('选择节点', `(text) => text.includes(${J(spec.node)})`)
+    if (node !== true) throw new Error(`node: ${node}`)
+    await delay(4000)
+  } else {
+    if (!await clickText('从代理库选择', drawer)) throw new Error('从代理库选择 not found')
+    await delay(400)
+    const proxy = await choose('选择代理', `(text) => text.includes(${J(proxyHost)})`)
+    if (proxy !== true) throw new Error(`proxy: ${proxy}`)
+    await delay(2500)
+  }
   await clickText('基础设置', drawer)
   await delay(300)
   const bindingLabel = spec.binding === 'on' ? '绑定' : '不绑定'
@@ -185,12 +200,31 @@ if (phase === 'create') {
   }
   // The proxy is checked first, as in a user's library: 新建窗口 then takes the country, time zone and
   // language from its IP.
-  const proxies = await run(`window.browserApi.proxy.list().then((list) => list.map((p) => ({ id: p.id, host: p.host })))`)
-  const target = proxies.find((p) => p.host === proxyHost)
-  if (!target) throw new Error(`no proxy ${proxyHost} in the test library`)
-  const checked = await run(`window.browserApi.proxy.check(${J(target.id)}).then((p) => p.check, (e) => ({ ok: false, error: e.message }))`)
-  log('proxy check', proxyHost, J({ ok: checked?.ok, ip: checked?.ip, country: checked?.countryCode, city: checked?.city, tz: checked?.timezone, error: checked?.error }))
-  if (!checked?.ok) throw new Error('proxy check failed')
+  // NODES=<file.json> (a list of node names): window n uses node n of the subscription 订阅 instead of
+  // the library proxy, each node checked first.
+  const nodeNames = process.env.NODES ? JSON.parse(await readFile(process.env.NODES, 'utf8')) : null
+  if (nodeNames) {
+    nodeNames.forEach((node, index) => { if (plan[index]) plan[index].node = node })
+    for (const node of nodeNames) {
+      const checked = await run(`(async () => {
+        const status = await window.browserApi.subscriptions.status()
+        const found = status.nodes.find((n) => n.name.includes(${J(node)}))
+        if (!found) return { ok: false, error: 'no node' }
+        const source = status.sources.find((s) => s.id === found.sourceId)
+        const short = found.name.startsWith(source.name + ' · ') ? found.name.slice(source.name.length + 3) : found.name
+        const entry = await window.browserApi.subscriptions.nodeProxy({ source: source.name, node: short })
+        return (await window.browserApi.proxy.check(entry.id)).check
+      })().catch((e) => ({ ok: false, error: e.message }))`)
+      log('node check', node, J({ ok: checked?.ok, country: checked?.countryCode, tz: checked?.timezone, error: checked?.error }))
+    }
+  } else {
+    const proxies = await run(`window.browserApi.proxy.list().then((list) => list.map((p) => ({ id: p.id, host: p.host })))`)
+    const target = proxies.find((p) => p.host === proxyHost)
+    if (!target) throw new Error(`no proxy ${proxyHost} in the test library`)
+    const checked = await run(`window.browserApi.proxy.check(${J(target.id)}).then((p) => p.check, (e) => ({ ok: false, error: e.message }))`)
+    log('proxy check', proxyHost, J({ ok: checked?.ok, ip: checked?.ip, country: checked?.countryCode, city: checked?.city, tz: checked?.timezone, error: checked?.error }))
+    if (!checked?.ok) throw new Error('proxy check failed')
+  }
   const existing = new Set((await windows()).map((w) => w.name))
   const made = []
   // LIMIT=1: only the first window (to try the screen out before making all).
@@ -327,7 +361,7 @@ if (phase === 'clone') {
       const draft = { ...source, name: ${J(name)}, note: ${J(spec.note ?? '')}, fingerprint, kernelVersion: ${J(spec.kernelVersion ?? null)} ?? source.kernelVersion }
       delete draft.id
       const created = await window.browserApi.profiles.create(draft)
-      return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
+      return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, gpu: created.fingerprint.gpu, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
     })().catch((e) => 'error: ' + e.message)`)
     log('clone', name, 'from', spec.source, made)
     if (spec.node && !String(made).startsWith('error')) {
@@ -380,9 +414,11 @@ if (phase === 'run' || phase === 'reopen') {
   const all = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   const only = phase === 'reopen' ? arg5 : arg6
   const concurrency = phase === 'reopen' ? 3 : Number(arg5) || 5
-  const finished = (w) => SITES.every(([site]) => existsSync(join(out, `${w.name}-${site}.txt`)))
+  // SITES_ONLY=fpcom,creepjs: only these sites (the other phases' quick checks).
+  const sites = phase === 'reopen' ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site))
+    : process.env.SITES_ONLY ? SITES.filter(([site]) => process.env.SITES_ONLY.split(',').includes(site)) : SITES
+  const finished = (w) => sites.every(([site]) => existsSync(join(out, `${w.name}-${site}.txt`)))
   const chosen = (only ? all.filter((w) => only.split(',').some((key) => w.name.endsWith(key))) : all).filter((w) => phase === 'reopen' || process.env.FORCE === '1' || !finished(w))
-  const sites = phase === 'reopen' ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site)) : SITES
   log(`${phase} ${chosen.length} windows of ${round}, ${concurrency} at a time, ${sites.length} sites each`)
   const results = []
   let next = 0
