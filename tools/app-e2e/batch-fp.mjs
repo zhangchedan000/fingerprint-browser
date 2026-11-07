@@ -307,6 +307,19 @@ if (phase === 'setver') {
   await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
 }
 
+// route <node>: the round's windows reach their proxy through this 网络加速 node (as the editor's 手动固定).
+if (phase === 'route') {
+  const node = arg5
+  for (const w of (await windows()).filter((item) => item.name.startsWith(`${round}-`))) {
+    const done = await run(`(async () => {
+      const profile = (await window.browserApi.profiles.list()).find((p) => p.id === ${J(w.id)})
+      const saved = await window.browserApi.profiles.update(profile.id, { ...profile, tunnel: { enabled: true, mode: 'manual', node: ${J(node)} } })
+      return JSON.stringify(saved.tunnel ?? saved.proxy?.tunnel)
+    })().catch((e) => 'error: ' + e.message)`)
+    log('route', w.name, done)
+  }
+}
+
 if (phase === 'run' || phase === 'reopen') {
   const all = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   const only = phase === 'reopen' ? arg5 : arg6
