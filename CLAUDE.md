@@ -8,9 +8,10 @@
 
 1. **表头**：拖表头边缘改宽度、拖表头换位置、点表头按这一列排序（升序 / 降序）。
 2. **列设置**：勾选显示 / 隐藏、拖动调整顺序、改列名、新建自定义列（每行可以填内容，也能按它排序）、删列（自己加的直接删，自带的隐藏，「恢复默认」找回）。
+   **新建列自动匹配数据**（用户 11-07 定）：输入列名后按名称自动匹配表里已有的数据（出口 IP、时区等），匹配上就每行自动显示、能按它排序；「内容」下拉可以手动改成某项数据或「自己填写」；没匹配上就是每行自己填写；已经被别的自定义列用了的数据不再出现。**以后表格里加了新数据（新的字段、新的检测结果等），必须同时在 `data-fields.ts` 里加一项，让新建列能选到**，名称和常用叫法写进 `aliases`。
 3. **行**：能上下拖动调整顺序，拖好的顺序保存下来；不按任何一列排序时显示自己拖的顺序，点表头就按那一列排。
 4. **一条一条的清单**（深度检测网站、IP 检测网站、扩展列表等）：编辑时能拖动排序、能改。
 5. **跟着账号走**：上面这些设置、新建列里填的内容、行和清单的顺序，同一个账号在哪台电脑都一样，团队里别的账号不受影响；本地模式（不登录团队）存在本机。
 6. **范围**：整个软件。**左边栏菜单不改。**
 
-做法（v0.5.79 起）：表格用 `src/renderer/src/components/table-columns.tsx` 的 `useTableColumns(columns, scrollX, { rowDrag: true })`（`ListPage` 已经用了，新列表页用 `ListPage` 就全都有）；一条条的清单用 `src/renderer/src/components/list-drag.tsx` 的 `useListDrag`；存储在 `src/shared/ui-prefs.ts`（设置里的 `uiPrefs`，随账号同步）。界面测试 `tools/app-e2e/table-ux.mjs`。还没有列设置的：内核管理、下载内核弹窗、网络加速节点、批量导入预览。
+做法（v0.5.79 起）：表格用 `src/renderer/src/components/table-columns.tsx` 的 `useTableColumns(columns, scrollX, { rowDrag: true })`（`ListPage` 已经用了，新列表页用 `ListPage` 就全都有）；新建列能显示的数据在 `src/renderer/src/components/data-fields.ts`（`ListPage` 的 `dataFields`，或 `useTableColumns` 的 `dataFields` 选项；窗口、代理、订阅节点、团队云端窗口已有）；一条条的清单用 `src/renderer/src/components/list-drag.tsx` 的 `useListDrag`；存储在 `src/shared/ui-prefs.ts`（设置里的 `uiPrefs`，随账号同步）。界面测试 `tools/app-e2e/table-ux.mjs`。还没有列设置的：内核管理、下载内核弹窗、网络加速节点、批量导入预览。

@@ -5,6 +5,7 @@ import { getLocale, t } from '../../../../shared/i18n'
 import type { TeamBackup, TeamInvite, TeamLogEntry, TeamOffsite, TeamOffsiteDraft, TeamProfileView, TeamServerInfo, TeamServerPair, TeamStatus, TeamUser } from '../../../../shared/team'
 import { formatBytes, shortDateTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
+import { teamWindowDataFields } from '../../components/data-fields'
 import { StatusPill } from '../../components/StatusPill'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
@@ -715,6 +716,7 @@ function ProfilesTab({ status, members, profiles, loading, reload }: {
   return (
     <>
       <ListPage<TeamProfileView>
+        dataFields={teamWindowDataFields}
         toolbar={(
           <>
             <Button type="primary" icon={<SyncOutlined />} loading={busy === 'sync'} onClick={() => void syncNow()}>{t("立即同步")}</Button>

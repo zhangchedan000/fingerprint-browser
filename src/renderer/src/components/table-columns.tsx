@@ -1,14 +1,16 @@
 import { DeleteOutlined, EditOutlined, HolderOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
-import { Button, Checkbox, Input, Popconfirm, Popover, Space, Tooltip, type TableColumnsType, type TableProps } from 'antd'
+import { Button, Checkbox, Input, Popconfirm, Popover, Select, Space, Tooltip, type TableColumnsType, type TableProps } from 'antd'
 import { useEffect, useMemo, useRef, useState, type DragEvent, type HTMLAttributes, type MouseEvent, type ReactNode, type ThHTMLAttributes } from 'react'
 import { t } from '../../../shared/i18n'
-import { arrangeRows, CUSTOM_COLUMN_PREFIX, movedRows, type CustomColumn, type TableUiPrefs } from '../../../shared/ui-prefs'
+import { arrangeRows, CUSTOM_COLUMN_PREFIX, matchDataField, movedRows, type CustomColumn, type DataFieldName, type TableUiPrefs } from '../../../shared/ui-prefs'
 import { useWorkspace } from '../data/workspace'
+import type { DataField } from './data-fields'
 
 /**
  * Columns and rows the user arranges, per table: drag a header edge to change one column's width
  * (the others keep theirs), drag a header to move it; in the column settings hide, reorder, rename,
- * add their own columns (each row can be written in, and sorted by them) and delete those; drag rows
+ * add their own columns (each row written in by hand, or showing one of the table's data fields
+ * matched by the name typed — 出口 IP, 时区… — and sorted by them) and delete those; drag rows
  * by their handle to put them in their own order. The checkbox column and pinned columns
  * (fixed: left/right, e.g. 操作) stay put. All of it follows the account (user 11-07), see ui-prefs.ts.
  * Every list or table of the launcher has these (rule of 11-07 in CLAUDE.md).
@@ -209,11 +211,30 @@ export interface TableColumnsOptions {
   settingsTitle?: string
   /** Rows can be dragged into the user's own order (needs rows with an id). */
   rowDrag?: boolean
+  /** Data the user's own columns can show (data-fields.ts); a new column's name is matched against them. */
+  dataFields?: DataField<never>[]
+}
+
+/** A field's value as shown, and as sorted (numbers as numbers, empty last). */
+function fieldText(field: DataField<never>, row: unknown): string {
+  const value = field.value(row as never)
+  if (value === undefined || value === '') return ''
+  return typeof value === 'number' ? (field.format ? field.format(value) : String(value)) : value
+}
+
+function compareField(field: DataField<never>, first: unknown, second: unknown): number {
+  const a = field.value(first as never)
+  const b = field.value(second as never)
+  const emptyA = a === undefined || a === ''
+  const emptyB = b === undefined || b === ''
+  if (emptyA || emptyB) return emptyA === emptyB ? 0 : emptyA ? 1 : -1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(a).localeCompare(String(b), undefined, { numeric: true })
 }
 
 /** Each table is keyed by its column set, so pages need no names of their own. */
 export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: number, options: TableColumnsOptions | string = {}): TableColumnsResult<T> {
-  const { settingsTitle, rowDrag } = typeof options === 'string' ? { settingsTitle: options, rowDrag: false } : options
+  const { settingsTitle, rowDrag, dataFields } = typeof options === 'string' ? { settingsTitle: options, rowDrag: false, dataFields: undefined } : options
   const ws = useWorkspace()
   const ids = columns.map((column, index) => columnId(column as never, index))
   const key = ids.join('|')
@@ -263,8 +284,24 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
     const allIds = [...ids, ...customIds]
     const customById = new Map(layout.custom.map((column) => [column.id, column]))
     const byId = new Map<string, Column<T>>(columns.map((column, index) => [ids[index], column]))
-    // The user's own columns: a cell to write in, sorted by what is written.
+    const fieldById = new Map((dataFields ?? []).map((field) => [field.id, field]))
+    // The user's own columns: a data field, or a cell to write in, sorted by what it shows.
     for (const custom of layout.custom) {
+      const field = custom.field ? fieldById.get(custom.field) : undefined
+      if (field) {
+        byId.set(custom.id, {
+          key: custom.id,
+          title: custom.title,
+          width: CUSTOM_WIDTH,
+          ellipsis: true,
+          sorter: (first: unknown, second: unknown) => compareField(field, first, second),
+          render: (_value: unknown, row: unknown) => {
+            const text = fieldText(field, row)
+            return text ? <span className="fb-field-cell" title={text}>{text}</span> : <span className="fb-muted">—</span>
+          }
+        } as Column<T>)
+        continue
+      }
       byId.set(custom.id, {
         key: custom.id,
         title: custom.title,
@@ -391,6 +428,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
           defaultTitle: customById.has(id) ? undefined : byId.get(id)!.title as ReactNode,
           renamed: Boolean(layout.titles[id]),
           custom: customById.has(id),
+          field: (() => { const field = customById.get(id)?.field; return field && fieldById.has(field) ? t(fieldById.get(field)!.label) : undefined })(),
           hidden: hidden.has(id),
           required: isRequired(byId.get(id) as never)
         }))}
@@ -404,10 +442,12 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
           else delete titles[id]
           return { ...current, titles }
         })}
-        onAdd={(title) => update((current) => current.custom.length >= 20 ? current : ({
+        onAdd={(title, field) => update((current) => current.custom.length >= 20 ? current : ({
           ...current,
-          custom: [...current.custom, { id: `${CUSTOM_COLUMN_PREFIX}${Date.now().toString(36)}`, title: title.trim().slice(0, 40) }]
+          custom: [...current.custom, { id: `${CUSTOM_COLUMN_PREFIX}${Date.now().toString(36)}`, title: title.trim().slice(0, 40), ...(field ? { field } : {}) }]
         }))}
+        fields={(dataFields ?? []).map((field) => ({ id: field.id, label: t(field.label), names: [field.label, t(field.label), ...field.aliases] }))}
+        takenFields={layout.custom.map((column) => column.field).filter((field): field is string => Boolean(field && fieldById.has(field)))}
         onDelete={(id) => update((current) => ({
           ...current,
           custom: current.custom.filter((column) => column.id !== id),
@@ -462,7 +502,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
       components: { ...tableHeaderComponents, body: { row: DropRow } }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ids follow columns and key
-  }, [columns, layout, key, minScrollX, settingsTitle, rowDrag, sorted, dragging, over])
+  }, [columns, layout, key, minScrollX, settingsTitle, rowDrag, dataFields, sorted, dragging, over])
 }
 
 /** A cell of a column the user added: the text, and a box to write in when clicked. */
@@ -509,28 +549,47 @@ interface SettingsItem {
   defaultTitle?: ReactNode
   renamed: boolean
   custom: boolean
+  /** The data field an added column shows (its label); unset: written by hand. */
+  field?: string
   hidden: boolean
   required: boolean
 }
 
 /** 列设置: drag rows to reorder, tick to show, rename, add and delete the user's own columns, back to the default layout. */
-function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, canAdd, onReset, changed, title }: {
+function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, canAdd, onReset, changed, title, fields, takenFields }: {
   items: SettingsItem[]
   onToggle: (id: string, show: boolean) => void
   onMove: (from: string, to: string, before: boolean) => void
   onRename: (id: string, title: string) => void
-  onAdd: (title: string) => void
+  onAdd: (title: string, field?: string) => void
   onDelete: (id: string) => void
   canAdd: boolean
   onReset: () => void
   changed: boolean
   /** A page with two tables names which one (订阅 / 节点). */
   title?: string
+  /** Data a new column can show, with the names it is matched by. */
+  fields: Array<DataFieldName & { label: string }>
+  /** Fields another added column shows already: not offered again. */
+  takenFields: string[]
 }) {
   const [dragging, setDragging] = useState<string>()
   const [over, setOver] = useState<{ id: string; before: boolean }>()
   const [renaming, setRenaming] = useState<{ id: string; text: string }>()
   const [adding, setAdding] = useState('')
+  // What the new column shows: '' = written by hand. Follows the name typed until the user picks.
+  const [content, setContent] = useState<{ field: string; byHand: boolean }>({ field: '', byHand: false })
+  const freeFields = fields.filter((field) => !takenFields.includes(field.id))
+  const typeName = (name: string) => {
+    setAdding(name)
+    if (!content.byHand) setContent({ field: matchDataField(name, freeFields) ?? '', byHand: false })
+  }
+  const pickContent = (field: string) => {
+    setContent({ field, byHand: true })
+    // A field picked before a name is typed names the column.
+    if (field && !adding.trim()) setAdding(fields.find((item) => item.id === field)?.label ?? '')
+  }
+  const chosen = freeFields.find((field) => field.id === content.field)
   const shown = items.filter((item) => !item.hidden).length
   const finishRename = () => {
     if (renaming) onRename(renaming.id, renaming.text)
@@ -538,8 +597,9 @@ function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, ca
   }
   const add = () => {
     if (!adding.trim()) return
-    onAdd(adding)
+    onAdd(adding, chosen?.id)
     setAdding('')
+    setContent({ field: '', byHand: false })
   }
   const panel = (
     <div className="fb-colset">
@@ -585,7 +645,7 @@ function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, ca
                 onChange={(event) => onToggle(item.id, event.target.checked)}
               >
                 {item.title || <span className="fb-muted">{t("（无标题）")}</span>}
-                {item.custom && <span className="fb-colset-tag">{t("自定义")}</span>}
+                {item.custom && <span className="fb-colset-tag" title={item.field ? t("显示数据：{0}", item.field) : t("每行自己填写")}>{item.field ?? t("自定义")}</span>}
               </Checkbox>
             )}
             {renaming?.id !== item.id && (
@@ -605,9 +665,30 @@ function ColumnSettings({ items, onToggle, onMove, onRename, onAdd, onDelete, ca
         ))}
       </ul>
       <Space.Compact className="fb-colset-add">
-        <Input size="small" maxLength={40} placeholder={t("新建列的名称")} value={adding} disabled={!canAdd} onChange={(event) => setAdding(event.target.value)} onPressEnter={add} />
+        <Input size="small" maxLength={40} placeholder={t("新建列的名称")} value={adding} disabled={!canAdd} onChange={(event) => typeName(event.target.value)} onPressEnter={add} />
         <Button size="small" icon={<PlusOutlined />} disabled={!canAdd || !adding.trim()} onClick={add}>{t("新建列")}</Button>
       </Space.Compact>
+      {fields.length > 0 && canAdd && (
+        <div className="fb-colset-content">
+          <span className="fb-muted">{t("内容")}</span>
+          <Select
+            size="small"
+            showSearch
+            optionFilterProp="label"
+            value={chosen?.id ?? ''}
+            onChange={pickContent}
+            popupMatchSelectWidth={false}
+            options={[{ value: '', label: t("自己填写") }, ...freeFields.map((field) => ({ value: field.id, label: field.label }))]}
+          />
+        </div>
+      )}
+      {fields.length > 0 && canAdd && adding.trim() && (
+        <div className="fb-muted fb-colset-hint">
+          {chosen
+            ? (content.byHand ? t("每行显示「{0}」", chosen.label) : t("已按名称匹配到「{0}」，每行自动显示；不对可以在上面改", chosen.label))
+            : t("没有匹配的数据，每行自己填写；也可以在上面选要显示的数据")}
+        </div>
+      )}
       {!canAdd && <div className="fb-muted fb-colset-limit">{t("最多 20 个自定义列")}</div>}
       <div className="fb-colset-foot">
         <span className="fb-muted">{t("拖动调整顺序")}</span>

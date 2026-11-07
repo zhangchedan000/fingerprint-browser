@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrangeRows, movedRows, validUiPrefs, withTable } from './ui-prefs'
+import { arrangeRows, matchDataField, movedRows, validUiPrefs, withTable } from './ui-prefs'
 
 const rows = (...ids: string[]) => ids.map((id) => ({ id }))
 const ids = (list: Array<{ id: string }>) => list.map((row) => row.id)
@@ -52,5 +52,40 @@ describe('table settings that follow the account', () => {
     const both = withTable(start, 'b', { hidden: ['x'] })
     expect(both).toEqual({ tables: { a: { rows: ['1'] }, b: { hidden: ['x'] } } })
     expect(withTable(both, 'a', undefined)).toEqual({ tables: { b: { hidden: ['x'] } } })
+  })
+})
+
+describe('a new column finds its data by the name typed', () => {
+  const fields = [
+    { id: 'exitIp', names: ['出口 IP', 'IP', 'IP 地址', 'exit ip'] },
+    { id: 'ipTimezone', names: ['IP 时区', '出口时区'] },
+    { id: 'timezone', names: ['时区', 'timezone'] },
+    { id: 'country', names: ['国家 / 地区', '国家', '地区'] }
+  ]
+
+  it('takes the same name first, spacing, case and marks aside', () => {
+    expect(matchDataField('出口ip', fields)).toBe('exitIp')
+    expect(matchDataField(' IP ', fields)).toBe('exitIp')
+    expect(matchDataField('ip时区', fields)).toBe('ipTimezone')
+    expect(matchDataField('Time Zone', [{ id: 'timezone', names: ['time zone'] }])).toBe('timezone')
+    expect(matchDataField('国家/地区', fields)).toBe('country')
+  })
+
+  it('else the field whose longest name is in the typed name; nothing when none is', () => {
+    expect(matchDataField('出口 IP 地址', fields)).toBe('exitIp')
+    expect(matchDataField('窗口时区', fields)).toBe('timezone')
+    expect(matchDataField('代理国家', fields)).toBe('country')
+    expect(matchDataField('负责人', fields)).toBeUndefined()
+    expect(matchDataField('', fields)).toBeUndefined()
+  })
+
+  it('skips data another added column shows already', () => {
+    expect(matchDataField('IP', fields, ['exitIp'])).toBeUndefined()
+    expect(matchDataField('窗口时区', fields, ['timezone'])).toBeUndefined()
+  })
+
+  it('keeps the data an added column shows', () => {
+    expect(validUiPrefs({ tables: { t: { custom: [{ id: 'custom:1', title: 'IP', field: 'exitIp' }, { id: 'custom:2', title: '负责人', field: '' }] } } }))
+      .toEqual({ tables: { t: { custom: [{ id: 'custom:1', title: 'IP', field: 'exitIp' }, { id: 'custom:2', title: '负责人' }] } } })
   })
 })

@@ -47,7 +47,8 @@ export class SettingsStore {
 
   async initialize(): Promise<void> {
     try {
-      const stored = JSON.parse(await readFile(this.path, 'utf8')) as Partial<AppSettings>
+      // A file saved by an editor that starts it with a byte-order mark still reads (it stopped the launcher from starting).
+      const stored = JSON.parse((await readFile(this.path, 'utf8')).replace(/^\uFEFF/, '')) as Partial<AppSettings>
       this.settings = {
         browserExecutable: typeof stored.browserExecutable === 'string' ? stored.browserExecutable : '',
         fingerprintKernel: stored.fingerprintKernel === true,

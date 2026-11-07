@@ -107,6 +107,32 @@ try {
   const cell = await run(`document.querySelector('.fb-table-panel .ant-table-tbody tr[data-row-key] .fb-custom-cell')?.innerText.trim()`)
   check(cell === '小王', `written in the new column (${cell})`)
 
+  // 2b. A column named 时区 finds the window's time zone by itself; a second one is not offered it again.
+  await run(`document.querySelector('.fb-colset-button').click(), true`)
+  await delay(500)
+  await run(`(() => { const input = document.querySelector('.fb-colset-add input'); window.__type(input, '时区'); return true })()`)
+  await delay(300)
+  const matched = await run(`({ hint: document.querySelector('.fb-colset-hint')?.innerText.trim(), chosen: document.querySelector('.fb-colset-content .ant-select')?.innerText.trim() })`)
+  check(matched.chosen === '时区' && /已按名称匹配到「时区」/.test(matched.hint ?? ''), `typing 时区 picks the time zone data (${matched.chosen} / ${matched.hint})`)
+  await screenshot('table-3b-matched')
+  await run(`[...document.querySelectorAll('.fb-colset-add button')].find((b) => b.innerText.includes('新建列')).click(), true`)
+  await delay(700)
+  const zoneCells = await run(`(() => {
+    const ths = [...document.querySelectorAll('.fb-table-panel thead th')]
+    const at = ths.findIndex((th) => th.innerText.trim() === '时区')
+    if (at < 0) return null
+    return [...document.querySelectorAll('.fb-table-panel .ant-table-tbody tr[data-row-key]')].map((tr) => tr.children[at]?.innerText.trim())
+  })()`)
+  const zoneValues = await run(`window.browserApi.profiles.list().then((list) => list.map((p) => p.fingerprint.timezone))`)
+  check(Array.isArray(zoneCells) && zoneCells.length === 3 && zoneCells.every((text) => zoneValues.includes(text)), `时区 column shows each window's time zone (${zoneCells?.join(', ')})`)
+  await run(`(() => { const input = document.querySelector('.fb-colset-add input'); window.__type(input, '时区'); return true })()`)
+  await delay(300)
+  const again = await run(`document.querySelector('.fb-colset-hint')?.innerText.trim()`)
+  check(/没有匹配的数据/.test(again ?? ''), `the time zone is not offered to a second column (${again})`)
+  await run(`(() => { const input = document.querySelector('.fb-colset-add input'); window.__type(input, ''); return true })()`)
+  await run(`document.body.click(), document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), true`)
+  await delay(400)
+
   // 3. Rename the 备注 header to 店铺.
   await run(`document.querySelector('.fb-colset-button').click(), true`)
   await delay(500)
@@ -143,6 +169,7 @@ try {
   const tables = Object.values(prefs.uiPrefs?.tables ?? {})
   tableKeyRows = tables.find((table) => table.rows)?.rows
   check(J(tableKeyRows) === J(dragged), 'row order kept in the account settings')
+  check(tables.some((table) => table.custom?.some((column) => column.title === '时区' && column.field === 'timezone')), 'the 时区 column keeps its data field in the account settings')
   check(tables.some((table) => table.custom?.[0]?.title === '负责人' && Object.values(table.values ?? {}).some((cells) => Object.values(cells).includes('小王'))), 'added column and its text kept in the account settings')
   check(tables.some((table) => Object.values(table.titles ?? {}).includes('店铺')), 'renamed header kept in the account settings')
 } finally {

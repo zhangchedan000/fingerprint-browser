@@ -26,6 +26,15 @@ describe('SettingsStore', () => {
     expect(reopened.get().recycleRetentionDays).toBe(30)
     expect(reopened.get().enginePreference).toBe('system')
   })
+
+  it('reads a settings file an editor saved with a byte-order mark (it stopped the launcher from starting)', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'prism-settings-'))
+    temporaryPaths.push(vault)
+    await writeFile(join(vault, 'settings.json'), `\uFEFF${JSON.stringify({ recycleRetentionDays: 7 })}`, 'utf8')
+    const settings = new SettingsStore(vault)
+    await settings.initialize()
+    expect(settings.get().recycleRetentionDays).toBe(7)
+  })
 })
 
 describe('interface preferences', () => {

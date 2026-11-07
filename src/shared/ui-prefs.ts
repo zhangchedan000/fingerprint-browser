@@ -9,6 +9,18 @@
 export interface CustomColumn {
   id: string
   title: string
+  /**
+   * The data the column shows, from the table's data fields (出口 IP, 时区…). Unset: the user writes
+   * each row's text by hand.
+   */
+  field?: string
+}
+
+/** Data a table offers for the user's own columns: matched by name when a column is added. */
+export interface DataFieldName {
+  id: string
+  /** Names it is known by: its label (in the source language and the interface language) and aliases. */
+  names: string[]
 }
 
 export interface TableUiPrefs {
@@ -69,7 +81,7 @@ function validTable(input: unknown): TableUiPrefs | undefined {
         && shortString(typeof column.title === 'string' ? column.title.trim() : column.title, MAX_TITLE))
       .filter((column) => !seen.has(column.id) && Boolean(seen.add(column.id)))
       .slice(0, MAX_CUSTOM)
-      .map((column) => ({ id: column.id, title: column.title.trim() }))
+      .map((column) => ({ id: column.id, title: column.title.trim(), ...(shortString(column.field, MAX_ID) ? { field: column.field } : {}) }))
     if (custom.length) table.custom = custom
   }
   if (isRecord(input.values)) {
@@ -87,6 +99,30 @@ function validTable(input: unknown): TableUiPrefs | undefined {
   const rows = ids(input.rows, MAX_ROWS)
   if (rows.length) table.rows = rows
   return Object.keys(table).length ? table : undefined
+}
+
+const squash = (text: string) => text.toLowerCase().replace(/[\s/\\_\-·・.,，、:：()（）[\]【】]+/g, '')
+
+/**
+ * The data field a new column's name means (rule of 11-07: a typed name finds the data by itself):
+ * the same name as a field's label or alias first, else the field whose longest name the typed name
+ * contains ("出口 IP 地址" → 出口 IP). Fields in `taken` (used by another column) are skipped.
+ */
+export function matchDataField(name: string, fields: DataFieldName[], taken: Iterable<string> = []): string | undefined {
+  const typed = squash(name)
+  if (!typed) return undefined
+  const used = new Set(taken)
+  const free = fields.filter((field) => !used.has(field.id))
+  const exact = free.find((field) => field.names.some((item) => squash(item) === typed))
+  if (exact) return exact.id
+  let best: { id: string; length: number } | undefined
+  for (const field of free) {
+    for (const item of field.names) {
+      const known = squash(item)
+      if (known.length >= 2 && typed.includes(known) && known.length > (best?.length ?? 0)) best = { id: field.id, length: known.length }
+    }
+  }
+  return best?.id
 }
 
 /** Keeps only well-formed tables, and none at all past the size limit. Undefined = nothing arranged. */

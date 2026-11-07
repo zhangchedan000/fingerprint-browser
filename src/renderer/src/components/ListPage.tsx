@@ -3,6 +3,7 @@ import { Button, Dropdown, Empty, Spin, Table, Tabs, Tooltip, type TableColumnsT
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { t } from '../../../shared/i18n'
+import type { DataField } from './data-fields'
 import { useTableColumns } from './table-columns'
 
 export interface ListTab {
@@ -64,6 +65,8 @@ export interface ListPageProps<T extends { id: string }> {
   footnote?: ReactNode
   /** Rows per page; false shows all rows. */
   paginate?: boolean
+  /** Data the user's own columns can show (matched by the name typed for a new column). */
+  dataFields?: DataField<T>[]
 }
 
 /**
@@ -72,11 +75,11 @@ export interface ListPageProps<T extends { id: string }> {
  */
 export function ListPage<T extends { id: string }>({
   toolbar, filters, header, tabs, activeTab, onTabChange, selection, columns, rows, loading, emptyText, emptyAction, scrollX,
-  onRowClick, activeRowId, footnote, paginate = true
+  onRowClick, activeRowId, footnote, paginate = true, dataFields
 }: ListPageProps<T>) {
   const [pageSize, setPageSize] = useState(20)
   // Every list's rows can be dragged into the user's own order (user 11-07); header sorts still work.
-  const table = useTableColumns(columns, scrollX === 'content' ? undefined : scrollX, { rowDrag: true })
+  const table = useTableColumns(columns, scrollX === 'content' ? undefined : scrollX, { rowDrag: true, dataFields })
   const arranged = table.arrange(rows)
   const selected = new Set(selection?.ids ?? [])
   return (

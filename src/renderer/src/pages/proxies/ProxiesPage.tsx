@@ -6,6 +6,7 @@ import type { ProxyDraft, ProxyRecordView } from '../../../../shared/types'
 import { AssignModal } from '../../components/AssignModal'
 import { humanError, relativeTime } from '../../components/format'
 import { ListPage } from '../../components/ListPage'
+import { proxyDataFields } from '../../components/data-fields'
 import { proxyAddress, proxyLabel, ZoneSplitTag } from '../../components/proxy'
 import { StatCards } from '../../components/StatCards'
 import { useTunnelStatus } from '../../components/TunnelRouteField'
@@ -330,6 +331,7 @@ export function ProxiesPage() {
     <>
       {sectionTabs}
       <ListPage<ProxyRecordView>
+        dataFields={proxyDataFields}
         header={(
           <StatCards stats={[
             { label: t("代理总数"), value: stats.total },

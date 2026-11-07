@@ -28,6 +28,7 @@ import type { BrowserCrashRecord, BrowserProfileView, LaunchDiagnosticReport, Pr
 import { AssignModal } from '../../components/AssignModal'
 import { ACTIVE_STATUSES, formatBytes, shortDateTime, humanError, isEditable, relativeTime } from '../../components/format'
 import { ListPage, type ListTab } from '../../components/ListPage'
+import { windowDataFields } from '../../components/data-fields'
 import { ProxyCell, proxyLabel } from '../../components/proxy'
 import { StatusDot } from '../../components/StatusDot'
 import { useWorkspaceMigration } from '../../data/migration'
@@ -731,6 +732,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       )}
 
       <ListPage<BrowserProfileView>
+        dataFields={windowDataFields}
         toolbar={(
           <>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => void openEditor()}>{t("新建窗口")}</Button>

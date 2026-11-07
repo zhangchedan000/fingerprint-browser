@@ -8,6 +8,7 @@ import { StatCards } from '../../components/StatCards'
 import { nodeShortName, SubscriptionModal, subscriptionNodes } from '../../components/subscriptions'
 import { DelayText } from '../../components/TunnelRouteField'
 import { useTableColumns } from '../../components/table-columns'
+import { nodeDataFields } from '../../components/data-fields'
 import { useWorkspace } from '../../data/workspace'
 
 interface NodeRow {
@@ -227,7 +228,7 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
   ]
 
   const sourceTable = useTableColumns(columns, undefined, { settingsTitle: t("订阅列"), rowDrag: true })
-  const nodeTable = useTableColumns(nodeColumns, undefined, { settingsTitle: t("节点列"), rowDrag: true })
+  const nodeTable = useTableColumns(nodeColumns, undefined, { settingsTitle: t("节点列"), rowDrag: true, dataFields: nodeDataFields })
   const shownSources = sourceTable.arrange(visibleSources)
   // Node rows are known by their key; the table's own order and columns go by an id.
   const nodesOf = (source: TunnelSourceSummary) => nodeTable.arrange(rowsOf(source).filter(matches).map((row) => ({ ...row, id: row.key })))
