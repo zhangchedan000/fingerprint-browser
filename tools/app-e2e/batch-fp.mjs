@@ -241,7 +241,8 @@ async function visitAll(window, label, sites = SITES) {
   const result = { name: window.name, id: window.id, started: new Date().toISOString(), sites: {} }
   // 「不绑定」 is the default the screen shows, so a window made with it is still "not asked": the first
   // opening asks (the dialog's own call, setDeviceBinding).
-  if (window.fp.deviceBinding !== 'on' && window.fp.deviceBinding !== 'off') {
+  // (「不绑定」 chosen is stored as no value; only 'ask' is the question still open.)
+  if (window.fp.deviceBinding === 'ask') {
     const want = plan.find((p) => p.name === window.name)?.binding ?? 'off'
     await run(`window.browserApi.profiles.setDeviceBinding(${J(window.id)}, ${J(want)}).then(() => true)`)
   }
