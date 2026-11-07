@@ -13,4 +13,4 @@
 5. **跟着账号走**：上面这些设置、新建列里填的内容、行和清单的顺序，同一个账号在哪台电脑都一样，团队里别的账号不受影响；本地模式（不登录团队）存在本机。
 6. **范围**：整个软件。**左边栏菜单不改。**
 
-现有的表格设置在 `src/renderer/src/components/table-columns.tsx`（拖宽度、拖位置、显示隐藏，按电脑存）；改列名、新建列、行拖动、跟着账号存还没做，用户说「做」时补齐到所有地方。
+做法（v0.5.79 起）：表格用 `src/renderer/src/components/table-columns.tsx` 的 `useTableColumns(columns, scrollX, { rowDrag: true })`（`ListPage` 已经用了，新列表页用 `ListPage` 就全都有）；一条条的清单用 `src/renderer/src/components/list-drag.tsx` 的 `useListDrag`；存储在 `src/shared/ui-prefs.ts`（设置里的 `uiPrefs`，随账号同步）。界面测试 `tools/app-e2e/table-ux.mjs`。还没有列设置的：内核管理、下载内核弹窗、网络加速节点、批量导入预览。
