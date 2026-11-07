@@ -1,0 +1,230 @@
+[
+ {
+  "source": "w01",
+  "name": "SL1",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 1100000,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH1",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 1100007,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SL2",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 2100003,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH2",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 2100010,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SL3",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 3100006,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH3",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 3100013,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SL4",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 4100009,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH4",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 4100016,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SL5",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 5100012,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH5",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 5100019,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SL6",
+  "note": "低分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 6100015,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "SH6",
+  "note": "高分硬件，只换种子",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 6100022,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ }
+]
