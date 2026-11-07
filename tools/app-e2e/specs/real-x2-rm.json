@@ -1,0 +1,50 @@
+[
+ {
+  "source": "w01",
+  "name": "XBnr",
+  "note": "三项都用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900401,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "XDnr",
+  "note": "三项都用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900402,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ]
+  }
+ }
+]
