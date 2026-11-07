@@ -5,7 +5,7 @@
  * be read, the result says so and the screenshot still shows the site's own answer.
  */
 
-export type DeepSite = 'iphey' | 'browserscan' | 'pixelscan' | 'creepjs'
+export type DeepSite = 'iphey' | 'browserscan' | 'pixelscan' | 'creepjs' | 'fpcom'
 
 export interface DeepSiteResult {
   /** The DeepCheckSite id. */
@@ -30,7 +30,7 @@ export interface DeepCheckRecord {
   results: DeepSiteResult[]
 }
 
-/** A site in the user's deep check list (Settings); the four built-in ones are the default list. */
+/** A site in the user's deep check list (Settings); the built-in ones are the default list. */
 export interface DeepCheckSite {
   id: string
   name: string
@@ -60,7 +60,9 @@ export const DEEP_SITES: readonly DeepSiteSpec[] = [
   { site: 'iphey', name: 'iphey', url: 'https://iphey.com/', timeoutMs: 120_000 },
   { site: 'browserscan', name: 'BrowserScan', url: 'https://www.browserscan.net/', timeoutMs: 120_000 },
   { site: 'pixelscan', name: 'Pixelscan', url: 'https://pixelscan.net/fingerprint-check', timeoutMs: 120_000 },
-  { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 120_000 }
+  { site: 'creepjs', name: 'CreepJS', url: 'https://abrahamjuliot.github.io/creepjs/', timeoutMs: 120_000 },
+  // Its verdict came after 3 s on a direct connection (2026-11-07); the same IP asking too often gets 429.
+  { site: 'fpcom', name: 'Fingerprint.com', url: 'https://demo.fingerprint.com/playground', timeoutMs: 120_000 }
 ]
 type Parsed = Pick<DeepSiteResult, 'status' | 'score' | 'findings'>
 
@@ -130,7 +132,59 @@ function creepjs(text: string): Parsed | undefined {
   return { status, score: `${like}% / ${headless}% / ${stealth}%`, findings }
 }
 
-const PARSERS: Record<DeepSite, (text: string) => Parsed | undefined> = { iphey, browserscan, pixelscan, creepjs }
+/**
+ * Fingerprint.com's playground prints its Server API response as "key: value" lines. Thresholds are
+ * Fingerprint's own (docs.fingerprint.com, Smart Signals reference, read 2026-11-07): an anti-detect
+ * browser at tampering_ml_score above 0.8, an anomalous one at anomaly_score above 0.5; tampering,
+ * bot "bad" and the IP blocklist are its verdicts. VPN, proxy, virtual machine and the rest are risks.
+ */
+function fpcom(text: string): Parsed | undefined {
+  const start = text.indexOf('Server API Response')
+  if (start < 0) return undefined
+  const api = text.slice(start)
+  const field = (key: string) => api.match(new RegExp(`^${key}: "?([^"\\n]*)"?$`, 'm'))?.[1]
+  const ml = field('tampering_ml_score')
+  const tampering = field('tampering')
+  if (ml === undefined || tampering === undefined) return undefined
+  const anomaly = field('anomaly_score') ?? '0'
+  const yes = (key: string) => field(key) === 'true'
+  const antiDetect = yes('anti_detect_browser') || Number(ml) > 0.8
+  const findings = [`tampering: ${tampering}`, `tampering_ml_score: ${ml}`, `anomaly_score: ${anomaly}`]
+  const suspect = field('suspect_score')
+  if (suspect !== undefined) findings.push(`suspect_score: ${suspect}`)
+  let bad = tampering === 'true' || antiDetect || Number(anomaly) > 0.5
+  let risky = false
+  const bot = field('bot')
+  if (bot && bot !== 'not_detected') {
+    findings.push(`bot: ${bot}`)
+    bad ||= bot === 'bad'
+  }
+  const blocked = ['email_spam', 'attack_source', 'tor_node'].filter(yes)
+  if (blocked.length) {
+    findings.push(`ip_blocklist: ${blocked.join(', ')}`)
+    bad = true
+  }
+  if (yes('vpn')) {
+    risky = true
+    const methods = ['timezone_mismatch', 'public_vpn', 'os_mismatch', 'relay', 'auxiliary_mobile', 'ml_prediction'].filter(yes)
+    findings.push(...(methods.length ? methods.map((method) => `vpn: ${method}`) : ['vpn: true']))
+  }
+  if (yes('proxy')) {
+    risky = true
+    const details = api.match(/^proxy_details: \{([^}]*)\}/m)?.[1] ?? ''
+    const type = details.match(/^proxy_type: "?([^"\n]*)"?$/m)?.[1]
+    const provider = details.match(/^provider: "?([^"\n]*)"?$/m)?.[1]
+    findings.push(`proxy: ${type ?? 'true'}${provider ? ` (${provider})` : ''}`)
+  }
+  for (const key of ['virtual_machine', 'developer_tools', 'incognito', 'privacy_settings', 'high_activity_device', 'rare_device']) {
+    if (!yes(key)) continue
+    risky = true
+    findings.push(`${key}: true`)
+  }
+  return { status: bad ? 'bad' : risky ? 'warn' : 'ok', score: ml, findings }
+}
+
+const PARSERS: Record<DeepSite, (text: string) => Parsed | undefined> = { iphey, browserscan, pixelscan, creepjs, fpcom }
 
 /** The list a new installation starts with, and "恢复默认" brings back. */
 export const DEFAULT_DEEP_CHECK_SITES: readonly DeepCheckSite[] = DEEP_SITES.map((spec) => ({
@@ -199,6 +253,27 @@ export function parseDeepSite(url: string, text: string): Parsed | undefined {
 
 /** Chinese explanations for findings the sites word the same way every time. */
 export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
+  // Fingerprint.com (its field names; what they mean from its docs).
+  [/^tampering: true/, '被判定为浏览器篡改'],
+  [/^tampering: false/, '没有判定为浏览器篡改'],
+  [/^tampering_ml_score:/, '防关联浏览器模型分（0～1），官方 0.8 以上判为防关联浏览器；真实浏览器也不是 0'],
+  [/^anomaly_score:/, '浏览器特征的罕见程度（0～1），官方 0.5 以上判为异常'],
+  [/^suspect_score:/, '可疑总分：判中的各项信号按官方权重相加'],
+  [/^bot:/, '被识别为自动化浏览器'],
+  [/^ip_blocklist:/, '出口 IP 在黑名单里（垃圾邮件、攻击来源或 Tor 出口）'],
+  [/^vpn: timezone_mismatch/, '时区与 IP 所在国家不一致；同一个 IP 近 7 天有一半访问不一致也会判中（多人共用的 IP 容易这样）'],
+  [/^vpn: os_mismatch/, '网络流量看出的系统和浏览器的系统不一致；同一个 IP 近 7 天有 10% 访问不一致也会判中'],
+  [/^vpn: public_vpn/, '出口 IP 属于公开的 VPN 服务商'],
+  [/^vpn: relay/, '出口 IP 属于匿名中继服务'],
+  [/^vpn: ml_prediction/, '网站的模型判断在用 VPN'],
+  [/^vpn:/, '被识别为 VPN'],
+  [/^proxy:/, '被识别为代理 IP：data_center 是机房 IP，residential 是住宅代理'],
+  [/^virtual_machine:/, '被识别为虚拟机'],
+  [/^developer_tools:/, '开着开发者工具'],
+  [/^incognito:/, '无痕模式'],
+  [/^privacy_settings:/, '开了隐私保护设置'],
+  [/^high_activity_device:/, '这台设备近期访问次数很多'],
+  [/^rare_device:/, '设备配置很少见'],
   [/Different time zones|Timezone spoofed/i, '时区与 IP 所在地不一致'],
   [/Proxy detected/i, '被识别为代理 IP'],
   [/Masking detected/i, '发现指纹伪装痕迹'],

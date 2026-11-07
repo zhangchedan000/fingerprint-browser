@@ -9,6 +9,8 @@ const PIXELSCAN = 'Fingerprint Scan\nRestart\n\nYour Browser Fingerprint is inco
 // Pixelscan while it scans (10-30, prism13 on the Windows 11 computer): its FAQ further down already says "fingerprint is consistent".
 const PIXELSCAN_FAQ = '\n\nHow can I tell if my fingerprint is consistent across sessions using Pixelscan?\nRun the same profile through Pixelscan multiple times without changing settings. If key values like canvas hash, WebGL, and timezone stay the same, your fingerprint is consistent.'
 const PIXELSCAN_SCANNING = 'Fingerprint Scan\nYour Browser Fingerprint is scanning…\nCollecting Data…\nBrowser\nCheck Geo API\nLocation\nProxy\nFingerprint\nBot check' + PIXELSCAN_FAQ
+// Fingerprint.com playground, real Google Chrome on a cloud Windows Server 2022 (2026-11-07), cut down to the read parts.
+const FPCOM = 'Browser Tampering\t\nNot detected\n\nSuspect Score\t\n17\nServer API Response\n{\nevent_id: "1794048085382.y2WCoQ"\nbot: "not_detected"\ndeveloper_tools: false\nip_blocklist: {\nemail_spam: false\nattack_source: false\ntor_node: false\n}\nproxy: true\nproxy_confidence: "medium"\nproxy_details: {\nproxy_type: "data_center"\nlast_seen_at: 1793602800000\nprovider: "DataImpulse data center proxies"\n}\nproxy_ml_score: 0.281\nincognito: false\nprivacy_settings: false\nsuspect_score: 17\ntampering: false\ntampering_confidence: "high"\ntampering_ml_score: 0.0899\ntampering_details: {\nanomaly_score: 0\nanti_detect_browser: false\n}\nvirtual_machine: true\nvirtual_machine_ml_score: 1\nvpn: false\nvpn_methods: {\ntimezone_mismatch: false\npublic_vpn: false\nos_mismatch: false\nrelay: false\nml_prediction: false\n}\nhigh_activity_device: false\nrare_device: false\nraw_device_attributes: {'
 const CREEPJS = 'Headless543e3565\nchromium: true\n25% like headless: fafdf9d1\n0% headless: 52defe05\n0% stealth: 295d4148'
 
 describe('deep check parsers', () => {
@@ -44,6 +46,28 @@ describe('deep check parsers', () => {
     expect(parseDeepSite('https://abrahamjuliot.github.io/creepjs/', CREEPJS)).toEqual({ status: 'ok', score: '25% / 0% / 0%', findings: ['0% headless', '25% like headless', '0% stealth'] })
   })
 
+  it('reads Fingerprint.com tampering scores and the flagged signals by its own thresholds', () => {
+    const url = 'https://demo.fingerprint.com/playground'
+    expect(parseDeepSite(url, 'Fingerprint Playground\nAnalyze my browser again')).toBeUndefined()
+    expect(parseDeepSite(url, FPCOM)).toEqual({
+      status: 'warn',
+      score: '0.0899',
+      findings: ['tampering: false', 'tampering_ml_score: 0.0899', 'anomaly_score: 0', 'suspect_score: 17', 'proxy: data_center (DataImpulse data center proxies)', 'virtual_machine: true']
+    })
+    const clean = FPCOM.replace('proxy: true', 'proxy: false').replace('virtual_machine: true', 'virtual_machine: false')
+    expect(parseDeepSite(url, clean)?.status).toBe('ok')
+    // Over Fingerprint's 0.8 (0.9721 is its docs' example; a Singapore residential IP gave 0.97 on 11-07): an anti-detect browser.
+    const flagged = clean.replace('tampering: false', 'tampering: true').replace('tampering_ml_score: 0.0899', 'tampering_ml_score: 0.9721')
+      .replace('anti_detect_browser: false', 'anti_detect_browser: true').replace('vpn: false', 'vpn: true').replace('timezone_mismatch: false', 'timezone_mismatch: true')
+    expect(parseDeepSite(url, flagged)).toEqual({
+      status: 'bad',
+      score: '0.9721',
+      findings: ['tampering: true', 'tampering_ml_score: 0.9721', 'anomaly_score: 0', 'suspect_score: 17', 'vpn: timezone_mismatch']
+    })
+    // Anomalous alone (above 0.5) is a verdict too.
+    expect(parseDeepSite(url, clean.replace('anomaly_score: 0', 'anomaly_score: 0.62'))?.status).toBe('bad')
+  })
+
   it('knows a page is still filling in', () => {
     expect(pageStillLoading('IP\n---.---.---.---\n--/--\nBrowser fingerprint authenticity: 100%')).toBe(true)
     expect(pageStillLoading(IPHEY_LOADING)).toBe(true)
@@ -70,6 +94,6 @@ describe('deep check parsers', () => {
       { id: 'b', name: 'bad', url: 'file:///c:/x' },
       { id: 'c', name: '', url: 'https://x.com/' }
     ])).toEqual([{ id: 'a', name: 'Leaks', url: 'https://browserleaks.com/', enabled: false }])
-    expect(DEFAULT_DEEP_CHECK_SITES.map((site) => site.id)).toEqual(['iphey', 'browserscan', 'pixelscan', 'creepjs'])
+    expect(DEFAULT_DEEP_CHECK_SITES.map((site) => site.id)).toEqual(['iphey', 'browserscan', 'pixelscan', 'creepjs', 'fpcom'])
   })
 })

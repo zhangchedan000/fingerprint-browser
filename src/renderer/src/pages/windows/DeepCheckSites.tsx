@@ -1,16 +1,18 @@
 import { Button, Input, Modal, Space, Switch } from 'antd'
 import { useState } from 'react'
-import { t } from '../../../../shared/i18n'
-import { DEFAULT_DEEP_CHECK_SITES, knownDeepSite, type DeepCheckSite } from '../../../../shared/deep-check'
+import { formatList, t } from '../../../../shared/i18n'
+import { DEFAULT_DEEP_CHECK_SITES, DEEP_SITES, knownDeepSite, type DeepCheckSite } from '../../../../shared/deep-check'
 import { useWorkspace } from '../../data/workspace'
 
-/** The deep check's site list (shared by every window): switch, add, delete, back to the default four. */
+/** The deep check's site list (shared by every window): switch, add, delete, back to the default list. */
 export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ws = useWorkspace()
   const sites = ws.preferences.deepCheckSites ?? [...DEFAULT_DEEP_CHECK_SITES]
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
+  // Built-in sites a list saved earlier does not have (Fingerprint.com came after the first four).
+  const missing = DEFAULT_DEEP_CHECK_SITES.filter((site) => !sites.some((item) => knownDeepSite(item.url)?.site === knownDeepSite(site.url)?.site))
 
   const save = (next: DeepCheckSite[] | undefined) => ws.setPreferences({ deepCheckSites: next }).catch((reason) => ws.fail(reason))
 
@@ -52,6 +54,16 @@ export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () =
           </div>
         ))}
         {!sites.length && <span className="fb-muted">{t("没有检测网站，添加一个或恢复默认")}</span>}
+        {missing.map((site) => (
+          <div key={site.id} className="fb-deep-sites-row">
+            <div className="fb-deep-sites-name">
+              <b>{site.name}</b>
+              <span className="fb-muted fb-ellipsis">{site.url}</span>
+            </div>
+            <span className="fb-muted">{t("内置网站，不在列表里")}</span>
+            <Button type="link" size="small" disabled={sites.length >= 20} onClick={() => void save([...sites, { ...site }])}>{t("加入")}</Button>
+          </div>
+        ))}
       </div>
       <Space.Compact className="fb-deep-sites-add">
         <Input placeholder={t("名称（可不填）")} value={name} onChange={(event) => setName(event.target.value)} style={{ width: 160 }} />
@@ -60,7 +72,7 @@ export function DeepCheckSites({ open, onClose }: { open: boolean; onClose: () =
       </Space.Compact>
       {error && <div className="fb-deep-sites-error">{error}</div>}
       <div className="fb-deep-sites-foot">
-        <span className="fb-muted">{t("iphey、BrowserScan、Pixelscan、CreepJS 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。")}</span>
+        <span className="fb-muted">{t("{0} 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。", formatList(DEEP_SITES.map((site) => site.name)))}</span>
         <Button size="small" onClick={() => void save(undefined)}>{t("恢复默认")}</Button>
       </div>
     </Modal>

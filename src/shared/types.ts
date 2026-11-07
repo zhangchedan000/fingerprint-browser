@@ -407,7 +407,7 @@ export interface AppPreferences {
   theme: 'light' | 'dark' | 'system'
   /** Pause between windows opened in one batch. */
   batchLaunchGapSeconds: number
-  /** Sites the deep check opens, in order. Unset = the four built-in ones. */
+  /** Sites the deep check opens, in order. Unset = the built-in ones. */
   deepCheckSites?: import('./deep-check').DeepCheckSite[]
   /** Sites that read the exit IP after a proxy check (IP 评分). Unset = IPLark and ping0.cc. */
   ipCheckSites?: import('./ip-sites').IpCheckSite[]
