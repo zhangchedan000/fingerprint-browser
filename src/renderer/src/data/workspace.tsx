@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { getLocale, subscribeLocale } from '../../../shared/i18n'
 import { sameChromiumKernel } from '../../../shared/kernel-id'
+import type { TableUiPrefs } from '../../../shared/ui-prefs'
 import { applyThemePreference } from '../theme'
 import type {
   AppPreferences,
@@ -33,6 +34,8 @@ export interface Workspace {
   /** Settings-page choices (theme, batch open gap). */
   preferences: AppPreferences
   setPreferences: (patch: Partial<AppPreferences>) => Promise<void>
+  /** One table's arrangement (columns, added columns, row order); undefined: back to the default. */
+  setTablePrefs: (key: string, table: TableUiPrefs | undefined) => Promise<void>
   notify: MessageInstance
   upsertProfiles: (profiles: BrowserProfileView[]) => void
   dropProfiles: (ids: string[]) => void
@@ -190,8 +193,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (patch.theme) applyThemePreference(saved.theme)
   }, [])
 
+  const setTablePrefs = useCallback(async (key: string, table: TableUiPrefs | undefined) => {
+    setPreferenceState(await window.browserApi.app.setTablePrefs(key, table))
+  }, [])
+
   const value: Workspace = {
-    locale, loading, profiles, proxies, groups, engine, kernels, extensions, storageHealth, recovery, preferences, setPreferences, notify,
+    locale, loading, profiles, proxies, groups, engine, kernels, extensions, storageHealth, recovery, preferences, setPreferences, setTablePrefs, notify,
     upsertProfiles, dropProfiles, reloadProfiles, reloadLibraries, setEngine, reloadKernels, setExtensions, canLaunch, fail
   }
   return (

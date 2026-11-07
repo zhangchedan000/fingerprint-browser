@@ -9,6 +9,7 @@ import { CheckRuns } from './check-runs'
 import type { KernelManager } from './kernel-manager'
 import { listBundledBrowsers, locateBrowser, locateBrowserForProfile, locateBundledBrowser, normalizeBrowserSelection } from './browser-locator'
 import { DEFAULT_DEEP_CHECK_SITES, type DeepCheckRecord } from '../shared/deep-check'
+import { withTable, type TableUiPrefs } from '../shared/ui-prefs'
 import { deepCheck, evaluateFingerprint, expectedIdentity, fingerprintCheckStore, ipSiteCheck, observeFingerprint } from './fingerprint-check'
 import { DEFAULT_IP_CHECK_SITES, ipBaseline, ipSiteInTurn, safeIpSiteRecord, type IpSiteRecord } from '../shared/ip-sites'
 import type { DeepSiteResult } from '../shared/deep-check'
@@ -622,8 +623,15 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
   ipcMain.handle('app:set-preferences', async (_event, patch: Partial<AppPreferences>) => {
     const next = validPreferences({ ...settings.get(), ...(patch && typeof patch === 'object' ? patch : {}) })
     // deepCheckSites always goes in, so going back to the default list clears the stored one.
-    await settings.update({ ...next, deepCheckSites: next.deepCheckSites, ipCheckSites: next.ipCheckSites, ipCheckBaseline: next.ipCheckBaseline, downloadFolder: next.downloadFolder, downloadPerWindow: next.downloadPerWindow })
+    await settings.update({ ...next, deepCheckSites: next.deepCheckSites, ipCheckSites: next.ipCheckSites, ipCheckBaseline: next.ipCheckBaseline, downloadFolder: next.downloadFolder, downloadPerWindow: next.downloadPerWindow, uiPrefs: next.uiPrefs })
     return next
+  })
+  // One table at a time, merged here: two tables saved at once do not undo each other.
+  ipcMain.handle('app:set-table-prefs', async (_event, key: unknown, table: unknown) => {
+    if (typeof key !== 'string' || !key || key.length > 2000) throw new Error('表格参数无效')
+    const uiPrefs = withTable(settings.get().uiPrefs, key, table as TableUiPrefs | undefined)
+    await settings.update({ uiPrefs })
+    return validPreferences(settings.get())
   })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), vaultPath: profiles.vaultPath, logsPath: logger.directory }))
   ipcMain.handle('app:open-folder', async (_event, folder: unknown) => {

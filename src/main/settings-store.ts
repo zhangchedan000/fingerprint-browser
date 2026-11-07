@@ -5,6 +5,7 @@ import type { AppPreferences, AppSettings } from '../shared/types'
 import { DEFAULT_KERNEL_SOURCES, validKernelSources, withOfficialKernelSource } from '../shared/kernel-sources'
 import { validDeepCheckSites } from '../shared/deep-check'
 import { validIpCheckSites } from '../shared/ip-sites'
+import { validUiPrefs } from '../shared/ui-prefs'
 
 export const DEFAULT_PREFERENCES: AppPreferences = { theme: 'light', batchLaunchGapSeconds: 1.5, closeAction: 'tray' }
 
@@ -20,6 +21,7 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
   const folder = 'downloadFolder' in input ? input.downloadFolder : base.downloadFolder
   const downloadFolder = typeof folder === 'string' && isAbsolute(folder.trim()) && folder.trim().length <= 260 ? folder.trim() : undefined
   const downloadPerWindow = 'downloadPerWindow' in input ? input.downloadPerWindow === true : base.downloadPerWindow === true
+  const uiPrefs = 'uiPrefs' in input ? validUiPrefs(input.uiPrefs) : base.uiPrefs
   const close = 'closeAction' in input ? input.closeAction : base.closeAction
   const closeAction = close === 'quit' ? 'quit' : 'tray'
   return {
@@ -30,6 +32,7 @@ export function validPreferences(input: Partial<AppPreferences>, base: AppPrefer
     ...(ipCheckBaseline ? { ipCheckBaseline } : {}),
     ...(downloadFolder ? { downloadFolder } : {}),
     ...(downloadFolder && downloadPerWindow ? { downloadPerWindow: true } : {}),
+    ...(uiPrefs ? { uiPrefs } : {}),
     closeAction
   }
 }

@@ -371,7 +371,9 @@ app.whenReady().then(async () => {
       ipCheckSites: current.ipCheckSites ?? null,
       ipCheckBaseline: current.ipCheckBaseline ?? null,
       batchLaunchGapSeconds: current.batchLaunchGapSeconds,
-      recycleRetentionDays: current.recycleRetentionDays
+      recycleRetentionDays: current.recycleRetentionDays,
+      // How the tables are arranged (columns, added columns, row order) follows the account (user 11-07).
+      uiPrefs: current.uiPrefs ?? null
     }
   }
   activeTeam.workspaceExport = async () => ({
@@ -396,7 +398,9 @@ app.whenReady().then(async () => {
           deepCheckSites: (wanted.deepCheckSites ?? undefined) as AppPreferences['deepCheckSites'],
           ipCheckSites: (wanted.ipCheckSites ?? undefined) as AppPreferences['ipCheckSites'],
           ipCheckBaseline: (wanted.ipCheckBaseline ?? undefined) as AppPreferences['ipCheckBaseline'],
-          batchLaunchGapSeconds: Number(wanted.batchLaunchGapSeconds ?? settings.get().batchLaunchGapSeconds)
+          batchLaunchGapSeconds: Number(wanted.batchLaunchGapSeconds ?? settings.get().batchLaunchGapSeconds),
+          // An older version's copy has no tables: this computer keeps its own.
+          uiPrefs: ('uiPrefs' in wanted ? wanted.uiPrefs ?? undefined : settings.get().uiPrefs) as AppPreferences['uiPrefs']
         })
         const days = Number(wanted.recycleRetentionDays)
         await settings.update({
@@ -404,6 +408,7 @@ app.whenReady().then(async () => {
           ipCheckSites: next.ipCheckSites,
           ipCheckBaseline: next.ipCheckBaseline,
           batchLaunchGapSeconds: next.batchLaunchGapSeconds,
+          uiPrefs: next.uiPrefs,
           ...(days === 0 || days === 7 || days === 30 || days === 90 ? { recycleRetentionDays: days as 0 | 7 | 30 | 90 } : {})
         })
       }

@@ -12,6 +12,7 @@ const api: BrowserApi = {
   app: {
     preferences: () => ipcRenderer.invoke('app:preferences'),
     setPreferences: (patch) => ipcRenderer.invoke('app:set-preferences', patch),
+    setTablePrefs: (key, table) => ipcRenderer.invoke('app:set-table-prefs', key, table),
     info: () => ipcRenderer.invoke('app:info'),
     openFolder: (folder) => ipcRenderer.invoke('app:open-folder', folder),
     openProjectPage: () => ipcRenderer.invoke('app:open-project-page'),

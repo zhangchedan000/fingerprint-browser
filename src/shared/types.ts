@@ -419,6 +419,8 @@ export interface AppPreferences {
   downloadPerWindow?: boolean
   /** The main window's X: 'tray' hides it to the tray icon (windows keep running), 'quit' quits. Unset = 'tray'. */
   closeAction?: 'tray' | 'quit'
+  /** How the user arranged the tables (columns, added columns, row order); follows the account. */
+  uiPrefs?: import('./ui-prefs').UiPrefs
 }
 
 export interface AppInfo {
@@ -788,6 +790,8 @@ export interface BrowserApi {
   app: {
     preferences: () => Promise<AppPreferences>
     setPreferences: (patch: Partial<AppPreferences>) => Promise<AppPreferences>
+    /** One table's arrangement (undefined: back to the default); the others are kept. */
+    setTablePrefs: (key: string, table: import('./ui-prefs').TableUiPrefs | undefined) => Promise<AppPreferences>
     info: () => Promise<AppInfo>
     openFolder: (folder: 'vault' | 'logs') => Promise<void>
     openProjectPage: () => Promise<void>
