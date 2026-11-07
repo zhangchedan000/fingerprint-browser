@@ -392,6 +392,30 @@ if (phase === 'clone') {
   await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
 }
 
+// renode <spec.json>: [{ window: "w05", node: "美国 10" }]: the window moves to that subscription node
+// (reached directly, no 网络加速); everything else about it stays.
+if (phase === 'renode') {
+  const specs = JSON.parse(await readFile(arg5, 'utf8'))
+  for (const spec of specs) {
+    const done = await run(`(async () => {
+      const profile = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(`${round}-${spec.window}`)})
+      if (!profile) return 'no window'
+      const status = await window.browserApi.subscriptions.status()
+      const node = status.nodes.find((n) => n.name.includes(${J(spec.node)}))
+      if (!node) return 'no node'
+      const source = status.sources.find((s) => s.id === node.sourceId)
+      const short = node.name.startsWith(source.name + ' · ') ? node.name.slice(source.name.length + 3) : node.name
+      const entry = await window.browserApi.subscriptions.nodeProxy({ source: source.name, node: short })
+      const checked = await window.browserApi.proxy.check(entry.id).then((p) => p.check, () => undefined)
+      await window.browserApi.profiles.assignMany([profile.id], { proxyId: entry.id })
+      const fresh = (await window.browserApi.profiles.list()).find((p) => p.id === profile.id)
+      await window.browserApi.profiles.update(profile.id, { ...fresh, tunnel: { enabled: false, mode: 'auto' } })
+      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window tz ' + fresh.fingerprint.timezone
+    })().catch((e) => 'error: ' + e.message)`)
+    log('renode', spec.window, done)
+  }
+}
+
 // nodes: the subscription nodes the test launcher has, with exit IPs (written to <out>/nodes.txt).
 if (phase === 'nodes') {
   await delay(15000)
@@ -431,7 +455,8 @@ if (phase === 'run' || phase === 'reopen') {
   await Promise.all(Array.from({ length: concurrency }, async () => {
     while (next < chosen.length) {
       const window = chosen[next++]
-      const label = phase === 'reopen' && !/-c\d+$/.test(window.name) ? `${window.name}-reopen` : window.name
+      // LABEL=<word>: the reopen's pages are saved as <window>-<word>-<site> (default "reopen").
+      const label = phase === 'reopen' && !/-c\d+$/.test(window.name) ? `${window.name}-${process.env.LABEL || 'reopen'}` : window.name
       log('open', label)
       const result = await visitAll(window, label, sites)
       results.push(result)
