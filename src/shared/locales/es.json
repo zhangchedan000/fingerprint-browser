@@ -2828,5 +2828,12 @@
   "新建列的名称": "Nombre de la nueva columna",
   "最多 20 个自定义列": "Como máximo 20 columnas propias",
   "点击填写": "Haz clic para escribir",
-  "点表头取消排序后，可以拖动调整顺序": "Quita el orden por encabezado para arrastrar las filas"
+  "点表头取消排序后，可以拖动调整顺序": "Quita el orden por encabezado para arrastrar las filas",
+  "DNS 服务器和 IP 不在同一个国家：代理那边用的 DNS，whoer 实测会扣 30%（换代理或让代理商改 DNS）": "El servidor DNS está en otro país que la IP: es el DNS del proxy, y whoer restó un 30% por ello en las pruebas (cambia de proxy o pide al proveedor que cambie su DNS)",
+  "DNS 服务器所在国家，和 IP 同一个国家就没问题": "El país del servidor DNS; si es el mismo que el de la IP, está bien",
+  "whoer 按它的 IP 库算的当地时间和浏览器时间不一样（各家 IP 库对城市的判断可能不同）": "La hora local que whoer calcula con su base de IP difiere de la del navegador (las bases de IP pueden situar la misma IP en ciudades distintas)",
+  "被 whoer 识别为代理": "Detectado como proxy por whoer",
+  "被 whoer 识别为匿名服务": "Detectado como anonimizador por whoer",
+  "出口 IP 在 whoer 的黑名单里": "La IP de salida está en la lista negra de whoer",
+  "截图只截了页面前 {0} 像素（页面太长）": "Solo se capturaron los primeros {0} píxeles de la página (la página es demasiado larga)"
 }

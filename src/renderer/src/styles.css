@@ -453,14 +453,16 @@ button, input, textarea { font: inherit; }
 .fb-deep-results { display: flex; flex-direction: column; gap: 8px; }
 .fb-deep-site { display: flex; align-items: flex-start; gap: 12px; padding: 8px; border-radius: 6px; background: var(--fb-surface); }
 .fb-deep-site.is-pending { align-items: center; gap: 8px; font-size: 13px; }
-.fb-deep-shot { border-radius: 4px; border: 1px solid var(--fb-line-soft); }
+.fb-deep-shot { border-radius: 4px; border: 1px solid var(--fb-line-soft); object-fit: cover; object-position: top; }
+/* The thumbnail keeps its width when the text beside it is long (it used to be squeezed and cover the text). */
+.fb-deep-site > .ant-image { flex: 0 0 auto; }
 .fb-deep-sites { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .fb-deep-sites-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; background: var(--fb-surface-muted); }
 .fb-deep-sites-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .fb-deep-sites-add { width: 100%; }
 .fb-deep-sites-error { margin-top: 6px; color: var(--fb-danger); font-size: 12px; }
 .fb-deep-sites-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
-.fb-deep-link { padding: 0; height: auto; font-size: 12px; }
+.fb-deep-link { align-self: flex-start; justify-content: flex-start; max-width: 100%; padding: 0; height: auto; font-size: 12px; }
 .fb-fp-measured { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px; font-size: 12px; }
 .fb-fp-measured b { font-weight: 600; word-break: break-all; }
 .fb-deep-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; }

@@ -3,7 +3,7 @@ import { kernelChromiumVersion } from '../shared/kernel-id'
 import { ipZoneFix, ipZoneOnComputer } from '../shared/quick-fix'
 import { UNSUPPORTED_KERNEL } from './kernel-features'
 import { hideFingerprintArgs } from './encrypted-config'
-import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, pageStillLoading, parseDeepSite, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
+import { DEEP_SETTLE_AFTER_VERDICT_MS, deepSiteTimeout, knownDeepSite, OTHER_SITE_MIN_WAIT_MS, pageStillLoading, parseDeepSite, scoreLines, type DeepCheckSite, type DeepSiteResult } from '../shared/deep-check'
 import { ipSiteUrl, knownIpSite, parseIpSite, type IpCheckSite, type IpSiteReading } from '../shared/ip-sites'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -470,6 +470,39 @@ export async function observeFingerprint(options: FingerprintRunOptions): Promis
   }
 }
 
+/** The longest page shot whole; a longer one is shot from the top to this height (user 11-07: shoot the whole page). */
+export const FULL_SHOT_MAX_HEIGHT = 12_000
+
+/**
+ * The whole page, not just its first screen (Fingerprint.com's score is far down its page). The page is
+ * scrolled through first so parts that load when seen are there, then shot from the top; a very tall
+ * page is shot to FULL_SHOT_MAX_HEIGHT, at a smaller scale past 4000 px so the picture stays small.
+ */
+async function fullPageShot(client: CdpClient): Promise<{ data?: string; cut: boolean }> {
+  await client.send('Runtime.evaluate', {
+    awaitPromise: true,
+    expression: '(async () => { const step = Math.max(400, innerHeight - 100); for (let y = 0; y < Math.min(document.documentElement.scrollHeight, 12000); y += step) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 120)) } scrollTo(0, 0); await new Promise((r) => setTimeout(r, 300)) })()'
+  }, 20_000).catch(() => undefined)
+  const metrics = await client.send<{ cssContentSize?: { width: number; height: number }; cssLayoutViewport?: { clientWidth: number } }>('Page.getLayoutMetrics', {}, 10_000).catch(() => undefined)
+  const width = Math.round(metrics?.cssLayoutViewport?.clientWidth ?? metrics?.cssContentSize?.width ?? 0)
+  const pageHeight = Math.ceil(metrics?.cssContentSize?.height ?? 0)
+  if (!width || !pageHeight) {
+    const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
+    return { data: shot?.data, cut: false }
+  }
+  const height = Math.min(pageHeight, FULL_SHOT_MAX_HEIGHT)
+  const shot = await client.send<{ data?: string }>('Page.captureScreenshot', {
+    format: 'jpeg',
+    quality: 55,
+    captureBeyondViewport: true,
+    clip: { x: 0, y: 0, width, height, scale: height > 4000 ? 0.6 : 1 }
+  }, 40_000).catch(() => undefined)
+  if (shot?.data) return { data: shot.data, cut: pageHeight > FULL_SHOT_MAX_HEIGHT }
+  // Some pages refuse a shot that tall: their first screen, as before.
+  const screen = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
+  return { data: screen?.data, cut: false }
+}
+
 /**
  * Opens each detection site in the check browser and reads its verdict and a screenshot. Sites the
  * user added have no verdict to read: they get the page title and the screenshot.
@@ -488,6 +521,9 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
         // rows), so read on until the page text stops changing and no placeholder is left, at most
         // DEEP_SETTLE_AFTER_VERDICT_MS more. The screenshot is taken after that, never before the verdict.
         let deadline = Date.now() + deepSiteTimeout(site.url)
+        // A site the user added: never shot in its first seconds, and only after a longer still spell.
+        const notBefore = Date.now() + (known ? 0 : OTHER_SITE_MIN_WAIT_MS)
+        const stillReadings = known ? 2 : 3
         let parsed: ReturnType<typeof parseDeepSite>
         let previous: string | undefined
         // Readings in a row that did not change: two (3 s), as CreepJS fills its WebRTC and device rows after its verdict.
@@ -501,7 +537,7 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
           if (reading && !parsed && known) deadline = Date.now() + DEEP_SETTLE_AFTER_VERDICT_MS
           parsed = reading ?? parsed
           unchanged = text === previous ? unchanged + 1 : 0
-          settled = (Boolean(parsed) || (!known && text.length > 0)) && unchanged >= 2 && !pageStillLoading(text)
+          settled = (Boolean(parsed) || (!known && text.length > 0)) && unchanged >= stillReadings && Date.now() >= notBefore && !pageStillLoading(text)
           previous = text
         }
         if (parsed) Object.assign(result, parsed)
@@ -509,12 +545,14 @@ export async function deepCheck(options: FingerprintRunOptions, sites: readonly 
         else {
           const title = await client.send<{ result?: { value?: string } }>('Runtime.evaluate', { expression: 'document.title', returnByValue: true }).catch(() => undefined)
           if (title?.result?.value) result.findings.push(title.result.value.slice(0, 120))
+          // What the page says about the window (its score lines), shown like a built-in site's findings.
+          result.findings.push(...scoreLines(previous ?? ''))
         }
         // With the verdict read, rows still filling in below it do not change it: no warning then.
         if (!settled && !parsed) result.findings.push('页面在限定时间内没有完全加载完')
-        await client.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' }).catch(() => undefined)
-        const shot = await client.send<{ data?: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 55 }, 20_000).catch(() => undefined)
-        if (shot?.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`
+        const shot = await fullPageShot(client)
+        if (shot.data) result.screenshot = `data:image/jpeg;base64,${shot.data}`
+        if (shot.cut) result.findings.push(`截图只截了页面前 ${FULL_SHOT_MAX_HEIGHT} 像素（页面太长）`)
       } catch (error) {
         result.error = error instanceof Error ? error.message : String(error)
       }

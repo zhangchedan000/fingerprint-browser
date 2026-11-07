@@ -2828,5 +2828,12 @@
   "新建列的名称": "Tên cột mới",
   "最多 20 个自定义列": "Tối đa 20 cột tự thêm",
   "点击填写": "Nhấn để điền",
-  "点表头取消排序后，可以拖动调整顺序": "Bỏ sắp xếp theo tiêu đề để kéo đổi thứ tự"
+  "点表头取消排序后，可以拖动调整顺序": "Bỏ sắp xếp theo tiêu đề để kéo đổi thứ tự",
+  "DNS 服务器和 IP 不在同一个国家：代理那边用的 DNS，whoer 实测会扣 30%（换代理或让代理商改 DNS）": "Máy chủ DNS ở quốc gia khác với IP: đó là DNS của proxy, whoer đã trừ 30% khi thử (đổi proxy hoặc nhờ nhà cung cấp đổi DNS)",
+  "DNS 服务器所在国家，和 IP 同一个国家就没问题": "Quốc gia của máy chủ DNS; trùng với quốc gia của IP là ổn",
+  "whoer 按它的 IP 库算的当地时间和浏览器时间不一样（各家 IP 库对城市的判断可能不同）": "Giờ địa phương whoer tính theo cơ sở dữ liệu IP của nó khác giờ của trình duyệt (các cơ sở dữ liệu IP có thể xác định thành phố khác nhau)",
+  "被 whoer 识别为代理": "whoer nhận diện là proxy",
+  "被 whoer 识别为匿名服务": "whoer nhận diện là dịch vụ ẩn danh",
+  "出口 IP 在 whoer 的黑名单里": "IP đầu ra nằm trong danh sách đen của whoer",
+  "截图只截了页面前 {0} 像素（页面太长）": "Chỉ chụp {0} pixel đầu của trang (trang quá dài)"
 }

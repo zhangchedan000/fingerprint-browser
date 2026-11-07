@@ -1,7 +1,7 @@
 import { Alert, Button, Image, Tag } from 'antd'
 import { useEffect, useState } from 'react'
 import { formatList, getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
-import { DEFAULT_DEEP_CHECK_SITES, FINDING_NOTES, type DeepSiteResult } from '../../../../shared/deep-check'
+import { DEFAULT_DEEP_CHECK_SITES, FINDING_NOTES, knownDeepSite, type DeepSiteResult } from '../../../../shared/deep-check'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import { humanError, relativeTime } from '../../components/format'
@@ -124,10 +124,11 @@ export function DeepCheck({ draft, profileId, settingsKey }: { draft: () => Prof
       {(results.length > 0 || pending.length > 0) && (
         <div className="fb-deep-results">
           {results.map((result) => {
-            const [color, label] = STATUS[result.status]
+            // A site the user added has no score to read: its screenshot is the result, not a failure.
+            const [color, label] = result.status === 'unknown' && !result.error && !knownDeepSite(result.url) ? ['default', '只截图'] : STATUS[result.status]
             return (
               <div key={result.site} className="fb-deep-site">
-                {result.screenshot && <Image src={result.screenshot} width={120} className="fb-deep-shot" alt={result.name} />}
+                {result.screenshot && <Image src={result.screenshot} width={120} height={68} className="fb-deep-shot" alt={result.name} />}
                 <div className="fb-deep-body">
                   <div className="fb-deep-title">
                     <b>{result.name}</b>
