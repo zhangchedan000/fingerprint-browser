@@ -1,7 +1,7 @@
 // Windows, a test launcher on a test folder (the user's launcher, windows and kernels are not touched):
 // a kernel update while a window runs on it and is downloading a file.
 //   1. The installed 156 kernel is copied into the test vault; a window is opened from it (its chrome.exe),
-//      shows a page and starts a slow download (90 MB over about 90 s from a local server).
+//      shows a page and starts downloading a ~200 MB file (a kernel zip from GitHub, over https).
 //   2. During the download the test launcher installs another build of the kernel (历史版本): it must succeed;
 //      the new build is what new windows get (engine.status); a window opened from it works.
 //   3. The running window: the download must finish whole, the page must still work (script, a new page).
@@ -64,25 +64,25 @@ async function openWindow(chrome, name, url) {
   return { child, browser, tab, evaluate, close, ud }
 }
 
-// A slow download: 90 MB, 1 MB a second.
-const SIZE = 90
+// The pages the windows show; the download is a real file over https (Chrome cancels plain-http ones).
+const BIG = 'https://github.com/zhangchedan000/prism-kernel-releases/releases/download/prism22/ungoogled-chromium_156.0.8078.47-prism22_windows_x64.zip'
 const http = createHttp((req, res) => {
-  if (req.url === '/page') { res.setHeader('content-type', 'text/html'); res.end('<title>running</title><script>window.ticks=0;setInterval(()=>window.ticks++,100)</script>page'); return }
-  if (req.url === '/next') { res.setHeader('content-type', 'text/html'); res.end('<title>next page</title>next'); return }
-  res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': SIZE * 1024 * 1024, 'content-disposition': 'attachment; filename="big.bin"' })
-  let sent = 0
-  const chunk = Buffer.alloc(1024 * 1024, 7)
-  const timer = setInterval(() => { if (sent++ >= SIZE) { clearInterval(timer); res.end(); return } res.write(chunk) }, 1000)
-  req.on('close', () => clearInterval(timer))
+  res.setHeader('content-type', 'text/html')
+  if (req.url === '/next') { res.end('<title>next page</title>next'); return }
+  res.end('<title>running</title><script>window.ticks=0;setInterval(()=>window.ticks++,100)</script>page')
 })
 await new Promise((r) => http.listen(0, '127.0.0.1', r))
 const base = `http://127.0.0.1:${http.address().port}`
 
-rmSync(folder, { recursive: true, force: true })
 mkdirSync(join(userData, 'vault', 'kernels'), { recursive: true })
-try { execFileSync('robocopy', [kernelSource, kernel, '/E', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { stdio: 'ignore' }) } catch (e) { if (e.status >= 8) throw e }
+const robocopy = (from, to) => { try { execFileSync('robocopy', [from, to, '/E', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { stdio: 'ignore' }) } catch (e) { if (e.status >= 8) throw e } }
+robocopy(kernelSource, kernel)
+// The shared fonts, copied (not downloaded again); the old build gets its link to them, as the launcher gives it.
+const fontStore = join(userData, 'vault', 'kernel-fonts')
+robocopy(join(kernelSource, '..', '..', 'kernel-fonts'), fontStore)
 const manifest = () => JSON.parse(readFileSync(join(kernel, 'manifest.json'), 'utf8'))
 const oldExe = join(kernel, manifest().executableRelative)
+execFileSync('cmd', ['/c', 'mklink', '/J', join(kernel, 'browser', 'prism-system-fonts'), join(fontStore, 'v1')], { stdio: 'ignore' })
 log('1 copied', id, manifest().releaseTag, '| layout:', readdirSync(kernel).sort().join(', '))
 
 // 1. A window on the installed build, downloading.
@@ -90,9 +90,10 @@ const old = await openWindow(oldExe, 'old', `${base}/page`)
 const downloads = join(folder, 'downloads')
 mkdirSync(downloads, { recursive: true })
 await old.browser.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads, eventsEnabled: true })
-await old.tab.send('Page.navigate', { url: `${base}/big` })
+await old.evaluate(`(() => { const a = document.createElement('a'); a.href = ${JSON.stringify(BIG)}; document.body.appendChild(a); a.click() })()`)
 await delay(3000)
-log('1 window from', manifest().executableRelative, '| ticks', await old.evaluate('window.ticks'), '| downloading:', existsSync(downloads) ? readdirSync(downloads).join(', ') : '-')
+const progress = () => [...old.browser.events].reverse().find((e) => e.method === 'Browser.downloadProgress')?.params
+log('1 window from', manifest().executableRelative, '| ticks', await old.evaluate('window.ticks'), '| download:', JSON.stringify(progress() ? { state: progress().state, received: progress().receivedBytes, total: progress().totalBytes } : null))
 
 // 2. Install another build while it runs.
 let app = await launcher()
@@ -100,6 +101,7 @@ const rows = await app.evaluate('window.browserApi.engine.releases().then((r) =>
 const other = Array.isArray(rows) ? rows.find((x) => x.version === id && x.history && !x.installed) : undefined
 const started = Date.now()
 const result = await app.evaluate(`window.browserApi.engine.install(${JSON.stringify(id)}, ${JSON.stringify(other?.tag)}).then(() => 'ok', (e) => 'error: ' + e.message)`)
+log('2 download while installing:', JSON.stringify(progress() ? { state: progress().state, received: progress().receivedBytes } : null))
 log('2 install', other?.tag, ':', result, `${Math.round((Date.now() - started) / 1000)} s`, '| layout:', readdirSync(kernel).sort().join(', '))
 const status = await app.evaluate(`window.browserApi.engine.verify(${JSON.stringify(id)}).then((h) => h.status)`).catch((e) => e.message)
 const newExe = join(kernel, manifest().executableRelative)
@@ -115,8 +117,8 @@ for (let i = 0; i < 150 && !done; i++) {
   done = old.browser.events.find((e) => e.method === 'Browser.downloadProgress' && (e.params.state === 'completed' || e.params.state === 'canceled'))
   if (!done) await delay(1000)
 }
-const file = join(downloads, 'big.bin')
-log('3 download:', done?.params.state ?? 'not finished', '| file', existsSync(file) ? `${statSync(file).size} bytes (want ${SIZE * 1024 * 1024})` : 'missing')
+const file = join(downloads, basename(new URL(BIG).pathname))
+log('3 download:', done?.params.state ?? 'not finished', '| file', existsSync(file) ? `${statSync(file).size} bytes (want ${done?.params.totalBytes})` : 'missing')
 log('3 running window still works: ticks', await old.evaluate('window.ticks'))
 await old.tab.send('Page.navigate', { url: `${base}/next` })
 await delay(1500)
