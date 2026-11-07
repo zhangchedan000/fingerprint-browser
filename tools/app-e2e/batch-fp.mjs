@@ -56,7 +56,8 @@ const plan = Array.from({ length: 20 }, (_, i) => ({
   tier: TIERS[i % 4],
   binding: Math.floor(i / 2) % 2 === 0 ? 'on' : 'off',
   media: Math.floor(i / 5) % 2 === 0 ? 'auto' : 'other',
-  windows: [3, 9, 14, 18].includes(i) ? 'Windows 10' : 'Windows 11'
+  // Win11 / Win10 10 each (user 11-07), spread over kernels, vendors and tiers.
+  windows: [3, 4, 6, 8, 9, 11, 13, 14, 17, 18].includes(i) ? 'Windows 10' : 'Windows 11'
 }))
 // hardware-match.ts gpuTier, same regexes.
 const gpuTier = (model) => /RTX (3080 Ti|3090|4080|4090|4070 Ti SUPER|5070 Ti|5080|5090)/.test(model) ? 'top'
@@ -282,6 +283,22 @@ async function visitAll(window, label, sites = SITES) {
   }
   result.finished = new Date().toISOString()
   return result
+}
+
+// setver: windows made before the plan changed get the plan's system version (as 系统版本 in the editor).
+if (phase === 'setver') {
+  for (const w of (await windows()).filter((item) => item.name.startsWith(`${round}-`))) {
+    const want = plan.find((p) => p.name === w.name)?.windows === 'Windows 10' ? '10.0.0' : '19.0.0'
+    if (w.fp.platformVersion === want) continue
+    const done = await run(`(async () => {
+      const profile = (await window.browserApi.profiles.list()).find((p) => p.id === ${J(w.id)})
+      const saved = await window.browserApi.profiles.update(profile.id, { ...profile, fingerprint: { ...profile.fingerprint, platformVersion: ${J(want)} } })
+      return saved.fingerprint.platformVersion
+    })().catch((e) => 'error: ' + e.message)`)
+    log('setver', w.name, w.fp.platformVersion, '->', done)
+  }
+  const list = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
+  await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
 }
 
 if (phase === 'run' || phase === 'reopen') {
