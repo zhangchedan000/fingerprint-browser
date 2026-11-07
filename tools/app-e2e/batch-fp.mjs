@@ -321,7 +321,15 @@ async function visitAll(window, label, sites = SITES) {
   // ALLOW_GEO=1: the window's time zone stays as it was on purpose (control tests change only the IP).
   const launchOptions = process.env.ALLOW_GEO === '1' ? ', { allowGeoConflict: true }' : ''
   const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}${launchOptions}).then((p) => p.status, (e) => 'error: ' + e.message)`)
-  if (launched !== 'running') { result.error = `launch: ${launched}`; return result }
+  // FRESH: the window's own data folder goes back whatever happens to this visit.
+  const restore = async () => {
+    if (process.env.FRESH !== '1' || !existsSync(keptDir)) return
+    for (let i = 0; i < 10; i++) {
+      try { await rm(dataDir, { recursive: true, force: true }); await rename(keptDir, dataDir); return } catch { await delay(2000) }
+    }
+    log('FRESH: could not put back', dataDir)
+  }
+  if (launched !== 'running') { result.error = `launch: ${launched}`; await restore(); return result }
   const portFile = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort')
   let port
   for (let i = 0; i < 60 && !port; i++) {
@@ -367,11 +375,7 @@ async function visitAll(window, label, sites = SITES) {
   } finally {
     await run(`window.browserApi.profiles.close(${J(window.id)}).then(() => true, () => false)`)
     await delay(3000)
-    if (process.env.FRESH === '1' && existsSync(keptDir)) {
-      for (let i = 0; i < 10; i++) {
-        try { await rm(dataDir, { recursive: true, force: true }); await rename(keptDir, dataDir); break } catch { await delay(2000) }
-      }
-    }
+    await restore()
   }
   result.finished = new Date().toISOString()
   return result
