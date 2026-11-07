@@ -476,8 +476,10 @@ if (phase === 'renode') {
       const geo = ${J(geo)}
       // spec.fingerprint: one setting changed on purpose (seed, gpu …) for a control test.
       const fingerprint = { ...fresh.fingerprint, ...(geo ?? {}), ...${J(spec.fingerprint ?? {})} }
-      const saved = await window.browserApi.profiles.update(profile.id, { ...fresh, fingerprint, tunnel: { enabled: false, mode: 'auto' } })
-      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window ' + saved.fingerprint.region + ' ' + saved.fingerprint.timezone + ' ' + saved.fingerprint.language + ' seed ' + saved.fingerprint.seed + ' gpu ' + saved.fingerprint.gpu + ' hc ' + saved.fingerprint.hardwareConcurrency + ' mem ' + saved.fingerprint.deviceMemory + ' screen ' + saved.fingerprint.screenWidth + 'x' + saved.fingerprint.screenHeight
+      // spec.kernelVersion: the same window on another kernel (155 / 156 comparisons).
+      const kernelVersion = ${J(spec.kernelVersion ?? null)} ?? fresh.kernelVersion
+      const saved = await window.browserApi.profiles.update(profile.id, { ...fresh, kernelVersion, fingerprint, tunnel: { enabled: false, mode: 'auto' } })
+      return 'ok ' + saved.kernelVersion + ' off=' + (saved.fingerprint.disabledSpoofing ?? []).join('+') + ' ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window ' + saved.fingerprint.region + ' ' + saved.fingerprint.timezone + ' ' + saved.fingerprint.language + ' seed ' + saved.fingerprint.seed + ' gpu ' + saved.fingerprint.gpu + ' hc ' + saved.fingerprint.hardwareConcurrency + ' mem ' + saved.fingerprint.deviceMemory + ' screen ' + saved.fingerprint.screenWidth + 'x' + saved.fingerprint.screenHeight
     })().catch((e) => 'error: ' + e.message)`)
     log('renode', name, done)
   }
