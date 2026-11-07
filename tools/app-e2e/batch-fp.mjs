@@ -553,7 +553,7 @@ if (phase === 'deep') {
     results = await run('window.__deepDone ?? null')
   }
   if (!results) throw new Error('deep check did not finish in 15 minutes')
-  const mask = (text) => String(text ?? '').replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, 'x.x.x.x')
+  const mask = (text) => String(text ?? '').replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, 'x.x.x.x').replace(/\b[0-9a-f]{1,4}(:[0-9a-f]{0,4}){2,7}\b/gi, 'x:x::x')
   for (const r of results) log(r.site, r.status, mask(r.score), mask(r.findings.join(' ; ')), mask(r.error))
   await writeFile(join(out, `${round}-deep-${arg5}.json`), mask(J(results, null, 2)))
 }
