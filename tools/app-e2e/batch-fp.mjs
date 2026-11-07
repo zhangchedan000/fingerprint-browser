@@ -248,7 +248,9 @@ async function visitAll(window, label, sites = SITES) {
   }
   // A window closed by force keeps the port file of its old browser: read only the new one.
   await rm(join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort'), { force: true })
-  const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}).then((p) => p.status, (e) => 'error: ' + e.message)`)
+  // ALLOW_GEO=1: the window's time zone stays as it was on purpose (control tests change only the IP).
+  const launchOptions = process.env.ALLOW_GEO === '1' ? ', { allowGeoConflict: true }' : ''
+  const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}${launchOptions}).then((p) => p.status, (e) => 'error: ' + e.message)`)
   if (launched !== 'running') { result.error = `launch: ${launched}`; return result }
   const portFile = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort')
   let port
@@ -328,9 +330,34 @@ if (phase === 'clone') {
       return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
     })().catch((e) => 'error: ' + e.message)`)
     log('clone', name, 'from', spec.source, made)
+    if (spec.node && !String(made).startsWith('error')) {
+      // 代理方式「订阅」: the node by part of its name, reached directly (no 网络加速).
+      const routed = await run(`(async () => {
+        const status = await window.browserApi.subscriptions.status()
+        const node = status.nodes.find((n) => n.name.includes(${J(spec.node)}))
+        if (!node) return 'no node ' + ${J(spec.node)}
+        const source = status.sources.find((s) => s.id === node.sourceId)
+        const short = node.name.startsWith(source.name + ' · ') ? node.name.slice(source.name.length + 3) : node.name
+        const entry = await window.browserApi.subscriptions.nodeProxy({ source: source.name, node: short })
+        const id = JSON.parse(${J(made)}).id
+        await window.browserApi.profiles.assignMany([id], { proxyId: entry.id })
+        const profile = (await window.browserApi.profiles.list()).find((p) => p.id === id)
+        await window.browserApi.profiles.update(id, { ...profile, tunnel: { enabled: false, mode: 'auto' } })
+        return node.name + ' exit ' + (node.exitIp ?? '?')
+      })().catch((e) => 'error: ' + e.message)`)
+      log('  node', name, routed)
+    }
   }
   const list = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
+}
+
+// nodes: the subscription nodes the test launcher has, with exit IPs (written to <out>/nodes.txt).
+if (phase === 'nodes') {
+  await delay(15000)
+  const nodes = await run(`window.browserApi.subscriptions.status().then((st) => st.nodes.map((n) => n.name + ' | ' + n.type + ' | ' + (n.exitIp ?? '-') + ' | ' + (n.delay ?? '-')).join('\\n'))`)
+  await writeFile(join(out, 'nodes.txt'), nodes)
+  log('nodes', nodes.split('\n').length)
 }
 
 // route <node>: the round's windows reach their proxy through this 网络加速 node (as the editor's 手动固定).
