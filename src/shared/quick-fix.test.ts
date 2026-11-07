@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localeForCountry } from './network-identity'
-import { fittingCountryZone, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
+import { fittingCountryZone, ipNamesCountry, ipZoneFix, ipZoneMismatch, ipZoneOnComputer, languageFitsCountry, usualScreenFor, zoneInCountry } from './quick-fix'
 import { screenChoices, screenIsCommon } from './screen'
 import { COUNTRY_ZONES } from './windows-time-zones-data'
 import { countryWindowsZones, windowsCountries } from './windows-time-zones'
@@ -96,6 +96,17 @@ describe('time zone against the IP in the same country', () => {
     expect(ipZoneMismatch('America/Chicago', 'US', ip('Europe/Berlin', 'DE'), 'windows')).toBeUndefined()
     expect(ipZoneMismatch('America/Chicago', 'US', { ok: false }, 'windows')).toBeUndefined()
     expect(ipZoneMismatch('America/Chicago', 'US', { ...ip('America/Los_Angeles'), geoConfidence: 'conflict' }, 'windows')).toBeUndefined()
+    // A tie between the databases: the zone the ones naming the window's country gave (11-07: Los Angeles IP, New York window).
+    const tie = { ...ip('Asia/Tokyo', 'JP'), geoConfidence: 'conflict', countryVotes: [{ countryCode: 'JP', timezone: 'Asia/Tokyo' }, { countryCode: 'US', timezone: 'America/Los_Angeles' }] }
+    expect(ipZoneMismatch('America/New_York', 'US', tie, 'windows')).toBe('America/Los_Angeles')
+    expect(ipZoneMismatch('America/Los_Angeles', 'US', tie, 'windows')).toBeUndefined()
+    expect(ipZoneMismatch('America/New_York', 'US', { ...tie, rotating: true }, 'windows')).toBeUndefined()
+    // Switched to a country another database named: its zone counts, and the country is not "another country".
+    const voted = { ...ip('Asia/Tokyo', 'JP'), countryVotes: [{ countryCode: 'JP', timezone: 'Asia/Tokyo' }, { countryCode: 'US', timezone: 'America/Los_Angeles' }] }
+    expect(ipZoneMismatch('America/New_York', 'US', voted, 'windows')).toBe('America/Los_Angeles')
+    expect(ipNamesCountry(voted, 'us')).toBe(true)
+    expect(ipNamesCountry(voted, 'DE')).toBe(false)
+    expect(ipNamesCountry({ ...voted, rotating: true }, 'US')).toBe(false)
     expect(ipZoneMismatch(undefined, 'US', ip('America/Los_Angeles'), 'windows')).toBeUndefined()
   })
 

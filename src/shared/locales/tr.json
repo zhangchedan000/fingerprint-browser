@@ -2813,5 +2813,8 @@
   "设备配置很少见": "Cihaz yapılandırması nadir",
   "{0} 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "{0} puan ve puan düşme nedenlerini verir; eklediğiniz siteler yalnızca ekran görüntüsü ve sayfa başlığı alır.",
   "内置网站，不在列表里": "Yerleşik site, listede yok",
-  "加入": "Ekle"
+  "加入": "Ekle",
+  "IP 数据库对这个 IP 在哪个国家说法不一：{0}；已按 {1} 配": "IP veritabanları bu IP'nin ülkesinde anlaşamıyor: {0}; {1} için ayarlandı",
+  "{0}（{1} 家）": "{0} ({1})",
+  "按 {0} 配（{1}）": "{0} kullan ({1})"
 }

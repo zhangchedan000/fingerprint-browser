@@ -29,18 +29,34 @@ export function ipZoneFix(ipZone: string, country: string | undefined, platform:
 /**
  * The IP's zone (as this computer reports it) when the IP is in the window's country but its clock
  * is another zone's — a Washington IP for a Central-time window. Undefined when they agree, when
- * the IP is in another country (that has its own warning) or when the databases disagree.
+ * the IP is in another country (that has its own warning) or when the databases disagree with no
+ * zone for the window's country. When the databases named several countries, the zone the ones
+ * naming the window's country gave counts (11-07: a Los Angeles IP left a window on New York unwarned).
  */
 export function ipZoneMismatch(
   windowZone: string | undefined,
   region: string | undefined,
-  check: { ok: boolean; timezone?: string; countryCode?: string; geoConfidence?: string } | null | undefined,
+  check: { ok: boolean; timezone?: string; countryCode?: string; geoConfidence?: string; rotating?: boolean; countryVotes?: Array<{ countryCode: string; timezone?: string }> } | null | undefined,
   platform: string
 ): string | undefined {
-  if (!windowZone || !region || !check?.ok || !check.timezone || !check.countryCode || check.geoConfidence === 'conflict') return undefined
-  if (check.countryCode.toUpperCase() !== region.toUpperCase()) return undefined
-  const ipZone = ipZoneOnComputer(check.timezone, check.countryCode, platform)
+  if (!windowZone || !region || !check?.ok || !check.timezone || !check.countryCode) return undefined
+  // The check's own country; else another the databases named (picked in the editor), never a rotating IP's.
+  const own = check.geoConfidence !== 'conflict' && check.countryCode.toUpperCase() === region.toUpperCase()
+    ? { countryCode: check.countryCode, timezone: check.timezone }
+    : check.rotating ? undefined : check.countryVotes?.find((vote) => vote.countryCode.toUpperCase() === region.toUpperCase() && vote.timezone)
+  if (!own?.timezone) return undefined
+  const ipZone = ipZoneOnComputer(own.timezone, own.countryCode, platform)
   return ipZone !== ipZoneOnComputer(windowZone, region, platform) ? ipZone : undefined
+}
+
+/**
+ * Whether the checked IP is in this country by the check, or by one of the databases that named
+ * another one (a country switched to in the editor). A rotating proxy's other answers do not count.
+ */
+export function ipNamesCountry(check: { countryCode?: string; rotating?: boolean; countryVotes?: Array<{ countryCode: string }> } | null | undefined, country: string): boolean {
+  if (!check?.countryCode) return false
+  const code = country.toUpperCase()
+  return check.countryCode.toUpperCase() === code || (!check.rotating && Boolean(check.countryVotes?.some((vote) => vote.countryCode.toUpperCase() === code)))
 }
 
 /** Whether a Windows computer in this country can have this zone. */

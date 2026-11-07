@@ -2813,5 +2813,8 @@
   "设备配置很少见": "Cấu hình thiết bị rất hiếm gặp",
   "{0} 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "{0} cho biết điểm và lý do bị trừ điểm; trang bạn tự thêm chỉ chụp màn hình và hiện tiêu đề trang.",
   "内置网站，不在列表里": "Trang có sẵn, không có trong danh sách",
-  "加入": "Thêm"
+  "加入": "Thêm",
+  "IP 数据库对这个 IP 在哪个国家说法不一：{0}；已按 {1} 配": "Các cơ sở dữ liệu IP không thống nhất quốc gia của IP này: {0}; đã thiết lập theo {1}",
+  "{0}（{1} 家）": "{0} ({1})",
+  "按 {0} 配（{1}）": "Theo {0} ({1})"
 }

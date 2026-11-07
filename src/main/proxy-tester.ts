@@ -5,6 +5,7 @@ import type { ProxyConfig, ProxyTestResult, ServerPlace } from '../shared/types'
 import { closeProxyBridge, localProxyFor, openProxyBridge, rememberDirectRoute } from './proxy-bridge'
 import { safeErrorText } from './redaction'
 import { windowsReportedZone } from '../shared/windows-time-zones'
+import { zoneInCountry } from '../shared/quick-fix'
 
 const IP_CHECK_URL = 'https://api.ipify.org?format=json'
 /** A check gives up after this long: a proxy that does not answer is reported, not waited for. */
@@ -326,7 +327,9 @@ export function sameIpZone(result: ProxyTestResult, now = Date.now()): ZoneDecis
   if (!result.ok || !result.ip || !result.timezone || result.rotating) return {}
   const rank = zoneRank(result)
   const known = decidedZones.get(result.ip)
-  if (known && now - known.at < IP_ZONE_MEMORY_MS && known.rank > rank) return known.decision
+  // Only a zone of the country decided now (a database that changed its mind on the country does not bring its zone back).
+  const fits = (zone?: string) => !zone || !result.countryCode || zoneInCountry(windowsReportedZone(zone, result.countryCode) ?? zone, result.countryCode)
+  if (known && now - known.at < IP_ZONE_MEMORY_MS && known.rank > rank && fits(known.decision.timezone)) return known.decision
   const decision = zoneDecision(result)
   decidedZones.set(result.ip, { decision, rank, at: now })
   return decision
@@ -344,16 +347,48 @@ export function rememberIpZone(check: Pick<ProxyTestResult, 'ok' | 'ip' | 'timez
 }
 
 /**
- * Two services' answers for the same connection. Different exit IPs mean the proxy hands out a new
- * IP per connection (a rotating proxy). Same IP, different countries: the databases disagree. Same
- * country: agreed; a city they disagree on is left out (the country is what counts).
+ * The countries the services gave for one IP, most votes first (a tie keeps the order the services
+ * are listed in GEO_SOURCES, as the answers come in), each with the place its own answers agree on.
+ */
+function countryTally(answers: GeoAnswer[]): Array<{ countryCode: string; answers: GeoAnswer[] }> {
+  const groups = new Map<string, GeoAnswer[]>()
+  for (const answer of answers) {
+    const code = answer.result.countryCode?.toUpperCase()
+    if (!code) continue
+    groups.set(code, [...(groups.get(code) ?? []), answer])
+  }
+  return [...groups.entries()]
+    .map(([countryCode, group]) => ({ countryCode, answers: group }))
+    .sort((x, y) => y.answers.length - x.answers.length)
+}
+
+/** A country's answers summed up for 国家投票: its services, the zone most of them give and a position. */
+function countryChoice(countryCode: string, answers: GeoAnswer[]): NonNullable<ProxyTestResult['countryVotes']>[number] {
+  const timezone = timezoneVotes(answers)[0]?.timezone
+  const placed = answers.find((answer) => answer.result.timezone && (windowsReportedZone(answer.result.timezone, countryCode) ?? answer.result.timezone) === (timezone && (windowsReportedZone(timezone, countryCode) ?? timezone))
+    && answer.result.latitude !== undefined && answer.result.longitude !== undefined)?.result
+  return {
+    countryCode,
+    sources: answers.map((answer) => answer.source),
+    ...(timezone ? { timezone } : {}),
+    ...(placed ? { latitude: placed.latitude, longitude: placed.longitude, ...(placed.accuracyMeters ? { accuracyMeters: placed.accuracyMeters } : {}) } : {}),
+    ...(answers[0].result.city ? { city: answers[0].result.city } : {})
+  }
+}
+
+/**
+ * Every service's answer for the same connection (GEO_SOURCES order). Different exit IPs mean the
+ * proxy hands out a new IP per connection (a rotating proxy). Same IP: the country most services
+ * give is the IP's; only a tie at the top is a conflict (11-07: one service putting a US IP in
+ * Japan made the window keep the new-window default, US / New York, for an IP in Los Angeles).
+ * Within the country, a city they disagree on is left out (the country is what counts).
  */
 export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAnswer[] = []): ProxyTestResult {
-  const a = first.result
-  const b = second.result
   const geoSources = [first.source, second.source, ...more.map((answer) => answer.source)]
   const where = (result: ProxyTestResult) => [result.countryCode, result.city].filter(Boolean).join(' ')
-  if (a.ip && b.ip && a.ip !== b.ip) {
+  if (first.result.ip && second.result.ip && first.result.ip !== second.result.ip) {
+    const a = first.result
+    const b = second.result
     const geoConflict = `这个代理每个连接换一个出口 IP（轮换代理）：${a.ip}（${where(a) || '未知'}）、${b.ip}（${where(b) || '未知'}）`
     return {
       ...a,
@@ -365,34 +400,44 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
       rotating: true
     }
   }
-  if (a.countryCode && b.countryCode && a.countryCode !== b.countryCode) {
-    const geoConflict = `两个 IP 数据库判断的国家不同：${a.countryCode}（${first.source}）/ ${b.countryCode}（${second.source}）`
-    return {
-      ...a,
-      degraded: true,
-      warning: `${geoConflict}；时区、语言和地理位置可能对不上`,
-      geoConfidence: 'conflict',
-      geoSources,
-      geoConflict
-    }
-  }
   const all = [first, second, ...more]
-  const city = more.length ? majorityCity(all) : undefined
-  const cityAnswer = city ? all.find((answer) => answer.result.city?.trim().toLowerCase() === city)?.result : undefined
-  const sameCity = Boolean(a.city && b.city && a.city.toLowerCase() === b.city.toLowerCase())
+  const countries = countryTally(all)
+  // A tie at the top: the measuring service's country when it is one of them (it places the IP by its
+  // route), else the first service's in GEO_SOURCES order. The window follows it at once (user 11-07:
+  // 「直接按照这个记录给他设置对应的时区…直接联动」); the editor shows the others to switch to.
+  let countryBy: string | undefined
+  if (countries.length > 1 && countries[0].answers.length === countries[1].answers.length) {
+    const tied = countries.filter((group) => group.answers.length === countries[0].answers.length)
+    const measuring = tied.find((group) => group.answers.some((answer) => answer.source === MEASURING_SOURCE))
+    const firstTied = all.find((answer) => tied.some((group) => group.answers.includes(answer)))
+    const pick = measuring ?? tied.find((group) => firstTied && group.answers.includes(firstTied)) ?? tied[0]
+    countries.splice(countries.indexOf(pick), 1)
+    countries.unshift(pick)
+    countryBy = measuring ? MEASURING_SOURCE : pick.answers[0].source
+  }
+  const countryVotes = countries.length > 1 ? countries.map((group) => countryChoice(group.countryCode, group.answers)) : undefined
+  // The winning country's answers (and those that named none), in the services' order.
+  const winner = countries[0]?.countryCode
+  const pool = all.filter((answer) => !winner || !answer.result.countryCode || answer.result.countryCode.toUpperCase() === winner)
+  const a = pool[0].result
+  const b = (pool[1] ?? pool[0]).result
+  const city = pool.length > 2 ? majorityCity(pool) : undefined
+  const cityAnswer = city ? pool.find((answer) => answer.result.city?.trim().toLowerCase() === city)?.result : undefined
+  const sameCity = Boolean(pool.length > 1 && a.city && b.city && a.city.toLowerCase() === b.city.toLowerCase())
   // The time zone most databases give (the same country's answers only), not the first one's.
-  const votes = timezoneVotes([first, second, ...more].filter((answer) => !answer.result.countryCode || !a.countryCode
-    || answer.result.countryCode.toUpperCase() === a.countryCode.toUpperCase()))
+  const votes = timezoneVotes(pool)
   // The databases disagree on the zone: the measuring one decides (11-06: most databases put an IP at
   // its block's registered address in Kentucky; ipinfo.io and the route both say Los Angeles).
   const measured = votes.length > 1
-    ? all.find((answer) => answer.source === MEASURING_SOURCE && answer.result.timezone && (!answer.result.countryCode || !a.countryCode || answer.result.countryCode.toUpperCase() === a.countryCode.toUpperCase()))?.result
+    ? pool.find((answer) => answer.source === MEASURING_SOURCE && answer.result.timezone)?.result
     : undefined
+  const country = { countryCode: a.countryCode ?? b.countryCode, country: a.country ?? b.country }
+  // Services that named another country, kept so the editor can say who disagreed and switch.
+  const outvoted = countryVotes ? { countryVotes, ...(countryBy ? { countryBy } : {}) } : {}
   if (measured) {
     return {
       ...a,
-      countryCode: a.countryCode ?? b.countryCode,
-      country: a.country ?? b.country,
+      ...country,
       timezone: measured.timezone,
       timezoneVotes: votes,
       timezoneBy: MEASURING_SOURCE,
@@ -403,26 +448,22 @@ export function mergeGeoLookups(first: GeoAnswer, second: GeoAnswer, more: GeoAn
       accuracyMeters: measured.accuracyMeters,
       networkRisk: a.networkRisk ?? b.networkRisk,
       geoConfidence: 'consensus',
-      geoSources
+      geoSources,
+      ...outvoted
     }
   }
   return {
     ...a,
-    countryCode: a.countryCode ?? b.countryCode,
-    country: a.country ?? b.country,
+    ...country,
     timezone: votes[0]?.timezone ?? a.timezone ?? b.timezone,
     ...(votes.length > 1 ? { timezoneVotes: votes } : {}),
     networkRisk: a.networkRisk ?? b.networkRisk,
     ...(cityAnswer ? { city: cityAnswer.city, region: cityAnswer.region } : sameCity ? {} : { city: undefined, region: undefined }),
     geoConfidence: 'consensus',
-    geoSources
+    geoSources,
+    ...outvoted
   }
 }
-
-/**
- * The service that places an IP by measuring it (network latency), not by where its block is
- * registered: when the services disagree on the time zone, its answer is taken.
- */
 export const MEASURING_SOURCE = 'ipinfo.io'
 
 function errorText(error: unknown): string {

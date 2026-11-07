@@ -2,7 +2,7 @@ import { getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
 import { cssScreenSize, effectiveScreen, kernelSpoofsScreen, randomScreen, scaledScreen, screenChoices, screenIsCommon, screenKind } from '../../../../shared/screen'
 import { humanError, regionName, relativeTime } from '../../components/format'
 import { forgetScroll, useScrollMemory } from '../../components/scroll-memory'
-import { fittingCountryZone, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
+import { fittingCountryZone, ipNamesCountry, ipZoneFix, ipZoneMismatch, languageFitsCountry, usualScreenFor } from '../../../../shared/quick-fix'
 import {
   Alert,
   AutoComplete,
@@ -780,6 +780,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
    */
   const libraryCheck = !profile && libraryProxy && !libraryProxy.apiUrl && libraryProxy.check?.ok ? libraryProxy.check : undefined
   const lastCheck = proxyResult ? (proxyResult.ok ? proxyResult : undefined) : libraryCheck
+  // The IP databases named more than one country: the check went by the first (most of them, or on a
+  // tie the measuring one); the others can be switched to.
+  const countryChoices = lastCheck?.ok && !lastCheck.rotating && (lastCheck.countryVotes?.length ?? 0) > 1 ? lastCheck.countryVotes! : []
   // The fingerprint check went out through another exit IP than the latest proxy check's.
   const checkIpChanged = Boolean(checkReport?.exitIp && lastCheck?.ip && checkReport.exitIp !== lastCheck.ip)
 
@@ -839,7 +842,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   }, [open, sharedRecord?.id, sharedCheck?.checkedAt, sharedRecord?.ipSites?.checkedAt, sharedRecord?.ipSitesPending, testingProxy])
   const exitCountry = lastCheck?.countryCode
   // A rotating proxy or databases that disagree say nothing reliable about the country (its own warning shows).
-  const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && exitCountry.toUpperCase() !== fp.region
+  const regionMismatch = fp.region && exitCountry && proxyProtocol !== 'direct' && lastCheck?.geoConfidence !== 'conflict' && !ipNamesCountry(lastCheck, fp.region)
     ? { ip: exitCountry.toUpperCase(), window: fp.region }
     : undefined
   // The IP's own country but another clock (a new IP elsewhere in it): pointed out, its fix sets the zone and position.
@@ -1220,10 +1223,36 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
   /** The IP's zone and position for a window already in the IP's country: the rest fits as it is. */
   function zoneToIp(result: ProxyTestResult): void {
     const current = form.getFieldValue('fingerprint') as FingerprintConfig
-    const fixed = fixedIdentityForCheck(current, result)
+    // The window went by another country the databases named: the zone of the ones that named it.
+    const vote = !result.rotating && current.region && result.countryCode?.toUpperCase() !== current.region
+      ? result.countryVotes?.find((item) => item.countryCode === current.region && item.timezone)
+      : undefined
+    const fixed = fixedIdentityForCheck(current, vote
+      ? { ...result, countryCode: vote.countryCode, timezone: vote.timezone, latitude: vote.latitude, longitude: vote.longitude, accuracyMeters: vote.accuracyMeters, geoConfidence: 'consensus' }
+      : result)
     if (!fixed?.timezone) return
     // A window placed by its IP moves with it; one without a position keeps none.
     patchFingerprint({ timezone: fixed.timezone, ...(current.location && fixed.location ? { location: fixed.location } : {}) })
+  }
+
+  /**
+   * The IP databases named more than one country: the window takes the one picked here, with the zone
+   * and position its own databases gave (the check already went by the first).
+   */
+  function chooseVotedCountry(choice: NonNullable<ProxyTestResult['countryVotes']>[number]): void {
+    if (!lastCheck) return
+    const timezone = choice.timezone ?? fittingCountryZone(choice.countryCode)
+    if (!timezone) return
+    const picked: ProxyTestResult = {
+      ...lastCheck,
+      countryCode: choice.countryCode,
+      timezone,
+      latitude: choice.latitude,
+      longitude: choice.longitude,
+      accuracyMeters: choice.accuracyMeters,
+      geoConfidence: 'consensus'
+    }
+    if (fixToIp(picked)) countryByHand.current = true
   }
 
   /** 基于 IP 生成 picked by hand: the last check's IP, or a new check when there is none yet. */
@@ -2046,6 +2075,27 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
           />
         )}
         {proxyResult?.degraded && proxyResult.geoConfidence !== 'conflict' && <Alert type="warning" showIcon className="fb-editor-alert fb-exit-alert" title={mt(proxyResult.warning)} />}
+        {countryChoices.length > 0 && (
+          <Alert
+            type="info"
+            showIcon
+            className="fb-editor-alert fb-exit-alert"
+            title={t("IP 数据库对这个 IP 在哪个国家说法不一：{0}；已按 {1} 配", countryChoices.map((vote) => t("{0}（{1} 家）", vote.countryCode, vote.sources.length)).join(' / '), regionName(countryChoices[0].countryCode))}
+            description={(
+              <Space wrap size={[8, 4]}>
+                {countryChoices.map((choice) => {
+                  const zone = choice.timezone ?? fittingCountryZone(choice.countryCode)
+                  const chosen = fp.region === choice.countryCode && (!zone || fp.timezone === ipZoneFix(zone, choice.countryCode, fp.platform))
+                  return (
+                    <Button key={choice.countryCode} size="small" type={chosen ? 'primary' : 'default'} disabled={chosen} onClick={() => chooseVotedCountry(choice)}>
+                      {t("按 {0} 配（{1}）", regionName(choice.countryCode), zone ? windowsZoneLabel(zone, getLocale(), choice.countryCode) : choice.countryCode)}
+                    </Button>
+                  )
+                })}
+              </Space>
+            )}
+          />
+        )}
         <div className="fb-ip-identity">
           <Row label={t("网络身份")}>
             <span className="fb-identity-line">

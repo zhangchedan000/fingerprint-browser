@@ -543,6 +543,14 @@ export interface ProxyTestResult {
   timezoneVotes?: Array<{ timezone: string; sources: string[] }>
   /** The databases disagreed and this service's measured place decided the zone (ipinfo.io). */
   timezoneBy?: string
+  /**
+   * The country each geo database gave, most votes first (the one the check went by first), with the
+   * zone and position its own answers agree on. Only set when they named more than one country; the
+   * editor offers the others to switch to.
+   */
+  countryVotes?: Array<{ countryCode: string; sources: string[]; timezone?: string; latitude?: number; longitude?: number; accuracyMeters?: number; city?: string }>
+  /** The databases tied on the country and this service's answer decided it (ipinfo.io, else the first listed). */
+  countryBy?: string
   /** The two lookups saw different exit IPs: the proxy gives a new one for every connection. */
   rotating?: boolean
   /** API 提取 checked in the editor: the address the link gave, and where that server is (not kept with the check). */

@@ -23,7 +23,7 @@ import { applyChromePreferences, answerBlankPasswordCheck } from './chrome-prefe
 import { hostHardwareSnapshot } from './host-hardware'
 import { classifyProxyFailure, locateServer, quickExitIp, testProxy } from './proxy-tester'
 import { effectiveNetworkIdentity, fixedIdentityForCheck, GEOIP_CONFLICT_CONFIRMATION_PREFIX, hasCompleteProxyIdentity, proxyLaunchError, ZONE_NOTICE_MARKER } from '../shared/network-identity'
-import { ipZoneMismatch } from '../shared/quick-fix'
+import { ipNamesCountry, ipZoneMismatch } from '../shared/quick-fix'
 import { windowsFontScript } from '../shared/windows-font-packs'
 import { sameProxyIdentity } from './profile-secrets'
 import { BrowserControlSession, PipeCdpTransport } from './browser-control-session'
@@ -1224,7 +1224,7 @@ export class BrowserLauncher {
     // A window keeps its country; an IP somewhere else is pointed out (and, with 阻止启动, confirmed), never followed.
     const fp = updated.fingerprint
     const ipCountry = updated.proxyCheck?.ok ? updated.proxyCheck.countryCode?.toUpperCase() : undefined
-    if (fp.networkIdentityMode !== 'proxy' && fp.region && ipCountry && ipCountry !== fp.region.toUpperCase()) {
+    if (fp.networkIdentityMode !== 'proxy' && fp.region && ipCountry && !ipNamesCountry(updated.proxyCheck, fp.region)) {
       const where = `代理 IP 在 ${ipCountry}（${updated.proxyCheck!.ip}），窗口的国家是 ${fp.region.toUpperCase()}`
       if (fp.proxyExitPolicy === 'block' && !allowGeoConflict) {
         throw new Error(`${GEOIP_CONFLICT_CONFIRMATION_PREFIX} ${where}；窗口的时区和语言不会自动改，网站可能发现对不上。可以在编辑窗口里点「改成和 IP 一致」，或换一个这个国家的代理。是否仍要启动？`)

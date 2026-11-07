@@ -76,7 +76,7 @@ describe('proxy geolocation result', () => {
     })
   })
 
-  it('marks conflicting GeoIP countries and timezones as unsafe for automatic identity', () => {
+  it('goes by the first service listed when only two disagree on the country, keeping the other to switch to', () => {
     const primary = parseGeoLookup({
       ip: '104.251.237.13',
       country_code: 'JP',
@@ -92,11 +92,10 @@ describe('proxy geolocation result', () => {
       longitude: -75.45
     }, 10)
 
-    expect(mergeGeoLookups({ source: 'ipwho.is', result: primary }, { source: 'ipapi.co', result: secondary })).toMatchObject({
-      geoConfidence: 'conflict',
-      degraded: true,
-      geoConflict: '两个 IP 数据库判断的国家不同：JP（ipwho.is）/ US（ipapi.co）'
-    })
+    const merged = mergeGeoLookups({ source: 'ipwho.is', result: primary }, { source: 'ipapi.co', result: secondary })
+    expect(merged).toMatchObject({ geoConfidence: 'consensus', countryCode: 'JP', timezone: 'Asia/Tokyo', countryBy: 'ipwho.is' })
+    expect(merged.degraded).toBeUndefined()
+    expect(merged.countryVotes?.map((vote) => [vote.countryCode, vote.timezone])).toEqual([['JP', 'Asia/Tokyo'], ['US', 'America/New_York']])
   })
 
   it('says plainly when the proxy hands out a new IP per connection', () => {
@@ -114,6 +113,36 @@ describe('proxy geolocation result', () => {
     expect(mergeGeoLookups({ source: 'ipwho.is', result: a }, { source: 'ipapi.co', result: b })).toMatchObject({
       geoConfidence: 'consensus', countryCode: 'US', city: undefined, timezone: 'America/New_York'
     })
+  })
+
+  it('decides the country by most services: one dissenting database no longer leaves the window on the default', () => {
+    const answer = (source: string, country_code: string, city: string, timezone: string) =>
+      ({ source, result: parseSecondaryGeoLookup({ ip: '203.0.113.9', country_code, city, timezone, latitude: 34.05, longitude: -118.24 }, 10) })
+    // 11-07: an airport node in Los Angeles; the second service asked put it in Japan.
+    const merged = mergeGeoLookups(answer('ipwho.is', 'US', 'Los Angeles', 'America/Los_Angeles'), answer('ipapi.co', 'JP', 'Tokyo', 'Asia/Tokyo'), [
+      answer('ipinfo.io', 'US', 'Los Angeles', 'America/Los_Angeles'), answer('geojs.io', 'US', '', 'America/Los_Angeles'), answer('ip.sb', 'US', 'Los Angeles', 'America/Los_Angeles')
+    ])
+    expect(merged).toMatchObject({ geoConfidence: 'consensus', countryCode: 'US', timezone: 'America/Los_Angeles', city: 'Los Angeles' })
+    expect(merged.degraded).toBeUndefined()
+    expect(merged.countryVotes?.map((vote) => [vote.countryCode, vote.sources])).toEqual([['US', ['ipwho.is', 'ipinfo.io', 'geojs.io', 'ip.sb']], ['JP', ['ipapi.co']]])
+    // The majority may also be against the first service: its place is not kept.
+    const flipped = mergeGeoLookups(answer('ipwho.is', 'JP', 'Tokyo', 'Asia/Tokyo'), answer('ipapi.co', 'US', 'Los Angeles', 'America/Los_Angeles'), [
+      answer('ipinfo.io', 'US', 'Los Angeles', 'America/Los_Angeles')
+    ])
+    expect(flipped).toMatchObject({ geoConfidence: 'consensus', countryCode: 'US', timezone: 'America/Los_Angeles' })
+  })
+
+  it('settles a tie by the measuring service and keeps every country with its zone (user 11-07: 直接联动)', () => {
+    const answer = (source: string, country_code: string, timezone: string, latitude: number) =>
+      ({ source, result: parseSecondaryGeoLookup({ ip: '203.0.113.10', country_code, timezone, latitude, longitude: 100 }, 10) })
+    const merged = mergeGeoLookups(answer('ipwho.is', 'US', 'America/Los_Angeles', 34), answer('ipapi.co', 'JP', 'Asia/Tokyo', 35), [
+      answer('ipinfo.io', 'JP', 'Asia/Tokyo', 35), answer('geojs.io', 'US', 'America/Los_Angeles', 34)
+    ])
+    expect(merged).toMatchObject({ geoConfidence: 'consensus', countryCode: 'JP', timezone: 'Asia/Tokyo', countryBy: 'ipinfo.io' })
+    expect(merged.countryVotes).toEqual([
+      { countryCode: 'JP', sources: ['ipapi.co', 'ipinfo.io'], timezone: 'Asia/Tokyo', latitude: 35, longitude: 100, accuracyMeters: 25000 },
+      { countryCode: 'US', sources: ['ipwho.is', 'geojs.io'], timezone: 'America/Los_Angeles', latitude: 34, longitude: 100, accuracyMeters: 25000 }
+    ])
   })
 
   it('takes the time zone most services give when they disagree on the city', () => {

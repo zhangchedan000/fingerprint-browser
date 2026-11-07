@@ -2813,5 +2813,8 @@
   "设备配置很少见": "La configuration de l'appareil est rare",
   "{0} 能读出分数和扣分原因；自己添加的网站只截图和显示网页标题。": "{0} donnent un score et les raisons des déductions ; les sites que vous ajoutez n'ont qu'une capture d'écran et le titre de la page.",
   "内置网站，不在列表里": "Site intégré, absent de la liste",
-  "加入": "Ajouter"
+  "加入": "Ajouter",
+  "IP 数据库对这个 IP 在哪个国家说法不一：{0}；已按 {1} 配": "Les bases d'IP ne s'accordent pas sur le pays de cette IP : {0} ; configuré pour {1}",
+  "{0}（{1} 家）": "{0} ({1})",
+  "按 {0} 配（{1}）": "Utiliser {0} ({1})"
 }
