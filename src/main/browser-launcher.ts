@@ -484,6 +484,9 @@ export class BrowserLauncher {
       }
       const pipeControlEnabled = process.platform !== 'win32'
       if (pipeControlEnabled) args.push('--remote-debugging-pipe')
+      // App E2E only (tools/app-e2e/batch-fp.mjs): a test drives the real window over a local DevTools
+      // port, which Chrome writes to DevToolsActivePort in the window's data folder. Never in a normal run.
+      if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_DEVTOOLS === '1') args.push('--remote-debugging-port=0')
       // Every run writes a log so a crash can be explained in the window list.
       const launchedAt = new Date()
       const logFiles = launchLogFiles(runtimePath, launchedAt)
