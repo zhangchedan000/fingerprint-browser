@@ -289,13 +289,16 @@ function cdp(url) {
   const socket = new WebSocket(url)
   let seq = 0
   const pending = new Map()
+  const listeners = []
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(String(event.data))
     if (message.id && pending.has(message.id)) { pending.get(message.id)(message.result ?? { error: message.error }); pending.delete(message.id) }
+    if (message.method) for (const [method, fn] of listeners) if (method === message.method) fn(message.params)
   })
   return new Promise((done, fail) => {
     socket.addEventListener('open', () => done({
       send: (method, params = {}) => new Promise((answer) => { const id = ++seq; pending.set(id, answer); socket.send(JSON.stringify({ id, method, params })); setTimeout(() => { if (pending.has(id)) { pending.delete(id); answer({ error: 'timeout' }) } }, 60_000) }),
+      on: (method, fn) => listeners.push([method, fn]),
       close: () => socket.close()
     }), { once: true })
     socket.addEventListener('error', () => fail(new Error('cdp failed')), { once: true })
@@ -348,6 +351,13 @@ async function visitAll(window, label, sites = SITES) {
     if (!page) throw new Error('no page target')
     const tab = await cdp(page.webSocketDebuggerUrl)
     await tab.send('Page.enable')
+    // RAW=1: Fingerprint.com's own answer (Smart Signals and the device attributes it read) is kept as JSON,
+    // addresses masked, so a high and a low score can be compared attribute by attribute.
+    const jsonResponses = []
+    if (process.env.RAW === '1') {
+      await tab.send('Network.enable', { maxTotalBufferSize: 50_000_000, maxResourceBufferSize: 20_000_000 })
+      tab.on('Network.responseReceived', (params) => { if (/json/i.test(params.response?.mimeType ?? '') || /api|event|visitor/i.test(params.response?.url ?? '')) jsonResponses.push(params.requestId) })
+    }
     for (const [site, url, wait] of sites) {
       if (site === 'fpcom') await fpcomTurn()
       const began = Date.now()
@@ -364,6 +374,16 @@ async function visitAll(window, label, sites = SITES) {
         await delay(3000)
         const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: 'document.body ? document.body.innerText : ""' })).result?.value ?? ''
         await writeFile(join(out, `${label}-${site}.txt`), text)
+        if (process.env.RAW === '1' && site === 'fpcom') {
+          const kept = []
+          for (const requestId of jsonResponses.splice(0)) {
+            const body = await tab.send('Network.getResponseBody', { requestId })
+            const raw = body?.base64Encoded ? Buffer.from(body.body ?? '', 'base64').toString('utf8') : body?.body ?? ''
+            if (/tampering|raw_device_attributes|rawDeviceAttributes|botd|incognito/i.test(raw)) kept.push(raw)
+          }
+          const masked = kept.join('\n====\n').replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, 'x.x.x.x').replace(/\b[0-9a-f]{1,4}(:[0-9a-f]{0,4}){2,7}\b/gi, 'x:x::x')
+          await writeFile(join(out, `${label}-fpcom-raw.json`), masked)
+        }
         const shot = await tab.send('Page.captureScreenshot', { format: 'jpeg', quality: 60 })
         if (shot?.data) await writeFile(join(out, `${label}-${site}.jpg`), Buffer.from(shot.data, 'base64'))
         result.sites[site] = { chars: text.length, seconds: Math.round((Date.now() - began) / 1000) }
@@ -411,7 +431,11 @@ if (phase === 'clone') {
     const made = await run(`(async () => {
       const source = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(`${round}-${spec.source}`)})
       const fingerprint = { ...source.fingerprint, ...${J(spec.fingerprint ?? {})} }
-      const draft = { ...source, name: ${J(name)}, note: ${J(spec.note ?? '')}, fingerprint, kernelVersion: ${J(spec.kernelVersion ?? null)} ?? source.kernelVersion }
+      // spec.kernel ("155" / "156"): the installed kernel of that Chromium version.
+      const installed = ${J(spec.kernel ?? null)} ? (await window.browserApi.engine.installed()).map((item) => typeof item === 'string' ? item : item.version ?? item.id ?? '') : []
+      const byMajor = installed.find((version) => version.startsWith('prism-' + ${J(spec.kernel ?? '')} + '.'))
+      if (${J(spec.kernel ?? null)} && !byMajor) throw new Error('no installed kernel ' + ${J(spec.kernel ?? '')} + ' in ' + installed.join(','))
+      const draft = { ...source, name: ${J(name)}, note: ${J(spec.note ?? '')}, fingerprint, kernelVersion: byMajor ?? ${J(spec.kernelVersion ?? null)} ?? source.kernelVersion }
       delete draft.id
       const created = await window.browserApi.profiles.create(draft)
       return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, gpu: created.fingerprint.gpu, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
