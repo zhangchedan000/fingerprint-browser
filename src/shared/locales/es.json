@@ -2781,5 +2781,6 @@
   "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "Otras {0} ventanas no se eliminaron en la lista de ventanas (no están en la papelera); se omiten y se conserva su copia en la nube.",
   "设置改了，重新检测后才准": "La configuración cambió; vuelve a comprobar para un resultado exacto",
   "定位不一致": "Ubicación dispar",
-  "按多数定为 {0}": "según la mayoría: {0}"
+  "按多数定为 {0}": "según la mayoría: {0}",
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Otro programa está usando la carpeta del núcleo y ahora no se puede eliminar. Suele ser el servicio en segundo plano de un método de entrada (como el servicio en la nube de Sogou). Cierra ese programa o reinicia el equipo y vuelve a eliminarlo."
 }

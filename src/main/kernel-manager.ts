@@ -61,6 +61,28 @@ function folderInUse(error: unknown): boolean {
   return ['EPERM', 'EBUSY', 'EACCES'].includes((error as NodeJS.ErrnoException | undefined)?.code ?? '')
 }
 
+/** "a\\b/c" → "a/b/c". */
+function portableRelativePath(path: string): string {
+  return path.split(/[\\/]+/).filter(Boolean).join('/')
+}
+
+/** A new build folder's name: build-<local time>, with a suffix when one of that minute exists. */
+export async function uniqueBuildFolder(kernelFolder: string, now = new Date()): Promise<string> {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const base = `build-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  for (let index = 0; ; index++) {
+    const name = index ? `${base}-${index}` : base
+    if (!await pathExists(join(kernelFolder, name))) return name
+  }
+}
+
+export const KERNEL_FOLDER_IN_USE_REMOVE = '内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除'
+
+/** How long a project's release list from GitHub is used before asking again. */
+export const RELEASE_LIST_TTL_MS = 10 * 60 * 1000
+/** How old a list may be and still stand in while GitHub refuses or cannot be reached. */
+export const RELEASE_LIST_STALE_MS = 6 * 60 * 60 * 1000
+
 export const KERNEL_FOLDER_IN_USE = '内核文件夹正被其他程序占用，暂时没法更新。常见的是输入法的后台程序（比如搜狗输入法的云服务）：在浏览器里用过输入法后，它会在后台一直占着内核文件夹。请退出这个程序，或者重启电脑，再点更新'
 
 /**
@@ -146,6 +168,9 @@ const UNSUPPORTED_IMPORT = '这个本地构建不是 prism21（谷歌原版源�
 
 export class KernelManager {
   private installingVersion: string | null = null
+  private tidied = false
+  /** GitHub release lists per URL and when they were fetched (fetchReleases). */
+  private readonly releaseLists = new Map<string, { at: number; releases: GithubRelease[] }>()
   private installAbort: AbortController | null = null
 
   constructor(
@@ -159,6 +184,9 @@ export class KernelManager {
   ) {}
 
   async installed(): Promise<KernelRelease[]> {
+    await this.tidyKernels().catch((error) => {
+      this.logger?.error('清理旧的内核文件夹失败', { error: error instanceof Error ? error.message : String(error) })
+    })
     const manifests = await this.installedManifests()
     const releases: KernelRelease[] = []
     for (const manifest of manifests.values()) {
@@ -307,13 +335,30 @@ export class KernelManager {
     }
   }
 
+  /**
+   * A project's releases, asked of GitHub at most once every RELEASE_LIST_TTL_MS (GitHub allows 60
+   * queries an hour per IP without signing in; opening 「下载内核」 again and again used them up). When
+   * GitHub refuses or cannot be reached, the last list (up to RELEASE_LIST_STALE_MS old) is used instead.
+   */
   private async fetchReleases(url: string): Promise<GithubRelease[]> {
-    const response = await this.fetchImpl(url, {
-      headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
-      signal: AbortSignal.timeout(15_000)
-    })
-    if (!response.ok) throw new Error(githubFailure(response.status, response.headers, Date.now()))
-    return await response.json() as GithubRelease[]
+    const cached = this.releaseLists.get(url)
+    if (cached && Date.now() - cached.at < RELEASE_LIST_TTL_MS) return cached.releases
+    try {
+      const response = await this.fetchImpl(url, {
+        headers: { accept: 'application/vnd.github+json', 'user-agent': 'Fingerprint-Browser/0.1' },
+        signal: AbortSignal.timeout(15_000)
+      })
+      if (!response.ok) throw new Error(githubFailure(response.status, response.headers, Date.now()))
+      const releases = await response.json() as GithubRelease[]
+      this.releaseLists.set(url, { at: Date.now(), releases })
+      return releases
+    } catch (error) {
+      if (cached && Date.now() - cached.at < RELEASE_LIST_STALE_MS) {
+        this.logger?.info('GitHub 暂时不可用，用上次取到的内核列表', { url, error: error instanceof Error ? error.message : String(error) })
+        return cached.releases
+      }
+      throw error
+    }
   }
 
   /** Installs a kernel; `tag` picks an older build (history), which replaces an installed one in place. */
@@ -327,6 +372,11 @@ export class KernelManager {
       return locateBrowser(this.settings)
     }
     if (!release) throw new Error('没有找到适用于当前系统的内核发行包')
+    return this.installRelease(version, release, Boolean(existing))
+  }
+
+  /** Downloads and installs `release` as `version` (a new build next to the one in use, when replacing). */
+  private async installRelease(version: string, release: KernelRelease, replacing: boolean): Promise<EngineStatus> {
     this.validateRelease(release)
     this.installingVersion = version
     this.installAbort = new AbortController()
@@ -340,7 +390,6 @@ export class KernelManager {
     try {
       await this.assertDownloadSpace(downloadsPath, archivePath, release.size)
       await this.download(release, archivePath)
-      const replacing = Boolean(existing)
       this.emit(release, 'installing', release.size, release.size, replacing ? '正在更新浏览器内核…' : '正在安装浏览器内核…')
       if (process.platform === 'darwin') await this.installMac(release, archivePath)
       else await this.installWindows(release, archivePath)
@@ -561,6 +610,10 @@ export class KernelManager {
     }
   }
 
+  /**
+   * Installs the very build that is installed again, as a new build folder next to it (nothing is
+   * renamed, so a folder something still uses does not stop it); a failed repair leaves the kernel as it was.
+   */
   async repair(versionInput: string): Promise<EngineStatus> {
     const version = safeVersion(versionInput)
     if (this.installingVersion) throw new Error(`内核 ${this.installingVersion} 正在安装，请稍候`)
@@ -569,28 +622,12 @@ export class KernelManager {
     const rows = (await this.releases()).filter((item) => item.version === version && item.remoteAvailable)
     const release = rows.find((item) => item.sha256 === installedSha) ?? rows.find((item) => !item.history)
     if (!release) throw new Error('远程发行源中已找不到该版本，无法重新安装')
-    this.validateRelease(release)
-    const currentPath = this.kernelPath(version)
-    const recycleRoot = join(this.vaultPath, 'recycle-bin', 'kernels')
-    const backupPath = join(recycleRoot, `${version}-before-repair-${Date.now()}`)
-    const previousSettings = this.settings.get()
-    const repairedWasActive = Boolean(previousSettings.browserExecutable)
-      && resolve(previousSettings.browserExecutable).startsWith(`${resolve(currentPath)}${sep}`)
-    await mkdir(recycleRoot, { recursive: true })
-    await detachKernelFolderFonts(currentPath)
-    await rename(currentPath, backupPath)
     try {
-      let engine = await this.install(version)
-      if (!repairedWasActive) {
-        await this.settings.update(previousSettings)
-        engine = await locateBrowser(this.settings)
-      }
+      const engine = await this.installRelease(version, release, true)
       this.logger?.info('浏览器内核已重新安装并通过发行包校验', { version })
       return engine
     } catch (error) {
-      await rm(currentPath, { recursive: true, force: true })
-      await rename(backupPath, currentPath)
-      this.logger?.error('浏览器内核重新安装失败，已恢复原目录', { version, error: error instanceof Error ? error.message : String(error) })
+      this.logger?.error('浏览器内核重新安装失败，原来的内核没动', { version, error: error instanceof Error ? error.message : String(error) })
       throw error
     }
   }
@@ -613,7 +650,12 @@ export class KernelManager {
     const recycle = join(this.vaultPath, 'recycle-bin', 'kernels')
     await mkdir(recycle, { recursive: true })
     await detachKernelFolderFonts(this.kernelPath(version))
-    await rename(this.kernelPath(version), join(recycle, `${version}-${Date.now()}`))
+    try {
+      await renameKernelFolder(this.kernelPath(version), join(recycle, `${version}-${Date.now()}`), this.logger)
+    } catch (error) {
+      if (error instanceof Error && error.message === KERNEL_FOLDER_IN_USE) throw new Error(KERNEL_FOLDER_IN_USE_REMOVE)
+      throw error
+    }
     this.logger?.info('浏览器内核已移入回收目录', { version })
   }
 
@@ -748,15 +790,99 @@ export class KernelManager {
       }
       const chrome = await findEntry(extracted, (name) => name.toLowerCase() === 'chrome.exe')
       if (!chrome) throw new Error('ZIP 中没有找到 chrome.exe')
-      const browserPath = join(stagingPath, 'browser')
-      await cp(dirname(chrome), browserPath, { recursive: true })
-      const executable = join(browserPath, 'chrome.exe')
-      const manifest = await this.createManifest(release, stagingPath, relative(stagingPath, executable))
-      await writeFile(join(stagingPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 })
-      await this.replaceKernelFolder(stagingPath, release.version)
-      return manifest
+      return await this.installBuild(release, dirname(chrome))
     } finally {
       await rm(root, { recursive: true, force: true })
+    }
+  }
+
+  /**
+   * Puts a kernel build in its own folder inside the kernel's folder (kernels/<id>/build-<time>/browser)
+   * and points the kernel's manifest at it. Nothing in place is renamed: Windows refuses to rename a folder
+   * some process works in or has a file open in (an input method's background service, a window still
+   * running), which made updates fail. Windows open after this use the new build; the builds before it are
+   * removed now or, while something still uses them, later (tidyKernelFolder).
+   */
+  private async installBuild(release: KernelRelease, browserSource: string): Promise<InstalledKernelManifest> {
+    const kernelFolder = this.kernelPath(release.version)
+    await mkdir(kernelFolder, { recursive: true })
+    const build = await uniqueBuildFolder(kernelFolder)
+    const buildPath = join(kernelFolder, build)
+    try {
+      await cp(browserSource, join(buildPath, 'browser'), { recursive: true })
+      const executable = join(buildPath, 'browser', 'chrome.exe')
+      const manifest = await this.createManifest(release, kernelFolder, relative(kernelFolder, executable))
+      const previous = await this.readManifest(release.version).catch(() => undefined)
+      const manifestPath = join(kernelFolder, 'manifest.json')
+      await writeFile(`${manifestPath}.next`, JSON.stringify(manifest, null, 2), { mode: 0o600 })
+      await rename(`${manifestPath}.next`, manifestPath)
+      // The default kernel is a path to its chrome.exe: it follows the new build.
+      const configured = this.settings.get().browserExecutable
+      if (previous && configured && resolve(configured) === resolve(join(kernelFolder, previous.executableRelative))) {
+        await this.settings.update({ browserExecutable: executable })
+      }
+      this.logger?.info('内核装进新的子文件夹', { version: release.version, build })
+      await this.tidyKernelFolder(release.version)
+      return manifest
+    } catch (error) {
+      await rm(`${join(kernelFolder, 'manifest.json')}.next`, { force: true })
+      await detachKernelFolderFonts(buildPath)
+      await rm(buildPath, { recursive: true, force: true }).catch(() => undefined)
+      throw error
+    }
+  }
+
+  /**
+   * Removes what a kernel's folder holds besides its manifest and the build it uses: builds an update
+   * replaced. One still in use (a window running from it, a program working in it) is moved away only
+   * when nothing uses it; until then it stays and is tried again later.
+   */
+  private async tidyKernelFolder(version: string): Promise<void> {
+    const manifest = await this.readManifest(version).catch(() => undefined)
+    if (!manifest) return
+    const kernelFolder = this.kernelPath(version)
+    const inUse = portableRelativePath(manifest.executableRelative).split('/')[0]
+    for (const entry of await readdir(kernelFolder, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory() || entry.name === inUse) continue
+      await this.dropFolder(join(kernelFolder, entry.name))
+    }
+  }
+
+  /**
+   * Deletes a folder no kernel uses any more. It is first moved out of the way: that fails while any
+   * process still uses something in it, and then it is left for later instead of being half deleted.
+   */
+  private async dropFolder(folder: string): Promise<void> {
+    const trash = join(this.vaultPath, 'kernels', `.trash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    try {
+      await rename(folder, trash)
+    } catch (error) {
+      if (folderInUse(error)) {
+        this.logger?.info('旧的内核文件夹还在被使用，以后再清理', { folder })
+        return
+      }
+      throw error
+    }
+    await detachKernelFolderFonts(trash)
+    await rm(trash, { recursive: true, force: true }).catch((error) => {
+      this.logger?.error('删除旧的内核文件夹失败', { folder: trash, error: error instanceof Error ? error.message : String(error) })
+    })
+  }
+
+  /**
+   * Once per run: builds updates left behind, and what interrupted installs and older launchers left in the
+   * kernels folder (.install-…, .trash-…, <id>.old-…), go when nothing uses them.
+   */
+  private async tidyKernels(): Promise<void> {
+    if (this.tidied || this.installingVersion) return
+    this.tidied = true
+    const root = join(this.vaultPath, 'kernels')
+    for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory()) continue
+      if (isKernelId(entry.name)) await this.tidyKernelFolder(entry.name).catch(() => undefined)
+      else if (/^\.(install|trash)-/.test(entry.name) || /\.old-\d+$/.test(entry.name)) {
+        await this.dropFolder(join(root, entry.name)).catch(() => undefined)
+      }
     }
   }
 

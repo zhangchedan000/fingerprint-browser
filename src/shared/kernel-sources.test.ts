@@ -16,10 +16,12 @@ describe('kernel sources', () => {
     expect(validKernelSources(undefined)).toEqual([...DEFAULT_KERNEL_SOURCES])
   })
 
-  it('adds the kernel repository to lists saved before it existed, and treats both official ones as one', () => {
-    expect(DEFAULT_KERNEL_SOURCES).toEqual(['zhangchedan000/prism-kernel-releases', 'zhangchedan000/fingerprint-browser'])
+  it('asks only the kernel repository: the old official one is replaced in saved lists, and both count as one', () => {
+    expect(DEFAULT_KERNEL_SOURCES).toEqual(['zhangchedan000/prism-kernel-releases'])
     expect(withOfficialKernelSource(['x/y', 'zhangchedan000/fingerprint-browser']))
-      .toEqual(['x/y', 'zhangchedan000/prism-kernel-releases', 'zhangchedan000/fingerprint-browser'])
+      .toEqual(['x/y', 'zhangchedan000/prism-kernel-releases'])
+    expect(withOfficialKernelSource(['zhangchedan000/prism-kernel-releases', 'zhangchedan000/fingerprint-browser', 'x/y']))
+      .toEqual(['zhangchedan000/prism-kernel-releases', 'x/y'])
     expect(withOfficialKernelSource(['x/y'])).toEqual(['x/y'])
     expect(withOfficialKernelSource([...DEFAULT_KERNEL_SOURCES])).toEqual([...DEFAULT_KERNEL_SOURCES])
     expect(kernelSourceFamily('Zhangchedan000/Fingerprint-Browser')).toBe(kernelSourceFamily('zhangchedan000/prism-kernel-releases'))

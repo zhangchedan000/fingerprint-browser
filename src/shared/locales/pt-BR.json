@@ -2781,5 +2781,6 @@
   "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "Outras {0} janelas não foram excluídas na lista de janelas (não estão na lixeira); elas serão ignoradas e o backup na nuvem será mantido.",
   "设置改了，重新检测后才准": "As configurações mudaram; verifique de novo para um resultado exato",
   "定位不一致": "Localização divergente",
-  "按多数定为 {0}": "pela maioria: {0}"
+  "按多数定为 {0}": "pela maioria: {0}",
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Outro programa está usando a pasta do kernel, então ela não pode ser excluída agora. Geralmente é o serviço em segundo plano de um método de entrada (como o serviço em nuvem do Sogou). Feche esse programa ou reinicie o computador e exclua de novo."
 }

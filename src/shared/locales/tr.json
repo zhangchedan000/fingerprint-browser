@@ -2781,5 +2781,6 @@
   "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "Diğer {0} pencere pencere listesinde silinmedi (geri dönüşüm kutusunda değil); atlanır ve bulut yedekleri korunur.",
   "设置改了，重新检测后才准": "Ayarlar değişti; doğru sonuç için yeniden denetleyin",
   "定位不一致": "Konum tutarsız",
-  "按多数定为 {0}": "çoğunluğa göre: {0}"
+  "按多数定为 {0}": "çoğunluğa göre: {0}",
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Çekirdek klasörünü başka bir program kullanıyor, bu yüzden şu an silinemiyor. Genellikle bir giriş yönteminin arka plan hizmetidir (ör. Sogou bulut hizmeti). O programı kapatın veya bilgisayarı yeniden başlatın, sonra tekrar silin."
 }

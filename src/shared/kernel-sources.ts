@@ -2,12 +2,13 @@
  * Where "在线下载内核" looks for kernels: GitHub projects ("owner/repo") whose releases carry a
  * Windows x64 zip. The user adds and removes them; the official ones are the default.
  *
- * Prism kernels are published in their own repository; this app's repository carried them up to
- * prism8 and keeps those releases, so it stays listed (older apps only look there).
+ * Prism kernels are published in their own repository. This app's repository carried them up to
+ * prism8 and keeps those releases for older apps; this app runs prism21 and later only, so it no longer
+ * asks that repository (one GitHub query less each time: GitHub allows 60 an hour per IP).
  */
 export const OFFICIAL_KERNEL_SOURCE = 'zhangchedan000/prism-kernel-releases'
 export const LEGACY_KERNEL_SOURCE = 'zhangchedan000/fingerprint-browser'
-export const DEFAULT_KERNEL_SOURCES: readonly string[] = [OFFICIAL_KERNEL_SOURCE, LEGACY_KERNEL_SOURCE]
+export const DEFAULT_KERNEL_SOURCES: readonly string[] = [OFFICIAL_KERNEL_SOURCE]
 
 export function isOfficialKernelSource(source: string | undefined): boolean {
   const lower = source?.toLowerCase()
@@ -19,11 +20,15 @@ export function kernelSourceFamily(source: string): string {
   return isOfficialKernelSource(source) ? OFFICIAL_KERNEL_SOURCE.toLowerCase() : source.toLowerCase()
 }
 
-/** Saved lists from before the kernel repository existed get it, next to the old official one. */
+/**
+ * Saved lists: the old official repository (kernels up to prism8, none this app runs) is replaced by the
+ * kernel repository, in its place, once.
+ */
 export function withOfficialKernelSource(sources: string[]): string[] {
   const legacy = sources.findIndex((source) => source.toLowerCase() === LEGACY_KERNEL_SOURCE.toLowerCase())
-  if (legacy < 0 || sources.some((source) => source.toLowerCase() === OFFICIAL_KERNEL_SOURCE.toLowerCase())) return sources
-  return [...sources.slice(0, legacy), OFFICIAL_KERNEL_SOURCE, ...sources.slice(legacy)]
+  if (legacy < 0) return sources
+  const hasOfficial = sources.some((source) => source.toLowerCase() === OFFICIAL_KERNEL_SOURCE.toLowerCase())
+  return [...sources.slice(0, legacy), ...(hasOfficial ? [] : [OFFICIAL_KERNEL_SOURCE]), ...sources.slice(legacy + 1)]
 }
 
 const NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/

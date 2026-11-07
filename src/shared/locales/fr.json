@@ -2781,5 +2781,6 @@
   "另有 {0} 个窗口没在窗口列表里删除（不在回收站），这次不删，云端备份保留。": "{0} autres fenêtres n’ont pas été supprimées dans la liste des fenêtres (pas dans la corbeille). Elles sont ignorées et leur sauvegarde cloud est conservée.",
   "设置改了，重新检测后才准": "Paramètres modifiés. Relancez la vérification pour un résultat exact",
   "定位不一致": "Localisation divergente",
-  "按多数定为 {0}": "selon la majorité ({0})"
+  "按多数定为 {0}": "selon la majorité ({0})",
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Un autre programme utilise le dossier du noyau, il ne peut pas être supprimé pour l’instant. C’est souvent le service en arrière-plan d’une méthode de saisie (comme le service cloud de Sogou). Quittez ce programme ou redémarrez l’ordinateur, puis supprimez-le de nouveau."
 }

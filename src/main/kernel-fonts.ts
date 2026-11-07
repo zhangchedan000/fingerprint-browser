@@ -54,11 +54,20 @@ export async function detachKernelFonts(browserFolder: string): Promise<void> {
   if (info?.isSymbolicLink()) await rmdir(link).catch(() => rm(link, { force: true }))
 }
 
-/** detachKernelFonts for every browser folder in a kernel folder (`browser`, or older layouts). */
+/**
+ * detachKernelFonts for every browser folder in a kernel folder: `browser`, a build folder's `browser`
+ * (`build-…/browser`, launcher 0.5.76 on), or older layouts.
+ */
 export async function detachKernelFolderFonts(kernelFolder: string): Promise<void> {
-  const entries = await readdir(kernelFolder, { withFileTypes: true }).catch(() => [])
   await detachKernelFonts(kernelFolder)
-  for (const entry of entries) if (entry.isDirectory()) await detachKernelFonts(join(kernelFolder, entry.name))
+  for (const entry of await readdir(kernelFolder, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory()) continue
+    const child = join(kernelFolder, entry.name)
+    await detachKernelFonts(child)
+    for (const inner of await readdir(child, { withFileTypes: true }).catch(() => [])) {
+      if (inner.isDirectory() && inner.name !== PRISM_SYSTEM_FONTS_FOLDER) await detachKernelFonts(join(child, inner.name))
+    }
+  }
 }
 
 /**
