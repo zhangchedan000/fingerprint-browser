@@ -12,7 +12,7 @@
  *
  * round: a name (mx, hk). The windows of a round are named "<round>-w01" … "<round>-w20".
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { evaluate, launchApp, quitApp } from './run.mjs'
@@ -246,6 +246,8 @@ async function visitAll(window, label, sites = SITES) {
     const want = plan.find((p) => p.name === window.name)?.binding ?? 'off'
     await run(`window.browserApi.profiles.setDeviceBinding(${J(window.id)}, ${J(want)}).then(() => true)`)
   }
+  // A window closed by force keeps the port file of its old browser: read only the new one.
+  await rm(join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort'), { force: true })
   const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}).then((p) => p.status, (e) => 'error: ' + e.message)`)
   if (launched !== 'running') { result.error = `launch: ${launched}`; return result }
   const portFile = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort')
