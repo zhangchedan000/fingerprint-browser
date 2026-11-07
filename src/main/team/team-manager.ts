@@ -402,6 +402,8 @@ export class TeamManager {
    */
   private async verifySession(): Promise<void> {
     await this.restoring
+    // App checks (tools/app-e2e) without a team server open this computer's own windows (see status()).
+    if (process.env.PRISM_E2E === '1' && process.env.PRISM_E2E_TEAM_OFFLINE === '1' && !this.user) return
     const api = this.requireApi()
     if (!this.user) throw new Error('请先登录')
     if (Date.now() - this.verifiedAt < 60_000) return
