@@ -521,6 +521,43 @@ if (phase === 'route') {
   }
 }
 
+// ---- geo: what each window of the round was set to, next to its proxy's last check (no IPs) ------
+if (phase === 'geo') {
+  const list = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
+  const proxies = await run(`window.browserApi.proxy.list().then((list) => list.map((p) => ({ id: p.id, name: p.subscription?.node ?? p.remark ?? '', check: p.check && { ok: p.check.ok, country: p.check.countryCode, tz: p.check.timezone, geo: p.check.geoConfidence, by: p.check.countryBy, tzBy: p.check.timezoneBy, votes: (p.check.countryVotes ?? []).map((v) => v.countryCode + ':' + v.sources.length + ':' + (v.timezone ?? '-')).join(' ') } })))`)
+  const rows = list.map((w) => {
+    const proxy = proxies.find((p) => p.id === w.proxyId)
+    return { window: w.name, node: proxy?.name, windowCountry: w.fp.region, windowZone: w.fp.timezone, language: w.fp.language, fromIp: w.fp.regionSource === 'ip', check: proxy?.check }
+  })
+  for (const row of rows) log(J(row))
+  await writeFile(join(out, `${round}-geo.json`), J(rows, null, 2))
+}
+
+// ---- deep: the launcher's own 深度检测 for one window (arg5 = the end of its name), IPs masked -----
+if (phase === 'deep') {
+  const target = (await windows()).find((w) => w.name.startsWith(`${round}-`) && w.name.endsWith(arg5))
+  if (!target) throw new Error(`no window ending ${arg5}`)
+  // Started and then polled: one renderer call may take at most 30 s, the five sites take minutes.
+  await run(`(() => {
+    window.__deepDone = undefined
+    window.browserApi.profiles.list().then((list) => {
+      const profile = list.find((p) => p.id === ${J(target.id)})
+      return window.browserApi.profiles.deepCheck(profile, profile.id)
+    }).then((results) => { window.__deepDone = results.map((r) => ({ site: r.site, status: r.status, score: r.score, findings: r.findings, error: r.error })) },
+      (error) => { window.__deepDone = [{ site: 'all', status: 'error', findings: [], error: error.message }] })
+    return true
+  })()`)
+  let results
+  for (let i = 0; i < 90 && !results; i++) {
+    await delay(10_000)
+    results = await run('window.__deepDone ?? null')
+  }
+  if (!results) throw new Error('deep check did not finish in 15 minutes')
+  const mask = (text) => String(text ?? '').replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, 'x.x.x.x')
+  for (const r of results) log(r.site, r.status, mask(r.score), mask(r.findings.join(' ; ')), mask(r.error))
+  await writeFile(join(out, `${round}-deep-${arg5}.json`), mask(J(results, null, 2)))
+}
+
 if (phase === 'run' || phase === 'reopen') {
   const all = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   const only = phase === 'reopen' ? arg5 : arg6
