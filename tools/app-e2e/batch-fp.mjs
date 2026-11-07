@@ -50,7 +50,25 @@ const SITES = [
 ]
 
 // Pages only asked for by name (SITES_ONLY): tzprobe reads the time zone the way a page can, every way.
-const EXTRA = [['tzprobe', 'about:blank', 1000]]
+const EXTRA = [['tzprobe', 'about:blank', 1000], ['cvprobe', 'about:blank', 1000]]
+// cvprobe: the two canvases FingerprintJS (open source, the same family as Fingerprint.com) draws, read back as raw
+// RGBA (base64), so a window's canvas noise can be compared pixel by pixel with a window that has no canvas noise.
+const CV_PROBE = `(() => {
+  const text = document.createElement('canvas'); text.width = 240; text.height = 60
+  let c = text.getContext('2d')
+  c.textBaseline = 'alphabetic'; c.fillStyle = '#f60'; c.fillRect(100, 1, 62, 20)
+  c.fillStyle = '#069'; c.font = '11pt "Times New Roman"'
+  const printed = 'Cwm fjordbank gly ' + String.fromCharCode(55357, 56835)
+  c.fillText(printed, 2, 15)
+  c.fillStyle = 'rgba(102, 204, 0, 0.2)'; c.font = '18pt Arial'; c.fillText(printed, 4, 45)
+  const geometry = document.createElement('canvas'); geometry.width = 122; geometry.height = 110
+  c = geometry.getContext('2d')
+  c.globalCompositeOperation = 'multiply'
+  for (const [color, x, y] of [['#f2f', 40, 40], ['#2ff', 80, 40], ['#ff2', 60, 80]]) { c.fillStyle = color; c.beginPath(); c.arc(x, y, 40, 0, Math.PI * 2, true); c.closePath(); c.fill() }
+  c.fillStyle = '#f9c'; c.arc(60, 60, 60, 0, Math.PI * 2, true); c.arc(60, 60, 20, 0, Math.PI * 2, true); c.fill('evenodd')
+  const pixels = (canvas) => { const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; let s = ''; for (let i = 0; i < d.length; i += 8192) s += String.fromCharCode.apply(null, d.subarray(i, i + 8192)); return btoa(s) }
+  return JSON.stringify({ text: { w: 240, h: 60, rgba: pixels(text), url: text.toDataURL().length }, geometry: { w: 122, h: 110, rgba: pixels(geometry), url: geometry.toDataURL().length } })
+})()`
 const TZ_PROBE = `(() => {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const months = Array.from({ length: 12 }, (_, m) => new Date(Date.UTC(2026, m, 15, 12)).getTimezoneOffset())
@@ -375,8 +393,8 @@ async function visitAll(window, label, sites = SITES) {
         } else {
           await delay(wait)
         }
-        if (site === 'tzprobe') {
-          const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: TZ_PROBE })).result?.value ?? ''
+        if (site === 'tzprobe' || site === 'cvprobe') {
+          const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: site === 'cvprobe' ? CV_PROBE : TZ_PROBE })).result?.value ?? ''
           await writeFile(join(out, `${label}-${site}.txt`), text)
           result.sites[site] = { chars: text.length, seconds: Math.round((Date.now() - began) / 1000) }
           continue
