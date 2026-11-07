@@ -14,7 +14,7 @@
  *
  * round: a name (mx, hk). The windows of a round are named "<round>-w01" … "<round>-w20".
  */
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { evaluate, launchApp, quitApp } from './run.mjs'
@@ -311,8 +311,13 @@ async function visitAll(window, label, sites = SITES) {
     const want = plan.find((p) => p.name === window.name)?.binding ?? 'off'
     await run(`window.browserApi.profiles.setDeviceBinding(${J(window.id)}, ${J(want)}).then(() => true)`)
   }
+  // FRESH=1: the window opens with an empty data folder (the same settings and seed, nothing a site
+  // stored before); its own folder is kept aside and put back after.
+  const dataDir = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data')
+  const keptDir = `${dataDir}.kept`
+  if (process.env.FRESH === '1' && existsSync(dataDir)) { await rm(keptDir, { recursive: true, force: true }); await rename(dataDir, keptDir) }
   // A window closed by force keeps the port file of its old browser: read only the new one.
-  await rm(join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort'), { force: true })
+  await rm(join(dataDir, 'DevToolsActivePort'), { force: true })
   // ALLOW_GEO=1: the window's time zone stays as it was on purpose (control tests change only the IP).
   const launchOptions = process.env.ALLOW_GEO === '1' ? ', { allowGeoConflict: true }' : ''
   const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}${launchOptions}).then((p) => p.status, (e) => 'error: ' + e.message)`)
@@ -362,6 +367,11 @@ async function visitAll(window, label, sites = SITES) {
   } finally {
     await run(`window.browserApi.profiles.close(${J(window.id)}).then(() => true, () => false)`)
     await delay(3000)
+    if (process.env.FRESH === '1' && existsSync(keptDir)) {
+      for (let i = 0; i < 10; i++) {
+        try { await rm(dataDir, { recursive: true, force: true }); await rename(keptDir, dataDir); break } catch { await delay(2000) }
+      }
+    }
   }
   result.finished = new Date().toISOString()
   return result
@@ -425,11 +435,21 @@ if (phase === 'clone') {
 
 // renode <spec.json>: [{ window: "w05", node: "美国 10" }]: the window moves to that subscription node
 // (reached directly, no 网络加速); everything else about it stays.
+// spec.window may name another round's window ("tt-w02"); spec.geoFrom (a full window name) gives the
+// window that window's country, time zone and languages (read before any window here changes).
+const GEO_KEYS = ['networkIdentityMode', 'region', 'regionSource', 'timezone', 'language', 'acceptLanguages', 'location', 'uiLocale', 'voicesLocale', 'mediaLocale', 'keyboardLayout']
 if (phase === 'renode') {
   const specs = JSON.parse(await readFile(arg5, 'utf8'))
+  const donors = {}
+  for (const spec of specs.filter((item) => item.geoFrom)) {
+    donors[spec.geoFrom] = await run(`window.browserApi.profiles.list().then((list) => { const f = list.find((p) => p.name === ${J(spec.geoFrom)})?.fingerprint; return f ? Object.fromEntries(${J(GEO_KEYS)}.map((k) => [k, f[k]])) : null })`)
+    log('geo of', spec.geoFrom, J(donors[spec.geoFrom] && { region: donors[spec.geoFrom].region, timezone: donors[spec.geoFrom].timezone, language: donors[spec.geoFrom].language }))
+  }
   for (const spec of specs) {
+    const name = spec.window.includes('-') ? spec.window : `${round}-${spec.window}`
+    const geo = spec.geoFrom ? donors[spec.geoFrom] : null
     const done = await run(`(async () => {
-      const profile = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(`${round}-${spec.window}`)})
+      const profile = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(name)})
       if (!profile) return 'no window'
       const status = await window.browserApi.subscriptions.status()
       const node = status.nodes.find((n) => n.name.includes(${J(spec.node)}))
@@ -440,10 +460,12 @@ if (phase === 'renode') {
       const checked = await window.browserApi.proxy.check(entry.id).then((p) => p.check, () => undefined)
       await window.browserApi.profiles.assignMany([profile.id], { proxyId: entry.id })
       const fresh = (await window.browserApi.profiles.list()).find((p) => p.id === profile.id)
-      await window.browserApi.profiles.update(profile.id, { ...fresh, tunnel: { enabled: false, mode: 'auto' } })
-      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window tz ' + fresh.fingerprint.timezone
+      const geo = ${J(geo)}
+      const fingerprint = geo ? { ...fresh.fingerprint, ...geo } : fresh.fingerprint
+      const saved = await window.browserApi.profiles.update(profile.id, { ...fresh, fingerprint, tunnel: { enabled: false, mode: 'auto' } })
+      return 'ok ' + (checked?.countryCode ?? '?') + ' ' + (checked?.timezone ?? '?') + ' window ' + saved.fingerprint.region + ' ' + saved.fingerprint.timezone + ' ' + saved.fingerprint.language + ' seed ' + saved.fingerprint.seed + ' gpu ' + saved.fingerprint.gpu
     })().catch((e) => 'error: ' + e.message)`)
-    log('renode', spec.window, done)
+    log('renode', name, done)
   }
 }
 
