@@ -86,13 +86,19 @@ const clickText = (text, scope = 'document', exact = true) => run(`(() => {
   return true
 })()`)
 /** Opens the select (the nth in the row, or the one with this aria-label) and clicks the option whose text passes `test`. */
-async function choose(row, test, nth = 0) {
+async function choose(row, test, nth = 0, search = '') {
   const opened = await run(`(() => {
     const row = ${rowOf(row)}
     const select = row?.querySelectorAll('.ant-select')[${nth}]
     if (!select) return false
     select.querySelector('.ant-select-selector, .ant-select-content')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    // A long list shows only the options in view: typed text narrows it (showSearch selects).
+    const input = ${J(search)} && select.querySelector('input')
+    if (input) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${J(search)})
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
     return true
   })()`)
   if (!opened) return `no select in ${row}`
@@ -123,7 +129,7 @@ async function createOne(spec, proxyHost) {
     const source = await choose('选择订阅', `(text) => text.startsWith('订阅')`)
     if (source !== true) throw new Error(`subscription: ${source}`)
     await delay(600)
-    const node = await choose('选择节点', `(text) => text.includes(${J(spec.node)})`)
+    const node = await choose('选择节点', `(text) => text.includes(${J(spec.node)})`, 0, spec.node)
     if (node !== true) throw new Error(`node: ${node}`)
     await delay(4000)
   } else {
