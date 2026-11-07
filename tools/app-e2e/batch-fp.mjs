@@ -447,6 +447,13 @@ const GEO_KEYS = ['networkIdentityMode', 'region', 'regionSource', 'timezone', '
 if (phase === 'renode') {
   const specs = JSON.parse(await readFile(arg5, 'utf8'))
   const donors = {}
+  // spec.langFrom (a full window name): only that window's languages (not its country or time zone).
+  const LANG_KEYS = ['language', 'acceptLanguages', 'uiLocale', 'voicesLocale', 'mediaLocale', 'keyboardLayout']
+  for (const spec of specs.filter((item) => item.langFrom)) {
+    const langs = await run(`window.browserApi.profiles.list().then((list) => { const f = list.find((p) => p.name === ${J(spec.langFrom)})?.fingerprint; return f ? Object.fromEntries(${J(LANG_KEYS)}.map((k) => [k, f[k]])) : null })`)
+    log('languages of', spec.langFrom, J(langs))
+    spec.fingerprint = { ...(langs ?? {}), ...(spec.fingerprint ?? {}) }
+  }
   for (const spec of specs.filter((item) => item.geoFrom)) {
     donors[spec.geoFrom] = await run(`window.browserApi.profiles.list().then((list) => { const f = list.find((p) => p.name === ${J(spec.geoFrom)})?.fingerprint; return f ? Object.fromEntries(${J(GEO_KEYS)}.map((k) => [k, f[k]])) : null })`)
     log('geo of', spec.geoFrom, J(donors[spec.geoFrom] && { region: donors[spec.geoFrom].region, timezone: donors[spec.geoFrom].timezone, language: donors[spec.geoFrom].language }))
