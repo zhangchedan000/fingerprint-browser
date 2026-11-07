@@ -438,7 +438,10 @@ if (phase === 'clone') {
       const draft = { ...source, name: ${J(name)}, note: ${J(spec.note ?? '')}, fingerprint, kernelVersion: byMajor ?? ${J(spec.kernelVersion ?? null)} ?? source.kernelVersion }
       delete draft.id
       const created = await window.browserApi.profiles.create(draft)
-      return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, gpu: created.fingerprint.gpu, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
+      // A seed already taken is replaced and the hardware re-rolled: say so, the window is not the one asked for.
+      const asked = ${J(spec.fingerprint ?? {})}
+      const differs = ['seed', 'gpu', 'cpu', 'hardwareConcurrency', 'deviceMemory', 'screenWidth', 'platformVersion'].filter((key) => key in asked && asked[key] !== created.fingerprint[key])
+      return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, gpu: created.fingerprint.gpu, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, os: created.fingerprint.platformVersion, binding: created.fingerprint.deviceBinding, ...(differs.length ? { NOT_AS_ASKED: differs } : {}) })
     })().catch((e) => 'error: ' + e.message)`)
     log('clone', name, 'from', spec.source, made)
     if (spec.node && !String(made).startsWith('error')) {

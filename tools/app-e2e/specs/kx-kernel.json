@@ -1,10 +1,154 @@
 [
-  { "source": "w01", "name": "a155", "note": "hk-w20 (0.200) 155", "kernel": "155", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 4090|0x00002684", "cpu": "AMD Ryzen 9 9900X", "coresSource": "profile", "hardwareConcurrency": 24, "deviceMemory": 32, "screenSource": "profile", "screenWidth": 3840, "screenHeight": 2160, "deviceBinding": "off" } },
-  { "source": "w01", "name": "a156", "note": "hk-w20 config on 156", "kernel": "156", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 4090|0x00002684", "cpu": "AMD Ryzen 9 9900X", "coresSource": "profile", "hardwareConcurrency": 24, "deviceMemory": 32, "screenSource": "profile", "screenWidth": 3840, "screenHeight": 2160, "deviceBinding": "off" } },
-  { "source": "w01", "name": "b155", "note": "hk-w02 (0.164) 155", "kernel": "155", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9", "cpu": "Intel Core i7-9700", "coresSource": "profile", "hardwareConcurrency": 8, "deviceMemory": 16, "screenSource": "profile", "screenWidth": 2560, "screenHeight": 1440, "deviceBinding": "on" } },
-  { "source": "w01", "name": "b156", "note": "hk-w02 config on 156", "kernel": "156", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9", "cpu": "Intel Core i7-9700", "coresSource": "profile", "hardwareConcurrency": 8, "deviceMemory": 16, "screenSource": "profile", "screenWidth": 2560, "screenHeight": 1440, "deviceBinding": "on" } },
-  { "source": "w01", "name": "c156", "note": "hk-w05 (0.008) 156", "kernel": "156", "fingerprint": { "platformVersion": "10.0.0", "gpu": "NVIDIA GeForce RTX 2060|0x00001E89", "cpu": "Intel Core i5-11600K", "coresSource": "profile", "hardwareConcurrency": 12, "deviceMemory": 32, "screenSource": "profile", "screenWidth": 1920, "screenHeight": 1080, "deviceBinding": "on" } },
-  { "source": "w01", "name": "c155", "note": "hk-w05 config on 155", "kernel": "155", "fingerprint": { "platformVersion": "10.0.0", "gpu": "NVIDIA GeForce RTX 2060|0x00001E89", "cpu": "Intel Core i5-11600K", "coresSource": "profile", "hardwareConcurrency": 12, "deviceMemory": 32, "screenSource": "profile", "screenWidth": 1920, "screenHeight": 1080, "deviceBinding": "on" } },
-  { "source": "w01", "name": "d156", "note": "hk-w11 (0.014) 156", "kernel": "156", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07", "cpu": "AMD Ryzen 5 5600GT", "coresSource": "profile", "hardwareConcurrency": 12, "deviceMemory": 16, "screenSource": "profile", "screenWidth": 2560, "screenHeight": 1440, "deviceBinding": "off" } },
-  { "source": "w01", "name": "d155", "note": "hk-w11 config on 155", "kernel": "155", "fingerprint": { "platformVersion": "19.0.0", "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07", "cpu": "AMD Ryzen 5 5600GT", "coresSource": "profile", "hardwareConcurrency": 12, "deviceMemory": 16, "screenSource": "profile", "screenWidth": 2560, "screenHeight": 1440, "deviceBinding": "off" } }
+ {
+  "source": "w01",
+  "name": "p20k155",
+  "note": "hk-w20 (0.200) 155",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 880101,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "coresSource": "profile",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p20k156",
+  "note": "hk-w20 config on 156",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880102,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "coresSource": "profile",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p02k155",
+  "note": "hk-w02 (0.164) 155",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 880103,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p02k156",
+  "note": "hk-w02 config on 156",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880104,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p05k156",
+  "note": "hk-w05 (0.008) 156",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880105,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p05k155",
+  "note": "hk-w05 config on 155",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 880106,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p11k156",
+  "note": "hk-w11 (0.014) 156",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880107,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "p11k155",
+  "note": "hk-w11 config on 155",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 880108,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off"
+  }
+ }
 ]
