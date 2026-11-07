@@ -1155,6 +1155,17 @@ export class ProfileStore {
     this.notify(users.map((profile) => profile.id))
   }
 
+  /**
+   * Library entries no window uses, removed in one go (subscription nodes gone, or a subscription
+   * deleted); entries a window uses stay. Returns how many were removed.
+   */
+  async removeUnusedProxies(ids: string[]): Promise<number> {
+    const unused = [...new Set(ids)].filter((id) => this.library.proxies.has(id) && !this.proxyUsers(id).length)
+    for (const id of unused) this.library.deleteProxy(id)
+    if (unused.length) await this.persist()
+    return unused.length
+  }
+
   // ---- group library ---------------------------------------------------------------------
 
   listGroups(): GroupRecord[] {

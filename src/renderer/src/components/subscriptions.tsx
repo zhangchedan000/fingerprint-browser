@@ -7,17 +7,17 @@ import type { TunnelNodeInfo, TunnelSourcePreview, TunnelSourceSummary, TunnelSt
 import { humanError } from './format'
 
 /** The account's subscriptions (代理 IP → 订阅) and their nodes, kept up to date. */
-export function useSubscriptionStatus(): [TunnelStatus | undefined, (status: TunnelStatus) => void] {
+export function useSubscriptionStatus(poll = true): [TunnelStatus | undefined, (status: TunnelStatus) => void] {
   const [status, setStatus] = useState<TunnelStatus>()
   useEffect(() => {
     let alive = true
     const load = () => void window.browserApi.subscriptions.status().then((next) => { if (alive) setStatus(next) }).catch(() => undefined)
     load()
     const unsubscribe = window.browserApi.subscriptions.onChanged(setStatus)
-    // Delays and exit IPs are measured in the background.
-    const timer = setInterval(load, 15_000)
-    return () => { alive = false; unsubscribe(); clearInterval(timer) }
-  }, [])
+    // Delays and exit IPs are measured in the background (the side menu's count needs no polling).
+    const timer = poll ? setInterval(load, 15_000) : undefined
+    return () => { alive = false; unsubscribe(); if (timer) clearInterval(timer) }
+  }, [poll])
   return [status, setStatus]
 }
 

@@ -189,6 +189,7 @@ const api: BrowserApi = {
     createMany: (drafts) => ipcRenderer.invoke('proxy:create-many', drafts),
     update: (id, draft) => ipcRenderer.invoke('proxy:update', id, draft),
     remove: (id, replaceWith) => ipcRenderer.invoke('proxy:remove', id, replaceWith),
+    removeUnused: (ids) => ipcRenderer.invoke('proxy:remove-unused', ids),
     check: (id, route) => ipcRenderer.invoke('proxy:check', id, route),
     password: (id) => ipcRenderer.invoke('proxy:password', id),
     match: (config) => ipcRenderer.invoke('proxy:match', config),

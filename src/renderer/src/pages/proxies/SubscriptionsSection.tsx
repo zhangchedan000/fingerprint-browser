@@ -1,12 +1,13 @@
-import { ApiOutlined, DeleteOutlined, EditOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { ApiOutlined, ClearOutlined, DeleteOutlined, EditOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, Button, Dropdown, Input, Modal, Space, Table, Tag, Tooltip, type TableColumnsType } from 'antd'
 import { useMemo, useState } from 'react'
 import { t } from '../../../../shared/i18n'
 import type { ProxyRecordView, TunnelNodeInfo, TunnelSourceSummary, TunnelStatus } from '../../../../shared/types'
-import { relativeTime } from '../../components/format'
+import { humanError, relativeTime } from '../../components/format'
 import { StatCards } from '../../components/StatCards'
 import { nodeShortName, SubscriptionModal, subscriptionNodes } from '../../components/subscriptions'
 import { DelayText } from '../../components/TunnelRouteField'
+import { tableHeaderComponents, useTableColumns } from '../../components/table-columns'
 import { useWorkspace } from '../../data/workspace'
 
 interface NodeRow {
@@ -42,6 +43,49 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
   const windowsOf = (source: TunnelSourceSummary) => [...new Set(proxies.filter((item) => item.subscription?.source === source.name).flatMap((item) => item.profileIds))]
   const allNodes = sources.flatMap(rowsOf)
   const nodeState = (row: NodeRow) => row.entry?.check ? (row.entry.check.ok ? 'ok' : 'bad') : row.node.delay === undefined ? 'unknown' : row.node.delay > 0 ? 'ok' : 'bad'
+  const nodeIp = (row: NodeRow) => (row.entry?.check?.ok ? row.entry.check.ip : row.node.exitIp) ?? ''
+  const nodeDelay = (row: NodeRow) => (row.entry?.check?.ok ? row.entry.check.latencyMs : row.node.delay) ?? 0
+  const STATE_ORDER = { ok: 0, unknown: 1, bad: 2 }
+
+  /**
+   * Library entries of nodes no longer listed: the subscription was deleted, or its download no longer
+   * has the node (renamed or removed). A subscription that has no nodes right now (download failed,
+   * still starting) says nothing about its nodes: its entries are kept.
+   */
+  const staleEntries = status ? proxies.filter((item) => {
+    const ref = item.subscription
+    if (!ref) return false
+    const source = sources.find((candidate) => candidate.name === ref.source)
+    if (!source) return true
+    const nodes = subscriptionNodes(status, source)
+    return nodes.length > 0 && !nodes.some((node) => nodeShortName(source, node) === ref.node)
+  }) : []
+
+  function cleanStale(): void {
+    const unused = staleEntries.filter((item) => !item.profileIds.length)
+    const bound = staleEntries.length - unused.length
+    Modal.confirm({
+      title: t("清理 {0} 条旧节点记录？", unused.length),
+      content: (
+        <>
+          <p>{t("这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。")}</p>
+          {bound > 0 && <p>{t("另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。", bound)}</p>}
+        </>
+      ),
+      okText: t("清理"),
+      okButtonProps: { danger: true, disabled: !unused.length },
+      cancelText: t("取消"),
+      onOk: async () => {
+        try {
+          const removed = await window.browserApi.proxy.removeUnused(unused.map((item) => item.id))
+          await ws.reloadLibraries()
+          notify.success(t("已清理 {0} 条旧节点记录", removed))
+        } catch (error) {
+          notify.error(humanError(error))
+        }
+      }
+    })
+  }
 
   const normalized = query.trim().toLowerCase()
   const matches = (row: NodeRow) => !normalized || [row.short, row.source.name, row.entry?.check?.ip ?? row.node.exitIp ?? ''].some((value) => value.toLowerCase().includes(normalized))
@@ -106,12 +150,19 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
     : <span className="fb-muted">{t("未绑定")}</span>
 
   const nodeColumns: TableColumnsType<NodeRow> = [
-    { title: t("节点名称"), key: 'name', render: (_value, row) => <span className="fb-mono">{row.short}</span> },
-    { title: t("协议"), key: 'type', width: 110, render: (_value, row) => row.node.type || '—' },
+    {
+      title: t("节点名称"),
+      key: 'name',
+      width: 200,
+      sorter: (a, b) => a.short.localeCompare(b.short, undefined, { numeric: true }),
+      render: (_value, row) => <span className="fb-mono">{row.short}</span>
+    },
+    { title: t("协议"), key: 'type', width: 110, sorter: (a, b) => (a.node.type || '').localeCompare(b.node.type || ''), render: (_value, row) => row.node.type || '—' },
     {
       title: t("出口 IP / 地区"),
       key: 'ip',
       width: 220,
+      sorter: (a, b) => `${a.entry?.check?.ok ? a.entry.check.countryCode ?? '' : ''} ${nodeIp(a)}`.localeCompare(`${b.entry?.check?.ok ? b.entry.check.countryCode ?? '' : ''} ${nodeIp(b)}`, undefined, { numeric: true }),
       render: (_value, row) => {
         const check = row.entry?.check
         const ip = check?.ok ? check.ip : row.node.exitIp
@@ -120,37 +171,46 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
           : <span className="fb-muted">{t("未检测")}</span>
       }
     },
-    { title: t("延迟"), key: 'delay', width: 90, render: (_value, row) => <DelayText delay={row.entry?.check?.ok ? row.entry.check.latencyMs : row.node.delay} /> },
+    {
+      title: t("延迟"),
+      key: 'delay',
+      width: 90,
+      sorter: (a, b) => (nodeDelay(a) > 0 ? nodeDelay(a) : Infinity) - (nodeDelay(b) > 0 ? nodeDelay(b) : Infinity),
+      render: (_value, row) => <DelayText delay={row.entry?.check?.ok ? row.entry.check.latencyMs : row.node.delay} />
+    },
     {
       title: t("状态"),
       key: 'state',
       width: 90,
+      sorter: (a, b) => STATE_ORDER[nodeState(a)] - STATE_ORDER[nodeState(b)],
       render: (_value, row) => {
         const state = nodeState(row)
         return <Tag color={state === 'ok' ? 'success' : state === 'bad' ? 'error' : 'default'}>{state === 'ok' ? t("可用") : state === 'bad' ? t("失效") : t("未检测")}</Tag>
       }
     },
-    { title: t("绑定窗口"), key: 'windows', width: 160, render: (_value, row) => windowsCell(row.entry?.profileIds ?? []) },
+    { title: t("绑定窗口"), key: 'windows', width: 160, sorter: (a, b) => (a.entry?.profileIds.length ?? 0) - (b.entry?.profileIds.length ?? 0), render: (_value, row) => windowsCell(row.entry?.profileIds ?? []) },
     {
       title: t("操作"),
       key: 'actions',
       width: 80,
       align: 'right',
+      fixed: 'right',
       render: (_value, row) => <Button size="small" type="link" loading={checking.has(row.key)} onClick={() => void check([row])}>{t("检测")}</Button>
     }
   ]
 
   const columns: TableColumnsType<TunnelSourceSummary> = [
-    { title: t("订阅名称"), dataIndex: 'name', key: 'name', render: (name: string) => <strong>{name}</strong> },
-    { title: t("类型"), key: 'kind', width: 110, render: (_value, source) => source.kind === 'subscription' ? t("订阅链接") : t("节点链接") },
-    { title: t("节点数"), key: 'nodes', width: 90, render: (_value, source) => subscriptionNodes(status, source).length },
-    { title: t("绑定窗口"), key: 'windows', width: 180, render: (_value, source) => windowsCell(windowsOf(source)) },
-    { title: t("最后更新"), key: 'updated', width: 120, render: (_value, source) => relativeTime(source.updatedAt, locale, '—') },
+    { title: t("订阅名称"), dataIndex: 'name', key: 'name', width: 220, sorter: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }), render: (name: string) => <strong>{name}</strong> },
+    { title: t("类型"), key: 'kind', width: 110, sorter: (a, b) => a.kind.localeCompare(b.kind), render: (_value, source) => source.kind === 'subscription' ? t("订阅链接") : t("节点链接") },
+    { title: t("节点数"), key: 'nodes', width: 90, sorter: (a, b) => subscriptionNodes(status, a).length - subscriptionNodes(status, b).length, render: (_value, source) => subscriptionNodes(status, source).length },
+    { title: t("绑定窗口"), key: 'windows', width: 180, sorter: (a, b) => windowsOf(a).length - windowsOf(b).length, render: (_value, source) => windowsCell(windowsOf(source)) },
+    { title: t("最后更新"), key: 'updated', width: 120, sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt), render: (_value, source) => relativeTime(source.updatedAt, locale, '—') },
     {
       title: t("操作"),
       key: 'actions',
       width: 200,
       align: 'right',
+      fixed: 'right',
       render: (_value, source) => (
         <Space size={2}>
           <Button size="small" type="link" loading={checking.size > 0 && rowsOf(source).some((row) => checking.has(row.key))} onClick={() => void check(rowsOf(source))}>{t("检测")}</Button>
@@ -165,6 +225,9 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
       )
     }
   ]
+
+  const sourceTable = useTableColumns(columns, undefined, t("订阅列"))
+  const nodeTable = useTableColumns(nodeColumns, undefined, t("节点列"))
 
   return (
     <div className="fb-stack">
@@ -181,7 +244,14 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
           <Button icon={<ApiOutlined />} disabled={!allNodes.length} loading={checking.size > 0} onClick={() => void check(allNodes)}>{t("全部检测")}</Button>
         </Space>
         <div className="fb-toolbar-filters">
+          {staleEntries.length > 0 && (
+            <Tooltip title={t("订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）")}>
+              <Button icon={<ClearOutlined />} onClick={cleanStale}>{t("清理旧记录 {0}", staleEntries.length)}</Button>
+            </Tooltip>
+          )}
           <Input allowClear prefix={<SearchOutlined />} placeholder={t("搜索订阅 / 节点 / IP")} value={query} onChange={(event) => setQuery(event.target.value)} style={{ width: 240 }} />
+          {sourceTable.settings}
+          {nodeTable.settings}
         </div>
       </div>
       {status?.state === 'error' && status.error && <Alert type="error" showIcon title={status.error} />}
@@ -189,7 +259,10 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
         <Table<TunnelSourceSummary>
           rowKey="id"
           size="middle"
-          columns={columns}
+          columns={sourceTable.columns}
+          components={tableHeaderComponents}
+          tableLayout={sourceTable.tableLayout}
+          scroll={sourceTable.scrollX ? { x: sourceTable.scrollX } : undefined}
           dataSource={visibleSources}
           pagination={false}
           locale={{ emptyText: sources.length ? t("没有符合条件的订阅") : t("还没有订阅，可以添加多个，每个订阅里的节点都能给窗口用") }}
@@ -198,7 +271,10 @@ export function SubscriptionsSection({ status, setStatus }: { status: TunnelStat
               <Table<NodeRow>
                 rowKey="key"
                 size="small"
-                columns={nodeColumns}
+                columns={nodeTable.columns}
+                components={tableHeaderComponents}
+                tableLayout={nodeTable.tableLayout}
+                scroll={nodeTable.scrollX ? { x: nodeTable.scrollX } : undefined}
                 dataSource={rowsOf(source).filter(matches)}
                 pagination={rowsOf(source).length > 50 ? { pageSize: 50 } : false}
                 locale={{ emptyText: t("这个订阅还没有可用节点（刚添加时要等几秒，或点「全部刷新」）") }}

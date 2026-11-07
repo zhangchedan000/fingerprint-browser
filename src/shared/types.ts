@@ -972,6 +972,8 @@ export interface BrowserApi {
     update: (id: string, draft: ProxyDraft) => Promise<ProxyRecordView>
     /** replaceWith: what the windows using it switch to (another proxy id, or '' for direct). */
     remove: (id: string, replaceWith?: string) => Promise<void>
+    /** Removes those of these library entries no window uses; how many were removed. */
+    removeUnused: (ids: string[]) => Promise<number>
     /** Tests a library proxy and saves the result on it; route: a window's 网络加速 instead of the proxy's default. */
     check: (id: string, route?: TunnelRoute) => Promise<ProxyRecordView>
     /** The saved password of a library proxy, shown in its edit form behind the eye button. */

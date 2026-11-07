@@ -2782,5 +2782,14 @@
   "设置改了，重新检测后才准": "Cài đặt đã thay đổi; hãy kiểm tra lại để có kết quả chính xác",
   "定位不一致": "Vị trí không thống nhất",
   "按多数定为 {0}": "theo đa số: {0}",
-  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Một chương trình khác đang dùng thư mục nhân, nên hiện không xóa được. Thường là dịch vụ nền của bộ gõ (như dịch vụ đám mây của Sogou). Hãy thoát chương trình đó hoặc khởi động lại máy, rồi xóa lại."
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Một chương trình khác đang dùng thư mục nhân, nên hiện không xóa được. Thường là dịch vụ nền của bộ gõ (như dịch vụ đám mây của Sogou). Hãy thoát chương trình đó hoặc khởi động lại máy, rồi xóa lại.",
+  "{0}：顺序、显示和宽度": "{0}: thứ tự, hiển thị và độ rộng",
+  "订阅列": "Cột đăng ký",
+  "节点列": "Cột nút",
+  "清理 {0} 条旧节点记录？": "Xóa {0} bản ghi nút cũ?",
+  "这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。": "Gói đăng ký của các nút này đã bị xóa hoặc không còn nút này; bản ghi chỉ chứa kết quả kiểm tra trước đây.",
+  "另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。": "Còn {0} bản ghi đang gắn với cửa sổ nên không bị xóa; hãy đổi nút cho các cửa sổ đó trước.",
+  "已清理 {0} 条旧节点记录": "Đã xóa {0} bản ghi nút cũ",
+  "订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）": "Bản ghi của các nút có gói đăng ký đã bị xóa hoặc không còn trong gói (chỉ có kết quả kiểm tra cũ)",
+  "清理旧记录 {0}": "Xóa bản ghi cũ {0}"
 }

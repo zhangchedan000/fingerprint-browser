@@ -75,6 +75,8 @@ async function freePort(): Promise<number> {
 
 /** How long a start waits for subscription links to download (a dead link must not hold the start forever). */
 const SUBSCRIPTION_WAIT_MS = 20_000
+/** A slot used by one connection without a holder (an API proxy probe, say) keeps its node this long. */
+export const SLOT_GRACE_MS = 60_000
 
 async function pathExists(path: string): Promise<boolean> {
   return access(path).then(() => true, () => false)
@@ -106,6 +108,16 @@ export class TunnelManager {
   private probing?: Promise<void>
   /** The node each slot (nodeSlotGroup) carries; kept across restarts and set again on start. */
   private slots: string[] = []
+  /**
+   * Who is using each slot (a window's or a check's proxy bridge, a 网络加速 route of the subscription
+   * nodes): a held slot is never pointed at another node. When the last one lets go the slot is free
+   * again (11-07: slots were never given back, so after 64 nodes checked every other node failed).
+   */
+  private slotHolders = new Map<number, Set<string>>()
+  /** When a slot was last used by a caller that holds nothing (one connection): free only after SLOT_GRACE_MS. */
+  private slotLoose = new Map<number, number>()
+  /** When a slot was last asked for or let go: the longest unused free slot is pointed at a new node first. */
+  private slotTouched = new Map<number, number>()
   private slotting: Promise<unknown> = Promise.resolve()
   private controller = ''
   private secret = ''
@@ -144,7 +156,7 @@ export class TunnelManager {
    * window on a new route adds it to the running core (a reload, the core keeps running). A node or
    * subscription the account no longer has is an error, never a direct connection.
    */
-  async nodeProxy(ref: { source: string; node: string }, route?: TunnelRoute): Promise<LocalProxy> {
+  async nodeProxy(ref: { source: string; node: string }, route?: TunnelRoute, holder?: string): Promise<LocalProxy> {
     if (!this.stored.sources.some((source) => source.name === ref.source)) throw new Error(`订阅「${ref.source}」已不存在，请在代理设置里重新选择`)
     let prefix = ref.source
     if (route?.enabled) {
@@ -169,7 +181,7 @@ export class TunnelManager {
     if (this.state !== 'running') throw new Error(`订阅节点没有运行起来${this.error ? `：${this.error}` : ''}`)
     const name = `${prefix} · ${ref.node}`
     if (!(await this.groupNames(nodeSlotGroup(0))).includes(name)) throw new Error(`订阅「${ref.source}」里没有节点「${ref.node}」了，请在代理设置里重新选择节点`)
-    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(name)] }
+    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(name, holder)] }
   }
 
   private get file(): string {
@@ -271,29 +283,70 @@ export class TunnelManager {
    * The local port for a window set to 网络加速: the fastest node, or the node it is fixed to.
    * Throws when the tunnel is not running — such a window must not connect from this computer's IP.
    */
-  async routeProxy(route: Pick<TunnelRoute, 'mode' | 'node'>): Promise<LocalProxy> {
+  async routeProxy(route: Pick<TunnelRoute, 'mode' | 'node'>, holder?: string): Promise<LocalProxy> {
     for (let waited = 0; this.state === 'starting' && waited < 30_000; waited += 250) await delay(250)
     if (this.state !== 'running') {
       throw new Error(this.state === 'error' && this.error ? `获取不到代理 IP（网络加速出错：${this.error}）` : '获取不到代理 IP（网络加速未开启）')
     }
     if (route.mode !== 'manual' || !route.node) return { type: 'http', host: '127.0.0.1', port: this.autoPort }
-    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(route.node)] }
+    return { type: 'http', host: '127.0.0.1', port: this.slotPorts[await this.slotFor(route.node, holder)] }
   }
 
-  /** The slot that carries `node`, pointing a free one at it the first time it is asked for. */
-  private slotFor(node: string): Promise<number> {
+  /**
+   * The slot that carries `node`, pointing a free one at it the first time it is asked for. `holder`
+   * keeps it until release(holder); without one (a single connection) it stays free of other nodes
+   * for SLOT_GRACE_MS.
+   */
+  private slotFor(node: string, holder?: string): Promise<number> {
     const next = this.slotting.then(async () => {
-      const known = this.slots.indexOf(node)
-      if (known >= 0) return known
-      if (!(await this.groupNames(nodeSlotGroup(0))).includes(node)) throw new Error(`获取不到代理 IP（加速节点「${node}」已不存在，请在代理设置里重新选择）`)
-      const index = this.slots.includes('') ? this.slots.indexOf('') : this.slots.length
-      if (index >= this.slotCount) throw new Error(`同时使用的节点不能超过 ${this.slotCount} 个`)
-      await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
-      this.slots[index] = node
+      let index = this.slots.indexOf(node)
+      if (index < 0) {
+        if (!(await this.groupNames(nodeSlotGroup(0))).includes(node)) throw new Error(`获取不到代理 IP（加速节点「${node}」已不存在，请在代理设置里重新选择）`)
+        index = this.freeSlot()
+        if (index < 0) throw new Error(`同时使用的节点不能超过 ${this.slotCount} 个，请先关闭一些窗口`)
+        await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
+        this.slots[index] = node
+        this.slotHolders.delete(index)
+        this.slotLoose.delete(index)
+      }
+      if (holder) {
+        const holders = this.slotHolders.get(index) ?? new Set<string>()
+        holders.add(holder)
+        this.slotHolders.set(index, holders)
+      } else {
+        this.slotLoose.set(index, Date.now())
+      }
+      this.slotTouched.set(index, Date.now())
       return index
     })
     this.slotting = next.catch(() => undefined)
     return next
+  }
+
+  /** A slot for a new node: one never used, else the free one unused longest; -1 when all are in use. */
+  private freeSlot(): number {
+    let best = -1
+    for (let index = 0; index < this.slotCount; index++) {
+      if (!this.slots[index]) return index
+      if (this.slotHolders.get(index)?.size) continue
+      if (Date.now() - (this.slotLoose.get(index) ?? 0) < SLOT_GRACE_MS) continue
+      if (best < 0 || (this.slotTouched.get(index) ?? 0) < (this.slotTouched.get(best) ?? 0)) best = index
+    }
+    return best
+  }
+
+  /** `holder` (a closed window or a finished check) no longer uses its slots: they can carry other nodes. */
+  release(holder: string): void {
+    for (const [index, holders] of this.slotHolders) {
+      if (!holders.delete(holder)) continue
+      this.slotTouched.set(index, Date.now())
+      if (!holders.size) this.slotHolders.delete(index)
+    }
+  }
+
+  /** How many slots are held now (tests and the log). */
+  heldSlots(): number {
+    return [...this.slotHolders.values()].filter((holders) => holders.size > 0).length
   }
 
   async status(): Promise<TunnelStatus> {
@@ -586,6 +639,12 @@ export class TunnelManager {
   private async pointSlots(): Promise<void> {
     const names = await this.groupNames(nodeSlotGroup(0))
     this.slots = this.slots.map((node) => names.includes(node) ? node : '')
+    for (const [index, node] of this.slots.entries()) {
+      if (!node) {
+        this.slotHolders.delete(index)
+        this.slotLoose.delete(index)
+      }
+    }
     for (const [index, node] of this.slots.entries()) {
       if (node) await this.api('PUT', `/proxies/${encodeURIComponent(nodeSlotGroup(index))}`, { name: node })
     }

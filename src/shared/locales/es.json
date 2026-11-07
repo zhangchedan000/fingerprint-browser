@@ -2782,5 +2782,14 @@
   "设置改了，重新检测后才准": "La configuración cambió; vuelve a comprobar para un resultado exacto",
   "定位不一致": "Ubicación dispar",
   "按多数定为 {0}": "según la mayoría: {0}",
-  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Otro programa está usando la carpeta del núcleo y ahora no se puede eliminar. Suele ser el servicio en segundo plano de un método de entrada (como el servicio en la nube de Sogou). Cierra ese programa o reinicia el equipo y vuelve a eliminarlo."
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Otro programa está usando la carpeta del núcleo y ahora no se puede eliminar. Suele ser el servicio en segundo plano de un método de entrada (como el servicio en la nube de Sogou). Cierra ese programa o reinicia el equipo y vuelve a eliminarlo.",
+  "{0}：顺序、显示和宽度": "{0}: orden, visibilidad y ancho",
+  "订阅列": "Columnas de suscripciones",
+  "节点列": "Columnas de nodos",
+  "清理 {0} 条旧节点记录？": "¿Limpiar {0} registros antiguos de nodos?",
+  "这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。": "La suscripción de estos nodos se eliminó o ya no los tiene; los registros solo guardan comprobaciones anteriores.",
+  "另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。": "Otros {0} están vinculados a ventanas y no se eliminarán; asigna primero otro nodo a esas ventanas.",
+  "已清理 {0} 条旧节点记录": "Se limpiaron {0} registros antiguos de nodos",
+  "订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）": "Registros de nodos cuya suscripción se eliminó o que ya no están en ella (solo comprobaciones anteriores)",
+  "清理旧记录 {0}": "Limpiar registros antiguos {0}"
 }

@@ -2782,5 +2782,14 @@
   "设置改了，重新检测后才准": "Settings changed; check again for an accurate result",
   "定位不一致": "Location varies",
   "按多数定为 {0}": "going by the majority: {0}",
-  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Another program is using the kernel folder, so it can't be deleted right now. Usually it is an input method's background service (such as Sogou's cloud service). Quit that program or restart the computer, then delete again."
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Another program is using the kernel folder, so it can't be deleted right now. Usually it is an input method's background service (such as Sogou's cloud service). Quit that program or restart the computer, then delete again.",
+  "{0}：顺序、显示和宽度": "{0}: order, visibility and width",
+  "订阅列": "Subscription columns",
+  "节点列": "Node columns",
+  "清理 {0} 条旧节点记录？": "Clear {0} old node records?",
+  "这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。": "These nodes' subscription was deleted, or the subscription no longer has them; the records only hold earlier checks.",
+  "另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。": "{0} more are bound to windows and will not be deleted; give those windows another node first.",
+  "已清理 {0} 条旧节点记录": "Cleared {0} old node records",
+  "订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）": "Records left by nodes whose subscription was deleted or that the subscription no longer has (earlier checks only)",
+  "清理旧记录 {0}": "Clear old records {0}"
 }

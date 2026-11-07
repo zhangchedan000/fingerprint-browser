@@ -2782,5 +2782,14 @@
   "设置改了，重新检测后才准": "Ayarlar değişti; doğru sonuç için yeniden denetleyin",
   "定位不一致": "Konum tutarsız",
   "按多数定为 {0}": "çoğunluğa göre: {0}",
-  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Çekirdek klasörünü başka bir program kullanıyor, bu yüzden şu an silinemiyor. Genellikle bir giriş yönteminin arka plan hizmetidir (ör. Sogou bulut hizmeti). O programı kapatın veya bilgisayarı yeniden başlatın, sonra tekrar silin."
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Çekirdek klasörünü başka bir program kullanıyor, bu yüzden şu an silinemiyor. Genellikle bir giriş yönteminin arka plan hizmetidir (ör. Sogou bulut hizmeti). O programı kapatın veya bilgisayarı yeniden başlatın, sonra tekrar silin.",
+  "{0}：顺序、显示和宽度": "{0}: sıra, görünürlük ve genişlik",
+  "订阅列": "Abonelik sütunları",
+  "节点列": "Düğüm sütunları",
+  "清理 {0} 条旧节点记录？": "{0} eski düğüm kaydı temizlensin mi?",
+  "这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。": "Bu düğümlerin aboneliği silinmiş veya abonelikte artık bu düğümler yok; kayıtlarda yalnızca önceki kontroller var.",
+  "另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。": "{0} kayıt daha pencerelere bağlı olduğu için silinmeyecek; önce bu pencerelere başka bir düğüm verin.",
+  "已清理 {0} 条旧节点记录": "{0} eski düğüm kaydı temizlendi",
+  "订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）": "Aboneliği silinen veya abonelikte artık bulunmayan düğümlerden kalan kayıtlar (yalnızca önceki kontroller)",
+  "清理旧记录 {0}": "Eski kayıtları temizle {0}"
 }

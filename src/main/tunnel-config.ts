@@ -26,7 +26,9 @@ export const AUTO_TUNNEL_GROUP = 'TUNNEL-AUTO'
  * Node names come from the providers only once mihomo runs, so the groups are made empty (REJECT,
  * never a wrong node) and pointed at a node when a window first needs it.
  */
-export const NODE_SLOT_COUNT = 16
+export const NODE_SLOT_COUNT = 64
+/** Subscription nodes (订阅) in use at once: windows open on different nodes, plus checks running. */
+export const SUBSCRIPTION_SLOT_COUNT = 128
 export const nodeSlotGroup = (index: number) => `TUNNEL-NODE-${index + 1}`
 /** Ports used only to look up each node's exit IP, a few nodes at a time. */
 export const PROBE_SLOT_COUNT = 4

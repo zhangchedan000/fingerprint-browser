@@ -25,6 +25,11 @@ export type PageKey = 'windows' | 'groups' | 'proxies' | 'team' | 'extensions' |
 export type SectionKey = 'workspace' | 'tools' | 'system'
 
 /** Context one page can hand to another, e.g. "show this group's windows". */
+/** What a count in the side menu needs besides the workspace (the subscriptions' nodes run in the main process). */
+export interface PageCountExtra {
+  subscriptionNodes?: number
+}
+
 export interface PageParams {
   groupId?: string
   /** Settings tab to open, e.g. "about" from the sidebar's update badge. */
@@ -45,7 +50,7 @@ export interface PageDefinition {
   icon: ReactNode
   label: () => string
   /** Number shown next to the menu entry. */
-  count?: (workspace: Workspace) => number | undefined
+  count?: (workspace: Workspace, extra: PageCountExtra) => number | undefined
   /** Text next to the page title in the top bar. */
   subtitle?: (workspace: Workspace) => string
   /** A full page in the main area. */
@@ -88,7 +93,9 @@ const ALL_PAGES: PageDefinition[] = [
     section: 'workspace',
     icon: <ClusterOutlined />,
     label: () => t("代理 IP"),
-    count: (ws) => ws.proxies.length,
+    // What the page lists: the proxies, and each subscription's nodes as they are now (not the records
+    // of nodes gone, or of a deleted subscription).
+    count: (ws, extra) => ws.proxies.filter((proxy) => !proxy.subscription).length + (extra.subscriptionNodes ?? 0),
     subtitle: () => proxiesSubtitle(),
     page: ProxiesPage
   },

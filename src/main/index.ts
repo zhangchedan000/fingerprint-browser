@@ -3,8 +3,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, screen, se
 import { instrumentIpc, watchMainStalls } from './timing'
 import { rememberIpZone } from './proxy-tester'
 import { t } from '../shared/i18n'
-import { parseProxyRule, setLocalProxyResolver, setSubscriptionResolver } from './proxy-bridge'
-import { NODE_SERVER_DNS } from './tunnel-config'
+import { parseProxyRule, setLocalProxyResolver, setSlotRelease, setSubscriptionResolver } from './proxy-bridge'
+import { NODE_SERVER_DNS, SUBSCRIPTION_SLOT_COUNT } from './tunnel-config'
 import { TunnelManager } from './tunnel-manager'
 import { registerTunnelIpc } from './tunnel-ipc'
 import { adoptAppCacheKey, APP_CACHE_FOLDER, resolveVaultLocation, vaultPathSync } from './vault-location'
@@ -205,10 +205,11 @@ app.whenReady().then(async () => {
   // the tunnel unable to start that fails rather than going out from this computer's own IP.
   const chainRoute = async (route: TunnelRoute) => {
     await activeTunnel.ensureRunning(route)
-    return (await activeTunnel.routeProxy(route)).port
+    // The subscriptions' core dials this port for as long as it runs: its slot is never given back.
+    return (await activeTunnel.routeProxy(route, `chain ${route.mode === 'manual' && route.node ? route.node : 'auto'}`)).port
   }
   const subscriptionNodes = new TunnelManager(join(vaultPath, 'subscriptions'), new ElectronSecretCodec(), tunnelBinary, logger,
-    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: 64, alwaysOn: true, chainRoute, serverDns: NODE_SERVER_DNS })
+    (status) => mainWindow?.webContents.send('subscriptions:changed', status), undefined, undefined, { slotCount: SUBSCRIPTION_SLOT_COUNT, alwaysOn: true, chainRoute, serverDns: NODE_SERVER_DNS })
   subscriptions = subscriptionNodes
   registerTunnelIpc(subscriptionNodes, 'subscriptions', {
     // Windows name their subscription: renamed, they follow (here and, through their configs, elsewhere).
@@ -216,10 +217,23 @@ app.whenReady().then(async () => {
       const windows = await profiles.renameSubscription(from, to)
       await team?.pushConfigs(windows)
       mainWindow?.webContents.send('proxy:changed')
+    },
+    // A subscription deleted: its nodes' library entries no window uses go with it (checks, IP 评分).
+    removed: async (name) => {
+      const removed = await profiles.removeUnusedProxies(profiles.listProxies().filter((proxy) => proxy.subscription?.source === name).map((proxy) => proxy.id))
+      if (removed) {
+        logger?.info('删除订阅时清理了它的节点记录', { removed })
+        mainWindow?.webContents.send('proxy:changed')
+      }
     }
   })
   void subscriptionNodes.initialize()
-  setSubscriptionResolver((node, route) => subscriptionNodes.nodeProxy(node, route))
+  setSubscriptionResolver((node, route, holder) => subscriptionNodes.nodeProxy(node, route, holder))
+  // A window closed or a check finished: the node slots its proxy bridge held can carry other nodes.
+  setSlotRelease((holder) => {
+    subscriptionNodes.release(holder)
+    activeTunnel.release(holder)
+  })
   registerVaultIpc(app.getPath('userData'), vaultPath, profiles, activeTunnel, logger)
   void activeTunnel.initialize()
 
@@ -236,9 +250,9 @@ app.whenReady().then(async () => {
     loggedRoutes.add(key)
     logger?.info(message, details)
   }
-  setLocalProxyResolver(async (host, port, route) => {
+  setLocalProxyResolver(async (host, port, route, holder) => {
     if (route?.enabled) {
-      const via = await activeTunnel.routeProxy(route)
+      const via = await activeTunnel.routeProxy(route, holder)
       logRoute('代理经网络加速连接', { proxy: `${host}:${port}`, node: route.mode === 'manual' ? route.node : '自动' })
       return via
     }

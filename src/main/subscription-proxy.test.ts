@@ -6,11 +6,12 @@ import { defaultProfileDraft } from '../shared/defaults'
 import { validateProxyConfig } from '../shared/validation'
 import { ProfileStore } from './profile-store'
 import { portableDraft } from './profile-portable'
-import { setSubscriptionResolver, subscriptionEndpoint } from './proxy-bridge'
+import { closeProxyBridge, openProxyBridge, setSlotRelease, setSubscriptionResolver, subscriptionEndpoint } from './proxy-bridge'
 
 const roots: string[] = []
 afterEach(async () => {
   setSubscriptionResolver(undefined)
+  setSlotRelease(undefined)
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
@@ -48,6 +49,24 @@ describe('subscription nodes (订阅) as window proxies', () => {
     expect(reopened.get(window.id).proxy.subscription).toEqual({ source: '机场A', node: '香港 01' })
   })
 
+  it('removes the records of nodes no window uses in one go; a node a window uses stays', async () => {
+    const vault = await mkdtemp(join(tmpdir(), 'subscription-proxy-'))
+    roots.push(vault)
+    const store = new ProfileStore(vault)
+    await store.initialize()
+    const node = { protocol: 'http' as const, host: '', username: '', password: '', note: '' }
+    const used = await store.createProxy({ ...node, subscription: { source: 'EMSL', node: '香港 01' } })
+    const gone = await store.createProxy({ ...node, subscription: { source: 'EMSL', node: '美国 02' } })
+    const kept = await store.createProxy({ ...node, subscription: { source: '订阅', node: '日本 01' } })
+    await store.create({ ...defaultProfileDraft(), proxyId: used.id })
+    expect(await store.removeUnusedProxies([used.id, gone.id, gone.id, 'missing'])).toBe(1)
+    expect(store.listProxies().map((proxy) => proxy.id).sort()).toEqual([used.id, kept.id].sort())
+    const reopened = new ProfileStore(vault)
+    await reopened.initialize()
+    expect(reopened.listProxies()).toHaveLength(2)
+    expect(await store.removeUnusedProxies([])).toBe(0)
+  })
+
   it('becomes the node’s local port for each connection, through the window’s 网络加速 route, never direct', async () => {
     const config = validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: 'n' }, tunnel: { enabled: true, mode: 'manual', node: 'JP · a' } })
     await expect(subscriptionEndpoint(config)).rejects.toThrow('订阅节点没有运行')
@@ -59,5 +78,35 @@ describe('subscription nodes (订阅) as window proxies', () => {
     expect(await subscriptionEndpoint(config)).toEqual({ protocol: 'http', host: '127.0.0.1', port: 7001, username: '', password: '' })
     await subscriptionEndpoint({ ...config, tunnel: { enabled: false, mode: 'auto' } })
     expect(asked).toEqual([['机场/n', { enabled: true, mode: 'manual', node: 'JP · a' }], ['机场/n', undefined]])
+  })
+
+  it('a window or check holds its node slot while its bridge is open and gives it back when closed', async () => {
+    const held: string[] = []
+    const released: string[] = []
+    setSubscriptionResolver(async (_ref, _route, holder) => {
+      held.push(holder ?? '')
+      return { type: 'http', host: '127.0.0.1', port: 7001 }
+    })
+    setSlotRelease((holder) => released.push(holder))
+    const config = validateProxyConfig({ protocol: 'http', host: '', username: '', password: '', subscription: { source: '机场', node: 'n' } })
+    const first = await openProxyBridge(config)
+    const second = await openProxyBridge(config)
+    expect(held).toHaveLength(2)
+    expect(held[0]).toMatch(/^bridge /)
+    expect(held[0]).not.toBe(held[1])
+    expect(released).toEqual([])
+    await closeProxyBridge(first)
+    expect(released).toEqual([held[0]])
+    await closeProxyBridge(first)
+    expect(released).toEqual([held[0]])
+    await closeProxyBridge(second)
+    expect(released).toEqual([held[0], held[1]])
+    // A bridge that cannot open gives back what it was given.
+    setSubscriptionResolver(async (_ref, _route, holder) => {
+      held.push(holder ?? '')
+      throw new Error('没有节点')
+    })
+    await expect(openProxyBridge(config)).rejects.toThrow('没有节点')
+    expect(released.at(-1)).toBe(held.at(-1))
   })
 })

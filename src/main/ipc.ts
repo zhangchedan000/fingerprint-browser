@@ -1076,6 +1076,10 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await profiles.removeProxy(id, replaceWith)
     await team.pushConfigs(users)
   })
+  ipcMain.handle('proxy:remove-unused', async (_event, ids: unknown) => {
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) throw new Error('代理参数无效')
+    return profiles.removeUnusedProxies(ids as string[])
+  })
   /** route: the 网络加速 of the window being edited; without it, the proxy's own default. */
   ipcMain.handle('proxy:check', async (_event, id: string, routeInput?: unknown) => {
     const saved = profiles.getProxy(id)

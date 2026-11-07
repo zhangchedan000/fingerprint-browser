@@ -2782,5 +2782,14 @@
   "设置改了，重新检测后才准": "As configurações mudaram; verifique de novo para um resultado exato",
   "定位不一致": "Localização divergente",
   "按多数定为 {0}": "pela maioria: {0}",
-  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Outro programa está usando a pasta do kernel, então ela não pode ser excluída agora. Geralmente é o serviço em segundo plano de um método de entrada (como o serviço em nuvem do Sogou). Feche esse programa ou reinicie o computador e exclua de novo."
+  "内核文件夹正被其他程序占用，暂时没法删除。常见的是输入法的后台程序（比如搜狗输入法的云服务）。请退出这个程序，或者重启电脑，再删除": "Outro programa está usando a pasta do kernel, então ela não pode ser excluída agora. Geralmente é o serviço em segundo plano de um método de entrada (como o serviço em nuvem do Sogou). Feche esse programa ou reinicie o computador e exclua de novo.",
+  "{0}：顺序、显示和宽度": "{0}: ordem, visibilidade e largura",
+  "订阅列": "Colunas de assinaturas",
+  "节点列": "Colunas de nós",
+  "清理 {0} 条旧节点记录？": "Limpar {0} registros antigos de nós?",
+  "这些节点所在的订阅已删除，或订阅里已经没有这个节点；记录里只有以前的检测结果。": "A assinatura destes nós foi excluída ou não tem mais estes nós; os registros só guardam verificações anteriores.",
+  "另有 {0} 条绑定了窗口，不会删除，请先给这些窗口换节点。": "Outros {0} estão vinculados a janelas e não serão excluídos; troque o nó dessas janelas primeiro.",
+  "已清理 {0} 条旧节点记录": "{0} registros antigos de nós limpos",
+  "订阅已删除、或订阅里已经没有的节点留下的记录（只有以前的检测结果）": "Registros deixados por nós cuja assinatura foi excluída ou que não estão mais na assinatura (só verificações anteriores)",
+  "清理旧记录 {0}": "Limpar registros antigos {0}"
 }

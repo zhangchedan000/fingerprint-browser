@@ -406,6 +406,50 @@ describe.skipIf(!core)('subscription nodes as window exits (订阅)', () => {
     await expect(subscriptions.nodeProxy({ source: '机场', node: '香港 01' }, { enabled: true, mode: 'manual', node: 'Accel · a1' })).rejects.toThrow()
   }, 120_000)
 
+  it('gives a node slot back when its window or check is done; a held slot never carries another node', async () => {
+    const echo = await listen(createServer((socket) => socket.pipe(socket)))
+    const askedA: string[] = []
+    const askedB: string[] = []
+    const askedC: string[] = []
+    const [nodeA, nodeB, nodeC] = [await socksNode(askedA), await socksNode(askedB), await socksNode(askedC)]
+    vaults.push(await mkdtemp(join(tmpdir(), 'subscription-')))
+    const subscriptions = new TunnelManager(vaults[0], identitySecretCodec, core, undefined, undefined, undefined, undefined, { slotCount: 2, alwaysOn: true })
+    managers.push(subscriptions)
+    await subscriptions.addSource({ name: '机场', kind: 'links', content: [
+      'proxies:',
+      `  - {name: A, type: socks5, server: 127.0.0.1, port: ${nodeA}}`,
+      `  - {name: B, type: socks5, server: 127.0.0.1, port: ${nodeB}}`,
+      `  - {name: C, type: socks5, server: 127.0.0.1, port: ${nodeC}}`,
+      ''
+    ].join('\n') })
+    const a = await subscriptions.nodeProxy({ source: '机场', node: 'A' }, undefined, 'window 1')
+    const b = await subscriptions.nodeProxy({ source: '机场', node: 'B' }, undefined, 'check 1')
+    // Another window on A shares its slot; a third node finds both slots held.
+    expect((await subscriptions.nodeProxy({ source: '机场', node: 'A' }, undefined, 'window 2')).port).toBe(a.port)
+    await expect(subscriptions.nodeProxy({ source: '机场', node: 'C' }, undefined, 'check 2')).rejects.toThrow('不能超过 2 个')
+    // The check on B is done: C takes its slot, and goes out from C, not B.
+    subscriptions.release('check 1')
+    const c = await subscriptions.nodeProxy({ source: '机场', node: 'C' }, undefined, 'check 2')
+    expect(c.port).toBe(b.port)
+    expect(await roundTrip(c, echo, 'from C')).toBe('from C')
+    expect(askedC).toContain(`127.0.0.1:${echo}`)
+    expect(askedB).not.toContain(`127.0.0.1:${echo}`)
+    // A is held by two windows: one closing keeps it; the windows still go out from A.
+    subscriptions.release('window 1')
+    subscriptions.release('check 2')
+    expect(await roundTrip(a, echo, 'still A')).toBe('still A')
+    expect(askedA).toContain(`127.0.0.1:${echo}`)
+    expect(subscriptions.heldSlots()).toBe(1)
+    // B again takes the slot C let go of, never A's (window 2 still holds it).
+    expect((await subscriptions.nodeProxy({ source: '机场', node: 'B' }, undefined, 'check 3')).port).toBe(c.port)
+    // A connection with no holder (a single probe) keeps its node for a while: a slot it used is not taken at once.
+    subscriptions.release('window 2')
+    subscriptions.release('check 3')
+    await subscriptions.nodeProxy({ source: '机场', node: 'A' })
+    expect((await subscriptions.nodeProxy({ source: '机场', node: 'C' }, undefined, 'check 4')).port).toBe(c.port)
+    await expect(subscriptions.nodeProxy({ source: '机场', node: 'B' }, undefined, 'check 5')).rejects.toThrow('不能超过')
+  }, 60_000)
+
   it('a subscription link: the first start waits for its download; a link that gives no nodes is not added', async () => {
     const echo = await listen(createServer((socket) => socket.pipe(socket)))
     const exitAsked: string[] = []

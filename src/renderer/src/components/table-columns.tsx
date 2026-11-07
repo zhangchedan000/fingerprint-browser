@@ -37,7 +37,7 @@ function isPinned(column: Column<never>): boolean {
 
 /** The window name and similar: hiding it would leave rows nobody can tell apart. */
 function isRequired(column: Column<never>): boolean {
-  return 'dataIndex' in column && column.dataIndex === 'name'
+  return ('dataIndex' in column && column.dataIndex === 'name') || column.key === 'name'
 }
 
 function load(key: string): Layout {
@@ -158,7 +158,7 @@ export interface TableColumnsResult<T> {
 }
 
 /** Each table is keyed by its column set, so pages need no names of their own. */
-export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: number): TableColumnsResult<T> {
+export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: number, settingsTitle?: string): TableColumnsResult<T> {
   const ids = columns.map((column, index) => columnId(column as never, index))
   const key = ids.join('|')
   const [saved, setSaved] = useState<{ key: string; layout: Layout }>(() => ({ key, layout: load(key) }))
@@ -238,6 +238,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
         onMove={(from, to, before) => move(from, to, before)}
         onReset={() => update(() => EMPTY)}
         changed={sized || layout.order.length > 0 || hidden.size > 0}
+        title={settingsTitle}
       />
     )
 
@@ -248,7 +249,7 @@ export function useTableColumns<T>(columns: TableColumnsType<T>, minScrollX?: nu
       settings
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ids follow columns and key
-  }, [columns, layout, key, minScrollX])
+  }, [columns, layout, key, minScrollX, settingsTitle])
 }
 
 interface SettingsItem {
@@ -259,12 +260,14 @@ interface SettingsItem {
 }
 
 /** 列设置: drag rows to reorder, tick to show, and go back to the default layout. */
-function ColumnSettings({ items, onToggle, onMove, onReset, changed }: {
+function ColumnSettings({ items, onToggle, onMove, onReset, changed, title }: {
   items: SettingsItem[]
   onToggle: (id: string, show: boolean) => void
   onMove: (from: string, to: string, before: boolean) => void
   onReset: () => void
   changed: boolean
+  /** A page with two tables names which one (订阅 / 节点). */
+  title?: string
 }) {
   const [dragging, setDragging] = useState<string>()
   const [over, setOver] = useState<{ id: string; before: boolean }>()
@@ -310,9 +313,9 @@ function ColumnSettings({ items, onToggle, onMove, onReset, changed }: {
     </div>
   )
   return (
-    <Popover trigger="click" placement="bottomRight" title={t("列设置")} content={panel} arrow={false}>
-      <Tooltip title={t("列设置：顺序、显示和宽度")}>
-        <Button icon={<SettingOutlined />} aria-label={t("列设置")} className={changed ? 'fb-colset-button is-changed' : 'fb-colset-button'} />
+    <Popover trigger="click" placement="bottomRight" title={title ?? t("列设置")} content={panel} arrow={false}>
+      <Tooltip title={title ? t("{0}：顺序、显示和宽度", title) : t("列设置：顺序、显示和宽度")}>
+        <Button icon={<SettingOutlined />} aria-label={title ?? t("列设置")} className={changed ? 'fb-colset-button is-changed' : 'fb-colset-button'}>{title ? title : null}</Button>
       </Tooltip>
     </Popover>
   )

@@ -5,6 +5,7 @@ import { useWorkspace } from '../data/workspace'
 import { useEffect, useState } from 'react'
 import { PAGES, SECTIONS, type PageKey, type PageParams } from '../pages/registry'
 import { ServerAvatar } from './ServerPanel'
+import { useSubscriptionStatus } from './subscriptions'
 
 /** The side menu, built from the page registry. */
 export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (key: PageKey, params?: PageParams) => void }) {
@@ -12,6 +13,7 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
   const { engine } = ws
   // A newer release shows a badge next to the version; it opens Settings → About.
   const [newVersion, setNewVersion] = useState<string>()
+  const [subscriptionStatus] = useSubscriptionStatus(false)
   useEffect(() => {
     void window.browserApi.app.checkUpdate().then((info) => setNewVersion(info.available ? info.latest : undefined)).catch(() => undefined)
   }, [])
@@ -41,7 +43,7 @@ export function Sidebar({ active, onNavigate }: { active: PageKey; onNavigate: (
         <div key={section.key} className="fb-nav-section">
           <div className="fb-nav-title">{section.title()}</div>
           {PAGES.filter((page) => page.section === section.key).map((page) => {
-            const count = page.count?.(ws)
+            const count = page.count?.(ws, { subscriptionNodes: subscriptionStatus?.nodes.length })
             const button = (
               <button
                 key={page.key}
