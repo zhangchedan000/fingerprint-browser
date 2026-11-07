@@ -239,6 +239,12 @@ function cdp(url) {
 
 async function visitAll(window, label, sites = SITES) {
   const result = { name: window.name, id: window.id, started: new Date().toISOString(), sites: {} }
+  // 「不绑定」 is the default the screen shows, so a window made with it is still "not asked": the first
+  // opening asks (the dialog's own call, setDeviceBinding).
+  if (window.fp.deviceBinding !== 'on' && window.fp.deviceBinding !== 'off') {
+    const want = plan.find((p) => p.name === window.name)?.binding ?? 'off'
+    await run(`window.browserApi.profiles.setDeviceBinding(${J(window.id)}, ${J(want)}).then(() => true)`)
+  }
   const launched = await run(`window.browserApi.profiles.launch(${J(window.id)}).then((p) => p.status, (e) => 'error: ' + e.message)`)
   if (launched !== 'running') { result.error = `launch: ${launched}`; return result }
   const portFile = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data', 'DevToolsActivePort')
@@ -305,7 +311,8 @@ if (phase === 'run' || phase === 'reopen') {
   const all = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
   const only = phase === 'reopen' ? arg5 : arg6
   const concurrency = phase === 'reopen' ? 3 : Number(arg5) || 5
-  const chosen = only ? all.filter((w) => only.split(',').some((key) => w.name.endsWith(key))) : all
+  const finished = (w) => SITES.every(([site]) => existsSync(join(out, `${w.name}-${site}.txt`)))
+  const chosen = (only ? all.filter((w) => only.split(',').some((key) => w.name.endsWith(key))) : all).filter((w) => phase === 'reopen' || process.env.FORCE === '1' || !finished(w))
   const sites = phase === 'reopen' ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site)) : SITES
   log(`${phase} ${chosen.length} windows of ${round}, ${concurrency} at a time, ${sites.length} sites each`)
   const results = []
@@ -318,7 +325,7 @@ if (phase === 'run' || phase === 'reopen') {
       const result = await visitAll(window, label, sites)
       results.push(result)
       log('done', label, result.error ?? '', Object.entries(result.sites).filter(([, value]) => value.error).map(([site]) => site).join(',') || 'all sites ok')
-      await writeFile(join(out, `${round}-${phase}-results.json`), J(results, null, 2))
+      await writeFile(join(out, `${round}-${phase}-results-${process.pid}.json`), J(results, null, 2))
     }
   }))
   log(`${phase} finished: ${results.length} windows`)
