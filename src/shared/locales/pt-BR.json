@@ -2859,5 +2859,14 @@
   "所属订阅": "Assinatura",
   "最后上传": "Último envio por",
   "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "O Pixelscan escreve inconsistent quando qualquer verificação abaixo fica vermelha; veja abaixo qual é",
-  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "O Pixelscan considera proxy pela base de dados de IP: todo IP de data center recebe isso, só um IP residencial não; não tem relação com a impressão digital do navegador"
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "O Pixelscan considera proxy pela base de dados de IP: todo IP de data center recebe isso, só um IP residencial não; não tem relação com a impressão digital do navegador",
+  "本机真实（推荐）": "Real deste computador (recomendado)",
+  "本机真实（推荐） · {0}": "Real deste computador (recomendado) · {0}",
+  "为 {0} 个窗口设置 Canvas、AudioContext、ClientRects": "Definir Canvas, AudioContext e ClientRects de {0} janelas",
+  "本机真实：和真实 Chrome 读到的一样，新建窗口默认用这个。实测检测网站对加了噪音的窗口打分忽高忽低，用真实值稳定在低分；窗口之间靠显卡、CPU、屏幕等硬件和 IP 区分。字体和显卡的设置不变。": "Real: o mesmo que um Chrome real lê, e o que as janelas novas usam. Nos testes, sites de detecção pontuaram janelas com ruído de forma muito variável, enquanto os valores reais ficaram baixos; as janelas se diferenciam pelo hardware (GPU, CPU, tela) e pelo IP. As configurações de fontes e GPU não mudam.",
+  "{0} 个窗口正在运行，关闭后重新打开才会生效": "{0} janelas estão abertas; a mudança vale depois de fechá-las e abri-las de novo",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为本机真实": "Canvas, AudioContext e ClientRects de {0} janelas alterados para os valores reais deste computador",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为每个窗口不同": "Canvas, AudioContext e ClientRects de {0} janelas alterados para diferentes em cada janela",
+  "Canvas / AudioContext / ClientRects": "Canvas / AudioContext / ClientRects",
+  "默认用本机真实值（和真实 Chrome 一样）；也可以改成每个窗口不同": "Valores reais deste computador por padrão (como um Chrome real); podem ser alterados para diferentes em cada janela"
 }

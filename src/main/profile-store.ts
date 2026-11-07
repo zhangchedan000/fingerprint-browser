@@ -1064,6 +1064,29 @@ export class ProfileStore {
     return next.map((profile) => this.resolve(profile))
   }
 
+  /**
+   * Canvas / AudioContext / ClientRects of several windows at once: this computer's real values
+   * (real = true, the default for new windows) or each window its own (the noise). Other surfaces
+   * (fonts, GPU) are left as they are. Running windows take it at their next launch.
+   */
+  async setSurfacesMany(idsInput: string[], real: boolean): Promise<BrowserProfile[]> {
+    if (!Array.isArray(idsInput) || typeof real !== 'boolean') throw new Error('批量设置参数无效')
+    const ids = this.selection(idsInput)
+    const surfaces = ['canvas', 'audio', 'clientrects'] as const
+    const now = new Date().toISOString()
+    const next = ids.map((id) => {
+      const current = this.stored(id)
+      const kept = current.fingerprint.disabledSpoofing.filter((item) => !(surfaces as readonly string[]).includes(item))
+      const disabledSpoofing = real ? [...kept, ...surfaces] : kept
+      const same = [...disabledSpoofing].sort().join() === [...current.fingerprint.disabledSpoofing].sort().join()
+      if (same) return current
+      return { ...current, fingerprint: { ...current.fingerprint, disabledSpoofing }, updatedAt: now }
+    })
+    for (const profile of next) this.profiles.set(profile.id, profile)
+    await this.persist()
+    return next.map((profile) => this.resolve(profile))
+  }
+
   // ---- proxy library ---------------------------------------------------------------------
 
   listProxies(): ProxyRecord[] {

@@ -49,6 +49,19 @@ describe('batch import', () => {
     expect(new Set(table.rows.filter((row) => row.draft).map((row) => row.draft!.fingerprint.seed)).size).toBe(3)
   })
 
+  it('keeps Canvas / AudioContext / ClientRects real unless the row says otherwise', () => {
+    const rows = analyzeBatchTable([
+      ['name', 'disabled_spoofing'],
+      ['A', ''],
+      ['B', 'none'],
+      ['C', 'canvas|gpu']
+    ]).rows
+    expect(rows.map((row) => row.errors)).toEqual([[], [], []])
+    expect([...rows[0].draft!.fingerprint.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects'])
+    expect(rows[1].draft!.fingerprint.disabledSpoofing).toEqual([])
+    expect(rows[2].draft!.fingerprint.disabledSpoofing).toEqual(['canvas', 'gpu'])
+  })
+
   it('still reads the full English column set', () => {
     const [row] = analyzeBatchTable([
       ['name', 'proxy_protocol', 'proxy_host', 'proxy_port', 'platform', 'hardware_concurrency', 'window_x'],

@@ -2859,5 +2859,14 @@
   "所属订阅": "所屬訂閱",
   "最后上传": "最後上傳",
   "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "下面任一項報紅，Pixelscan 就寫 inconsistent，看下面具體是哪一項",
-  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan 依 IP 資料庫判斷是代理：機房 IP 都會這樣，換住宅 IP 才不報；和瀏覽器指紋無關"
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan 依 IP 資料庫判斷是代理：機房 IP 都會這樣，換住宅 IP 才不報；和瀏覽器指紋無關",
+  "本机真实（推荐）": "本機真實（推薦）",
+  "本机真实（推荐） · {0}": "本機真實（推薦） · {0}",
+  "为 {0} 个窗口设置 Canvas、AudioContext、ClientRects": "為 {0} 個視窗設定 Canvas、AudioContext、ClientRects",
+  "本机真实：和真实 Chrome 读到的一样，新建窗口默认用这个。实测检测网站对加了噪音的窗口打分忽高忽低，用真实值稳定在低分；窗口之间靠显卡、CPU、屏幕等硬件和 IP 区分。字体和显卡的设置不变。": "本機真實：和真實 Chrome 讀到的一樣，新建視窗預設用這個。實測檢測網站對加了雜訊的視窗評分忽高忽低，用真實值穩定在低分；視窗之間靠顯示卡、CPU、螢幕等硬體和 IP 區分。字型和顯示卡的設定不變。",
+  "{0} 个窗口正在运行，关闭后重新打开才会生效": "{0} 個視窗正在執行，關閉後重新開啟才會生效",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为本机真实": "{0} 個視窗的 Canvas、AudioContext、ClientRects 已改為本機真實",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为每个窗口不同": "{0} 個視窗的 Canvas、AudioContext、ClientRects 已改為每個視窗不同",
+  "Canvas / AudioContext / ClientRects": "Canvas / AudioContext / ClientRects",
+  "默认用本机真实值（和真实 Chrome 一样）；也可以改成每个窗口不同": "預設用本機真實值（和真實 Chrome 一樣）；也可以改成每個視窗不同"
 }

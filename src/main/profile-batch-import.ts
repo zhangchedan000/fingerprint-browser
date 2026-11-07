@@ -3,7 +3,7 @@ import { defaultHardwareProfileId, refreshSeededGpuIdentity } from '../shared/ha
 import { getLocale, joinMessages, t, translateMessage } from '../shared/i18n'
 import { platformStartUrl } from '../shared/platforms'
 import { parsePastedProxy } from '../shared/proxy-paste'
-import type { BatchImportRowView, BrowserBrand, BrowserPlatform, ProfileDraft, ProxyConfig, ProxyProtocol, WebRtcPolicy } from '../shared/types'
+import type { BatchImportRowView, BrowserBrand, BrowserPlatform, FingerprintConfig, ProfileDraft, ProxyConfig, ProxyProtocol, WebRtcPolicy } from '../shared/types'
 import { validateProfileDraft } from '../shared/validation'
 import { chromeAcceptLanguagesFor } from '../shared/chrome-languages'
 import { chromeAcceptLanguages } from '../shared/network-identity'
@@ -189,6 +189,17 @@ function integer(value: string, column: string, errors: string[], signed = false
   return Number(text)
 }
 
+/**
+ * disabled_spoofing: empty keeps a new window's default (Canvas / AudioContext / ClientRects real);
+ * "none" gives every surface its own values; otherwise the surfaces listed (canvas|audio|…) are real.
+ */
+function importedDisabledSpoofing(value: string, defaults: FingerprintConfig['disabledSpoofing']): FingerprintConfig['disabledSpoofing'] {
+  const items = splitPipe(value)
+  if (!items.length) return [...defaults]
+  if (items.length === 1 && /^(none|无)$/i.test(items[0])) return []
+  return items as FingerprintConfig['disabledSpoofing']
+}
+
 function splitPipe(value: string): string[] {
   return value.split(/[|\n]/).map((item) => item.trim()).filter(Boolean)
 }
@@ -299,7 +310,7 @@ function analyzeRow(values: Record<BatchImportColumn, string>, index: number): P
       screenWidth: screenWidth ?? base.fingerprint.screenWidth,
       screenHeight: screenHeight ?? base.fingerprint.screenHeight,
       webrtcPolicy: (values.webrtc_policy.trim().toLowerCase() || base.fingerprint.webrtcPolicy) as WebRtcPolicy,
-      disabledSpoofing: splitPipe(values.disabled_spoofing) as typeof base.fingerprint.disabledSpoofing
+      disabledSpoofing: importedDisabledSpoofing(values.disabled_spoofing, base.fingerprint.disabledSpoofing)
     })
     const draft = validateProfileDraft({
       ...base,

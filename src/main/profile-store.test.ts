@@ -447,6 +447,24 @@ describe('ProfileStore', () => {
     expect(repository.get(first.id).kernelVersion).toBe('144.0.7559.132')
   })
 
+  it('sets Canvas / AudioContext / ClientRects of many windows real or noisy, keeping fonts and GPU', async () => {
+    const repository = await store()
+    const draft = defaultProfileDraft()
+    const [old, other] = await repository.createMany([
+      { ...draft, fingerprint: { ...draft.fingerprint, disabledSpoofing: ['font'] } },
+      { ...draft, fingerprint: { ...draft.fingerprint, disabledSpoofing: ['canvas', 'gpu'] } }
+    ])
+    await repository.setSurfacesMany([old.id, other.id], true)
+    expect([...repository.get(old.id).fingerprint.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font'])
+    expect([...repository.get(other.id).fingerprint.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'gpu'])
+    const reopened = new ProfileStore(repository.vaultPath)
+    await reopened.initialize()
+    expect([...reopened.get(old.id).fingerprint.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font'])
+    await repository.setSurfacesMany([other.id], false)
+    expect(repository.get(other.id).fingerprint.disabledSpoofing).toEqual(['gpu'])
+    await expect(repository.setSurfacesMany([], true)).rejects.toThrow('没有选择')
+  })
+
   it('rejects invalid kernel batch requests without changing anything', async () => {
     const repository = await store()
     const profile = await repository.create(defaultProfileDraft())

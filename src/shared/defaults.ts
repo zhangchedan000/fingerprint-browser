@@ -25,6 +25,16 @@ export function defaultPlatform(): BrowserPlatform {
   return /Win/i.test(globalThis.navigator?.platform ?? globalThis.navigator?.userAgent ?? '') ? 'windows' : 'macos'
 }
 
+/**
+ * Canvas, AudioContext and ClientRects of a new window: this computer's real values (user 11-07).
+ * Measured on Fingerprint.com (same IP, same hardware, only these changed): made-up values from the
+ * noise scored anywhere from 0.005 to 0.32 depending on which values a seed happened to give, the real
+ * ones 0.005–0.031 on every hardware set; windows with different hardware stayed different visitors
+ * with identical canvas and audio, and noise did not keep same-hardware windows on one IP apart.
+ * Each window can still turn the noise on in the editor (每个窗口不同).
+ */
+export const DEFAULT_REAL_SURFACES = ['canvas', 'audio', 'clientrects'] as const
+
 export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
   const platform = defaultPlatform()
   const fingerprint: FingerprintConfig = {
@@ -46,7 +56,7 @@ export function defaultFingerprint(seed = randomSeed()): FingerprintConfig {
     proxyExitPolicy: 'block',
     screenWidth: 1440,
     screenHeight: 900,
-    disabledSpoofing: []
+    disabledSpoofing: [...DEFAULT_REAL_SURFACES]
   }
   return {
     ...applyHardwareProfile(fingerprint, fingerprint.hardwareProfileId, { refreshSeededGpu: true }),

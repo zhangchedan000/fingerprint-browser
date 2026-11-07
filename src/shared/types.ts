@@ -907,6 +907,8 @@ export interface BrowserApi {
     assignMany: (ids: string[], patch: { proxyId?: string; groupId?: string; followProxyIdentity?: boolean; extensionId?: string; removeExtension?: boolean }) => Promise<BrowserProfileView[]>
     /** Pin windows to an installed kernel version, or '' to follow the default kernel. */
     setKernelMany: (ids: string[], kernelVersion: string) => Promise<BrowserProfileView[]>
+    /** Canvas / AudioContext / ClientRects real (true) or each window its own (false). */
+    setSurfacesMany: (ids: string[], real: boolean) => Promise<BrowserProfileView[]>
     /** Import pasted cookie JSON (same formats as the cookie file import); the window must be closed. */
     /** replace: the window keeps exactly these. The login state then goes up to the team cloud (syncError when it could not). */
     importCookiesText: (id: string, text: string, options?: { replace?: boolean }) => Promise<{ count: number; syncError?: string }>

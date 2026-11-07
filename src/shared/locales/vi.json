@@ -2859,5 +2859,14 @@
   "所属订阅": "Gói đăng ký",
   "最后上传": "Tải lên gần nhất",
   "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Chỉ cần một mục bên dưới báo đỏ là Pixelscan ghi inconsistent; xem bên dưới là mục nào",
-  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan xác định là proxy theo cơ sở dữ liệu IP: IP trung tâm dữ liệu đều bị như vậy, chỉ IP dân cư mới không bị; không liên quan đến vân tay trình duyệt"
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan xác định là proxy theo cơ sở dữ liệu IP: IP trung tâm dữ liệu đều bị như vậy, chỉ IP dân cư mới không bị; không liên quan đến vân tay trình duyệt",
+  "本机真实（推荐）": "Giá trị thật của máy này (khuyên dùng)",
+  "本机真实（推荐） · {0}": "Giá trị thật của máy này (khuyên dùng) · {0}",
+  "为 {0} 个窗口设置 Canvas、AudioContext、ClientRects": "Đặt Canvas, AudioContext và ClientRects cho {0} cửa sổ",
+  "本机真实：和真实 Chrome 读到的一样，新建窗口默认用这个。实测检测网站对加了噪音的窗口打分忽高忽低，用真实值稳定在低分；窗口之间靠显卡、CPU、屏幕等硬件和 IP 区分。字体和显卡的设置不变。": "Giá trị thật: giống như Chrome thật đọc được, và là mặc định của cửa sổ mới. Khi thử nghiệm, các trang kiểm tra chấm điểm cửa sổ có nhiễu lúc thấp lúc cao, còn giá trị thật thì ổn định ở mức thấp; các cửa sổ được phân biệt bằng phần cứng (GPU, CPU, màn hình) và IP. Cài đặt phông chữ và GPU không đổi.",
+  "{0} 个窗口正在运行，关闭后重新打开才会生效": "{0} cửa sổ đang chạy; thay đổi có hiệu lực sau khi đóng và mở lại",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为本机真实": "Đã đặt Canvas, AudioContext và ClientRects của {0} cửa sổ thành giá trị thật của máy này",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为每个窗口不同": "Đã đặt Canvas, AudioContext và ClientRects của {0} cửa sổ thành khác nhau cho mỗi cửa sổ",
+  "Canvas / AudioContext / ClientRects": "Canvas / AudioContext / ClientRects",
+  "默认用本机真实值（和真实 Chrome 一样）；也可以改成每个窗口不同": "Mặc định dùng giá trị thật của máy này (giống Chrome thật); có thể đổi thành khác nhau cho mỗi cửa sổ"
 }

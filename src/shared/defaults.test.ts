@@ -7,3 +7,11 @@ describe('device-bound sign-in default', () => {
     expect(defaultProfileDraft().fingerprint.deviceBinding).toBe('ask')
   })
 })
+
+describe('canvas, audio and ClientRects of a new window', () => {
+  it('are the real values (11-07): no noise flags, GPU still a listed card', () => {
+    const fp = defaultProfileDraft().fingerprint
+    expect([...fp.disabledSpoofing].sort()).toEqual(['audio', 'canvas', 'clientrects'])
+    expect(fp.disabledSpoofing).not.toContain('gpu')
+  })
+})

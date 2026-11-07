@@ -110,6 +110,7 @@ const api: BrowserApi = {
     classifyMany: (ids: string[], patch: ProfileBatchClassification) => ipcRenderer.invoke('profiles:classify-many', ids, patch),
     assignMany: (ids, patch) => ipcRenderer.invoke('profiles:assign-many', ids, patch),
     setKernelMany: (ids: string[], kernelVersion: string) => ipcRenderer.invoke('profiles:set-kernel-many', ids, kernelVersion),
+    setSurfacesMany: (ids: string[], real: boolean) => ipcRenderer.invoke('profiles:set-surfaces-many', ids, real),
     importCookiesText: (id: string, text: string, options?: { replace?: boolean }) => ipcRenderer.invoke('profiles:import-cookies-text', id, text, options),
     currentCookies: (id: string) => ipcRenderer.invoke('profiles:current-cookies', id),
     removeMany: (ids: string[]) => ipcRenderer.invoke('profiles:remove-many', ids),

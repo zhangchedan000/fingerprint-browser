@@ -39,6 +39,7 @@ import { BatchImportModal } from './BatchImportModal'
 import { BatchResultModal, type BatchOperationResult } from './BatchResultModal'
 import { CrashHistoryModal } from './CrashHistoryModal'
 import { KernelSwitchModal } from './KernelSwitchModal'
+import { SurfacesModal } from './SurfacesModal'
 import { LaunchDiagnosticsModal } from './LaunchDiagnosticsModal'
 import { ProfileDataModal } from './ProfileDataModal'
 import { ProfileEditor, type ProfileEditorExtras } from './ProfileEditor'
@@ -80,6 +81,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
   const [kernelSwitchOpen, setKernelSwitchOpen] = useState(false)
   // Batch API 提取: one link given to every selected window (each keeps it itself).
   const [apiLinkOpen, setApiLinkOpen] = useState(false)
+  const [surfacesOpen, setSurfacesOpen] = useState(false)
   const [apiLink, setApiLink] = useState('')
   const [batchImportOpen, setBatchImportOpen] = useState(false)
   const [batchResult, setBatchResult] = useState<BatchOperationResult>()
@@ -439,6 +441,22 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
       notify.success(kernelVersion
         ? t("已将 {0} 个窗口切换到 {1}", ids.length, kernelName(kernelVersion))
         : t("{0} 个窗口已改为跟随默认内核", ids.length))
+    } catch (error) {
+      ws.fail(error)
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  async function applySurfaces(real: boolean): Promise<void> {
+    const ids = [...selectedIds]
+    setBatchBusy(true)
+    try {
+      ws.upsertProfiles(await window.browserApi.profiles.setSurfacesMany(ids, real))
+      setSurfacesOpen(false)
+      notify.success(real
+        ? t("{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为本机真实", ids.length)
+        : t("{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为每个窗口不同", ids.length))
     } catch (error) {
       ws.fail(error)
     } finally {
@@ -806,6 +824,7 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
             { key: 'api', label: t("设置 API 链接"), icon: <LinkOutlined />, disabled: batchBusy, onClick: () => setApiLinkOpen(true) },
             { key: 'check', label: t("检测代理"), icon: <ApiOutlined />, disabled: batchBusy, onClick: () => void runProxyChecks(selectedIds) },
             { key: 'kernel', label: t("切换内核"), icon: <DeploymentUnitOutlined />, disabled: batchBusy, onClick: () => setKernelSwitchOpen(true) },
+            { key: 'surfaces', label: t("Canvas / AudioContext / ClientRects"), icon: <SafetyCertificateOutlined />, disabled: batchBusy, onClick: () => setSurfacesOpen(true) },
             { key: 'remove', label: t("删除"), icon: <DeleteOutlined />, danger: true, disabled: batchBusy, onClick: confirmBatchRemove }
           ]
         }}
@@ -888,6 +907,14 @@ export function WindowsPage({ openKernels, groupId, kernelVersion }: { openKerne
         busy={batchBusy}
         onSubmit={(version) => void applyKernelSwitch(version)}
         onClose={() => setKernelSwitchOpen(false)}
+      />
+      <SurfacesModal
+        open={surfacesOpen}
+        count={selectedIds.length}
+        runningCount={selected.filter((profile) => ACTIVE_STATUSES.has(profile.status)).length}
+        busy={batchBusy}
+        onSubmit={(real) => void applySurfaces(real)}
+        onClose={() => setSurfacesOpen(false)}
       />
       <BatchImportModal
         open={batchImportOpen}

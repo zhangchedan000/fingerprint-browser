@@ -124,9 +124,13 @@ describe('fingerprint check verdicts', () => {
   })
 
   it('offers a one-click change for every mismatch a setting can fix', () => {
-    // Real values shared with another window: give this one its own.
-    const twin = check({ fingerprint: { disabledSpoofing: ['canvas'] }, others: [{ label: '#2 shop', observed: seen, disabledSpoofing: ['canvas'] }] })
-    expect(row(twin, 'canvas')[0]).toMatchObject({ status: 'warn', fix: 'use-noise' })
+    // Real values shared with another window: normal (the default since 11-07), nothing to fix.
+    const twin = check({ fingerprint: { disabledSpoofing: ['canvas', 'audio', 'clientrects'] }, others: [{ label: '#2 shop', observed: seen, disabledSpoofing: ['canvas', 'audio', 'clientrects'] }] })
+    for (const surface of ['canvas', 'audio', 'clientrects'] as const) {
+      expect(row(twin, surface)[0]).toMatchObject({ status: 'ok' })
+      expect(row(twin, surface)[0].fix).toBeUndefined()
+      expect(row(twin, surface)[0].message).toContain('本机真实值')
+    }
     // A kernel that cannot set the memory: take what pages see.
     expect(row(check({ observed: { memory: 16 } }), 'memory')[0]).toMatchObject({ status: 'warn', fix: 'set-memory', fixValue: '16' })
     // This computer's own card renders in software: a listed card.

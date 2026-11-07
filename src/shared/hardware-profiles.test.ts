@@ -51,12 +51,13 @@ describe('coherent hardware profiles', () => {
 
   it('turns off injected rendering overrides for host-matched profiles', () => {
     const config = applyHardwareProfile(defaultFingerprint(1), 'macos-host')
-    expect(effectiveDisabledSpoofing(config)).toEqual(['font', 'audio', 'canvas', 'clientrects', 'gpu'])
+    expect([...effectiveDisabledSpoofing(config)].sort()).toEqual(['audio', 'canvas', 'clientrects', 'font', 'gpu'])
   })
 
   it('enables coherent rendering surfaces for simulated profiles', () => {
     const config = applyHardwareProfile(defaultFingerprint(1), 'macos-m3-pro')
-    expect(effectiveDisabledSpoofing(config)).toEqual([])
+    // GPU from the profile; Canvas / AudioContext / ClientRects real as for every new window (11-07).
+    expect([...effectiveDisabledSpoofing(config)].sort()).toEqual(['audio', 'canvas', 'clientrects'])
     expect(config.renderIdentityVersion).toBe(4)
   })
 

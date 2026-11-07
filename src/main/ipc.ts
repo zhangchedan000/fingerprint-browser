@@ -814,6 +814,11 @@ export function registerIpc({ profiles, settings, launcher, kernels, extensions,
     await team.pushConfigs(changed.map((profile) => profile.id))
     return changed.map(publicProfile)
   })
+  ipcMain.handle('profiles:set-surfaces-many', async (_event, ids: string[], real: boolean) => {
+    const changed = await profiles.setSurfacesMany(ids, real)
+    await team.pushConfigs(changed.map((profile) => profile.id))
+    return changed.map(publicProfile)
+  })
   ipcMain.handle('profiles:remove-many', async (_event, ids: string[]) => {
     for (const id of ids) {
       if (launcher.isRunning(id)) throw new Error(`环境“${profiles.get(id).name}”正在运行，不能删除`)

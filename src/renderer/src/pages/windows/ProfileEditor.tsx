@@ -968,7 +968,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
     const pending = checking ? t("正在检测…") : t("待检测")
     return [
       { value: 'noise', label: !real && value ? value : `${t("每个窗口不同")} · ${real ? '' : pending}`.replace(/ · $/, '') },
-      { value: 'real', label: real && value ? t("本机真实 · {0}", value) : t("本机真实") }
+      { value: 'real', label: real && value ? t("本机真实（推荐） · {0}", value) : t("本机真实（推荐）") }
     ]
   }
 
@@ -1113,7 +1113,9 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       screenHeight: height,
       // A picked card brings its own CPU, memory and resolution.
       ...(gpu ? matchedToGpu(gpu) : {}),
-      disabledSpoofing: [],
+      // A listed card instead of the real one; Canvas / AudioContext / ClientRects stay as chosen
+      // (real by default: DEFAULT_REAL_SURFACES).
+      disabledSpoofing: fp.disabledSpoofing.filter((item) => item !== 'gpu'),
       deviceName: deviceName(randomSeed(), fp.platform),
       macAddress: macAddress(randomSeed(), fp.platform, gpu?.split('|')[0])
     })
@@ -2663,7 +2665,7 @@ export function ProfileEditor({ open, profile, suggestedIndex, saving, extension
       <section className="fb-fp-card">
         <div className="fb-fp-card-head">
           <h3 className="fb-fp-group">{t("指纹值")}</h3>
-          <span className="fb-fp-card-sub">{t("每个窗口不同，同一窗口每次一样")}</span>
+          <span className="fb-fp-card-sub">{t("默认用本机真实值（和真实 Chrome 一样）；也可以改成每个窗口不同")}</span>
         </div>
       <Row label="Canvas" check={checkFor('canvas')} fix={checkFix('canvas')}>
         {noiseControl('canvas', 'Canvas')}

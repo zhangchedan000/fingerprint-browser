@@ -310,11 +310,16 @@ describe('launch arguments', () => {
 
   it('gives each window its own audio and rects unless set to real', () => {
     const kernel = { userDataDir: '/data', fingerprintKernel: true, engineVersion: 'prism-156.0.8078.47' }
-    const seeded = buildLaunchArgs(profile(), kernel)
+    const seeded = buildLaunchArgs(profile({ disabledSpoofing: [] }), kernel)
     expect(seeded).toContain('--fingerprinting-audio-noise')
     expect(seeded).toContain('--fingerprinting-client-rects-noise')
+    expect(seeded.some((arg) => arg.startsWith('--disable-spoofing'))).toBe(false)
     const real = buildLaunchArgs(profile({ disabledSpoofing: ['audio', 'clientrects'] }), kernel)
     expect(real.some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
+    // A new window (11-07): Canvas, AudioContext and ClientRects real, no noise flags.
+    const fresh = buildLaunchArgs(profile(), kernel)
+    expect(fresh.some((arg) => arg.startsWith('--fingerprinting-'))).toBe(false)
+    expect(fresh.find((arg) => arg.startsWith('--disable-spoofing='))?.split('=')[1].split(',').sort()).toEqual(['audio', 'canvas', 'clientrects'])
   })
 
   it('turns Chrome\'s port scan protection off only when asked', () => {
@@ -340,7 +345,8 @@ describe('launch arguments', () => {
     for (const item of PRISM21_CASES) {
       // The cases without a platform were recorded on Linux, where a new window defaults to macOS
       // (defaultProfileDraft follows this computer); on a Windows test machine it would default to Windows.
-      const fingerprint = { ...(item.windows ? WINDOWS : MACOS), ...item.fingerprint } as Partial<BrowserProfile['fingerprint']>
+      // Windows made then had every surface noisy (no disabledSpoofing) and keep it.
+      const fingerprint = { disabledSpoofing: [], ...(item.windows ? WINDOWS : MACOS), ...item.fingerprint } as Partial<BrowserProfile['fingerprint']>
       const args = buildLaunchArgs({ ...profile(fingerprint), ...item.profile } as BrowserProfile, { userDataDir: '/data', fingerprintKernel: true, engineVersion: item.engine, ...item.options })
       expect(args, item.name).toEqual(before[item.name])
     }

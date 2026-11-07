@@ -2859,5 +2859,14 @@
   "所属订阅": "Abonnement",
   "最后上传": "Dernier envoi par",
   "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Pixelscan écrit inconsistent dès qu’une vérification ci-dessous est en rouge ; voyez laquelle ci-dessous",
-  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan le classe comme proxy d’après sa base d’IP : toutes les IP de centre de données sont signalées, seule une IP résidentielle ne l’est pas ; cela n’a rien à voir avec l’empreinte du navigateur"
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan le classe comme proxy d’après sa base d’IP : toutes les IP de centre de données sont signalées, seule une IP résidentielle ne l’est pas ; cela n’a rien à voir avec l’empreinte du navigateur",
+  "本机真实（推荐）": "Réel de cet ordinateur (recommandé)",
+  "本机真实（推荐） · {0}": "Réel de cet ordinateur (recommandé) · {0}",
+  "为 {0} 个窗口设置 Canvas、AudioContext、ClientRects": "Définir Canvas, AudioContext et ClientRects pour {0} fenêtres",
+  "本机真实：和真实 Chrome 读到的一样，新建窗口默认用这个。实测检测网站对加了噪音的窗口打分忽高忽低，用真实值稳定在低分；窗口之间靠显卡、CPU、屏幕等硬件和 IP 区分。字体和显卡的设置不变。": "Réel : identique à ce que lit un vrai Chrome, et utilisé par les nouvelles fenêtres. Lors des tests, les sites de détection notaient les fenêtres avec bruit de façon très variable, alors que les valeurs réelles restaient basses ; les fenêtres se distinguent par le matériel (GPU, CPU, écran) et par l’IP. Les réglages des polices et du GPU ne changent pas.",
+  "{0} 个窗口正在运行，关闭后重新打开才会生效": "{0} fenêtres sont ouvertes ; le changement s’applique après les avoir fermées et rouvertes",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为本机真实": "Canvas, AudioContext et ClientRects de {0} fenêtres passés aux valeurs réelles de cet ordinateur",
+  "{0} 个窗口的 Canvas、AudioContext、ClientRects 已改为每个窗口不同": "Canvas, AudioContext et ClientRects de {0} fenêtres passés à différents pour chaque fenêtre",
+  "Canvas / AudioContext / ClientRects": "Canvas / AudioContext / ClientRects",
+  "默认用本机真实值（和真实 Chrome 一样）；也可以改成每个窗口不同": "Valeurs réelles de cet ordinateur par défaut (comme un vrai Chrome) ; modifiables en différentes pour chaque fenêtre"
 }

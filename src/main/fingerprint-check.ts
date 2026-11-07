@@ -273,7 +273,9 @@ export function evaluateFingerprint(input: {
       add({ row: surface, status: 'ok', message: fp.fontSource === 'host'
         ? `${name} 本机真实字体 · ${first}（用本机字体的窗口都相同）`
         : `${name} 跟随系统语言 · ${first}（同一语言的真实 Windows 相同，属正常）` })
-    } else if (first === second && (alwaysReal || (real && ALWAYS_REAL.has(surface)))) {
+    } else if (first === second && (alwaysReal || real)) {
+      // Real values are the default (DEFAULT_REAL_SURFACES): a real Chrome on this computer reads the same,
+      // so windows sharing them is normal; windows stay apart by their hardware and IP.
       add({ row: surface, status: 'ok', message: `${name} 本机真实值 · ${first}（与真实 Chrome 一致，各窗口相同属正常）` })
     } else if (first !== second) {
       add({ row: surface, status: 'bad', message: `${name} 两次读取结果不同，容易被识别为伪装`, fix: 'use-real' })
@@ -283,8 +285,6 @@ export function evaluateFingerprint(input: {
       add({ row: surface, status: 'ok', message: `${name} 与窗口 ${twin.label} 相同：偏移的种类有限，同样系统和字体的真实电脑也相同` })
     } else if (twin && !real) {
       add({ row: surface, status: 'bad', message: `${name} 与窗口 ${twin.label} 相同，两个窗口会被关联`, fix: 'reseed' })
-    } else if (twin) {
-      add({ row: surface, status: 'warn', message: `${name} 与窗口 ${twin.label} 相同：都用本机真实值，同一台电脑上会一样`, fix: 'use-noise' })
     } else {
       add({ row: surface, status: 'ok', message: real ? `${name} 使用本机真实值 · ${first}` : `${name} 指纹 ${first}，与其他窗口都不同` })
     }
