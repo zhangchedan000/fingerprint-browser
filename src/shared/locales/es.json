@@ -2857,5 +2857,7 @@
   "IP 类型": "Tipo de IP",
   "原生 IP": "IP nativa",
   "所属订阅": "Suscripción",
-  "最后上传": "Última subida de"
+  "最后上传": "Última subida de",
+  "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Pixelscan escribe inconsistent si cualquiera de las comprobaciones de abajo está en rojo; mira abajo cuál es",
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan lo considera proxy según su base de datos de IP: a toda IP de centro de datos le pasa, solo una IP residencial no; no tiene que ver con la huella del navegador"
 }

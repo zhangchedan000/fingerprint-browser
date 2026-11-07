@@ -2857,5 +2857,7 @@
   "IP 类型": "IP type",
   "原生 IP": "Native IP",
   "所属订阅": "Subscription",
-  "最后上传": "Last upload by"
+  "最后上传": "Last upload by",
+  "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Pixelscan says inconsistent when any one check below is red; see which one below",
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan calls it a proxy from its IP database: every data-centre IP gets this, only a residential IP does not; it has nothing to do with the browser fingerprint"
 }

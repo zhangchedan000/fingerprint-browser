@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_DEEP_CHECK_SITES, knownDeepSite, pageStillLoading, parseDeepSite, scoreLines, validDeepCheckSites } from './deep-check'
+import { DEFAULT_DEEP_CHECK_SITES, findingNote, knownDeepSite, pageStillLoading, parseDeepSite, scoreLines, validDeepCheckSites } from './deep-check'
 
 // Page text as the sites showed it (tools/kernel-smoke BISECT=sites, and a user's iphey result).
 const IPHEY_LOADING = 'Your Digital Identity Looks\n\nBROWSER\n\nTemporary value\n\nHARDWARE\n\nTemporary value\n\n0\nMX SCORE'
@@ -44,6 +44,22 @@ describe('deep check parsers', () => {
       status: 'bad',
       findings: ['Fingerprint is inconsistent', 'Location: Timezone spoofed', 'Proxy: Proxy detected', 'Fingerprint: Masking detected']
     })
+  })
+
+  it('a data-centre IP alone (Proxy detected, nothing about the browser) is a risk, not a failure', () => {
+    // #80 (11-07): Hong Kong data-centre SOCKS5; Pixelscan said inconsistent only because of its proxy check.
+    const proxyOnly = 'Fingerprint Scan\nRestart\n\nYour Browser Fingerprint is inconsistent\n\nChrome 156.0.0.0 on Windows\n\nBrowser\n\nNo location spoofing detected\n\nLocation\n\nProxy detected\n\nProxy\n\nNo masking detected\n\nFingerprint\n\nNo automated behavior detected\n\nBot check'
+    expect(parseDeepSite('https://pixelscan.net/fingerprint-check', proxyOnly)).toEqual({ status: 'warn', findings: ['Fingerprint is inconsistent', 'Proxy: Proxy detected'] })
+  })
+
+  it('explains a finding with the note of its own site (whoer and Pixelscan both write "Proxy: …")', () => {
+    expect(findingNote('Proxy: Proxy detected', 'pixelscan')).toMatch(/^Pixelscan 按 IP 数据库/)
+    expect(findingNote('Proxy: Yes', 'whoer')).toBe('被 whoer 识别为代理')
+    expect(findingNote('Fingerprint is inconsistent', 'pixelscan')).toMatch(/任意一项报红/)
+    // A site the user added gets only the notes that fit any site.
+    expect(findingNote('Proxy: Proxy detected', undefined)).toBe('被识别为代理 IP')
+    expect(findingNote('DNS: 香港', undefined)).toBeUndefined()
+    expect(findingNote('tampering_ml_score: 0.0593', 'fpcom')).toMatch(/0\.8/)
   })
 
   it('reads CreepJS headless and stealth ratings', () => {

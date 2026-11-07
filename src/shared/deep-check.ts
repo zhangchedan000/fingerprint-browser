@@ -110,6 +110,7 @@ function pixelscan(text: string): Parsed | undefined {
   const all = lines(text)
   const findings: string[] = [`Fingerprint is ${verdict}`]
   let flagged = false
+  const flaggedLabels: string[] = []
   for (const label of ['Location', 'Proxy', 'Fingerprint', 'Bot check']) {
     const index = all.findIndex((line, i) => line === label && i > 0)
     const status = index > 0 ? all[index - 1] : undefined
@@ -117,10 +118,15 @@ function pixelscan(text: string): Parsed | undefined {
     const bad = /detected|spoofed|mismatch/i.test(status) && !/^no /i.test(status)
     if (bad) {
       flagged = true
+      flaggedLabels.push(label)
       findings.push(`${label}: ${status}`)
     }
   }
-  return { status: /^inconsistent$/i.test(verdict) ? 'bad' : flagged ? 'warn' : 'ok', findings }
+  // Its proxy check reads the IP's database entry: a data-centre IP is always "Proxy detected" and the headline then
+  // says inconsistent, though nothing about the browser was flagged. That alone is a risk of the IP, not a failure.
+  const onlyProxy = flaggedLabels.length > 0 && flaggedLabels.every((label) => label === 'Proxy')
+  const inconsistent = /^inconsistent$/i.test(verdict)
+  return { status: inconsistent && !onlyProxy ? 'bad' : inconsistent || flagged ? 'warn' : 'ok', findings }
 }
 
 /** CreepJS: "0% headless", "25% like headless", "0% stealth". */
@@ -315,15 +321,21 @@ export function parseDeepSite(url: string, text: string): Parsed | undefined {
   return known ? PARSERS[known.site](text) : undefined
 }
 
-/** Chinese explanations for findings the sites word the same way every time. */
-export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
+/**
+ * Chinese explanations for findings the sites word the same way every time. A note with a site is only for that
+ * site's findings (Pixelscan and whoer both write "Proxy: …"); the others fit any site.
+ */
+export const FINDING_NOTES: ReadonlyArray<readonly [RegExp, string, DeepSite?]> = [
   // whoer.net.
-  [/^DNS: .*≠ IP:/, 'DNS 服务器和 IP 不在同一个国家：代理那边用的 DNS，whoer 实测会扣 30%（换代理或让代理商改 DNS）'],
-  [/^DNS: /, 'DNS 服务器所在国家，和 IP 同一个国家就没问题'],
-  [/^Time zone: IP GMT/, 'whoer 按它的 IP 库算的当地时间和浏览器时间不一样（各家 IP 库对城市的判断可能不同）'],
-  [/^Proxy: /, '被 whoer 识别为代理'],
-  [/^Anonymizer: /, '被 whoer 识别为匿名服务'],
-  [/^Blacklist: /, '出口 IP 在 whoer 的黑名单里'],
+  [/^DNS: .*≠ IP:/, 'DNS 服务器和 IP 不在同一个国家：代理那边用的 DNS，whoer 实测会扣 30%（换代理或让代理商改 DNS）', 'whoer'],
+  [/^DNS: /, 'DNS 服务器所在国家，和 IP 同一个国家就没问题', 'whoer'],
+  [/^Time zone: IP GMT/, 'whoer 按它的 IP 库算的当地时间和浏览器时间不一样（各家 IP 库对城市的判断可能不同）', 'whoer'],
+  [/^Proxy: /, '被 whoer 识别为代理', 'whoer'],
+  [/^Anonymizer: /, '被 whoer 识别为匿名服务', 'whoer'],
+  [/^Blacklist: /, '出口 IP 在 whoer 的黑名单里', 'whoer'],
+  // Pixelscan.
+  [/^Fingerprint is inconsistent/, '下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项', 'pixelscan'],
+  [/^Proxy: /, 'Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关', 'pixelscan'],
   // Fingerprint.com (its field names; what they mean from its docs).
   [/^tampering: true/, '被判定为浏览器篡改'],
   [/^tampering: false/, '没有判定为浏览器篡改'],
@@ -353,8 +365,13 @@ export const FINDING_NOTES: ReadonlyArray<[RegExp, string]> = [
   [/WebRTC/i, 'WebRTC 相关'],
   [/stealth/i, '发现隐身插件或伪装痕迹'],
   [/headless/i, '像无头浏览器的特征'],
-  [/^LOCATION:/, 'iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因'],
-  [/^IP ADDRESS:/, 'iphey 看到的出口 IP'],
+  [/^LOCATION:/, 'iphey 按 IP 判断的位置，和窗口时区所在国家不同时通常就是扣分原因', 'iphey'],
+  [/^IP ADDRESS:/, 'iphey 看到的出口 IP', 'iphey'],
   [/没有完全加载完/, '截图和结论可能不完整，可以打开原网页再看'],
   [/^网页弹窗：/, '检测网站自己弹出的提示，检测时已自动点掉；常见是网站的接口连不上（Failed to fetch），结论可能不完整']
 ]
+
+/** The note for one finding of a site (undefined: the site is not a built-in one, only notes for any site). */
+export function findingNote(finding: string, site?: DeepSite): string | undefined {
+  return FINDING_NOTES.find(([pattern, , only]) => (!only || only === site) && pattern.test(finding))?.[1]
+}

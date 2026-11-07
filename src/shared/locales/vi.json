@@ -2857,5 +2857,7 @@
   "IP 类型": "Loại IP",
   "原生 IP": "IP bản địa",
   "所属订阅": "Gói đăng ký",
-  "最后上传": "Tải lên gần nhất"
+  "最后上传": "Tải lên gần nhất",
+  "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Chỉ cần một mục bên dưới báo đỏ là Pixelscan ghi inconsistent; xem bên dưới là mục nào",
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan xác định là proxy theo cơ sở dữ liệu IP: IP trung tâm dữ liệu đều bị như vậy, chỉ IP dân cư mới không bị; không liên quan đến vân tay trình duyệt"
 }

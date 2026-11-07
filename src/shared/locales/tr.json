@@ -2857,5 +2857,7 @@
   "IP 类型": "IP türü",
   "原生 IP": "Yerel IP",
   "所属订阅": "Abonelik",
-  "最后上传": "Son yükleyen"
+  "最后上传": "Son yükleyen",
+  "下面任意一项报红，Pixelscan 就写 inconsistent，看下面具体是哪一项": "Aşağıdaki kontrollerden biri kırmızıysa Pixelscan inconsistent yazar; hangisi olduğuna aşağıda bakın",
+  "Pixelscan 按 IP 数据库判断是代理：机房 IP 都会这样，换住宅 IP 才不报；和浏览器指纹无关": "Pixelscan bunu IP veritabanına göre proxy sayar: tüm veri merkezi IP’leri böyle işaretlenir, yalnızca konut IP’si işaretlenmez; tarayıcı parmak iziyle ilgisi yoktur"
 }

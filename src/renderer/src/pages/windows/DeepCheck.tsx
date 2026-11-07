@@ -1,7 +1,7 @@
 import { Alert, Button, Image, Tag } from 'antd'
 import { useEffect, useState } from 'react'
 import { formatList, getLocale, t, translateMessage as mt } from '../../../../shared/i18n'
-import { DEFAULT_DEEP_CHECK_SITES, FINDING_NOTES, knownDeepSite, type DeepSiteResult } from '../../../../shared/deep-check'
+import { DEFAULT_DEEP_CHECK_SITES, findingNote, knownDeepSite, type DeepSiteResult } from '../../../../shared/deep-check'
 import { useWindowLauncher } from '../../data/window-actions'
 import { useWorkspace } from '../../data/workspace'
 import { humanError, relativeTime } from '../../components/format'
@@ -13,10 +13,6 @@ const STATUS: Record<DeepSiteResult['status'], [string, string]> = {
   warn: ['warning', '有风险'],
   bad: ['error', '不通过'],
   unknown: ['default', '未读到结果']
-}
-
-function note(finding: string): string | undefined {
-  return FINDING_NOTES.find(([pattern]) => pattern.test(finding))?.[1]
 }
 
 /** “Deep check”: what public detection sites (which keep updating their tests) say about the window. */
@@ -135,12 +131,15 @@ export function DeepCheck({ draft, profileId, settingsKey }: { draft: () => Prof
                     <Tag color={color}>{t(label)}</Tag>
                     {result.score && <span className="fb-mono">{result.score}</span>}
                   </div>
-                  {result.findings.map((finding) => (
-                    <div key={finding} className="fb-deep-finding">
-                      <span className="fb-mono">{mt(finding)}</span>
-                      {note(finding) && <span className="fb-muted">{t(note(finding)!)}</span>}
-                    </div>
-                  ))}
+                  {result.findings.map((finding) => {
+                    const note = findingNote(finding, knownDeepSite(result.url)?.site)
+                    return (
+                      <div key={finding} className="fb-deep-finding">
+                        <span className="fb-mono">{mt(finding)}</span>
+                        {note && <span className="fb-muted">{t(note)}</span>}
+                      </div>
+                    )
+                  })}
                   {result.error && <span className="fb-muted">{mt(result.error)}</span>}
                   {savedProfile
                     ? (
