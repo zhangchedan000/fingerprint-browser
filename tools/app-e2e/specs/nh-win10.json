@@ -1,0 +1,218 @@
+[
+ {
+  "source": "w05",
+  "name": "S0",
+  "note": "w05 原样（新种子）",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3050 OEM|0x00002508",
+   "cpu": "Intel Core i5-13500",
+   "hardwareConcurrency": 20,
+   "deviceMemory": 16,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910001
+  }
+ },
+ {
+  "source": "w05",
+  "name": "S1",
+  "note": "w05 系统改 Win11",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3050 OEM|0x00002508",
+   "cpu": "Intel Core i5-13500",
+   "hardwareConcurrency": 20,
+   "deviceMemory": 16,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910002
+  }
+ },
+ {
+  "source": "w05",
+  "name": "S2",
+  "note": "w05 屏幕改 2560",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3050 OEM|0x00002508",
+   "cpu": "Intel Core i5-13500",
+   "hardwareConcurrency": 20,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910003
+  }
+ },
+ {
+  "source": "w05",
+  "name": "S3",
+  "note": "w05 显卡改 5070",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 5070|0x00002F04",
+   "cpu": "Intel Core i5-13500",
+   "hardwareConcurrency": 20,
+   "deviceMemory": 16,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910004
+  }
+ },
+ {
+  "source": "w05",
+  "name": "S4",
+  "note": "w05 CPU 改 i7-13790F 24 线程",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3050 OEM|0x00002508",
+   "cpu": "Intel Core i7-13790F",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 16,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910005
+  }
+ },
+ {
+  "source": "w05",
+  "name": "S5",
+  "note": "w05 内核改 155",
+  "kernel": "155",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3050 OEM|0x00002508",
+   "cpu": "Intel Core i5-13500",
+   "hardwareConcurrency": 20,
+   "deviceMemory": 16,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910006
+  }
+ },
+ {
+  "source": "w04",
+  "name": "T0",
+  "note": "w04 原样（新种子）",
+  "kernel": "155",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3090 Ti|0x00002203",
+   "cpu": "Intel Core i9-11900K",
+   "hardwareConcurrency": 16,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910007
+  }
+ },
+ {
+  "source": "w04",
+  "name": "T1",
+  "note": "w04 系统改 Win11",
+  "kernel": "155",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3090 Ti|0x00002203",
+   "cpu": "Intel Core i9-11900K",
+   "hardwareConcurrency": 16,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910008
+  }
+ },
+ {
+  "source": "w04",
+  "name": "T2",
+  "note": "w04 内核改 156",
+  "kernel": "156",
+  "fingerprint": {
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3090 Ti|0x00002203",
+   "cpu": "Intel Core i9-11900K",
+   "hardwareConcurrency": 16,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio",
+    "clientrects"
+   ],
+   "seed": 910009
+  }
+ }
+]
