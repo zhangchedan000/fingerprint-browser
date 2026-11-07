@@ -4,8 +4,9 @@
 // goes into its own folder, the update succeeds, the old build stays while in use and goes once it is free.
 //   1. The installed 156 kernel (old layout, browser\chrome.exe) is copied into the test vault.
 //   2. A program (cmd.exe) is started working in its browser folder and kept running.
-//   3. The test launcher updates the kernel: it must succeed; the manifest points to build-…\browser;
-//      the old browser folder is still there (in use); the kernel checks out (engine.verify).
+//   3. The test launcher installs an older build of it (历史版本), then updates to the newest: both must
+//      succeed; the manifest points to build-…\browser; the old browser folder is still there (in use), the
+//      build the update replaced is gone; the kernel checks out (engine.verify).
 //   4. The program is ended, the launcher started again: the old browser folder is gone.
 // node kernel-update-win.mjs <launcher exe> <installed kernel folder> <test folder>   Output: <test folder>\kernel-update.log
 import { execFileSync, spawn } from 'node:child_process'
@@ -53,23 +54,27 @@ try { execFileSync('robocopy', [kernelSource, kernel, '/E', '/XJ', '/NFL', '/NDL
 log('1 copied', id, 'layout:', listing(), 'exe:', manifest().executableRelative)
 
 // 2. Something works in the kernel's browser folder (as an input method's service would).
-const holder = spawn('cmd.exe', ['/k'], { cwd: join(kernel, 'browser'), stdio: 'ignore', detached: true, windowsHide: true })
+const holder = spawn('ping.exe', ['-n', '1200', '127.0.0.1'], { cwd: join(kernel, 'browser'), stdio: 'ignore', detached: true, windowsHide: true })
 await delay(1000)
 let renamable = true
 try { execFileSync('cmd', ['/c', 'ren', kernel, `${id}.probe`], { stdio: 'ignore' }) } catch { renamable = false }
 if (renamable) execFileSync('cmd', ['/c', 'ren', join(userData, 'vault', 'kernels', `${id}.probe`), id], { stdio: 'ignore' })
 log('2 holder pid', holder.pid, 'working in browser; kernel folder renamable:', renamable)
 
-// 3. Update.
+// 3. An older build (历史版本), then the newest.
 let app = await start()
-const rows = await app.evaluate('window.browserApi.engine.releases().then((r) => r.map((x) => ({ version: x.version, update: !!x.update, installed: !!x.installed, history: !!x.history })))').catch((e) => ({ error: e.message }))
+const rows = await app.evaluate('window.browserApi.engine.releases().then((r) => r.map((x) => ({ version: x.version, tag: x.tag, update: !!x.update, installed: !!x.installed, history: !!x.history })))').catch((e) => ({ error: e.message }))
 log('3 releases:', JSON.stringify(rows))
-const started = Date.now()
-const result = await app.evaluate(`window.browserApi.engine.install(${JSON.stringify(id)}).then(() => 'ok', (e) => 'error: ' + e.message)`)
-log('3 install:', result, `${Math.round((Date.now() - started) / 1000)} s`)
-log('3 layout:', listing(), 'exe:', manifest().executableRelative, 'releaseTag:', manifest().releaseTag)
+const older = Array.isArray(rows) ? rows.find((x) => x.version === id && x.history && !x.installed) : undefined
+for (const [label, tag] of [['older build ' + (older?.tag ?? '?'), older?.tag], ['newest', undefined]]) {
+  if (label.startsWith('older') && !tag) { log('3 no older build listed'); continue }
+  const started = Date.now()
+  const result = await app.evaluate(`window.browserApi.engine.install(${JSON.stringify(id)}${tag ? `, ${JSON.stringify(tag)}` : ''}).then(() => 'ok', (e) => 'error: ' + e.message)`)
+  log('3', label, 'install:', result, `${Math.round((Date.now() - started) / 1000)} s`)
+  log('3   layout:', listing(), '| exe:', manifest().executableRelative, '| releaseTag:', manifest().releaseTag)
+  log('3   verify:', JSON.stringify(await app.evaluate(`window.browserApi.engine.verify(${JSON.stringify(id)}).then((h) => ({ status: h.status, message: h.message }))`).catch((e) => e.message)))
+}
 log('3 old browser folder still there (in use):', existsSync(join(kernel, 'browser')))
-log('3 verify:', JSON.stringify(await app.evaluate(`window.browserApi.engine.verify(${JSON.stringify(id)}).then((h) => ({ status: h.status, message: h.message }))`).catch((e) => e.message)))
 await app.quit()
 
 // 4. Free it and start again.
