@@ -454,7 +454,7 @@ if (phase === 'checks') {
     const c = p.proxyCheck ?? {}
     const keep = Object.fromEntries(Object.entries(c).filter(([k]) => !/^(ip|ipv6|host|address)$/i.test(k)))
     return p.name + ' window ' + p.fingerprint.region + ' ' + p.fingerprint.timezone + ' | check ' + JSON.stringify(keep)
-  }).join('\n'))`)
+  }).join('\\n'))`)
   await writeFile(join(out, `${round}-checks.txt`), text)
   log('checks written')
 }
