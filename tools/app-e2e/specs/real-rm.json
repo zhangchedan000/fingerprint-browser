@@ -1,0 +1,226 @@
+[
+ {
+  "source": "w01",
+  "name": "RA156",
+  "note": "画布、音频用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900201,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RA155",
+  "note": "画布、音频用真实值",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 900202,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RB156",
+  "note": "画布、音频用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900203,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RB155",
+  "note": "画布、音频用真实值",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 900204,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RC156",
+  "note": "画布、音频用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900205,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RC155",
+  "note": "画布、音频用真实值",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 900206,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RD156",
+  "note": "画布、音频用真实值",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900207,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "RD155",
+  "note": "画布、音频用真实值",
+  "kernel": "155",
+  "fingerprint": {
+   "seed": 900208,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti|0x00001E07",
+   "cpu": "AMD Ryzen 5 5600GT",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "off",
+   "disabledSpoofing": [
+    "canvas",
+    "audio"
+   ]
+  }
+ },
+ {
+  "source": "w01",
+  "name": "NB156",
+  "note": "噪音照旧（对照）",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900209,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on",
+   "disabledSpoofing": []
+  }
+ },
+ {
+  "source": "w01",
+  "name": "NC156",
+  "note": "噪音照旧（对照）",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 900210,
+   "coresSource": "profile",
+   "screenSource": "profile",
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 4090|0x00002684",
+   "cpu": "AMD Ryzen 9 9900X",
+   "hardwareConcurrency": 24,
+   "deviceMemory": 32,
+   "screenWidth": 3840,
+   "screenHeight": 2160,
+   "deviceBinding": "off",
+   "disabledSpoofing": []
+  }
+ }
+]
