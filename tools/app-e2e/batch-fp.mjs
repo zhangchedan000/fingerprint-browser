@@ -310,6 +310,29 @@ if (phase === 'setver') {
   await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
 }
 
+// clone <spec.json>: control-variable windows: a copy of a window of the round with one thing changed,
+// as a NEW window (its own data folder: Fingerprint.com also remembers a visitor by its storage).
+// spec: [{ source: "w09", name: "c2", note: "...", fingerprint: { … }, kernelVersion?: "…" }]
+if (phase === 'clone') {
+  const specs = JSON.parse(await readFile(arg5, 'utf8'))
+  const all = await windows()
+  for (const spec of specs) {
+    const name = `${round}-${spec.name}`
+    if (all.some((w) => w.name === name)) { log('exists', name); continue }
+    const made = await run(`(async () => {
+      const source = (await window.browserApi.profiles.list()).find((p) => p.name === ${J(`${round}-${spec.source}`)})
+      const fingerprint = { ...source.fingerprint, ...${J(spec.fingerprint ?? {})} }
+      const draft = { ...source, name: ${J(name)}, note: ${J(spec.note ?? '')}, fingerprint, kernelVersion: ${J(spec.kernelVersion ?? null)} ?? source.kernelVersion }
+      delete draft.id
+      const created = await window.browserApi.profiles.create(draft)
+      return JSON.stringify({ id: created.id, kernel: created.kernelVersion, seed: created.fingerprint.seed, cpu: created.fingerprint.cpu, hc: created.fingerprint.hardwareConcurrency, mem: created.fingerprint.deviceMemory, screen: created.fingerprint.screenWidth + 'x' + created.fingerprint.screenHeight, binding: created.fingerprint.deviceBinding })
+    })().catch((e) => 'error: ' + e.message)`)
+    log('clone', name, 'from', spec.source, made)
+  }
+  const list = (await windows()).filter((w) => w.name.startsWith(`${round}-`)).sort((a, b) => a.name.localeCompare(b.name))
+  await writeFile(join(out, `${round}-windows.json`), J(list.map((w) => ({ id: w.id, name: w.name, kernelVersion: w.kernelVersion, fp: w.fp, plan: plan.find((p) => p.name === w.name) })), null, 2))
+}
+
 // route <node>: the round's windows reach their proxy through this 网络加速 node (as the editor's 手动固定).
 if (phase === 'route') {
   // The node by part of its name (an ASCII argument survives the Windows command line).
@@ -339,7 +362,7 @@ if (phase === 'run' || phase === 'reopen') {
   await Promise.all(Array.from({ length: concurrency }, async () => {
     while (next < chosen.length) {
       const window = chosen[next++]
-      const label = phase === 'reopen' ? `${window.name}-reopen` : window.name
+      const label = phase === 'reopen' && !/-c\d+$/.test(window.name) ? `${window.name}-reopen` : window.name
       log('open', label)
       const result = await visitAll(window, label, sites)
       results.push(result)
