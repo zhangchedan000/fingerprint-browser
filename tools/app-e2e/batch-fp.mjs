@@ -309,7 +309,10 @@ if (phase === 'setver') {
 
 // route <node>: the round's windows reach their proxy through this 网络加速 node (as the editor's 手动固定).
 if (phase === 'route') {
-  const node = arg5
+  // The node by part of its name (an ASCII argument survives the Windows command line).
+  const node = await run(`window.browserApi.tunnel.status().then((st) => st.nodes.map((n) => n.name).find((n) => n.includes(${J(arg5)})) ?? '')`)
+  if (!node) throw new Error(`no 网络加速 node with ${arg5}`)
+  log('route node', node)
   for (const w of (await windows()).filter((item) => item.name.startsWith(`${round}-`))) {
     const done = await run(`(async () => {
       const profile = (await window.browserApi.profiles.list()).find((p) => p.id === ${J(w.id)})
