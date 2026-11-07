@@ -315,7 +315,7 @@ async function visitAll(window, label, sites = SITES) {
   // stored before); its own folder is kept aside and put back after.
   const dataDir = join(resolve(userData), 'vault', 'profiles', window.id, 'user-data')
   const keptDir = `${dataDir}.kept`
-  if (process.env.FRESH === '1' && existsSync(dataDir)) { await rm(keptDir, { recursive: true, force: true }); await rename(dataDir, keptDir) }
+  if (process.env.FRESH === '1' && existsSync(dataDir)) { await rm(keptDir, { recursive: true, force: true }); await rename(dataDir, keptDir); await mkdir(dataDir) }
   // A window closed by force keeps the port file of its old browser: read only the new one.
   await rm(join(dataDir, 'DevToolsActivePort'), { force: true })
   // ALLOW_GEO=1: the window's time zone stays as it was on purpose (control tests change only the IP).
