@@ -49,6 +49,31 @@ const SITES = [
   ['amiunique', 'https://amiunique.org/fingerprint', 40000]
 ]
 
+// Pages only asked for by name (SITES_ONLY): tzprobe reads the time zone the way a page can, every way.
+const EXTRA = [['tzprobe', 'about:blank', 1000]]
+const TZ_PROBE = `(() => {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const months = Array.from({ length: 12 }, (_, m) => new Date(Date.UTC(2026, m, 15, 12)).getTimezoneOffset())
+  // The day the offset changes, both ways, in 2026 (hour by hour).
+  const changes = []
+  let last = new Date(Date.UTC(2026, 0, 1)).getTimezoneOffset()
+  for (let h = 0; h < 365 * 24; h++) {
+    const d = new Date(Date.UTC(2026, 0, 1, h))
+    const o = d.getTimezoneOffset()
+    if (o !== last) { changes.push(d.toISOString() + ' ' + last + '->' + o); last = o }
+  }
+  const sample = new Date(Date.UTC(2026, 10, 7, 12, 0, 0))
+  const intlOffset = (date) => { const p = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' }).formatToParts(date).find((x) => x.type === 'timeZoneName')?.value; return p }
+  return JSON.stringify({
+    zone, locale: Intl.DateTimeFormat().resolvedOptions().locale, months, changes,
+    intlOffsetJan: intlOffset(new Date(Date.UTC(2026, 0, 15))), intlOffsetJul: intlOffset(new Date(Date.UTC(2026, 6, 15))),
+    toString: sample.toString(), toTimeString: sample.toTimeString(), toLocaleString: sample.toLocaleString(),
+    longName: new Intl.DateTimeFormat(undefined, { timeZoneName: 'long' }).format(sample),
+    shortName: new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).format(sample),
+    nowOffset: new Date().getTimezoneOffset(), languages: navigator.languages, language: navigator.language
+  }, null, 1)
+})()`
+
 /** The plan (11-07): 156 / 155, Intel / AMD 10 each, GPU tiers 5 each, binding and media devices half each, a few Win10. */
 const TIERS = ['entry', 'mid', 'high', 'top']
 const plan = Array.from({ length: 20 }, (_, i) => ({
@@ -314,6 +339,12 @@ async function visitAll(window, label, sites = SITES) {
       try {
         await tab.send('Page.navigate', { url })
         await delay(wait)
+        if (site === 'tzprobe') {
+          const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: TZ_PROBE })).result?.value ?? ''
+          await writeFile(join(out, `${label}-${site}.txt`), text)
+          result.sites[site] = { chars: text.length, seconds: Math.round((Date.now() - began) / 1000) }
+          continue
+        }
         await tab.send('Runtime.evaluate', { awaitPromise: true, expression: '(async()=>{for(let y=0;y<document.body.scrollHeight;y+=700){scrollTo(0,y);await new Promise(r=>setTimeout(r,250))}scrollTo(0,0)})()' })
         await delay(3000)
         const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: 'document.body ? document.body.innerText : ""' })).result?.value ?? ''
@@ -416,6 +447,18 @@ if (phase === 'renode') {
   }
 }
 
+// checks: the proxy check each window of the round keeps (the one its country and time zone came from),
+// without its IP, to <out>/<round>-checks.txt.
+if (phase === 'checks') {
+  const text = await run(`window.browserApi.profiles.list().then((list) => list.filter((p) => p.name.startsWith(${J(`${round}-`)})).sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
+    const c = p.proxyCheck ?? {}
+    const keep = Object.fromEntries(Object.entries(c).filter(([k]) => !/^(ip|ipv6|host|address)$/i.test(k)))
+    return p.name + ' window ' + p.fingerprint.region + ' ' + p.fingerprint.timezone + ' | check ' + JSON.stringify(keep)
+  }).join('\n'))`)
+  await writeFile(join(out, `${round}-checks.txt`), text)
+  log('checks written')
+}
+
 // nodes: the subscription nodes the test launcher has, with exit IPs (written to <out>/nodes.txt).
 if (phase === 'nodes') {
   await delay(15000)
@@ -446,7 +489,7 @@ if (phase === 'run' || phase === 'reopen') {
   const concurrency = phase === 'reopen' ? 3 : Number(arg5) || 5
   // SITES_ONLY=fpcom,creepjs: only these sites (the other phases' quick checks).
   const sites = phase === 'reopen' ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site))
-    : process.env.SITES_ONLY ? SITES.filter(([site]) => process.env.SITES_ONLY.split(',').includes(site)) : SITES
+    : process.env.SITES_ONLY ? [...SITES, ...EXTRA].filter(([site]) => process.env.SITES_ONLY.split(',').includes(site)) : SITES
   const finished = (w) => sites.every(([site]) => existsSync(join(out, `${w.name}-${site}.txt`)))
   const chosen = (only ? all.filter((w) => only.split(',').some((key) => w.name.endsWith(key))) : all).filter((w) => phase === 'reopen' || process.env.FORCE === '1' || !finished(w))
   log(`${phase} ${chosen.length} windows of ${round}, ${concurrency} at a time, ${sites.length} sites each`)
