@@ -1,0 +1,230 @@
+[
+ {
+  "source": "w01",
+  "name": "L0",
+  "note": "低分 w05 配置重建（对照）",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880201,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H0",
+  "note": "高分 w02 配置重建（对照）",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880202,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "L-os",
+  "note": "低分配置只把 os 换成高分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880203,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "L-scr",
+  "note": "低分配置只把 scr 换成高分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880204,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "L-gpu",
+  "note": "低分配置只把 gpu 换成高分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880205,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "L-cpu",
+  "note": "低分配置只把 cpu 换成高分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880206,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "L-mem",
+  "note": "低分配置只把 mem 换成高分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880207,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H-os",
+  "note": "高分配置只把 os 换成低分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880208,
+   "platformVersion": "10.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H-scr",
+  "note": "高分配置只把 scr 换成低分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880209,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 1920,
+   "screenHeight": 1080,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H-gpu",
+  "note": "高分配置只把 gpu 换成低分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880210,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 2060|0x00001E89",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H-cpu",
+  "note": "高分配置只把 cpu 换成低分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880211,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i5-11600K",
+   "coresSource": "profile",
+   "hardwareConcurrency": 12,
+   "deviceMemory": 16,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ },
+ {
+  "source": "w01",
+  "name": "H-mem",
+  "note": "高分配置只把 mem 换成低分的",
+  "kernel": "156",
+  "fingerprint": {
+   "seed": 880212,
+   "platformVersion": "19.0.0",
+   "gpu": "NVIDIA GeForce RTX 3060 Ti|0x000024C9",
+   "cpu": "Intel Core i7-9700",
+   "coresSource": "profile",
+   "hardwareConcurrency": 8,
+   "deviceMemory": 32,
+   "screenSource": "profile",
+   "screenWidth": 2560,
+   "screenHeight": 1440,
+   "deviceBinding": "on"
+  }
+ }
+]
