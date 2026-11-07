@@ -179,7 +179,8 @@ if (phase === 'create') {
   await delay(3000)
   const existing = new Set((await windows()).map((w) => w.name))
   const made = []
-  for (const spec of plan) {
+  // LIMIT=1: only the first window (to try the screen out before making all).
+  for (const spec of plan.slice(0, Number(process.env.LIMIT) || plan.length)) {
     if (existing.has(spec.name)) { log('exists', spec.name); continue }
     try {
       const result = await createOne(spec, proxyHost)
