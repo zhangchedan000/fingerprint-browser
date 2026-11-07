@@ -281,7 +281,8 @@ let fpcomGate = Promise.resolve()
 /** Fingerprint.com answers 429 when one IP asks too often: one visit a minute for the round. */
 function fpcomTurn() {
   const turn = fpcomGate
-  fpcomGate = turn.then(() => delay(60_000))
+  // FPCOM_GAP_MS: the pause between two Fingerprint.com visits from this IP (default 60 s; it once answered 429).
+  fpcomGate = turn.then(() => delay(Number(process.env.FPCOM_GAP_MS) || 60_000))
   return turn
 }
 
@@ -363,7 +364,17 @@ async function visitAll(window, label, sites = SITES) {
       const began = Date.now()
       try {
         await tab.send('Page.navigate', { url })
-        await delay(wait)
+        if (site === 'fpcom') {
+          // Read as soon as its answer is on the page (up to the usual wait), not after a fixed wait.
+          for (let waited = 0; waited < wait; waited += 1500) {
+            await delay(1500)
+            const shown = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: '/tampering_ml_score|Too Many Requests|429/.test(document.body ? document.body.innerText : "")' })).result?.value
+            if (shown) break
+          }
+          await delay(1500)
+        } else {
+          await delay(wait)
+        }
         if (site === 'tzprobe') {
           const text = (await tab.send('Runtime.evaluate', { returnByValue: true, expression: TZ_PROBE })).result?.value ?? ''
           await writeFile(join(out, `${label}-${site}.txt`), text)
@@ -609,7 +620,7 @@ if (phase === 'run' || phase === 'reopen') {
   const only = phase === 'reopen' ? arg5 : arg6
   const concurrency = phase === 'reopen' ? 3 : Number(arg5) || 5
   // SITES_ONLY=fpcom,creepjs: only these sites (the other phases' quick checks).
-  const sites = phase === 'reopen' ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site))
+  const sites = phase === 'reopen' && !process.env.SITES_ONLY ? SITES.filter(([site]) => ['fpcom', 'creepjs'].includes(site))
     : process.env.SITES_ONLY ? [...SITES, ...EXTRA].filter(([site]) => process.env.SITES_ONLY.split(',').includes(site)) : SITES
   const finished = (w) => sites.every(([site]) => existsSync(join(out, `${w.name}-${site}.txt`)))
   const chosen = (only ? all.filter((w) => only.split(',').some((key) => w.name.endsWith(key))) : all).filter((w) => phase === 'reopen' || process.env.FORCE === '1' || !finished(w))
